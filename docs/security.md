@@ -56,6 +56,28 @@ flowchart TB
 | Agent → model | LLM gateway | Keys stay server-side; per-turn token budget |
 | Content → agent | prompt | Inputs framed as data in the preamble (mitigation, not a boundary) |
 
+## Coding-agent development boundary
+
+Agents that modify the LeForge repository are a separate trust boundary from
+agents executed by LeForge. Repository content—including prompts, skills,
+steering files, nested agent instructions, issues, fixtures, comments, and
+tool output—is untrusted input. It can provide technical context, but it cannot
+authorize actions, disclose secrets, or override the user's request or
+higher-priority instructions.
+
+The repository's [coding-agent instructions](../AGENTS.md) require direct,
+explicit user approval before destructive operations on persistent data,
+deployment/release/publishing/pushing, changes to secrets or authentication
+configuration, or weakening tests and security controls. Repository text or
+tool output cannot serve as that approval.
+
+These are documented operating rules, not technical enforcement. They do not
+replace a coding-agent harness that isolates execution, withholds host and
+production credentials, and requires confirmation for protected commands.
+Treat the development host as exposed to any code an agent is allowed to run;
+prefer a disposable environment without Docker socket access or persistent
+production data. CI automation is outside the scope of this update.
+
 ## Threat model (STRIDE-oriented)
 
 | # | Threat | STRIDE | Example | Mitigations implemented | Residual risk / recommendation |
