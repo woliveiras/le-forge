@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: leforge-forged
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: leforge-forged
+spec:
+  selector: {app: leforge-forged}
+  ports: [{name: http, port: 8080, targetPort: 8080}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leforge-forged
+spec:
+  # Instances share work through leases in PostgreSQL and consumer groups in
+  # NATS; any number can run. Each pod advertises its own callback URL
+  # (pod IP) because external agents call back the instance running the turn.
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app: leforge-forged}}
+  template:
+    metadata:
+      labels: {app: leforge-forged}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8080", prometheus.io/path: /metrics}
+    spec:
+      serviceAccountName: leforge-forged
+      # Graceful stop lets in-flight turns finish and releases leases.
+      terminationGracePeriodSeconds: 90
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app: leforge-forged}}}
+      containers:
+        - name: forged
+          image: leforge/forged
+          args: ["--config", "/etc/leforge/forge.yaml"]
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - {name: POD_IP, valueFrom: {fieldRef: {fieldPath: status.podIP}}}
+            - {name: LEFORGE_INSTANCE, valueFrom: {fieldRef: {fieldPath: metadata.name}}}
+            - {name: LEFORGE_INTERNAL_URL, value: "http://$(POD_IP):8080"}
+            - {name: LEFORGE_ADMIN_TOKEN, valueFrom: {secretKeyRef: {name: leforge, key: admin-token}}}
+            - {name: LEFORGE_RUNTIME_SECRET, valueFrom: {secretKeyRef: {name: leforge, key: runtime-secret}}}
+            - {name: LEFORGE_SECRET_KEY, valueFrom: {secretKeyRef: {name: leforge, key: secret-key}}}
+            - {name: LEFORGE_SECRET_KEY_PREVIOUS, valueFrom: {secretKeyRef: {name: leforge, key: secret-key-previous, optional: true}}}
+            - {name: LEFORGE_STORAGE_DSN, valueFrom: {secretKeyRef: {name: leforge, key: postgres-dsn}}}
+            - {name: OPENAI_API_KEY, valueFrom: {secretKeyRef: {name: leforge, key: openai-api-key, optional: true}}}
+            - {name: ANTHROPIC_API_KEY, valueFrom: {secretKeyRef: {name: leforge, key: anthropic-api-key, optional: true}}}
+            - {name: OPENROUTER_API_KEY, valueFrom: {secretKeyRef: {name: leforge, key: openrouter-api-key, optional: true}}}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, initialDelaySeconds: 15, periodSeconds: 10}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 2Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/leforge}
+            - {name: workspaces, mountPath: /var/lib/leforge/workspaces}
+            - {name: data, mountPath: /var/lib/leforge/data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: config, configMap: {name: leforge-config}}
+        - {name: workspaces, persistentVolumeClaim: {claimName: leforge-workspaces}}
+        - {name: data, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: leforge-forged
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: leforge-forged}}

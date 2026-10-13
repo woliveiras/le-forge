@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leforge-agents"
+version = "0.1.0"
+description = "Example LeForge agents: planner, researcher, developer, reviewer, qa"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = ["leforge>=0.1.0"]
+
+[project.optional-dependencies]
+langgraph = ["leforge[langgraph]"]
+
+[project.scripts]
+leforge-agents = "leforge_agents.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["leforge_agents*"]

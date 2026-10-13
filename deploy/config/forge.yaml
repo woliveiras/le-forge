@@ -1,0 +1,62 @@
+# LeForge control-plane configuration used by the container image.
+# Every value can be overridden with environment variables (see
+# docs/configuration.md); docker-compose.yml does exactly that.
+server:
+  addr: ":8080"
+  # How agent runtimes reach this instance's callback API. With several
+  # instances, set it per instance (pod IP / hostname), not to a load balancer.
+  internalUrl: "http://forged:8080"
+  maxBodyBytes: 8388608
+
+storage:
+  type: sqlite          # fs | sqlite | postgres   (LEFORGE_STORAGE_TYPE)
+
+queue:
+  type: fs              # fs | nats | redis | rabbitmq | kafka | memory   (LEFORGE_QUEUE_TYPE)
+
+workspaces:
+  root: /var/lib/leforge/workspaces
+
+llm:
+  # "mock" answers deterministically with no model and no network, so the
+  # platform is fully functional offline. Point LEFORGE_DEFAULT_PROVIDER at a
+  # real provider (ollama, vllm, openai, anthropic, openrouter, huggingface).
+  default: mock
+  providers:
+    - {name: mock, type: mock, defaultModel: mock-1}
+
+secrets:
+  # Installation key that encrypts credentials entered in the console.
+  # LEFORGE_SECRET_KEY (base64 or hex, 32 bytes) wins; otherwise keyFile is
+  # read, and created with a random key on first start when generateKeyFile
+  # is true. Older keys in LEFORGE_SECRET_KEY_PREVIOUS (comma-separated)
+  # still decrypt and are re-encrypted with the current key at startup.
+  keyEnv: LEFORGE_SECRET_KEY
+  keyFile: /var/lib/leforge/data/secret.key   # LEFORGE_SECRET_KEY_FILE
+  generateKeyFile: true
+  previousKeysEnv: LEFORGE_SECRET_KEY_PREVIOUS
+
+auth:
+  # LEFORGE_ADMIN_TOKEN adds an admin token. Add viewers/operators here:
+  # tokens:
+  #   - {name: ci, role: operator, tokenEnv: LEFORGE_CI_TOKEN}
+  #   - {name: dashboards, role: viewer, tokenFile: /run/secrets/leforge_viewer}
+  tokens: []
+
+runtimes:
+  sharedSecretEnv: LEFORGE_RUNTIME_SECRET
+
+isolation:
+  docker: {bin: docker, image: "leforge/sandbox:latest", network: none}
+
+observability:
+  serviceName: leforge
+  logFormat: json
+  logLevel: info
+  traceSampleRatio: 1.0
+
+engine:
+  leaseTTL: 20s
+  reconcileInterval: 2s
+  retryBackoff: 2s
+  maxConcurrentTurns: 32

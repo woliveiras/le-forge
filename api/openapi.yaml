@@ -1,0 +1,1356 @@
+openapi: 3.1.0
+info:
+  title: LeForge Control Plane API
+  version: "1.0.0"
+  summary: Vendor-neutral agent factory - graphs of continuously running agent loops.
+  description: |
+    Public REST API (`/api/v1`), live event stream (SSE), health/metrics, and the
+    Runtime Protocol v1 callback API (`/internal/v1`) used by external agent runtimes.
+
+    * Authentication: `Authorization: Bearer <token>`. Tokens are static (configured
+      with a role) or OIDC JWTs (RS256/ES256). `GET` requests may pass `?access_token=`
+      instead (needed by EventSource); never for writes.
+    * Roles are hierarchical: `viewer` < `operator` < `admin`. Each operation states the
+      minimum role in `x-leforge-role`.
+    * Errors use the `Error` schema. `details` carries a validation report for 422.
+    * JSON field names are camelCase; message metadata keys are snake_case.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8080
+    description: docker compose default
+tags:
+  - name: system
+  - name: graphs
+  - name: lifecycle
+  - name: nodes
+  - name: messages
+  - name: executions
+  - name: events
+  - name: approvals
+  - name: catalog
+  - name: workspace
+  - name: providers
+    description: Model providers - configured on the server or managed through the API with encrypted credentials.
+  - name: runtime-callback
+    description: |
+      Runtime Protocol v1 callbacks. Called by external agent runtimes during a turn with the
+      per-execution token from `TurnInput.callback.token`. The token authorises exactly one
+      running execution and stops working when the turn ends. Keep `/internal` off public ingress.
+security:
+  - bearer: []
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: healthz
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema: {type: object, properties: {status: {const: ok}}}
+  /readyz:
+    get:
+      tags: [system]
+      operationId: readyz
+      summary: Readiness probe (storage and broker reachable)
+      security: []
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Readiness"}
+        "503":
+          description: A dependency is not reachable (the failing check carries the error text)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Readiness"}
+  /metrics:
+    get:
+      tags: [system]
+      operationId: metrics
+      summary: Prometheus metrics (unauthenticated unless server.protectMetrics is set, then a viewer token is required)
+      security: []
+      responses:
+        "200":
+          description: Prometheus text exposition format
+          content:
+            text/plain: {schema: {type: string}}
+  /api/v1/info:
+    get:
+      tags: [system]
+      operationId: getInfo
+      summary: Platform information
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Info
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Info"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/v1/graphs:
+    get:
+      tags: [graphs]
+      operationId: listGraphs
+      summary: List graphs with their control records
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Graphs
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/GraphSummary"}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      tags: [graphs]
+      operationId: createGraph
+      summary: Create a graph (JSON or YAML)
+      x-leforge-role: admin
+      requestBody: {$ref: "#/components/requestBodies/GraphDocument"}
+      responses:
+        "201":
+          description: Created (version 1)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphSummary"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/Invalid"}
+  /api/v1/graphs/validate:
+    post:
+      tags: [graphs]
+      operationId: validateGraph
+      summary: Normalise and validate a graph without saving it
+      x-leforge-role: viewer
+      requestBody: {$ref: "#/components/requestBodies/GraphDocument"}
+      responses:
+        "200":
+          description: Validation report (valid or not)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ValidationReport"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/v1/graphs/{id}:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [graphs]
+      operationId: getGraph
+      summary: Get the latest (or a specific) version of a graph
+      x-leforge-role: viewer
+      parameters:
+        - name: version
+          in: query
+          schema: {type: integer, minimum: 0}
+          description: 0 or absent = latest
+      responses:
+        "200":
+          description: Graph
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphSummary"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [graphs]
+      operationId: updateGraph
+      summary: Save a new version (applied live if the graph is running)
+      description: |
+        Behaviour changes (prompt, model, tools, loop, approvals) apply on each replica's next
+        turn; structural changes (runtime, isolation, workspace, cluster comms) restart affected
+        replicas gracefully. Send `If-Match: <version>` for optimistic concurrency.
+      x-leforge-role: admin
+      parameters:
+        - name: If-Match
+          in: header
+          schema: {type: string}
+          description: Expected current version (e.g. `3`, quotes and `W/` are tolerated)
+      requestBody: {$ref: "#/components/requestBodies/GraphDocument"}
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphSummary"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/Invalid"}
+    delete:
+      tags: [graphs]
+      operationId: deleteGraph
+      summary: Delete a stopped graph definition (all versions, control record) and its broker groups; history is kept
+      x-leforge-role: admin
+      responses:
+        "204": {description: Deleted}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/graphs/{id}/versions:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [graphs]
+      operationId: listGraphVersions
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    version: {type: integer}
+                    createdAt: {type: string, format: date-time}
+                    author: {type: string}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/export:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [graphs]
+      operationId: exportGraph
+      summary: Download the graph document (attachment)
+      x-leforge-role: viewer
+      parameters:
+        - {name: format, in: query, schema: {enum: [yaml, json], default: yaml}}
+        - {name: version, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: Document
+          content:
+            application/yaml: {schema: {type: string}}
+            application/json: {schema: {$ref: "#/components/schemas/Graph"}}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/{action}:
+    parameters:
+      - $ref: "#/components/parameters/GraphId"
+      - name: action
+        in: path
+        required: true
+        schema: {enum: [start, stop, pause, resume, kill]}
+        description: |
+          start = new run (clears per-node stops); stop = graceful (in-flight turns finish);
+          kill = cancel in-flight turns (inputs are redelivered); pause/resume = no new turns.
+    post:
+      tags: [lifecycle]
+      operationId: graphAction
+      x-leforge-role: operator
+      responses:
+        "200":
+          description: Status after the action was recorded (convergence is asynchronous)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphStatus"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/graphs/{id}/status:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [lifecycle]
+      operationId: graphStatus
+      summary: Live replicas, states and queue depths
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphStatus"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/nodes/{node}/{action}:
+    parameters:
+      - $ref: "#/components/parameters/GraphId"
+      - $ref: "#/components/parameters/NodeId"
+      - name: action
+        in: path
+        required: true
+        schema: {enum: [start, stop, pause, resume, kill]}
+        description: Starting one node of a stopped graph starts the graph with only that node running.
+    post:
+      tags: [nodes]
+      operationId: nodeAction
+      x-leforge-role: operator
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphStatus"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/graphs/{id}/nodes/{node}/scale:
+    parameters:
+      - $ref: "#/components/parameters/GraphId"
+      - $ref: "#/components/parameters/NodeId"
+    put:
+      tags: [nodes]
+      operationId: scaleNode
+      summary: Set replicas (fixed clusters) or the ceiling (autoscaled clusters, saved as a new version)
+      x-leforge-role: operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replicas]
+              properties: {replicas: {type: integer, minimum: 0, maximum: 256}}
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/GraphStatus"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/nodes/{node}/chat:
+    parameters:
+      - $ref: "#/components/parameters/GraphId"
+      - $ref: "#/components/parameters/NodeId"
+    get:
+      tags: [nodes]
+      operationId: listOperatorMessages
+      summary: Latest 200 operator messages for the node (oldest first)
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/OperatorMessage"}}
+    post:
+      tags: [nodes]
+      operationId: sendOperatorMessage
+      summary: Send a human message to a node (wakes a waiting replica; withdraws a pending auto-stop)
+      x-leforge-role: operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1}
+                replica: {type: integer, description: "-1 or absent = whichever replica takes its next turn first"}
+      responses:
+        "201":
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/OperatorMessage"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/channels/{channel}/messages:
+    parameters:
+      - $ref: "#/components/parameters/GraphId"
+      - name: channel
+        in: path
+        required: true
+        schema: {type: string}
+    post:
+      tags: [messages]
+      operationId: injectMessage
+      summary: Inject a message onto a channel (held if the channel has an approval gate)
+      x-leforge-role: operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: {type: string}
+                payload: {description: Any JSON value}
+                target: {type: string}
+                metadata: {type: object, description: Reserved platform keys are ignored}
+            example:
+              type: feature.request
+              payload: {title: slugify, description: Add a slugify(text) helper.}
+      responses:
+        "201":
+          description: Published (or held)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Message"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/messages:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [messages]
+      operationId: listMessages
+      summary: Message history (newest first; one row per message, channel and consumer group)
+      x-leforge-role: viewer
+      parameters:
+        - {name: channel, in: query, schema: {type: string}, description: "`_unrouted` lists dropped messages"}
+        - {name: node, in: query, schema: {type: string}, description: Source or target node}
+        - {name: correlationId, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/MessageStatus"}}
+        - {$ref: "#/components/parameters/Limit"}
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/MessageRecord"}}
+  /api/v1/messages/{messageId}:
+    get:
+      tags: [messages]
+      operationId: getMessage
+      summary: Every history row of one message
+      x-leforge-role: viewer
+      parameters:
+        - {name: messageId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/MessageRecord"}}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/executions:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [executions]
+      operationId: listExecutions
+      summary: Turns (newest first)
+      x-leforge-role: viewer
+      parameters:
+        - {name: node, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/ExecutionStatus"}}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, default: 50}
+      responses:
+        "200":
+          description: Executions
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Execution"}}
+  /api/v1/executions/{executionId}:
+    get:
+      tags: [executions]
+      operationId: getExecution
+      x-leforge-role: viewer
+      parameters:
+        - {name: executionId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Execution
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Execution"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/events:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [events]
+      operationId: listEvents
+      summary: Event log page (ascending by seq)
+      description: Without `after`, returns the latest `limit` events (still ascending). With `after`, returns events with seq > after.
+      x-leforge-role: viewer
+      parameters:
+        - {name: after, in: query, schema: {type: integer, format: int64}}
+        - {name: node, in: query, schema: {type: string}}
+        - {name: types, in: query, schema: {type: string}, description: "Comma-separated event types", example: "execution.completed,execution.failed"}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, default: 200}
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Event"}}
+  /api/v1/events/stream:
+    get:
+      tags: [events]
+      operationId: streamEvents
+      summary: Live event stream (Server-Sent Events)
+      description: |
+        Frames: `id: <seq>`, `event: <type>`, `data: <Event JSON>`. The stream starts with
+        `retry: 3000` and `: connected`, and sends a `: ping` comment after 15 s without events.
+        Resume with `?after=<seq>` or the `Last-Event-ID` header; with neither, the stream starts
+        at the newest event ("now"). The stream tails the durable log, so it is correct across
+        several control-plane instances.
+      x-leforge-role: viewer
+      parameters:
+        - {name: graph, in: query, schema: {type: string}, description: Empty = all graphs}
+        - {name: after, in: query, schema: {type: integer, format: int64}}
+        - {name: node, in: query, schema: {type: string}}
+        - {name: types, in: query, schema: {type: string}}
+        - {name: access_token, in: query, schema: {type: string}, description: Alternative to the Authorization header (GET only)}
+        - {name: Last-Event-ID, in: header, schema: {type: string}}
+      responses:
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema: {type: string}
+              example: "id: 4211\nevent: execution.completed\ndata: {\"seq\":4211,\"type\":\"execution.completed\",...}\n\n"
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api/v1/approvals:
+    get:
+      tags: [approvals]
+      operationId: listApprovals
+      summary: Approvals (newest first)
+      x-leforge-role: viewer
+      parameters:
+        - {name: graph, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {$ref: "#/components/schemas/ApprovalStatus"}}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, default: 200}
+      responses:
+        "200":
+          description: Approvals
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Approval"}}
+  /api/v1/approvals/{approvalId}/{decision}:
+    parameters:
+      - {name: approvalId, in: path, required: true, schema: {type: string}}
+      - name: decision
+        in: path
+        required: true
+        schema: {enum: [approve, reject]}
+    post:
+      tags: [approvals]
+      operationId: decideApproval
+      summary: Approve or reject (first decision wins)
+      description: |
+        `answer` is the human's reply for `question` approvals, or a replacement payload (valid JSON)
+        for held `message` approvals.
+      x-leforge-role: operator
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment: {type: string}
+                answer: {type: string}
+      responses:
+        "200":
+          description: Decided
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Approval"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/providers:
+    get:
+      tags: [providers]
+      operationId: listProviders
+      summary: Configured and console-managed model providers (no secrets)
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Providers in registry order; ETag is the settings revision
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Provider"}}
+    post:
+      tags: [providers]
+      operationId: createProvider
+      summary: Create a console-managed provider (credential encrypted at rest)
+      x-leforge-role: admin
+      parameters:
+        - {$ref: "#/components/parameters/IfMatchRevision"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProviderInput"}
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Provider"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/InvalidProvider"}
+  /api/v1/providers/test:
+    post:
+      tags: [providers]
+      operationId: testProviderDraft
+      summary: Test unsaved provider settings (lists models, sends one short prompt); saves nothing
+      x-leforge-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProviderInput"}
+      responses:
+        "200":
+          description: Test result (ok reflects the inference)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProviderTestResult"}
+        "422": {$ref: "#/components/responses/InvalidProvider"}
+  /api/v1/providers/{name}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [providers]
+      operationId: getProvider
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Provider
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Provider"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [providers]
+      operationId: updateProvider
+      summary: Update a console-managed provider (omit apiKey to keep the stored credential)
+      x-leforge-role: admin
+      parameters:
+        - {$ref: "#/components/parameters/IfMatchRevision"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProviderInput"}
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Provider"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/InvalidProvider"}
+    delete:
+      tags: [providers]
+      operationId: deleteProvider
+      summary: Remove a console-managed provider (refused while selected by a graph or default)
+      x-leforge-role: admin
+      parameters:
+        - {$ref: "#/components/parameters/IfMatchRevision"}
+      responses:
+        "204": {description: Removed}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/InvalidProvider"}
+  /api/v1/providers/{name}/test:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string}}
+    post:
+      tags: [providers]
+      operationId: testProvider
+      summary: Test a saved provider through the LLM gateway
+      x-leforge-role: operator
+      responses:
+        "200":
+          description: Test result (ok reflects the inference)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProviderTestResult"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/provider-settings:
+    get:
+      tags: [providers]
+      operationId: getProviderSettings
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Settings revision, default provider, credential storage status, supported types
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProviderSettings"}
+    put:
+      tags: [providers]
+      operationId: setDefaultProvider
+      x-leforge-role: admin
+      parameters:
+        - {$ref: "#/components/parameters/IfMatchRevision"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [default]
+              properties:
+                default: {type: string, description: Provider name; empty returns to the configuration default}
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProviderSettings"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/InvalidProvider"}
+  /api/v1/providers/{name}/models:
+    get:
+      tags: [catalog]
+      operationId: listModels
+      x-leforge-role: viewer
+      parameters:
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Models the backend reports (best effort)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: {type: string}
+                    provider: {type: string}
+                    contextSize: {type: integer}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/tools:
+    get:
+      tags: [catalog]
+      operationId: listTools
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Registered tools
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: {type: string}
+                    capability: {type: string}
+                    description: {type: string}
+                    schema: {type: object}
+  /api/v1/graphs/{id}/files:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [workspace]
+      operationId: listFiles
+      summary: List a workspace directory (worktree of node/replica when it has one)
+      x-leforge-role: viewer
+      parameters:
+        - {name: path, in: query, schema: {type: string}}
+        - {name: node, in: query, schema: {type: string}}
+        - {name: replica, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: Entries (max 2000, .git hidden)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: {type: string}
+                    path: {type: string}
+                    dir: {type: boolean}
+                    size: {type: integer}
+                    modTime: {type: string, format: date-time}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/v1/graphs/{id}/files/content:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [workspace]
+      operationId: getFileContent
+      summary: Read a workspace file (first 4 MiB, always text/plain with a deny-all CSP)
+      x-leforge-role: viewer
+      parameters:
+        - {name: path, in: query, required: true, schema: {type: string}}
+        - {name: node, in: query, schema: {type: string}}
+        - {name: replica, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: File bytes
+          content:
+            text/plain: {schema: {type: string}}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  # ---------------------------------------------------------------- callbacks
+  /internal/v1/executions/{executionId}/tools:
+    parameters: [{$ref: "#/components/parameters/ExecutionId"}]
+    get:
+      tags: [runtime-callback]
+      operationId: cbListTools
+      security: [{executionToken: []}]
+      responses:
+        "200":
+          description: Granted tools only
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/ToolSchema"}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /internal/v1/executions/{executionId}/tools/{tool}:
+    parameters:
+      - $ref: "#/components/parameters/ExecutionId"
+      - {name: tool, in: path, required: true, schema: {type: string}, example: filesystem.read}
+    post:
+      tags: [runtime-callback]
+      operationId: cbInvokeTool
+      summary: Invoke a tool under the node's grants
+      description: "Execution failures (and budget exhaustion, invalid arguments) return 200 with `isError` set to true."
+      security: [{executionToken: []}]
+      requestBody:
+        content:
+          application/json:
+            schema: {type: object, description: Tool arguments (see GET /api/v1/tools)}
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ToolResult"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "429":
+          description: Grant rate limit exceeded
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /internal/v1/executions/{executionId}/llm/chat:
+    parameters: [{$ref: "#/components/parameters/ExecutionId"}]
+    post:
+      tags: [runtime-callback]
+      operationId: cbChat
+      summary: Call the node's model (model defaults to the node's; provider keys stay server-side)
+      security: [{executionToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChatRequest"}
+      responses:
+        "200":
+          description: Completion
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChatResponse"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "502":
+          description: Provider error or token budget exhausted (code `llm_error`)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /internal/v1/executions/{executionId}/emit:
+    parameters: [{$ref: "#/components/parameters/ExecutionId"}]
+    post:
+      tags: [runtime-callback]
+      operationId: cbEmit
+      summary: Queue an output message (published only if the turn succeeds)
+      security: [{executionToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/Emit"}
+      responses:
+        "200":
+          description: Queued
+          content:
+            application/json:
+              schema: {type: object, properties: {queued: {const: true}}}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /internal/v1/executions/{executionId}/state/{key}:
+    parameters:
+      - $ref: "#/components/parameters/ExecutionId"
+      - {name: key, in: path, required: true, schema: {type: string, maxLength: 512}, description: URL-encoded; may contain '/'}
+    get:
+      tags: [runtime-callback]
+      operationId: cbStateGet
+      summary: Read node memory (shared by all replicas of the node)
+      security: [{executionToken: []}]
+      responses:
+        "200":
+          description: Raw bytes
+          content:
+            application/octet-stream: {schema: {type: string, format: binary}}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [runtime-callback]
+      operationId: cbStatePut
+      security: [{executionToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary, maxLength: 1048576}
+      responses:
+        "204": {description: Stored}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /internal/v1/executions/{executionId}/output:
+    parameters: [{$ref: "#/components/parameters/ExecutionId"}]
+    post:
+      tags: [runtime-callback]
+      operationId: cbOutput
+      summary: Stream narration to observers (event agent.output, max 8000 chars kept)
+      security: [{executionToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [text], properties: {text: {type: string}}}
+      responses:
+        "204": {description: Recorded}
+  /internal/v1/executions/{executionId}/ask:
+    parameters: [{$ref: "#/components/parameters/ExecutionId"}]
+    post:
+      tags: [runtime-callback]
+      operationId: cbAsk
+      summary: Ask a human; blocks until answered (question approval)
+      security: [{executionToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [question], properties: {question: {type: string}}}
+      responses:
+        "200":
+          description: Answer
+          content:
+            application/json:
+              schema: {type: object, properties: {answer: {type: string}}}
+        "409":
+          description: Rejected or expired (code `no_answer`)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Static API token (role from config) or OIDC JWT (RS256/ES256, role claim `leforge_role` by default).
+    executionToken:
+      type: http
+      scheme: bearer
+      description: Per-execution token from TurnInput.callback.token; valid only while that turn runs.
+  parameters:
+    GraphId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"}
+    NodeId:
+      name: node
+      in: path
+      required: true
+      schema: {type: string}
+    ExecutionId:
+      name: executionId
+      in: path
+      required: true
+      schema: {type: string}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, default: 100}
+    IfMatchRevision:
+      name: If-Match
+      in: header
+      required: false
+      description: Provider settings revision the caller edited; a stale value returns 409.
+      schema: {type: string}
+  requestBodies:
+    GraphDocument:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Graph"}
+        application/yaml:
+          schema: {$ref: "#/components/schemas/Graph"}
+          example: |
+            apiVersion: leforge.io/v1
+            kind: Graph
+            metadata: {name: hello}
+            spec:
+              defaults: {runtime: {kind: echo}}
+              nodes: [{id: a}, {id: b}]
+              channels: [{id: in, to: [a]}, {id: ab, from: a, to: [b]}]
+  responses:
+    BadRequest:
+      description: Malformed request (code `invalid`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Unauthorized:
+      description: Missing or invalid credentials (code `unauthorized`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Forbidden:
+      description: Role too low, or tool denied/rejected (code `forbidden`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: Not found (code `not_found`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Conflict:
+      description: Version conflict, already exists, wrong state, or approval already decided (code `conflict`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Invalid:
+      description: Graph failed validation; `details` holds the report (code `invalid`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    InvalidProvider:
+      description: Provider input failed validation; `details.errors[]` holds `{path, message}` (code `invalid`)
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+  schemas:
+    Provider:
+      type: object
+      description: A model provider. Never contains a credential or its ciphertext.
+      required: [name, type, default, source, editable, credential, status]
+      properties:
+        name: {type: string}
+        type: {type: string}
+        baseUrl: {type: string}
+        defaultModel: {type: string}
+        default: {type: boolean}
+        timeoutSec: {type: integer}
+        maxRetries: {type: integer}
+        concurrency: {type: integer}
+        source: {enum: [config, managed], description: "config: server configuration (read-only); managed: created through the API"}
+        editable: {type: boolean}
+        credential:
+          type: object
+          properties:
+            configured: {type: boolean}
+            source: {enum: [stored, env, file, none]}
+            env: {type: string, description: Variable name for config providers}
+            updatedAt: {type: string, format: date-time}
+            error: {type: string}
+        status: {enum: [ready, unavailable]}
+        error: {type: string, description: Why the provider is unavailable}
+        lastTest: {$ref: "#/components/schemas/ProviderTestResult"}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string}
+    ProviderInput:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        name: {type: string, pattern: "^[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$", description: Required on create; cannot change}
+        type: {type: string, description: "openai, anthropic, openrouter, ollama, vllm, lmstudio, huggingface, tgi, mock"}
+        baseUrl: {type: string, format: uri}
+        defaultModel: {type: string, maxLength: 200}
+        timeoutSec: {type: integer, minimum: 0, maximum: 3600}
+        maxRetries: {type: integer, minimum: -1, maximum: 10}
+        concurrency: {type: integer, minimum: 0, maximum: 1000}
+        apiKey:
+          description: Omit to keep the stored credential; value replaces it; clear removes it.
+          type: object
+          additionalProperties: false
+          properties:
+            value: {type: string, writeOnly: true}
+            clear: {type: boolean}
+    ProviderTestResult:
+      type: object
+      properties:
+        provider: {type: string}
+        ok: {type: boolean, description: True when the test inference succeeded}
+        checkedAt: {type: string, format: date-time}
+        durationMs: {type: integer}
+        draft: {type: boolean}
+        model: {type: string}
+        models:
+          type: object
+          properties:
+            ok: {type: boolean}
+            count: {type: integer}
+            error: {type: string}
+            defaultModelListed: {type: boolean}
+        inference:
+          type: object
+          properties:
+            ok: {type: boolean}
+            reply: {type: string}
+            stopReason: {type: string}
+            inputTokens: {type: integer}
+            outputTokens: {type: integer}
+            durationMs: {type: integer}
+            error: {type: string, description: Redacted error message}
+    ProviderSettings:
+      type: object
+      properties:
+        revision: {type: integer}
+        default: {type: string}
+        configDefault: {type: string}
+        secrets:
+          type: object
+          properties:
+            enabled: {type: boolean, description: Whether credentials can be stored}
+            keySource: {enum: [none, env, file, generated]}
+            keyId: {type: string, description: Public identifier of the installation key (not the key)}
+        types:
+          type: array
+          items:
+            type: object
+            properties:
+              type: {type: string}
+              label: {type: string}
+              defaultBaseUrl: {type: string}
+              keyRequired: {type: boolean}
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error: {type: string}
+        code: {enum: [invalid, unauthorized, forbidden, not_found, conflict, rate_limited, internal, llm_error, no_answer, secret_key_missing]}
+        details: {description: "ValidationReport for 422"}
+      example: {error: "conflict: graph was modified (expected version 3)", code: conflict}
+    Readiness:
+      type: object
+      properties:
+        storage: {type: string, description: ok or the error}
+        queue: {type: string}
+    Info:
+      type: object
+      properties:
+        version: {type: string}
+        instance: {type: string}
+        queue: {type: string, examples: [nats]}
+        storage: {type: string, examples: [postgres]}
+        providers: {type: array, items: {type: string}}
+        defaultProvider: {type: string}
+        runtimes: {type: array, items: {type: string}}
+        grafanaUrl: {type: string}
+        identity:
+          type: object
+          description: "Caller identity. NOTE: currently serialised with Go field names (Name, Role)."
+          properties:
+            Name: {type: string}
+            Role: {enum: [viewer, operator, admin]}
+    Graph:
+      $ref: "../schemas/graph.schema.json"
+    Message:
+      $ref: "../schemas/message.schema.json"
+    Event:
+      $ref: "../schemas/event.schema.json"
+    Emit:
+      $ref: "../schemas/turn.schema.json#/$defs/Emit"
+    GraphState: {enum: [stopped, running, paused, stopping, failed]}
+    ReplicaState: {enum: [stopped, starting, idle, running, awaiting_approval, paused, stopping, completed, failed]}
+    ExecutionStatus: {enum: [pending, running, awaiting_approval, succeeded, failed, cancelled, interrupted]}
+    MessageStatus: {enum: [published, held, rejected, delivered, acked, nacked, dead_lettered, dropped]}
+    ApprovalStatus: {enum: [pending, approved, rejected, expired]}
+    GraphRecord:
+      type: object
+      properties:
+        id: {type: string}
+        version: {type: integer}
+        desiredState: {$ref: "#/components/schemas/GraphState"}
+        state: {$ref: "#/components/schemas/GraphState"}
+        runId: {type: string}
+        startedAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    GraphSummary:
+      type: object
+      required: [graph, record]
+      properties:
+        graph: {$ref: "#/components/schemas/Graph"}
+        record: {$ref: "#/components/schemas/GraphRecord"}
+    ValidationIssue:
+      type: object
+      properties:
+        path: {type: string, examples: ["spec.channels[2].when"]}
+        message: {type: string}
+    ValidationReport:
+      type: object
+      properties:
+        valid: {type: boolean}
+        errors: {type: array, items: {$ref: "#/components/schemas/ValidationIssue"}}
+        warnings: {type: array, items: {$ref: "#/components/schemas/ValidationIssue"}}
+    ReplicaStatus:
+      $ref: "../schemas/event.schema.json#/$defs/ReplicaStatus"
+    GraphStatus:
+      type: object
+      properties:
+        graphId: {type: string}
+        state: {$ref: "#/components/schemas/GraphState"}
+        desiredState: {$ref: "#/components/schemas/GraphState"}
+        runId: {type: string}
+        version: {type: integer}
+        approvalsPending: {type: integer}
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              nodeId: {type: string}
+              name: {type: string}
+              state: {$ref: "#/components/schemas/ReplicaState"}
+              desiredReplicas: {type: integer}
+              replicas: {type: array, items: {$ref: "#/components/schemas/ReplicaStatus"}}
+              pending: {type: integer, description: Messages waiting for this node across its input groups}
+              disabled: {type: boolean}
+              stopped: {type: boolean, description: Operator stopped this node}
+              paused: {type: boolean}
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              channelId: {type: string}
+              type: {enum: [queue, topic, fanout, broadcast]}
+              from: {type: string}
+              to: {type: array, items: {type: string}}
+              subject: {type: string, examples: ["software-factory.tasks"]}
+              approval: {type: boolean}
+              when: {type: string}
+              groups:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    group: {type: string}
+                    node: {type: string}
+                    replica: {type: integer}
+                    pending: {type: integer}
+                    inFlight: {type: integer}
+                    dead: {type: integer}
+    MessageRecord:
+      type: object
+      properties:
+        message: {$ref: "#/components/schemas/Message"}
+        graphId: {type: string}
+        channel: {type: string}
+        group: {type: string, description: Empty for publish-side rows}
+        status: {$ref: "#/components/schemas/MessageStatus"}
+        attempt: {type: integer}
+        consumer: {type: string, description: Execution id that consumed or emitted it}
+        error: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    Usage:
+      type: object
+      properties:
+        inputTokens: {type: integer}
+        outputTokens: {type: integer}
+    Execution:
+      type: object
+      properties:
+        id: {type: string}
+        graphId: {type: string}
+        graphVersion: {type: integer}
+        runId: {type: string}
+        nodeId: {type: string}
+        replica: {type: integer}
+        iteration: {type: integer}
+        status: {$ref: "#/components/schemas/ExecutionStatus"}
+        inputIds: {type: array, items: {type: string}}
+        outputIds: {type: array, items: {type: string}}
+        summary: {type: string}
+        error: {type: string}
+        signal: {type: string}
+        usage: {$ref: "#/components/schemas/Usage"}
+        toolCalls: {type: integer}
+        traceId: {type: string}
+        instance: {type: string}
+        startedAt: {type: string, format: date-time}
+        completedAt: {type: string, format: date-time}
+    Approval:
+      type: object
+      properties:
+        id: {type: string}
+        graphId: {type: string}
+        nodeId: {type: string}
+        replica: {type: integer}
+        executionId: {type: string}
+        kind: {enum: [tool, message, turn, question]}
+        status: {$ref: "#/components/schemas/ApprovalStatus"}
+        title: {type: string}
+        detail: {description: "tool: {tool,args}; message: {graphId,channel,message,onTimeout}; turn: {inputs,onTimeout}; question: {question}"}
+        answer: {type: string}
+        decidedBy: {type: string}
+        comment: {type: string}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+        decidedAt: {type: string, format: date-time}
+    OperatorMessage:
+      type: object
+      properties:
+        id: {type: string}
+        graphId: {type: string}
+        nodeId: {type: string}
+        replica: {type: integer}
+        text: {type: string}
+        author: {type: string}
+        createdAt: {type: string, format: date-time}
+        consumedAt: {type: string, format: date-time}
+    ToolSchema:
+      type: object
+      properties:
+        name: {type: string}
+        description: {type: string}
+        parameters: {type: object}
+    ToolResult:
+      type: object
+      properties:
+        content: {type: string}
+        data: {description: "Optional structured output (e.g. shell.exec returns exitCode, stdout, stderr)"}
+        isError: {type: boolean}
+        truncated: {type: boolean, description: Content capped at 32 KiB}
+    ChatMessage:
+      type: object
+      required: [role]
+      properties:
+        role: {enum: [system, user, assistant, tool]}
+        content: {type: string}
+        toolCalls:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              name: {type: string, description: Platform tool name (dots), e.g. filesystem.read}
+              arguments: {type: object}
+        toolCallId: {type: string}
+        name: {type: string}
+    ChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        model: {type: string, description: Empty = node model}
+        system: {type: string}
+        messages: {type: array, items: {$ref: "#/components/schemas/ChatMessage"}}
+        tools: {type: array, items: {$ref: "#/components/schemas/ToolSchema"}}
+        temperature: {type: number}
+        maxTokens: {type: integer}
+        json: {type: boolean, description: Request a JSON object response}
+        stop: {type: array, items: {type: string}}
+        metadata: {type: object, additionalProperties: {type: string}}
+    ChatResponse:
+      type: object
+      properties:
+        message: {$ref: "#/components/schemas/ChatMessage"}
+        stopReason: {type: string, examples: [stop, tool_calls, length]}
+        model: {type: string}
+        usage: {$ref: "#/components/schemas/Usage"}

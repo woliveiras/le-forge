@@ -1,0 +1,28 @@
+# LeForge on Kubernetes (plain manifests, kustomize).
+#   kubectl apply -k deploy/kubernetes
+# Prerequisites (not included): PostgreSQL (operator or managed service) and
+# a ReadWriteMany StorageClass for agent workspaces. NATS is included as a
+# single-node JetStream StatefulSet for evaluation; use the official NATS
+# Helm chart (3-node cluster, R3 streams) in production.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: leforge
+labels:
+  - pairs: {app.kubernetes.io/part-of: leforge}
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - secret.yaml
+  - configmap.yaml
+  - workspaces-pvc.yaml
+  - nats.yaml
+  - forged.yaml
+  - agents.yaml
+  - networkpolicies.yaml
+images:
+  - name: leforge/forged
+    newTag: dev
+  - name: leforge/agents
+    newTag: dev
+# Optional: Prometheus Operator integration
+#  - optional/servicemonitor.yaml

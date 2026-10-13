@@ -1,0 +1,13 @@
+data/
+web/node_modules/
+web/dist/
+**/__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.db
+*.key
+*.pem
+/server/forged
+/server/forge

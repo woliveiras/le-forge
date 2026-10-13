@@ -1,0 +1,460 @@
+package llmconfig_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/events"
+	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/llm/llmtest"
+	_ "github.com/woliveiras/le-forge/server/internal/llm/providers"
+	"github.com/woliveiras/le-forge/server/internal/llmconfig"
+	"github.com/woliveiras/le-forge/server/internal/secrets"
+	"github.com/woliveiras/le-forge/server/internal/storage"
+	"github.com/woliveiras/le-forge/server/internal/storage/fsstore"
+)
+
+var ctx = context.Background()
+
+const secretKey = "sk-test"
+
+func key(b byte) []byte { return bytes.Repeat([]byte{b}, secrets.KeySize) }
+
+type env struct {
+	store storage.Store
+	reg   *llm.Registry
+	box   *secrets.Box
+	m     *llmconfig.Manager
+	bus   *events.Bus
+	fake  *llmtest.Server
+	inUse map[string][]string
+}
+
+func newEnv(t *testing.T) *env {
+	t.Helper()
+	st, err := fsstore.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	box, err := secrets.NewBox(key(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &env{store: st, box: box, fake: llmtest.New(t, secretKey), inUse: map[string][]string{}}
+	e.m = e.manager(t, box)
+	return e
+}
+
+func (e *env) manager(t *testing.T, box *secrets.Box) *llmconfig.Manager {
+	t.Helper()
+	static := []llm.ProviderConfig{{Name: "offline", Type: "mock", DefaultModel: "mock-1"}}
+	reg, err := llm.NewRegistry(static, "offline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	bus := events.NewBus(e.store, log)
+	m, err := llmconfig.New(llmconfig.Options{
+		Store: e.store, Box: box, KeySource: secrets.SourceEnv, Registry: reg, Static: static, StaticDefault: "offline",
+		Bus: bus, Log: log, TestTimeout: 2 * time.Second,
+		InUse: func(_ context.Context, p string) ([]string, error) { return e.inUse[p], nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.reg, e.bus = reg, bus
+	return m
+}
+
+func (e *env) openaiInput(name string) llmconfig.ProviderInput {
+	return llmconfig.ProviderInput{
+		Name: name, Type: "openai", BaseURL: e.fake.BaseURL(), DefaultModel: "fake-small", MaxRetries: -1,
+		APIKey: &llmconfig.CredentialUpdate{Value: secretKey},
+	}
+}
+
+func issues(t *testing.T, err error) map[string]string {
+	t.Helper()
+	var ve *llmconfig.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("want ValidationError, got %v", err)
+	}
+	out := map[string]string{}
+	for _, i := range ve.Errors {
+		out[i.Path] = i.Message
+	}
+	return out
+}
+
+func TestCreateStoresSealedCredentialAndServesThroughRegistry(t *testing.T) {
+	e := newEnv(t)
+	v, err := e.m.Create(ctx, e.openaiInput("team-openai"), "alice", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Source != llmconfig.SourceManaged || !v.Editable || !v.Credential.Configured || v.Credential.Source != "stored" || v.Status != "ready" {
+		t.Fatalf("view = %+v", v)
+	}
+	raw, err := e.store.GetSetting(ctx, llmconfig.SettingKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw.Value, []byte(secretKey)) || raw.UpdatedBy != "alice" {
+		t.Fatalf("stored document leaks the credential or misses the author: %s", raw.Value)
+	}
+	b, _ := json.Marshal(e.m.List())
+	if bytes.Contains(b, []byte(secretKey)) || bytes.Contains(b, []byte("v1.")) {
+		t.Fatalf("list leaks credential material: %s", b)
+	}
+	// Agents select it by name; the gateway sends the decrypted key.
+	p, model, err := e.reg.Resolve(domain.ModelRef{Provider: "team-openai"})
+	if err != nil || model != "fake-small" {
+		t.Fatalf("resolve: %v %q", err, model)
+	}
+	resp, err := e.reg.Chat(ctx, p.Name(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: "hi"}}})
+	if err != nil || resp.Message.Content != "OK" {
+		t.Fatalf("chat: %v %+v", err, resp)
+	}
+	if e.fake.LastAuthorization() != "Bearer "+secretKey {
+		t.Fatalf("provider received %q", e.fake.LastAuthorization())
+	}
+	evs, _ := e.store.ListEvents(ctx, storage.EventFilter{Types: []domain.EventType{domain.EvProviderChanged}})
+	if len(evs) != 1 || evs[0].Actor != "alice" || bytes.Contains(evs[0].Data, []byte(secretKey)) {
+		t.Fatalf("audit events = %+v", evs)
+	}
+}
+
+func TestCreateValidation(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.m.Create(ctx, e.openaiInput("dup"), "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]struct {
+		in   llmconfig.ProviderInput
+		path string
+	}{
+		"bad name":      {llmconfig.ProviderInput{Name: "Bad Name", Type: "mock"}, "name"},
+		"reserved":      {llmconfig.ProviderInput{Name: "default", Type: "mock"}, "name"},
+		"duplicate":     {llmconfig.ProviderInput{Name: "dup", Type: "mock"}, "name"},
+		"config clash":  {llmconfig.ProviderInput{Name: "offline", Type: "mock"}, "name"},
+		"unknown type":  {llmconfig.ProviderInput{Name: "x", Type: "gpt-cloud"}, "type"},
+		"bad url":       {llmconfig.ProviderInput{Name: "x", Type: "ollama", BaseURL: "ftp://host"}, "baseUrl"},
+		"url creds":     {llmconfig.ProviderInput{Name: "x", Type: "ollama", BaseURL: "http://u:p@host"}, "baseUrl"},
+		"timeout":       {llmconfig.ProviderInput{Name: "x", Type: "mock", TimeoutSec: 99999}, "timeoutSec"},
+		"retries":       {llmconfig.ProviderInput{Name: "x", Type: "mock", MaxRetries: 50}, "maxRetries"},
+		"concurrency":   {llmconfig.ProviderInput{Name: "x", Type: "mock", Concurrency: -1}, "concurrency"},
+		"clear and set": {llmconfig.ProviderInput{Name: "x", Type: "mock", APIKey: &llmconfig.CredentialUpdate{Value: "k", Clear: true}}, "apiKey"},
+		"empty key":     {llmconfig.ProviderInput{Name: "x", Type: "mock", APIKey: &llmconfig.CredentialUpdate{Value: "  "}}, "apiKey"},
+		"multiline":     {llmconfig.ProviderInput{Name: "x", Type: "mock", APIKey: &llmconfig.CredentialUpdate{Value: "a\nb"}}, "apiKey"},
+		"hosted no key": {llmconfig.ProviderInput{Name: "x", Type: "openai"}, "apiKey"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := e.m.Create(ctx, c.in, "a", 0)
+			if got := issues(t, err); got[c.path] == "" {
+				t.Fatalf("want an issue at %q, got %v", c.path, got)
+			}
+		})
+	}
+	if names := e.reg.Names(); len(names) != 2 {
+		t.Fatalf("rejected inputs must not reach the registry: %v", names)
+	}
+}
+
+func TestWithoutEncryptionKeyCredentialsAreRefused(t *testing.T) {
+	e := newEnv(t)
+	m := e.manager(t, nil)
+	_, err := m.Create(ctx, e.openaiInput("nokey"), "a", 0)
+	if !errors.Is(err, secrets.ErrNoKey) || !strings.Contains(err.Error(), "LEFORGE_SECRET_KEY") {
+		t.Fatalf("want actionable ErrNoKey, got %v", err)
+	}
+	if _, err := e.store.GetSetting(ctx, llmconfig.SettingKey); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("nothing must be stored: %v", err)
+	}
+	// Keyless backends can still be managed.
+	if _, err := m.Create(ctx, llmconfig.ProviderInput{Name: "local", Type: "ollama", BaseURL: "http://ollama:11434"}, "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	if meta := m.Meta(); meta.Secrets.Enabled {
+		t.Fatalf("meta must report secrets disabled: %+v", meta.Secrets)
+	}
+}
+
+func TestUpdateKeepsReplacesAndClearsCredential(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.m.Create(ctx, e.openaiInput("p"), "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	// Omitted credential: kept.
+	in := e.openaiInput("p")
+	in.APIKey, in.DefaultModel = nil, "fake-large"
+	v, err := e.m.Update(ctx, "p", in, "bob", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.Credential.Configured || v.DefaultModel != "fake-large" || v.UpdatedBy != "bob" {
+		t.Fatalf("after keep: %+v", v)
+	}
+	if _, err := e.reg.Chat(ctx, "p", &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: "x"}}}); err != nil {
+		t.Fatalf("kept credential must still authenticate: %v", err)
+	}
+	// Replaced credential: the provider uses the new value at once.
+	in.APIKey = &llmconfig.CredentialUpdate{Value: "sk-rotated-999999"}
+	if _, err := e.m.Update(ctx, "p", in, "bob", 0); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.reg.Chat(ctx, "p", &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: "x"}}})
+	if err == nil || e.fake.LastAuthorization() != "Bearer sk-rotated-999999" {
+		t.Fatalf("replaced credential not in use: %v %q", err, e.fake.LastAuthorization())
+	}
+	// Clearing is refused where the type needs a key ...
+	in.APIKey = &llmconfig.CredentialUpdate{Clear: true}
+	if got := issues(t, ignoreView(e.m.Update(ctx, "p", in, "bob", 0))); got["apiKey"] == "" {
+		t.Fatalf("clearing a required key: %v", got)
+	}
+	// ... and allowed where it does not.
+	in.Type = "vllm"
+	v, err = e.m.Update(ctx, "p", in, "bob", 0)
+	if err != nil || v.Credential.Configured || v.Credential.Source != "none" {
+		t.Fatalf("after clear: %+v %v", v, err)
+	}
+	if _, err := e.m.Update(ctx, "p", llmconfig.ProviderInput{Name: "q", Type: "mock"}, "bob", 0); issues(t, err)["name"] == "" {
+		t.Fatal("rename must be refused")
+	}
+	if _, err := e.m.Update(ctx, "offline", llmconfig.ProviderInput{Type: "mock"}, "bob", 0); issues(t, err)["name"] == "" {
+		t.Fatal("config providers are read-only")
+	}
+	if _, err := e.m.Update(ctx, "ghost", llmconfig.ProviderInput{Type: "mock"}, "bob", 0); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("unknown provider: %v", err)
+	}
+}
+
+func ignoreView(_ *llmconfig.ProviderView, err error) error { return err }
+
+func TestStaleRevisionConflicts(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.m.Create(ctx, llmconfig.ProviderInput{Name: "a", Type: "mock"}, "u", 0); err != nil {
+		t.Fatal(err)
+	}
+	rev := e.m.Meta().Revision
+	if _, err := e.m.Create(ctx, llmconfig.ProviderInput{Name: "b", Type: "mock"}, "u", rev); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.m.Create(ctx, llmconfig.ProviderInput{Name: "c", Type: "mock"}, "u", rev); !errors.Is(err, storage.ErrConflict) {
+		t.Fatalf("stale revision: %v", err)
+	}
+	if _, err := e.m.Get("c"); err == nil {
+		t.Fatal("conflicting write must not apply")
+	}
+}
+
+func TestDeleteAndDefault(t *testing.T) {
+	e := newEnv(t)
+	for _, n := range []string{"a", "b"} {
+		if _, err := e.m.Create(ctx, llmconfig.ProviderInput{Name: n, Type: "mock", DefaultModel: n + "-model"}, "u", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.m.SetDefault(ctx, "ghost", "u", 0); issues(t, err)["default"] == "" {
+		t.Fatal("unknown default must be refused")
+	}
+	meta, err := e.m.SetDefault(ctx, "a", "u", 0)
+	if err != nil || meta.Default != "a" {
+		t.Fatalf("set default: %+v %v", meta, err)
+	}
+	if _, model, _ := e.reg.Resolve(domain.ModelRef{}); model != "a-model" {
+		t.Fatalf("nodes without a provider must use the new default, got %q", model)
+	}
+	if err := e.m.Delete(ctx, "a", "u", 0); !errors.Is(err, storage.ErrConflict) {
+		t.Fatalf("deleting the default: %v", err)
+	}
+	e.inUse["b"] = []string{"graph demo / node writer"}
+	if err := e.m.Delete(ctx, "b", "u", 0); !errors.Is(err, storage.ErrConflict) || !strings.Contains(err.Error(), "node writer") {
+		t.Fatalf("deleting a provider in use: %v", err)
+	}
+	delete(e.inUse, "b")
+	if err := e.m.Delete(ctx, "b", "u", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.reg.Resolve(domain.ModelRef{Provider: "b"}); err == nil {
+		t.Fatal("deleted provider must be gone from the registry")
+	}
+	if err := e.m.Delete(ctx, "offline", "u", 0); issues(t, err)["name"] == "" {
+		t.Fatal("config providers cannot be deleted")
+	}
+	if err := e.m.Delete(ctx, "b", "u", 0); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
+	}
+	if meta, err := e.m.SetDefault(ctx, "", "u", 0); err != nil || meta.Default != "offline" {
+		t.Fatalf("clearing the default returns to the config default: %+v %v", meta, err)
+	}
+}
+
+func TestConnectionTestUsesInference(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.m.Create(ctx, e.openaiInput("p"), "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.m.Test(ctx, "p", "op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK || !res.Inference.OK || res.Inference.Reply != "OK" || !res.Models.OK || res.Models.Count != 2 ||
+		res.Models.DefaultModelListed == nil || !*res.Models.DefaultModelListed || res.Model != "fake-small" {
+		t.Fatalf("result = %+v", res)
+	}
+	if e.fake.Chats() != 1 || e.fake.LastChat()["model"] != "fake-small" {
+		t.Fatalf("the test must send a real chat request: %d %v", e.fake.Chats(), e.fake.LastChat())
+	}
+	if v, _ := e.m.Get("p"); v.LastTest == nil || !v.LastTest.OK {
+		t.Fatalf("last test must be shown: %+v", v)
+	}
+	// Static providers can be tested too.
+	if res, err := e.m.Test(ctx, "offline", "op"); err != nil || !res.OK {
+		t.Fatalf("static test: %+v %v", res, err)
+	}
+	if _, err := e.m.Test(ctx, "ghost", "op"); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("unknown: %v", err)
+	}
+}
+
+func TestConnectionTestFailuresAreRedactedAndBounded(t *testing.T) {
+	e := newEnv(t)
+	in := e.openaiInput("p")
+	in.APIKey = &llmconfig.CredentialUpdate{Value: "sk-wrong-key"}
+	if _, err := e.m.Create(ctx, in, "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.m.Test(ctx, "p", "op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || res.Inference.Error == "" || !strings.Contains(res.Inference.Error, "401") {
+		t.Fatalf("wrong key: %+v", res)
+	}
+	b, _ := json.Marshal(res)
+	evs, _ := e.store.ListEvents(ctx, storage.EventFilter{Types: []domain.EventType{domain.EvProviderTested}})
+	eb, _ := json.Marshal(evs)
+	if bytes.Contains(b, []byte("sk-wrong-key")) || bytes.Contains(eb, []byte("sk-wrong-key")) || !bytes.Contains(b, []byte("[redacted]")) {
+		t.Fatalf("credential echoed by the provider must be redacted: %s %s", b, eb)
+	}
+	if len(evs) != 1 || evs[0].Level != "warn" {
+		t.Fatalf("failed test must be audited as a warning: %+v", evs)
+	}
+
+	in.APIKey = &llmconfig.CredentialUpdate{Value: secretKey}
+	if _, err := e.m.Update(ctx, "p", in, "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	e.fake.FailChat.Store(true)
+	if res, _ := e.m.Test(ctx, "p", "op"); res.OK || !res.Models.OK || !strings.Contains(res.Inference.Error, "500") {
+		t.Fatalf("model listing alone must not pass a test: %+v", res)
+	}
+	e.fake.FailChat.Store(false)
+	e.fake.Delay = 5 * time.Second
+	start := time.Now()
+	res, _ = e.m.Test(ctx, "p", "op")
+	if res.OK || !strings.Contains(res.Inference.Error, "timed out") || time.Since(start) > 4*time.Second {
+		t.Fatalf("timeout: %+v after %s", res.Inference, time.Since(start))
+	}
+}
+
+func TestDraftTest(t *testing.T) {
+	e := newEnv(t)
+	res, err := e.m.TestDraft(ctx, e.openaiInput("not-saved"), "a")
+	if err != nil || !res.OK || !res.Draft {
+		t.Fatalf("draft: %+v %v", res, err)
+	}
+	if _, err := e.m.Get("not-saved"); err == nil {
+		t.Fatal("a draft test must not save anything")
+	}
+	if _, err := e.m.Create(ctx, e.openaiInput("saved"), "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	draft := e.openaiInput("saved")
+	draft.APIKey, draft.DefaultModel = nil, "fake-large"
+	res, err = e.m.TestDraft(ctx, draft, "a")
+	if err != nil || !res.OK || res.Model != "fake-large" {
+		t.Fatalf("draft of a saved provider must reuse its credential: %+v %v", res, err)
+	}
+	if _, err := e.m.TestDraft(ctx, llmconfig.ProviderInput{Type: "openai", BaseURL: e.fake.BaseURL()}, "a"); issues(t, err)["apiKey"] == "" {
+		t.Fatal("draft without a required key must be rejected")
+	}
+}
+
+func TestKeyRotationAndLostKey(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.m.Create(ctx, e.openaiInput("p"), "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	// New primary key, old key kept as previous: values are re-sealed on load.
+	rotated, _ := secrets.NewBox(key(2), key(1))
+	m2 := e.manager(t, rotated)
+	raw, _ := e.store.GetSetting(ctx, llmconfig.SettingKey)
+	if !bytes.Contains(raw.Value, []byte("v1."+rotated.PrimaryKeyID()+".")) || raw.UpdatedBy != "system:key-rotation" {
+		t.Fatalf("credential not re-sealed with the new key: %s", raw.Value)
+	}
+	if res, _ := m2.Test(ctx, "p", "op"); !res.OK {
+		t.Fatalf("provider must work after rotation: %+v", res)
+	}
+	// The old key alone can no longer open it: explicit, actionable failure.
+	lost, _ := secrets.NewBox(key(1))
+	m3 := e.manager(t, lost)
+	v, err := m3.Get("p")
+	if err != nil || v.Status != "unavailable" || !strings.Contains(v.Error, "re-enter") || v.Credential.Error == "" {
+		t.Fatalf("lost key view: %+v %v", v, err)
+	}
+	if _, _, err := e.reg.Resolve(domain.ModelRef{Provider: "p"}); !errors.Is(err, llm.ErrUnavailable) {
+		t.Fatalf("agents selecting it must get the reason, not another provider: %v", err)
+	}
+	if _, _, err := e.reg.Resolve(domain.ModelRef{}); err != nil {
+		t.Fatalf("other providers keep working: %v", err)
+	}
+	// Re-entering the credential repairs it.
+	in := e.openaiInput("p")
+	if v, err := m3.Update(ctx, "p", in, "a", 0); err != nil || v.Status != "ready" {
+		t.Fatalf("repair: %+v %v", v, err)
+	}
+}
+
+func TestRefreshPicksUpOtherInstances(t *testing.T) {
+	e := newEnv(t)
+	other := e.manager(t, e.box) // shares the store, has its own registry
+	otherReg := e.reg
+	if _, err := e.m.Create(ctx, llmconfig.ProviderInput{Name: "late", Type: "mock"}, "u", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := otherReg.Resolve(domain.ModelRef{Provider: "late"}); err == nil {
+		t.Fatal("precondition: the other instance has not refreshed yet")
+	}
+	if err := other.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := otherReg.Resolve(domain.ModelRef{Provider: "late"}); err != nil {
+		t.Fatalf("after refresh: %v", err)
+	}
+}
+
+func TestCorruptStoredDocumentFailsLoad(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.store.PutSetting(ctx, llmconfig.SettingKey, []byte("{not json"), 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := llm.NewRegistry(nil, "")
+	m, _ := llmconfig.New(llmconfig.Options{Store: e.store, Registry: reg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err := m.Load(ctx); err == nil || !strings.Contains(err.Error(), "corrupt") {
+		t.Fatalf("corrupt settings must fail loudly: %v", err)
+	}
+}

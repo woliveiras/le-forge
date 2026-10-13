@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: leforge-config
+data:
+  forge.yaml: |
+    server:
+      addr: ":8080"
+      maxBodyBytes: 8388608
+      # internalUrl is set per pod from POD_IP (LEFORGE_INTERNAL_URL)
+    storage:
+      type: postgres            # DSN from the secret (LEFORGE_STORAGE_DSN)
+    queue:
+      type: nats
+      url: nats://leforge-nats:4222
+      options: {replicas: "1"}  # set "3" with a 3-node NATS cluster
+    workspaces:
+      root: /var/lib/leforge/workspaces
+    llm:
+      default: mock
+      providers:
+        - {name: mock, type: mock, defaultModel: mock-1}
+        # - {name: ollama, type: ollama, baseUrl: http://ollama.models.svc:11434, defaultModel: llama3.2, concurrency: 4}
+        # - {name: vllm, type: vllm, baseUrl: http://vllm.models.svc:8000/v1, defaultModel: Qwen/Qwen2.5-7B-Instruct}
+    secrets:
+      # Every replica must share one key: it comes from the Secret
+      # (LEFORGE_SECRET_KEY); never generate one per pod.
+      keyEnv: LEFORGE_SECRET_KEY
+      keyFile: ""
+      generateKeyFile: false
+      previousKeysEnv: LEFORGE_SECRET_KEY_PREVIOUS
+    auth:
+      tokens: []                # admin token from LEFORGE_ADMIN_TOKEN
+      # oidc: {issuer: https://sso.example.com/realms/leforge, audience: leforge, roleClaim: leforge_role}
+    runtimes:
+      sharedSecretEnv: LEFORGE_RUNTIME_SECRET
+    observability:
+      serviceName: leforge
+      logFormat: json
+      logLevel: info
+      traceSampleRatio: 0.2
+      # otlpEndpoint: http://otel-collector.observability.svc:4318
+    engine:
+      leaseTTL: 20s
+      reconcileInterval: 5s
+      retryBackoff: 2s
+      maxConcurrentTurns: 64

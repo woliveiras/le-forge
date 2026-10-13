@@ -1,0 +1,494 @@
+// TypeScript mirrors of the Go domain types (server/internal/domain, runtime,
+// llm, tools). Field names are the Go JSON tags. Durations are Go duration
+// strings ("90s", "2h") or "" when unset.
+
+export type Duration = string;
+
+export interface Message {
+  id: string;
+  type: string;
+  source: string;
+  target: string;
+  payload: unknown;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface Graph {
+  apiVersion: string;
+  kind: string;
+  metadata: GraphMetadata;
+  spec: GraphSpec;
+}
+
+export interface GraphMetadata {
+  id: string;
+  name: string;
+  description?: string;
+  labels?: Record<string, string>;
+  version?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GraphSpec {
+  parameters?: Parameter[];
+  workspace?: { path?: string; git?: boolean; repo?: string };
+  defaults?: Partial<Pick<GraphNode, 'runtime' | 'model' | 'tools' | 'isolation' | 'loop'>>;
+  nodes: GraphNode[];
+  channels?: Channel[];
+  maxHops?: number;
+}
+
+export interface Parameter {
+  name: string;
+  value: string;
+  description?: string;
+}
+
+export type RuntimeKind = 'native' | 'external' | 'echo';
+export type LoopMode = 'once' | 'continuous' | 'scheduled' | 'event';
+export type StopPolicy = 'never' | 'auto' | 'iterations' | 'duration' | 'idle';
+export type ClusterMode = 'fixed' | 'autoscale';
+export type ClusterComms = 'isolated' | 'ring';
+export type IsolationMode = 'process' | 'docker' | 'kubernetes';
+export type ChannelType = 'queue' | 'topic' | 'fanout' | 'broadcast';
+
+export interface RuntimeRef {
+  kind?: RuntimeKind;
+  framework?: string;
+  agent?: string;
+  endpoint?: string;
+  command?: string[];
+  image?: string;
+  env?: Record<string, string>;
+}
+
+export interface ModelRef {
+  provider?: string;
+  name?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface ToolGrant {
+  name: string;
+  paths?: string[];
+  commands?: string[];
+  hosts?: string[];
+  requiresApproval?: boolean;
+  rateLimit?: number;
+}
+
+export interface LoopSpec {
+  mode?: LoopMode;
+  schedule?: string;
+  interval?: Duration;
+  stop?: { policy?: StopPolicy; maxIterations?: number; maxDuration?: Duration; idleTimeout?: Duration };
+  batchSize?: number;
+}
+
+export interface ClusterSpec {
+  mode?: ClusterMode;
+  replicas?: number;
+  minReplicas?: number;
+  maxReplicas?: number;
+  comms?: ClusterComms;
+  scaleDownAfter?: Duration;
+}
+
+export interface IsolationSpec {
+  mode?: IsolationMode;
+  image?: string;
+  cpu?: string;
+  memory?: string;
+  network?: string;
+  env?: Record<string, string>;
+}
+
+export interface GraphNode {
+  id: string;
+  name?: string;
+  description?: string;
+  runtime?: RuntimeRef;
+  model?: ModelRef;
+  prompt?: string;
+  // Grants may come back as bare strings from hand-written documents.
+  tools?: (ToolGrant | string)[];
+  loop?: LoopSpec;
+  cluster?: ClusterSpec;
+  isolation?: IsolationSpec;
+  workspace?: { mode?: 'shared' | 'worktree'; subdir?: string };
+  approval?: { beforeTurn?: boolean; beforeEmit?: boolean; timeout?: Duration; onTimeout?: string };
+  subscribe?: string[];
+  limits?: { turnTimeout?: Duration; maxToolCalls?: number; maxTokens?: number };
+  disabled?: boolean;
+  config?: Record<string, unknown>;
+  position?: { x: number; y: number } | null;
+}
+
+export interface Channel {
+  id: string;
+  type?: ChannelType;
+  from?: string;
+  to?: string[];
+  topic?: string;
+  types?: string[];
+  when?: string;
+  approval?: boolean;
+  maxDeliver?: number;
+  ackWait?: Duration;
+  retention?: Duration;
+  label?: string;
+}
+
+export type GraphState = 'stopped' | 'running' | 'paused' | 'stopping' | 'failed';
+export type ReplicaState =
+  | 'stopped'
+  | 'starting'
+  | 'idle'
+  | 'running'
+  | 'awaiting_approval'
+  | 'paused'
+  | 'stopping'
+  | 'completed'
+  | 'failed';
+export type ExecutionStatus =
+  | 'pending'
+  | 'running'
+  | 'awaiting_approval'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'interrupted';
+export type MessageStatus =
+  | 'published'
+  | 'held'
+  | 'rejected'
+  | 'delivered'
+  | 'acked'
+  | 'nacked'
+  | 'dead_lettered'
+  | 'dropped';
+
+export interface GraphRecord {
+  id: string;
+  version: number;
+  desiredState: GraphState;
+  state: GraphState;
+  runId?: string;
+  startedAt?: string;
+  updatedAt: string;
+}
+
+export interface GraphSummary {
+  graph: Graph;
+  record: GraphRecord;
+}
+
+export interface ReplicaStatus {
+  graphId: string;
+  nodeId: string;
+  replica: number;
+  state: ReplicaState;
+  iteration: number;
+  runIteration: number;
+  executionId?: string;
+  instance?: string;
+  detail?: string;
+  workdir?: string;
+  branch?: string;
+  deadline?: string;
+  updatedAt: string;
+}
+
+export interface GroupStats {
+  group: string;
+  node?: string;
+  replica?: number;
+  pending: number;
+  inFlight: number;
+  dead: number;
+}
+
+export interface NodeStatus {
+  nodeId: string;
+  name?: string;
+  state: ReplicaState;
+  desiredReplicas: number;
+  replicas: ReplicaStatus[] | null;
+  pending: number;
+  disabled?: boolean;
+}
+
+export interface ChannelStatus {
+  channelId: string;
+  type: ChannelType;
+  from?: string;
+  to: string[] | null;
+  subject?: string;
+  groups: GroupStats[] | null;
+}
+
+export interface GraphStatus {
+  graphId: string;
+  state: GraphState;
+  desiredState: GraphState;
+  runId?: string;
+  version: number;
+  nodes: NodeStatus[] | null;
+  channels: ChannelStatus[] | null;
+  approvalsPending: number;
+}
+
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface Execution {
+  id: string;
+  graphId: string;
+  graphVersion: number;
+  runId: string;
+  nodeId: string;
+  replica: number;
+  iteration: number;
+  status: ExecutionStatus;
+  inputIds?: string[];
+  outputIds?: string[];
+  summary?: string;
+  error?: string;
+  signal?: string;
+  usage: Usage;
+  toolCalls: number;
+  traceId?: string;
+  instance?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface MessageRecord {
+  message: Message;
+  graphId: string;
+  channel: string;
+  group?: string;
+  status: MessageStatus;
+  attempt: number;
+  consumer?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ApprovalKind = 'tool' | 'message' | 'turn' | 'question';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+export interface Approval {
+  id: string;
+  graphId: string;
+  nodeId?: string;
+  replica: number;
+  executionId?: string;
+  kind: ApprovalKind;
+  status: ApprovalStatus;
+  title: string;
+  detail?: unknown;
+  answer?: string;
+  decidedBy?: string;
+  comment?: string;
+  createdAt: string;
+  expiresAt?: string;
+  decidedAt?: string;
+}
+
+export interface OperatorMessage {
+  id: string;
+  graphId: string;
+  nodeId: string;
+  replica: number;
+  text: string;
+  author: string;
+  createdAt: string;
+  consumedAt?: string;
+}
+
+export interface LeForgeEvent {
+  seq: number;
+  id: string;
+  type: string;
+  time: string;
+  graphId?: string;
+  nodeId?: string;
+  replica?: number;
+  executionId?: string;
+  messageId?: string;
+  actor?: string;
+  traceId?: string;
+  level?: string;
+  data?: unknown;
+}
+
+export interface Info {
+  version: string;
+  instance: string;
+  queue: string;
+  storage: string;
+  providers: unknown[];
+  runtimes: string[];
+  defaultProvider?: string;
+  grafanaUrl?: string;
+  identity?: { name: string; role: 'viewer' | 'operator' | 'admin' };
+}
+
+/** Where a provider credential comes from; the value itself is never returned. */
+export interface CredentialState {
+  configured: boolean;
+  /** stored (encrypted by LeForge) | env | file | none */
+  source: 'stored' | 'env' | 'file' | 'none';
+  env?: string;
+  updatedAt?: string;
+  error?: string;
+}
+
+export interface ProviderTestResult {
+  provider: string;
+  ok: boolean;
+  checkedAt: string;
+  durationMs: number;
+  draft?: boolean;
+  model?: string;
+  models: { ok: boolean; count: number; error?: string; defaultModelListed?: boolean };
+  inference: {
+    ok: boolean;
+    reply?: string;
+    stopReason?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    durationMs?: number;
+    error?: string;
+  };
+}
+
+export interface ProviderInfo {
+  name: string;
+  type: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  default?: boolean;
+  timeoutSec?: number;
+  maxRetries?: number;
+  concurrency?: number;
+  /** config: defined in the server configuration (read-only here); managed: created in the console. */
+  source?: 'config' | 'managed';
+  editable?: boolean;
+  credential?: CredentialState;
+  status?: 'ready' | 'unavailable';
+  error?: string;
+  lastTest?: ProviderTestResult;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface ProviderTypeInfo {
+  type: string;
+  label: string;
+  defaultBaseUrl?: string;
+  keyRequired: boolean;
+}
+
+export interface ProviderSettings {
+  revision: number;
+  default: string;
+  configDefault?: string;
+  secrets: { enabled: boolean; keySource: string; keyId?: string };
+  types: ProviderTypeInfo[];
+}
+
+/** Credential change: omit to keep, {value} to replace, {clear: true} to remove. */
+export type CredentialUpdate = { value: string } | { clear: true };
+
+export interface ProviderInput {
+  name?: string;
+  type: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  timeoutSec?: number;
+  maxRetries?: number;
+  concurrency?: number;
+  apiKey?: CredentialUpdate;
+}
+
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  contextSize?: number;
+}
+
+export interface ReadyChecks {
+  storage: string;
+  queue: string;
+}
+
+export interface HealthStatus {
+  status: string;
+}
+
+export interface ToolInfo {
+  name: string;
+  capability: string;
+  description: string;
+  schema: unknown;
+}
+
+export interface ValidationIssue {
+  path: string;
+  message: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationIssue[] | null;
+  warnings: ValidationIssue[] | null;
+}
+
+export interface GraphVersion {
+  version: number;
+  createdAt: string;
+  author?: string;
+}
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  dir: boolean;
+  size: number;
+  modTime: string;
+}
+
+export type GraphAction = 'start' | 'stop' | 'pause' | 'resume' | 'kill';
+
+// Well-known metadata keys (domain/message.go).
+export const META = {
+  graph: 'graph',
+  channel: 'channel',
+  runId: 'run_id',
+  correlationId: 'correlation_id',
+  causationId: 'causation_id',
+  executionId: 'execution_id',
+  hops: 'hops',
+  createdAt: 'created_at',
+  traceparent: 'traceparent',
+  injectedBy: 'injected_by',
+  replica: 'replica',
+} as const;
+
+export function grantName(g: ToolGrant | string): string {
+  return typeof g === 'string' ? g : g.name;
+}
+
+export function traceIdFromParent(tp: unknown): string | undefined {
+  // W3C traceparent: version-traceid-spanid-flags
+  if (typeof tp !== 'string') return undefined;
+  const parts = tp.split('-');
+  return parts.length >= 4 ? parts[1] : undefined;
+}

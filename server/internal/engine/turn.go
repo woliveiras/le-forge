@@ -1,0 +1,617 @@
+package engine
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/graph"
+	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/observability"
+	"github.com/woliveiras/le-forge/server/internal/queue"
+	"github.com/woliveiras/le-forge/server/internal/runtime"
+	"github.com/woliveiras/le-forge/server/internal/tools"
+	"github.com/woliveiras/le-forge/server/internal/workspace"
+)
+
+type turnOutcome struct {
+	err       error
+	completed bool
+	reason    string
+}
+
+// turn runs one turn end to end: execution record, runtime call, routing
+// of outputs, acknowledgement of inputs, stop handshake, ring broadcast.
+func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Delivery, from []*sub, ops []*domain.OperatorMessage) turnOutcome {
+	gr := r.run_l()
+	e := gr.e
+	gid := gr.g.Metadata.ID
+
+	release, err := e.acquireTurn(loopCtx)
+	if err != nil {
+		nackAll(dels, 0)
+		return turnOutcome{}
+	}
+	defer release()
+
+	// A turn survives a graceful stop (loopCtx) but not a kill (turnCtx).
+	base := context.WithoutCancel(loopCtx)
+	turnCtx, cancel := context.WithTimeout(base, n.Limits.TurnTimeout.D())
+	defer cancel()
+	r.mu.Lock()
+	r.turnCancel = cancel
+	r.iteration++
+	r.runIter++
+	iter := r.iteration
+	pendingStop := r.pendStop
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.turnCancel = nil
+		r.execID = ""
+		r.mu.Unlock()
+	}()
+
+	inputs := make([]*domain.Message, len(dels))
+	for i, d := range dels {
+		inputs[i] = d.Message()
+	}
+
+	// Trace: the turn continues the trace of its first input; further inputs
+	// are linked, so fan-in shows up as one span with several parents.
+	var links []trace.Link
+	parent := base
+	for i, m := range inputs {
+		c := observability.Extract(base, m.Metadata)
+		if i == 0 {
+			parent = c
+		} else {
+			links = append(links, trace.Link{SpanContext: trace.SpanContextFromContext(c)})
+		}
+	}
+	turnCtx, span := observability.Tracer().Start(trace.ContextWithSpanContext(turnCtx, trace.SpanContextFromContext(parent)), "agent.turn",
+		trace.WithLinks(links...),
+		trace.WithAttributes(
+			attribute.String("leforge.graph", gid), attribute.String("leforge.node", n.ID),
+			attribute.Int("leforge.replica", r.index), attribute.Int("leforge.iteration", iter),
+			attribute.Int("leforge.inputs", len(inputs)),
+		))
+	defer span.End()
+
+	now := time.Now().UTC()
+	x := &domain.Execution{
+		ID: domain.NewID("exe"), GraphID: gid, GraphVer: gr.version, RunID: gr.runID,
+		NodeID: n.ID, Replica: r.index, Iteration: iter, Status: domain.ExecRunning,
+		TraceID: observability.TraceID(turnCtx), Instance: e.opt.Instance, StartedAt: now,
+	}
+	for _, m := range inputs {
+		x.InputIDs = append(x.InputIDs, m.ID)
+	}
+	span.SetAttributes(attribute.String("leforge.execution", x.ID))
+	_ = e.store.PutExecution(turnCtx, x)
+	r.mu.Lock()
+	r.execID = x.ID
+	r.mu.Unlock()
+	r.setState(domain.ReplicaRunning, "")
+	e.bus.Publish(turnCtx, domain.NewEvent(domain.EvExecStarted, gid, map[string]any{"iteration": iter, "inputs": x.InputIDs}).
+		WithNode(n.ID, r.index).WithExecution(x.ID).WithTrace(x.TraceID))
+
+	for i, d := range dels {
+		m := d.Message()
+		if t := m.CreatedAt(); !t.IsZero() {
+			observability.MessageLatency.WithLabelValues(gid, n.ID).Observe(time.Since(t).Seconds())
+		}
+		e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, m, domain.MsgDelivered, d.Attempt(), x.ID, "")
+	}
+
+	// Keep leases alive while the turn runs.
+	stopExtend := r.extendLeases(turnCtx, dels, from)
+	defer stopExtend()
+
+	finish := func(st domain.ExecutionStatus, errMsg string) {
+		done := time.Now().UTC()
+		x.Status, x.Error, x.CompletedAt = st, errMsg, &done
+		_ = e.store.PutExecution(context.WithoutCancel(turnCtx), x)
+		observability.Executions.WithLabelValues(gid, n.ID, string(st)).Inc()
+		observability.ExecutionDuration.WithLabelValues(gid, n.ID).Observe(done.Sub(x.StartedAt).Seconds())
+		ev := domain.EvExecCompleted
+		if st != domain.ExecSucceeded {
+			ev = domain.EvExecFailed
+		}
+		e.bus.Publish(context.WithoutCancel(turnCtx), domain.NewEvent(ev, gid, x).WithNode(n.ID, r.index).WithExecution(x.ID).WithTrace(x.TraceID))
+	}
+
+	// Human gate before the turn.
+	if n.Approval.BeforeTurn {
+		r.setState(domain.ReplicaAwaitingApproval, "waiting for approval to start the turn")
+		a, err := e.opt.Approvals.RequestApproval(turnCtx, &domain.Approval{
+			GraphID: gid, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID, Kind: domain.ApprovalTurn,
+			Title:     fmt.Sprintf("%s wants to start turn %d", n.DisplayName(), iter),
+			Detail:    mustJSON(map[string]any{"inputs": inputs, "onTimeout": n.Approval.OnTimeout}),
+			ExpiresAt: expiry(n.Approval.Timeout),
+		})
+		if err != nil || a.Status != domain.ApprovalApproved {
+			reason := "turn rejected by operator"
+			if err != nil {
+				reason = err.Error()
+				nackAll(dels, e.opt.RetryBackoff)
+				finish(domain.ExecCancelled, reason)
+				return turnOutcome{}
+			}
+			for i, d := range dels {
+				_ = d.Term(context.WithoutCancel(turnCtx), reason)
+				e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgDeadLettered, d.Attempt(), x.ID, reason)
+			}
+			finish(domain.ExecCancelled, reason)
+			return turnOutcome{}
+		}
+		r.setState(domain.ReplicaRunning, "")
+	}
+
+	env := newTurnEnv(r, gr, n, x)
+	env.span = trace.SpanContextFromContext(turnCtx)
+	token := e.execs.register(x.ID, env)
+	defer e.execs.unregister(x.ID)
+
+	in := r.buildInput(turnCtx, gr, n, x, inputs, ops, pendingStop, env.principal)
+	if e.opt.CallbackURL != "" {
+		in.Callback = &runtime.Callback{URL: strings.TrimRight(e.opt.CallbackURL, "/") + "/internal/v1/executions/" + x.ID, Token: token}
+	}
+
+	rt := e.opt.Runtimes[n.Runtime.Kind]
+	res, err := rt.Turn(turnCtx, in, env)
+	killed := errors.Is(turnCtx.Err(), context.Canceled)
+	if err == nil && res == nil {
+		err = errors.New("runtime returned no result")
+	}
+	if err == nil && res.Retry {
+		err = errors.New("agent asked to retry later")
+	}
+
+	if err != nil {
+		observability.EndSpan(span, err)
+		st := domain.ExecFailed
+		delay := time.Duration(0)
+		switch {
+		case killed:
+			st = domain.ExecCancelled
+		case errors.Is(turnCtx.Err(), context.DeadlineExceeded):
+			err = fmt.Errorf("turn timed out after %s: %w", n.Limits.TurnTimeout.D(), err)
+		}
+		for i, d := range dels {
+			if st != domain.ExecCancelled {
+				delay = backoffDelay(e.opt.RetryBackoff, d.Attempt())
+			}
+			ch := from[i].cfg
+			if st == domain.ExecFailed && ch != nil && d.Attempt() >= ch.MaxDeliver {
+				_ = d.Term(context.WithoutCancel(turnCtx), err.Error())
+				e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgDeadLettered, d.Attempt(), x.ID, err.Error())
+				observability.MessagesConsumed.WithLabelValues(gid, n.ID, "dead").Inc()
+				continue
+			}
+			_ = d.Nack(context.WithoutCancel(turnCtx), delay)
+			e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgNacked, d.Attempt(), x.ID, err.Error())
+			observability.MessagesConsumed.WithLabelValues(gid, n.ID, "nacked").Inc()
+		}
+		// Operator messages were consumed by this turn; give them back.
+		for _, op := range ops {
+			cp := *op
+			cp.ID, cp.Consumed = domain.NewID("opm"), nil
+			_ = e.store.PutOperatorMessage(context.WithoutCancel(turnCtx), &cp)
+		}
+		x.Usage = env.usage()
+		x.ToolCalls = env.toolCalls()
+		finish(st, err.Error())
+		if killed {
+			return turnOutcome{}
+		}
+		return turnOutcome{err: err}
+	}
+
+	// Success: publish, then ack. A crash between the two redelivers the
+	// inputs; consumers drop the duplicate by message id.
+	emits := append(env.drainEmits(), res.Emits...)
+	var parentMsg *domain.Message
+	if len(inputs) > 0 {
+		parentMsg = inputs[0]
+	}
+	pubCtx := context.WithoutCancel(turnCtx)
+	for _, em := range emits {
+		ids, perr := e.emit(pubCtx, gr, n, r.index, x, parentMsg, em)
+		if perr != nil {
+			e.log.Warn("emit failed", "graph", gid, "node", n.ID, "err", perr)
+		}
+		x.OutputIDs = append(x.OutputIDs, ids...)
+	}
+	for i, d := range dels {
+		if err := d.Ack(pubCtx); err != nil {
+			e.log.Warn("ack failed", "err", err)
+		}
+		_, _ = e.store.MarkProcessed(pubCtx, from[i].group.Group, d.Message().ID)
+		e.recordMessage(pubCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgAcked, d.Attempt(), x.ID, "")
+		observability.MessagesConsumed.WithLabelValues(gid, n.ID, "acked").Inc()
+	}
+
+	if n.Cluster.Comms == domain.CommsRing {
+		line := strings.TrimSpace(res.Broadcast)
+		if line == "" {
+			line = "(no broadcast; " + truncate(res.Summary, 120) + ")"
+		}
+		e.putBroadcast(pubCtx, gid, n.ID, r.index, iter, line)
+	}
+
+	x.Summary = truncate(res.Summary, 4000)
+	x.Signal = string(res.Signal)
+	x.Usage = env.usage()
+	x.Usage.Add(domain.Usage{InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens})
+	x.ToolCalls = env.toolCalls() + res.ToolCalls
+	finish(domain.ExecSucceeded, "")
+	span.SetAttributes(attribute.Int("leforge.outputs", len(x.OutputIDs)))
+
+	// Auto-stop handshake: declaration, then confirmation on the next turn.
+	if n.Loop.Stop.Policy == domain.StopAuto {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		switch {
+		case pendingStop && res.Signal == runtime.SignalConfirmStop:
+			return turnOutcome{completed: true, reason: "agent confirmed there is no further work"}
+		case res.Signal == runtime.SignalNoFurtherWork || res.Signal == runtime.SignalConfirmStop:
+			r.pendStop = len(ops) == 0 // an operator leaning in withdraws it
+		default:
+			r.pendStop = false
+		}
+	}
+	return turnOutcome{}
+}
+
+func nackAll(dels []queue.Delivery, delay time.Duration) {
+	for _, d := range dels {
+		_ = d.Nack(context.Background(), delay)
+	}
+}
+
+func expiry(d domain.Duration) *time.Time {
+	if d <= 0 {
+		return nil
+	}
+	t := time.Now().Add(d.D())
+	return &t
+}
+
+func (r *replica) extendLeases(ctx context.Context, dels []queue.Delivery, from []*sub) func() {
+	if len(dels) == 0 {
+		return func() {}
+	}
+	every := 5 * time.Minute
+	for _, s := range from {
+		if s.cfg != nil && s.cfg.AckWait.D()/3 < every {
+			every = s.cfg.AckWait.D() / 3
+		}
+	}
+	if every < time.Second {
+		every = time.Second
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				for _, d := range dels {
+					_ = d.Extend(ctx)
+				}
+			}
+		}
+	}()
+	return cancel
+}
+
+func (r *replica) buildInput(ctx context.Context, gr *graphRun, n *domain.Node, x *domain.Execution, inputs []*domain.Message, ops []*domain.OperatorMessage, pendingStop bool, p *tools.Principal) *runtime.TurnInput {
+	e := gr.e
+	r.mu.Lock()
+	workdir, branch := r.workdir, r.branch
+	r.mu.Unlock()
+	in := &runtime.TurnInput{
+		ExecutionID: x.ID, GraphID: gr.g.Metadata.ID, GraphName: gr.g.Metadata.Name,
+		NodeID: n.ID, NodeName: n.DisplayName(), Replica: r.index, Replicas: gr.replicaCount(n.ID),
+		Iteration: x.Iteration, Agent: n.Runtime.Agent,
+		Prompt: graph.Substitute(n.Prompt, gr.params), Inputs: inputs,
+		Model: n.Model, PendingStop: pendingStop, Workdir: workdir, Branch: branch,
+		Parameters: gr.params, Config: n.Config,
+	}
+	if in.Inputs == nil {
+		in.Inputs = []*domain.Message{}
+	}
+	for _, op := range ops {
+		in.OperatorMessages = append(in.OperatorMessages, op.Text)
+	}
+	for _, c := range gr.g.Outgoing(n.ID) {
+		in.Outputs = append(in.Outputs, runtime.OutputInfo{Channel: c.ID, Type: c.Type, Targets: gr.g.Consumers(c), Types: c.Types, When: c.When})
+	}
+	if in.Outputs == nil {
+		in.Outputs = []runtime.OutputInfo{}
+	}
+	if e.opt.Tools != nil {
+		in.Tools = e.opt.Tools.Schemas(p)
+	}
+	if in.Tools == nil {
+		in.Tools = []llm.ToolSchema{}
+	}
+	if n.Cluster.Comms == domain.CommsRing && in.Replicas > 1 {
+		in.Neighbors = e.neighbours(ctx, gr.g.Metadata.ID, n.ID, r.index, in.Replicas)
+	}
+	in.System = buildSystem(gr.g, n, in, workspace.Scratch(workdir, n.ID, r.index))
+	return in
+}
+
+// --- ring comms ---------------------------------------------------------
+
+func ringNS(graphID, node string) string { return graphID + "/" + node + "/_ring" }
+
+func (e *Engine) putBroadcast(ctx context.Context, graphID, node string, replica, iter int, line string) {
+	b, _ := json.Marshal(runtime.NeighborNote{Replica: replica, Text: truncate(line, 500), At: time.Now().UTC().Format(time.RFC3339)})
+	_ = e.store.KVPut(ctx, ringNS(graphID, node), fmt.Sprintf("r%d", replica), b)
+	e.bus.Publish(ctx, domain.NewEvent(domain.EvAgentBroadcast, graphID, map[string]any{"text": line, "iteration": iter}).WithNode(node, replica))
+}
+
+// neighbours returns the latest lines of the two ring neighbours (radius 1,
+// wrapping). Each replica writes only its own key, so there is nothing to
+// lock and no read-modify-write to lose.
+func (e *Engine) neighbours(ctx context.Context, graphID, node string, me, size int) []runtime.NeighborNote {
+	all, err := e.store.KVList(ctx, ringNS(graphID, node), "r")
+	if err != nil {
+		return nil
+	}
+	want := map[string]bool{fmt.Sprintf("r%d", (me+size-1)%size): true, fmt.Sprintf("r%d", (me+1)%size): true}
+	delete(want, fmt.Sprintf("r%d", me))
+	var out []runtime.NeighborNote
+	for k, v := range all {
+		if !want[k] {
+			continue
+		}
+		var nb runtime.NeighborNote
+		if json.Unmarshal(v, &nb) == nil {
+			out = append(out, nb)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Replica < out[j].Replica })
+	return out
+}
+
+// --- turn environment ---------------------------------------------------
+
+// turnEnv implements runtime.TurnEnv for one execution. It is the only
+// door out of an agent: tools go through the gateway with this replica's
+// grants, model calls through the LLM registry with this node's model.
+type turnEnv struct {
+	r         *replica
+	gr        *graphRun
+	n         *domain.Node
+	x         *domain.Execution
+	principal *tools.Principal
+	span      trace.SpanContext
+
+	mu    sync.Mutex
+	emits []runtime.Emit
+	use   domain.Usage
+	calls int
+}
+
+func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *turnEnv {
+	r.mu.Lock()
+	wd := r.workdir
+	r.mu.Unlock()
+	return &turnEnv{r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
+		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
+		Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
+	}}
+}
+
+// SpanContext is the turn's span; callback requests from external runtimes
+// are parented to it so their tool and model calls appear inside the turn.
+func (t *turnEnv) SpanContext() trace.SpanContext { return t.span }
+
+func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMessage) (*tools.Result, error) {
+	t.mu.Lock()
+	t.calls++
+	calls := t.calls
+	t.mu.Unlock()
+	if t.n.Limits.MaxToolCalls > 0 && calls > t.n.Limits.MaxToolCalls {
+		return nil, fmt.Errorf("tool call budget of %d per turn exhausted", t.n.Limits.MaxToolCalls)
+	}
+	if t.gr.e.opt.Tools == nil {
+		return nil, tools.ErrUnknownTool
+	}
+	// A tool that needs approval parks the replica in awaiting_approval.
+	if t.gr.e.opt.Tools.NeedsApproval(t.principal, name) {
+		t.r.setState(domain.ReplicaAwaitingApproval, "waiting for approval: "+name)
+		defer t.r.setState(domain.ReplicaRunning, "")
+	}
+	return t.gr.e.opt.Tools.Invoke(ctx, t.principal, name, args)
+}
+
+func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {
+	e := t.gr.e
+	if e.opt.Models == nil {
+		return nil, errors.New("no model providers configured")
+	}
+	ref := t.n.Model
+	if req.Model != "" {
+		ref.Name = req.Model
+	}
+	prov, model, err := e.opt.Models.Resolve(ref)
+	if err != nil {
+		return nil, err
+	}
+	req.Model = model
+	if req.Temperature == nil {
+		req.Temperature = t.n.Model.Temperature
+	}
+	if req.MaxTokens == 0 {
+		req.MaxTokens = t.n.Model.MaxTokens
+	}
+	if t.n.Limits.MaxTokens > 0 {
+		u := t.usage()
+		if u.InputTokens+u.OutputTokens >= t.n.Limits.MaxTokens {
+			return nil, fmt.Errorf("token budget of %d per turn exhausted", t.n.Limits.MaxTokens)
+		}
+	}
+	if req.Metadata == nil {
+		req.Metadata = map[string]string{}
+	}
+	req.Metadata["graph"], req.Metadata["node"], req.Metadata["execution"] = t.gr.g.Metadata.ID, t.n.ID, t.x.ID
+	resp, err := e.opt.Models.Chat(ctx, prov.Name(), req)
+	if err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	t.use.Add(domain.Usage{InputTokens: resp.Usage.InputTokens, OutputTokens: resp.Usage.OutputTokens})
+	t.mu.Unlock()
+	return resp, nil
+}
+
+func (t *turnEnv) Emit(ctx context.Context, em runtime.Emit) error {
+	if strings.TrimSpace(em.Type) == "" {
+		return errors.New("emit: type is required")
+	}
+	if len(em.Payload) == 0 {
+		em.Payload = json.RawMessage(`{}`)
+	}
+	if !json.Valid(em.Payload) {
+		return errors.New("emit: payload must be valid JSON")
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.emits) >= 1000 {
+		return errors.New("emit: at most 1000 messages per turn")
+	}
+	t.emits = append(t.emits, em)
+	return nil
+}
+
+func (t *turnEnv) drainEmits() []runtime.Emit {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := t.emits
+	t.emits = nil
+	return out
+}
+
+func (t *turnEnv) stateNS() string { return t.gr.g.Metadata.ID + "/" + t.n.ID }
+
+func (t *turnEnv) StateGet(ctx context.Context, key string) ([]byte, error) {
+	return t.gr.e.store.KVGet(ctx, t.stateNS(), key)
+}
+
+func (t *turnEnv) StatePut(ctx context.Context, key string, value []byte) error {
+	if len(value) > 1<<20 {
+		return errors.New("state values are limited to 1 MiB")
+	}
+	return t.gr.e.store.KVPut(ctx, t.stateNS(), key, value)
+}
+
+func (t *turnEnv) Output(ctx context.Context, text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	t.gr.e.bus.Publish(ctx, domain.NewEvent(domain.EvAgentOutput, t.gr.g.Metadata.ID, map[string]any{"text": truncate(text, 8000)}).
+		WithNode(t.n.ID, t.r.index).WithExecution(t.x.ID))
+}
+
+func (t *turnEnv) AskHuman(ctx context.Context, question string) (string, error) {
+	t.r.setState(domain.ReplicaAwaitingApproval, "asked a human")
+	defer t.r.setState(domain.ReplicaRunning, "")
+	a, err := t.gr.e.opt.Approvals.RequestApproval(ctx, &domain.Approval{
+		GraphID: t.gr.g.Metadata.ID, NodeID: t.n.ID, Replica: t.r.index, ExecutionID: t.x.ID,
+		Kind: domain.ApprovalQuestion, Title: truncate(question, 200),
+		Detail: mustJSON(map[string]any{"question": question}),
+	})
+	if err != nil {
+		return "", err
+	}
+	if a.Status != domain.ApprovalApproved {
+		return "", fmt.Errorf("question was %s", a.Status)
+	}
+	return a.Answer, nil
+}
+
+func (t *turnEnv) usage() domain.Usage {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.use
+}
+
+func (t *turnEnv) toolCalls() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.calls
+}
+
+// --- execution registry (callback authentication) -------------------------
+
+type execRegistry struct {
+	mu   sync.Mutex
+	envs map[string]*execEntry
+}
+
+type execEntry struct {
+	env   *turnEnv
+	token string
+}
+
+func newExecRegistry() *execRegistry { return &execRegistry{envs: map[string]*execEntry{}} }
+
+func (x *execRegistry) register(id string, env *turnEnv) string {
+	var b [24]byte
+	_, _ = rand.Read(b[:])
+	tok := hex.EncodeToString(b[:])
+	x.mu.Lock()
+	x.envs[id] = &execEntry{env: env, token: tok}
+	x.mu.Unlock()
+	return tok
+}
+
+func (x *execRegistry) unregister(id string) {
+	x.mu.Lock()
+	delete(x.envs, id)
+	x.mu.Unlock()
+}
+
+// ErrBadCallback is returned for unknown executions or wrong tokens.
+var ErrBadCallback = errors.New("unknown execution or invalid token")
+
+// Callback authenticates an external runtime's callback and returns the
+// turn environment it may act through.
+func (e *Engine) Callback(execID, token string) (runtime.TurnEnv, *tools.Principal, error) {
+	e.execs.mu.Lock()
+	ent := e.execs.envs[execID]
+	e.execs.mu.Unlock()
+	if ent == nil || subtle.ConstantTimeCompare([]byte(ent.token), []byte(token)) != 1 {
+		return nil, nil, ErrBadCallback
+	}
+	return ent.env, ent.env.principal, nil
+}
+
+// ToolSchemas lists the tools granted to a principal (callback GET /tools).
+func (e *Engine) ToolSchemas(p *tools.Principal) []llm.ToolSchema {
+	if e.opt.Tools == nil {
+		return nil
+	}
+	return e.opt.Tools.Schemas(p)
+}

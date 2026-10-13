@@ -1,0 +1,727 @@
+import { useEffect, useRef, useState } from 'react';
+import { api, errorMessage } from '../api/client';
+import {
+  grantName,
+  type GraphAction,
+  type GraphNode,
+  type GraphStatus,
+  type GraphSummary,
+  type LeForgeEvent,
+  type ToolGrant,
+  type ToolInfo,
+} from '../api/types';
+import { useAsync, useThrottled } from '../hooks/useData';
+import { matches, useEventStream } from '../hooks/useEventStream';
+import { Badge, Btn, Empty, ErrorBox, Icon, StateDot, fmtTime, since, stateLabel } from './common';
+import { describeEvent, eventTone } from './describe';
+import { ModelFields } from './ModelFields';
+
+const LOG_TYPES = [
+  'agent.output',
+  'agent.broadcast',
+  'operator.message',
+  'execution.started',
+  'execution.completed',
+  'execution.failed',
+  'tool.invoked',
+  'tool.completed',
+  'tool.denied',
+  'approval.requested',
+  'approval.decided',
+  'replica.state_changed',
+];
+
+interface Props {
+  summary: GraphSummary;
+  status?: GraphStatus;
+  nodeId: string;
+  onSaved: (s: GraphSummary) => void;
+  onStatus: (s: GraphStatus) => void;
+  onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+}
+
+export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdateNode }: Props) {
+  const graph = summary.graph;
+  const gid = graph.metadata.id;
+  const node = graph.spec.nodes.find((n) => n.id === nodeId);
+  const ns = status?.nodes?.find((n) => n.nodeId === nodeId);
+  const [replica, setReplica] = useState(-1);
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [scale, setScale] = useState<number>(ns?.desiredReplicas ?? 1);
+
+  useEffect(() => {
+    setReplica(-1);
+    setError(undefined);
+  }, [nodeId]);
+  useEffect(() => {
+    if (ns) setScale(ns.desiredReplicas);
+  }, [ns?.desiredReplicas]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!node) return <Empty>Node “{nodeId}” is not in this graph version.</Empty>;
+
+  const act = async (a: GraphAction) => {
+    if (a === 'kill' && !confirm(`Kill ${node.name || node.id}? Turns in flight are cancelled and their inputs redelivered.`))
+      return;
+    setBusy(true);
+    try {
+      onStatus(await api.nodeAction(gid, nodeId, a));
+      setError(undefined);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doScale = async () => {
+    setBusy(true);
+    try {
+      onStatus(await api.scaleNode(gid, nodeId, scale));
+      setError(undefined);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const desired = Math.max(ns?.desiredReplicas ?? 1, ns?.replicas?.length ?? 0, 1);
+  const replicas = Array.from({ length: desired }, (_, i) => ns?.replicas?.find((r) => r.replica === i));
+  const sel = replica >= 0 ? replicas[replica] : undefined;
+
+  return (
+    <div className="panel-body">
+      <div className="panel-title">
+        <StateDot state={ns?.state ?? 'stopped'} />
+        <h2>{node.name || node.id}</h2>
+        <Badge>{stateLabel(ns?.state ?? 'stopped')}</Badge>
+        {node.disabled && <Badge tone="muted">disabled</Badge>}
+      </div>
+      {node.description && <p className="muted">{node.description}</p>}
+
+      <div className="btn-row">
+        <Btn tone="primary" small disabled={busy || node.disabled} onClick={() => act('start')} title="Start">
+          <Icon name="play" /> Start
+        </Btn>
+        <Btn small disabled={busy} onClick={() => act('stop')} title="Stop after the current turn">
+          <Icon name="stop" /> Stop
+        </Btn>
+        <Btn small disabled={busy} onClick={() => act('pause')}>
+          <Icon name="pause" /> Pause
+        </Btn>
+        <Btn small disabled={busy} onClick={() => act('resume')}>
+          Resume
+        </Btn>
+        <Btn small tone="danger" disabled={busy} onClick={() => act('kill')} title="Kill turns in flight now">
+          <Icon name="bolt" />
+        </Btn>
+      </div>
+      <ErrorBox error={error} />
+
+      <section>
+        <h3>Replicas</h3>
+        <div className="seg" role="tablist" aria-label="Replica">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={replica === -1}
+            className={replica === -1 ? 'on' : ''}
+            onClick={() => setReplica(-1)}
+          >
+            all
+          </button>
+          {replicas.map((r, i) => (
+            <button
+              type="button"
+              role="tab"
+              key={i}
+              aria-selected={replica === i}
+              className={replica === i ? 'on' : ''}
+              onClick={() => setReplica(i)}
+              title={r ? `${stateLabel(r.state)} · turn ${r.iteration}${r.branch ? ` · ${r.branch}` : ''}` : 'not started'}
+            >
+              <StateDot state={r?.state ?? 'stopped'} /> n{i}
+            </button>
+          ))}
+        </div>
+        {sel && (
+          <dl className="kv small">
+            <dt>state</dt>
+            <dd>
+              {stateLabel(sel.state)}
+              {sel.detail ? ` – ${sel.detail}` : ''}
+            </dd>
+            <dt>turns</dt>
+            <dd>
+              {sel.iteration} total, {sel.runIteration} this run
+            </dd>
+            {sel.instance && (
+              <>
+                <dt>instance</dt>
+                <dd>{sel.instance}</dd>
+              </>
+            )}
+            {sel.branch && (
+              <>
+                <dt>branch</dt>
+                <dd className="mono">{sel.branch}</dd>
+              </>
+            )}
+            {sel.workdir && (
+              <>
+                <dt>workdir</dt>
+                <dd className="mono">{sel.workdir}</dd>
+              </>
+            )}
+            {sel.deadline && (
+              <>
+                <dt>deadline</dt>
+                <dd>{fmtTime(sel.deadline)}</dd>
+              </>
+            )}
+          </dl>
+        )}
+        <div className="inline-form">
+          <label>
+            Scale to{' '}
+            <input
+              type="number"
+              min={0}
+              max={64}
+              value={scale}
+              onChange={(e) => setScale(Number(e.target.value))}
+              aria-label="Replica count"
+            />
+          </label>
+          <Btn small disabled={busy || scale === ns?.desiredReplicas} onClick={doScale}>
+            Apply
+          </Btn>
+        </div>
+      </section>
+
+      <OutputLog graphId={gid} nodeId={nodeId} replica={replica} />
+      <ChatBox graphId={gid} nodeId={nodeId} replica={replica} />
+      <PromptEditor summary={summary} nodeId={nodeId} onSaved={onSaved} onUpdateNode={onUpdateNode} />
+      <NodeSettings summary={summary} nodeId={nodeId} onUpdateNode={onUpdateNode} />
+      <Executions graphId={gid} nodeId={nodeId} replica={replica} />
+    </div>
+  );
+}
+
+function OutputLog({ graphId, nodeId, replica }: { graphId: string; nodeId: string; replica: number }) {
+  const [lines, setLines] = useState<LeForgeEvent[]>([]);
+  const [follow, setFollow] = useState(true);
+  const box = useRef<HTMLDivElement>(null);
+  const filter = { graph: graphId, node: nodeId, replica, types: LOG_TYPES };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLines([]);
+    api
+      .events(graphId, { node: nodeId, types: LOG_TYPES.join(','), limit: 300 })
+      .then((evs) => {
+        if (!cancelled) setLines((cur) => mergeEvents(evs.filter((e) => matches(e, filter)), cur));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphId, nodeId, replica]);
+
+  useEventStream(filter, (ev) => setLines((cur) => mergeEvents(cur, [ev]).slice(-1000)));
+
+  useEffect(() => {
+    if (follow && box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [lines, follow]);
+
+  return (
+    <section>
+      <div className="section-head">
+        <h3>Live output</h3>
+        <label className="small">
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> follow
+        </label>
+      </div>
+      <div className="log" ref={box} aria-live="polite">
+        {lines.length === 0 && <div className="muted">No output yet.</div>}
+        {lines.map((ev) => (
+          <div key={ev.id} className={`log-line ${eventTone(ev)}`}>
+            <span className="log-time">{fmtTime(ev.time)}</span>
+            {replica < 0 && <span className="log-rep">n{ev.replica ?? 0}</span>}
+            <span className="log-text">{describeEvent(ev)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function mergeEvents(a: LeForgeEvent[], b: LeForgeEvent[]): LeForgeEvent[] {
+  const seen = new Set(a.map((e) => e.id));
+  const out = [...a, ...b.filter((e) => !seen.has(e.id))];
+  out.sort((x, y) => x.seq - y.seq);
+  return out;
+}
+
+function ChatBox({ graphId, nodeId, replica }: { graphId: string; nodeId: string; replica: number }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string>();
+  const history = useAsync(() => api.chatHistory(graphId, nodeId), [graphId, nodeId]);
+  const reload = useThrottled(() => void history.reload(), 300);
+  useEventStream({ graph: graphId, node: nodeId, types: ['operator.message'] }, reload);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    try {
+      await api.sendChat(graphId, nodeId, text.trim(), replica);
+      setText('');
+      setError(undefined);
+      void history.reload();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  const msgs = (history.data ?? []).filter((m) => replica < 0 || m.replica < 0 || m.replica === replica).slice(-8);
+  return (
+    <section>
+      <h3>Talk to {replica >= 0 ? `n${replica}` : 'the agent'}</h3>
+      {msgs.length > 0 && (
+        <ul className="chat">
+          {msgs.map((m) => (
+            <li key={m.id}>
+              <span className="muted small">
+                {fmtTime(m.createdAt)} {m.author}
+                {m.replica >= 0 ? ` → n${m.replica}` : ''} {m.consumedAt ? '✓ read' : '· queued'}
+              </span>
+              <div>{m.text}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="chat-input">
+        <textarea
+          rows={2}
+          value={text}
+          placeholder="Message wakes a waiting loop; mid-turn it is delivered on the next turn."
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send();
+          }}
+          aria-label="Operator message"
+        />
+        <Btn tone="primary" small onClick={send} disabled={!text.trim()}>
+          Send
+        </Btn>
+      </div>
+      <ErrorBox error={error} />
+    </section>
+  );
+}
+
+function PromptEditor({
+  summary,
+  nodeId,
+  onSaved,
+  onUpdateNode,
+}: {
+  summary: GraphSummary;
+  nodeId: string;
+  onSaved: (s: GraphSummary) => void;
+  onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+}) {
+  const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(node.prompt ?? '');
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    if (!editing) setDraft(node.prompt ?? '');
+  }, [node.prompt, editing]);
+
+  const save = async () => {
+    if (onUpdateNode) {
+      onUpdateNode(nodeId, { prompt: draft });
+      setEditing(false);
+      setError(undefined);
+      return;
+    }
+    const g = structuredClone(summary.graph);
+    const n = g.spec.nodes.find((x) => x.id === nodeId)!;
+    n.prompt = draft;
+    try {
+      const s = await api.updateGraph(g.metadata.id, g, summary.record.version);
+      onSaved(s);
+      setEditing(false);
+      setError(undefined);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
+  return (
+    <section>
+      <div className="section-head">
+        <h3>Prompt</h3>
+        {!editing ? (
+          <Btn small tone="ghost" onClick={() => setEditing(true)}>
+            Edit
+          </Btn>
+        ) : (
+          <span className="btn-row">
+            <Btn small tone="primary" onClick={save}>
+              Save v{summary.record.version + 1}
+            </Btn>
+            <Btn small tone="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Btn>
+          </span>
+        )}
+      </div>
+      {editing ? (
+        <textarea className="prompt-edit mono" rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} />
+      ) : (
+        <pre className="prompt">{highlightTokens(node.prompt ?? '')}</pre>
+      )}
+      <p className="muted small">Prompt changes are picked up on the replica's next turn.</p>
+      <ErrorBox error={error} />
+    </section>
+  );
+}
+
+/** Colour @tokens (parameters, @input/@output/@project/@loop). */
+function highlightTokens(s: string) {
+  const parts = s.split(/(@[A-Za-z_][\w-]*)/g);
+  return parts.map((p, i) =>
+    p.startsWith('@') ? (
+      <span key={i} className={['@input', '@output', '@project', '@loop'].includes(p) ? 'tok-res' : 'tok-param'}>
+        {p}
+      </span>
+    ) : (
+      p
+    ),
+  );
+}
+
+function grantDetail(g: ToolGrant | string): string {
+  if (typeof g === 'string') return '';
+  const bits = [
+    g.paths?.length ? `paths: ${g.paths.join(', ')}` : '',
+    g.commands?.length ? `commands: ${g.commands.join(', ')}` : '',
+    g.hosts?.length ? `hosts: ${g.hosts.join(', ')}` : '',
+    g.rateLimit ? `${g.rateLimit}/min` : '',
+  ].filter(Boolean);
+  return bits.join(' · ');
+}
+
+function NodeSettings({
+  summary,
+  nodeId,
+  onUpdateNode,
+}: {
+  summary: GraphSummary;
+  nodeId: string;
+  onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+}) {
+  const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
+  const defaults = summary.graph.spec.defaults ?? {};
+  const usesGraphDefaults = node.tools === undefined;
+  const tools = usesGraphDefaults ? (defaults.tools ?? []) : (node.tools ?? []);
+  const toolCatalog = useAsync(() => api.tools(), []);
+  const [toolSearch, setToolSearch] = useState('');
+  const rt = { ...defaults.runtime, ...node.runtime };
+  const model = { ...defaults.model, ...node.model };
+  const loop = node.loop ?? defaults.loop ?? {};
+  const iso = { ...defaults.isolation, ...node.isolation };
+  const inputs = (summary.graph.spec.channels ?? []).filter((c) => c.to?.includes(nodeId));
+  const outputs = (summary.graph.spec.channels ?? []).filter((c) => c.from === nodeId);
+  const knownTools = new Set((toolCatalog.data ?? []).map((tool) => tool.name));
+  const extraGrants = tools.filter((grant) => !knownTools.has(grantName(grant)));
+  const visibleTools = (toolCatalog.data ?? []).filter((tool) => {
+    const query = toolSearch.trim().toLowerCase();
+    return !query || `${tool.name} ${tool.capability} ${tool.description}`.toLowerCase().includes(query);
+  });
+  const updateToolGrant = (tool: ToolInfo, checked: boolean) => {
+    if (!onUpdateNode) return;
+    const current = tools.filter((grant) => grantName(grant) !== tool.name);
+    onUpdateNode(nodeId, {
+      tools: checked ? [...current, { name: tool.name }] : current,
+    });
+  };
+  const updateExtraGrant = (grant: ToolGrant | string, checked: boolean) => {
+    if (!onUpdateNode) return;
+    const current = tools.filter((item) => grantName(item) !== grantName(grant));
+    onUpdateNode(nodeId, { tools: checked ? [...current, grant] : current });
+  };
+  return (
+    <section>
+      <div className="section-head">
+        <h3>Tools {usesGraphDefaults ? <span className="muted small">(graph defaults)</span> : null}</h3>
+        {onUpdateNode && toolCatalog.data && (
+          <span className="muted small">{tools.length} selected</span>
+        )}
+      </div>
+      {onUpdateNode ? (
+        <div className="tool-picker">
+          <label className="tool-search">
+            <span className="sr-only">Search available tools</span>
+            <input
+              type="search"
+              value={toolSearch}
+              onChange={(event) => setToolSearch(event.target.value)}
+              placeholder="Search available tools"
+            />
+          </label>
+          <ErrorBox error={toolCatalog.error} />
+          {toolCatalog.loading && <p className="muted small">Loading available tools…</p>}
+          {!toolCatalog.loading && toolCatalog.data?.length === 0 && (
+            <p className="muted small">No tools are available in this installation.</p>
+          )}
+          <div className="tool-options" role="group" aria-label="Available tools">
+            {visibleTools.map((tool) => {
+              const grant = tools.find((item) => grantName(item) === tool.name);
+              return (
+                <label className="tool-option" key={tool.name}>
+                  <input
+                    type="checkbox"
+                    checked={!!grant}
+                    onChange={(event) => updateToolGrant(tool, event.target.checked)}
+                  />
+                  <span className="tool-option-copy">
+                    <span className="tool-option-title">
+                      <code>{tool.name}</code>
+                      <span className="badge">{tool.capability}</span>
+                    </span>
+                    <span className="muted small">{tool.description}</span>
+                    {grant && typeof grant !== 'string' && grant.requiresApproval && (
+                      <span className="muted tiny">Approval required</span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {extraGrants.length > 0 && (
+            <div className="tool-extra">
+              <h4>Patterns and configured grants</h4>
+              <p className="muted small">These grants are not in the current tool catalog. Existing restrictions are preserved.</p>
+              {extraGrants.map((grant) => (
+                <label className="tool-option" key={grantName(grant)}>
+                  <input
+                    type="checkbox"
+                    checked
+                    onChange={(event) => updateExtraGrant(grant, event.target.checked)}
+                  />
+                  <span className="tool-option-copy">
+                    <code>{grantName(grant)}</code>
+                    {grantDetail(grant) && <span className="muted small">{grantDetail(grant)}</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : tools.length === 0 ? (
+        <p className="muted small">No tools granted (default deny).</p>
+      ) : (
+        <ul className="grants">
+          {tools.map((g, i) => (
+            <li key={i}>
+              <code>{grantName(g)}</code>
+              {typeof g !== 'string' && g.requiresApproval && <Badge tone="warn">approval</Badge>}
+              <span className="muted small">{grantDetail(g)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {onUpdateNode && (
+        <div className="form node-editor">
+          <h3>Agent configuration</h3>
+          <label>
+            Name
+            <input value={node.name ?? ''} onChange={(event) => onUpdateNode(nodeId, { name: event.target.value })} />
+          </label>
+          <label>
+            Runtime
+            <select
+              value={rt.kind ?? 'native'}
+              onChange={(event) =>
+                onUpdateNode(nodeId, { runtime: { ...node.runtime, kind: event.target.value as NonNullable<GraphNode['runtime']>['kind'] } })
+              }
+            >
+              <option value="native">native</option>
+              <option value="external">external</option>
+              <option value="echo">echo</option>
+            </select>
+          </label>
+          <ModelFields
+            model={node.model}
+            inherited={defaults.model}
+            onChange={(next) => onUpdateNode(nodeId, { model: next })}
+          />
+          <label>
+            Loop mode
+            <select
+              value={loop.mode ?? 'continuous'}
+              onChange={(event) =>
+                onUpdateNode(nodeId, { loop: { ...node.loop, mode: event.target.value as NonNullable<GraphNode['loop']>['mode'] } })
+              }
+            >
+              {(['once', 'continuous', 'scheduled', 'event'] as const).map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Workspace
+            <select
+              value={node.workspace?.mode ?? 'shared'}
+              onChange={(event) =>
+                onUpdateNode(nodeId, {
+                  workspace: { ...node.workspace, mode: event.target.value as 'shared' | 'worktree' },
+                })
+              }
+            >
+              <option value="shared">shared</option>
+              <option value="worktree">worktree</option>
+            </select>
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={!!node.disabled}
+              onChange={(event) => onUpdateNode(nodeId, { disabled: event.target.checked })}
+            />
+            Disable agent
+          </label>
+        </div>
+      )}
+      <h3>Settings</h3>
+      <dl className="kv">
+        <dt>runtime</dt>
+        <dd>
+          {rt.kind ?? 'native'}
+          {rt.framework ? ` · ${rt.framework}` : ''}
+          {rt.agent ? ` · agent ${rt.agent}` : ''}
+          {rt.endpoint ? <div className="mono small">{rt.endpoint}</div> : null}
+          {rt.image ? <div className="mono small">{rt.image}</div> : null}
+        </dd>
+        <dt>model</dt>
+        <dd>
+          {model.provider || 'default provider'} / {model.name || 'default model'}
+          {model.temperature !== undefined ? ` · t=${model.temperature}` : ''}
+        </dd>
+        <dt>loop</dt>
+        <dd>
+          {loop.mode ?? 'continuous'}
+          {loop.schedule ? ` · ${loop.schedule}` : ''}
+          {loop.interval ? ` · every ${loop.interval}` : ''}
+          {loop.stop?.policy ? ` · stop: ${loop.stop.policy}` : ''}
+          {loop.stop?.maxIterations ? ` (${loop.stop.maxIterations} turns)` : ''}
+          {loop.stop?.maxDuration ? ` (${loop.stop.maxDuration})` : ''}
+          {loop.batchSize ? ` · batch ${loop.batchSize}` : ''}
+        </dd>
+        <dt>cluster</dt>
+        <dd>
+          {node.cluster
+            ? `${node.cluster.mode ?? 'fixed'} · ${
+                node.cluster.mode === 'autoscale'
+                  ? `${node.cluster.minReplicas ?? 1}–${node.cluster.maxReplicas ?? '?'}`
+                  : (node.cluster.replicas ?? 1)
+              } · ${node.cluster.comms ?? 'isolated'}`
+            : 'single replica'}
+        </dd>
+        <dt>isolation</dt>
+        <dd>
+          {iso.mode ?? 'process'}
+          {iso.image ? ` · ${iso.image}` : ''}
+          {iso.cpu ? ` · ${iso.cpu} cpu` : ''}
+          {iso.memory ? ` · ${iso.memory}` : ''}
+          {iso.network ? ` · net ${iso.network}` : ''}
+        </dd>
+        <dt>workspace</dt>
+        <dd>
+          {node.workspace?.mode ?? 'shared'}
+          {node.workspace?.subdir ? ` · ${node.workspace.subdir}` : ''}
+        </dd>
+        {(node.approval?.beforeTurn || node.approval?.beforeEmit) && (
+          <>
+            <dt>approval</dt>
+            <dd>
+              {[node.approval.beforeTurn && 'before turn', node.approval.beforeEmit && 'before emit']
+                .filter(Boolean)
+                .join(', ')}
+              {node.approval.timeout ? ` · timeout ${node.approval.timeout} → ${node.approval.onTimeout ?? 'reject'}` : ''}
+            </dd>
+          </>
+        )}
+        <dt>inputs</dt>
+        <dd>{inputs.map((c) => c.id).join(', ') || <span className="muted">none</span>}</dd>
+        <dt>outputs</dt>
+        <dd>{outputs.map((c) => c.id).join(', ') || <span className="muted">none – results land in the workspace</span>}</dd>
+        {node.subscribe?.length ? (
+          <>
+            <dt>subscribes</dt>
+            <dd>{node.subscribe.join(', ')}</dd>
+          </>
+        ) : null}
+      </dl>
+    </section>
+  );
+}
+
+function Executions({ graphId, nodeId, replica }: { graphId: string; nodeId: string; replica: number }) {
+  const ex = useAsync(() => api.executions(graphId, { node: nodeId, limit: 30 }), [graphId, nodeId]);
+  const reload = useThrottled(() => void ex.reload(), 800);
+  useEventStream({ graph: graphId, node: nodeId, prefixes: ['execution.'] }, reload);
+  const rows = (ex.data ?? []).filter((e) => replica < 0 || e.replica === replica);
+  return (
+    <section>
+      <div className="section-head">
+        <h3>Recent turns</h3>
+        <Btn small tone="ghost" onClick={() => void ex.reload()} aria-label="Refresh">
+          <Icon name="refresh" />
+        </Btn>
+      </div>
+      <ErrorBox error={ex.error} />
+      {rows.length === 0 ? (
+        <p className="muted small">No turns yet.</p>
+      ) : (
+        <table className="table small">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>rep</th>
+              <th>status</th>
+              <th>time</th>
+              <th>tokens</th>
+              <th>summary / error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((e) => (
+              <tr key={e.id} title={e.id}>
+                <td>{e.iteration}</td>
+                <td>n{e.replica}</td>
+                <td>
+                  <StateDot state={e.status} /> {stateLabel(e.status)}
+                </td>
+                <td>{since(e.startedAt, e.completedAt)}</td>
+                <td>
+                  {e.usage?.inputTokens ?? 0}/{e.usage?.outputTokens ?? 0}
+                </td>
+                <td className={e.error ? 'bad' : ''}>
+                  {e.error ?? e.summary ?? ''}
+                  {e.signal ? <Badge>{e.signal}</Badge> : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
