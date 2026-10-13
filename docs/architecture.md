@@ -10,6 +10,7 @@ LeForge is a self-hosted, vendor-neutral **agent factory**. Autonomous AI agents
 | [state-machines.md](state-machines.md) | Graph, replica, execution, message and approval state machines |
 | [execution-model.md](execution-model.md) | Loop modes, turns, delivery guarantees, clusters, routing, isolation |
 | [dev/contracts.md](dev/contracts.md) | HTTP API and Runtime Protocol v1 (wire contracts) |
+| [product-contracts.md](product-contracts.md) | Current-state inventory and design contracts for planned Release 1 capabilities |
 
 ---
 
@@ -68,6 +69,16 @@ and message publication.
 
 The engine claims work rather than delegating broker operations to agents.
 Deliveries are leased and redelivered when a turn fails before acknowledgement.
+
+### Planned Release 1 boundaries
+
+The current architecture does not yet implement managed MCP connections,
+application-managed skills/project steering, first-class user tasks, or
+dynamic child executions. Their proposed API, persistence, authorization,
+audit, and failure contracts are documented in
+[product-contracts.md](product-contracts.md). The target component view there
+is explicitly planned and must not be read as a description of deployed
+components.
 
 ## 3. Architectural principles and how they are enforced
 

@@ -3,6 +3,9 @@
 > Superseded by the formal specifications: [api/openapi.yaml](../../api/openapi.yaml), [docs/api.md](../api.md),
 > [docs/runtime-protocol.md](../runtime-protocol.md) and [schemas/](../../schemas). Kept as the original build-time
 > agreement between components; where it differs, the formal specs (and the code) win.
+>
+> Cross-component design contracts for capabilities not yet implemented are in
+> [product-contracts.md](../product-contracts.md); do not treat proposed operations there as shipped API.
 
 This file is the single source of truth that the Go server, the React UI and
 the Python SDK are built against while the full documentation is written.

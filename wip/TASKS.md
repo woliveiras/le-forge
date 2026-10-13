@@ -8,14 +8,14 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 ### 0. Prepare Product Contracts and Acceptance Criteria
 
-- [ ] Inventory the current API, interface, runtime, workspace, storage, and Docker deployment flows that will be retained or changed.
-- [ ] Define API contracts and persisted models for provider configurations, MCP connections, per-agent permissions, instructions, interface-initiated tasks, and child executions.
-- [ ] Define authorization and isolation between installation, graph, agent, workspace, and execution; no credentials may be sent to the agent runtime.
-- [ ] Define auditable events and their relationship to graph, agent, replica, task, and execution.
-- [ ] Define error contracts and interface-visible states for validation, unavailability, pending approval, timeout, and version conflict.
-- [ ] Update architecture diagrams and documentation to reflect the agreed contracts.
+- [x] Inventory the current API, interface, runtime, workspace, storage, and Docker deployment flows that will be retained or changed. (Recorded in [product-contracts.md](../docs/product-contracts.md#1-current-state-inventory).)
+- [x] Define API contracts and persisted models for provider configurations, MCP connections, per-agent permissions, instructions, interface-initiated tasks, and child executions. (The current provider pattern and proposed MCP, skill, task, and delegation contracts are documented in [product-contracts.md](../docs/product-contracts.md#3-installation-managed-connections-and-skills) through [section 4](../docs/product-contracts.md#4-user-tasks-and-child-executions).)
+- [x] Define authorization and isolation between installation, graph, agent, workspace, and execution; no credentials may be sent to the agent runtime. (The installation boundary, role matrix, scoped callback, workspace isolation, and grant inheritance are documented in [product-contracts.md](../docs/product-contracts.md#5-authorization-audit-and-error-states).)
+- [x] Define auditable events and their relationship to graph, agent, replica, task, and execution. (Existing event envelope and proposed event families are documented in [product-contracts.md](../docs/product-contracts.md#5-authorization-audit-and-error-states).)
+- [x] Define error contracts and interface-visible states for validation, unavailability, pending approval, timeout, and version conflict. (Common response mapping and corresponding UI states are documented in [product-contracts.md](../docs/product-contracts.md#5-authorization-audit-and-error-states).)
+- [x] Update architecture diagrams and documentation to reflect the documented contracts. (Added the explicitly planned component-boundary view in [product-contracts.md](../docs/product-contracts.md#6-planned-component-boundaries) and linked it from [architecture.md](../docs/architecture.md).)
 
-**Done when:** Contracts shared by the backend, interface, and runtime are documented and reviewed before implementations diverge.
+**Done when:** Contracts shared by the backend, interface, and runtime are documented and reviewed before implementations diverge. The inventory and proposed contracts are recorded in [product-contracts.md](../docs/product-contracts.md); planned behavior is clearly distinguished from shipped functionality.
 
 ### 1. Remove Out-of-Scope Product Functionality
 
