@@ -72,6 +72,7 @@ classDiagram
 |---|---|---|
 | `Graph` | `metadata.id` (DNS label, derived from `name` if empty), `metadata.version` (assigned by the store) | `apiVersion == leforge.io/v1`, `kind == Graph`, at least one node. |
 | `WorkspaceSpec` | `path`, `git`, `repo` | `repo` must be a remote URL (`https://`, `ssh://`, `git://`, `user@host:path`); `http://` is accepted with a warning; local paths, `file://`, `ext::` and option-like values are rejected. It is cloned only while the workspace is empty. |
+| `EnvironmentSpec` | `image` or `dockerfile`, `setup`, `network.setup`/`network.run`, `caches`, `timeout`, `cpu`, `memory` | Exactly one of `image`/`dockerfile`; a Dockerfile needs `FROM`; setup commands non-empty; networks `none`/`bridge`; caches absolute, unique, not `/workspace` or system directories; timeout ≤ 2h. Used by docker-isolated nodes without `isolation.image`. See [environments.md](environments.md). |
 | `Parameter` | `name`, `value` | Name matches `[A-Za-z_][A-Za-z0-9_-]*`; is not reserved (`input`, `output`, `project`, `workspace`, `loop`, `self`); unique. |
 | `Node` | `id`, `runtime.kind` (`native`, `external`, `echo`) | Unique DNS-label id. Native nodes need a prompt. External nodes need `endpoint`, `command` or `image`. The runtime must be registered. |
 | `LoopSpec` | `mode` (`once`, `continuous`, `scheduled`, `event`), `schedule`, `interval`, `stop`, `batchSize` | `scheduled` needs a parseable schedule. `event` and stop `auto` are mutually exclusive. Policy-specific limits must be > 0. |

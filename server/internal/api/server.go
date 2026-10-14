@@ -27,6 +27,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
+	"github.com/woliveiras/le-forge/server/internal/environment"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/hitl"
@@ -54,8 +55,10 @@ type Deps struct {
 	Providers  *llmconfig.Manager
 	Tools      *tools.Registry
 	Workspaces *workspace.Manager
-	Auth       *Authenticator
-	Log        *slog.Logger
+	// Environments is optional; without it the environment routes answer 404.
+	Environments *environment.Manager
+	Auth         *Authenticator
+	Log          *slog.Logger
 }
 
 type Server struct {
@@ -110,6 +113,9 @@ func (s *Server) routes() {
 		{"GET /api/v1/graphs/{id}/export", R, s.exportGraph},
 		{"POST /api/v1/graphs/{id}/{action}", O, s.graphAction},
 		{"GET /api/v1/graphs/{id}/status", R, s.graphStatus},
+		{"GET /api/v1/graphs/{id}/environment", R, s.getEnvironment},
+		{"POST /api/v1/graphs/{id}/environment/build", O, s.buildEnvironment},
+		{"POST /api/v1/graphs/{id}/environment/reset", A, s.resetEnvironment},
 		{"POST /api/v1/graphs/{id}/nodes/{node}/{action}", O, s.nodeAction},
 		{"PUT /api/v1/graphs/{id}/nodes/{node}/scale", O, s.scaleNode},
 		{"GET /api/v1/graphs/{id}/nodes/{node}/chat", R, s.listChat},
@@ -194,6 +200,10 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusBadRequest, "invalid", err.Error(), nil)
 	case errors.Is(err, tools.ErrDenied), errors.Is(err, tools.ErrRejected):
 		writeErr(w, http.StatusForbidden, "forbidden", err.Error(), nil)
+	case errors.Is(err, environment.ErrBuildRunning):
+		writeErr(w, http.StatusConflict, "conflict", err.Error(), nil)
+	case errors.Is(err, environment.ErrNotDefined):
+		writeErr(w, http.StatusBadRequest, "invalid", err.Error(), nil)
 	case errors.Is(err, tools.ErrUnknownTool):
 		writeErr(w, http.StatusNotFound, "not_found", err.Error(), nil)
 	case errors.Is(err, tools.ErrRateLimited):
@@ -489,8 +499,21 @@ func (s *Server) updateGraph(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) deleteGraph(w http.ResponseWriter, r *http.Request) error {
-	if err := s.Engine.DeleteGraph(r.Context(), r.PathValue("id"), identityFrom(r.Context()).Name); err != nil {
+	id := r.PathValue("id")
+	actor := identityFrom(r.Context()).Name
+	hadEnv := false
+	if s.Environments != nil {
+		hadEnv, _ = s.Environments.Exists(r.Context(), id)
+	}
+	if err := s.Engine.DeleteGraph(r.Context(), id, actor); err != nil {
 		return err
+	}
+	// The graph is gone; its environment images and caches go too. Failures
+	// leave orphans in the sandbox daemon only, so they are logged.
+	if hadEnv {
+		if err := s.Environments.Reset(r.Context(), id, actor); err != nil {
+			s.Log.Warn("environment cleanup after graph deletion", "graph", id, "err", err)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil

@@ -21,6 +21,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
+	"github.com/woliveiras/le-forge/server/internal/environment"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/hitl"
@@ -54,7 +55,9 @@ type App struct {
 	Tools     *tools.Registry
 	Gateway   *tools.Gateway
 	Engine    *engine.Engine
-	API       *api.Server
+	// Environments builds project environments on the sandbox daemon.
+	Environments *environment.Manager
+	API          *api.Server
 
 	shutdownObs func(context.Context) error
 }
@@ -137,10 +140,18 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		}),
 	}
 
+	a.Environments, err = environment.New(environment.Options{
+		Store: a.Store, Bus: a.Bus, Workspaces: ws, Instance: cfg.Instance, Log: log,
+		DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
+	})
+	if err != nil {
+		return nil, err
+	}
 	a.Engine, err = engine.New(engine.Options{
 		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
-		Sandboxes: sandboxFactory(cfg), CallbackURL: cfg.Server.InternalURL, Log: log,
+		Sandboxes: sandboxFactory(cfg, a.Environments), Environments: a.Environments,
+		CallbackURL: cfg.Server.InternalURL, Log: log,
 		LeaseTTL: cfg.Engine.LeaseTTL, ReconcileInterval: cfg.Engine.ReconcileInterval,
 		RetryBackoff: cfg.Engine.RetryBackoff, MaxConcurrentTurns: cfg.Engine.MaxConcurrentTurns,
 	})
@@ -157,6 +168,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.API = api.New(api.Deps{
 		Config: cfg, Engine: a.Engine, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Providers: a.Providers, Tools: a.Tools, Workspaces: ws, Auth: auth, Log: log,
+		Environments: a.Environments,
 	})
 	return a, nil
 }
@@ -251,15 +263,30 @@ func openBroker(ctx context.Context, cfg *config.Config) (queue.Broker, error) {
 }
 
 // sandboxFactory picks the command sandbox per node isolation mode.
-func sandboxFactory(cfg *config.Config) engine.SandboxFactory {
+//
+// Docker-isolated nodes without an image of their own use the graph's
+// environment when it defines one (its image, caches and run network);
+// otherwise the installation's default sandbox image.
+func sandboxFactory(cfg *config.Config, envs *environment.Manager) engine.SandboxFactory {
 	return func(ctx context.Context, s engine.SandboxSpec) (tools.Sandbox, error) {
 		switch s.Node.Isolation.Mode {
 		case domain.IsolationDocker:
 			img := s.Node.Isolation.Image
+			net := s.Node.Isolation.Network
+			var volumes []string
+			if engine.UsesEnvironment(s.Graph, s.Node) {
+				env, err := envs.SandboxFor(ctx, s.Graph)
+				if err != nil {
+					return nil, err
+				}
+				img, volumes = env.Image, env.Volumes
+				if net == "" {
+					net = env.Network
+				}
+			}
 			if img == "" {
 				img = cfg.Isolation.Docker.Image
 			}
-			net := s.Node.Isolation.Network
 			if net == "" {
 				net = cfg.Isolation.Docker.Network
 			}
@@ -268,7 +295,8 @@ func sandboxFactory(cfg *config.Config) engine.SandboxFactory {
 				Image: img, HostDir: s.HostWorkdir, Network: net,
 				CPU: s.Node.Isolation.CPU, Memory: s.Node.Isolation.Memory,
 				DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
-				Labels: map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
+				Labels:  map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
+				Volumes: volumes,
 			})
 			if err != nil {
 				return nil, err

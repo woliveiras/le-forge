@@ -389,7 +389,15 @@ export function GraphWorkspace({
               <button type="button" className="icon-btn panel-close" onClick={() => setSettingsOpen(false)} aria-label="Close panel">
                 <Icon name="x" />
               </button>
-              <GraphSettings graph={draftGraph} issues={issues?.graph} onChange={changeGraph} />
+              <GraphSettings
+                graph={draftGraph}
+                savedGraph={summary.graph}
+                dirty={draftDirty}
+                running={running}
+                role={info?.identity?.role}
+                issues={issues?.graph}
+                onChange={changeGraph}
+              />
             </aside>
           )}
           {selection && panelOpen && (

@@ -69,17 +69,17 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 #### Environment Model and Lifecycle
 
-- [ ] Define the environment contract: source (interface, repository, agent proposal), base image or Dockerfile, setup commands, working directory, resource limits, cache volumes, and network policy per phase (setup, execution); record it in [product-contracts.md](../docs/product-contracts.md).
-- [ ] Persist environments per graph with a content hash of the effective definition; rebuild only when the definition changes or on explicit request.
-- [ ] Implement the lifecycle `pending → building → ready | failed`, with build and setup logs stored and size-limited; record events for state changes with graph and environment identifiers.
-- [ ] Run image builds and setup steps in LeForge with resource limits, timeouts, and cancellation; never through agent-controlled Docker access.
-- [ ] Start agent sandboxes from the ready environment image, with dependency caches mounted per environment; refuse to start nodes that require an environment that is not ready, with an actionable error.
-- [ ] Implement Rebuild and Reset (remove containers, image, and caches of one environment), and clean up environments of deleted graphs.
-- [ ] Add metrics and traces for build duration, outcome, and failures, following existing telemetry names.
+- [x] Define the environment contract: source (interface, repository, agent proposal), base image or Dockerfile, setup commands, working directory, resource limits, cache volumes, and network policy per phase (setup, execution); record it in [product-contracts.md](../docs/product-contracts.md). (`spec.environment` is the single effective definition; repository and agent sources produce a definition the operator accepts into it.)
+- [x] Persist environments per graph with a content hash of the effective definition; rebuild only when the definition changes or on explicit request.
+- [x] Implement the lifecycle `pending → building → ready | failed`, with build and setup logs stored and size-limited; record events for state changes with graph and environment identifiers. (States `absent/building/ready/failed`; 64 KiB log tail; `environment.*` events; interrupted builds detected through the store lease.)
+- [x] Run image builds and setup steps in LeForge with resource limits, timeouts, and cancellation; never through agent-controlled Docker access.
+- [x] Start agent sandboxes from the ready environment image, with dependency caches mounted per environment; refuse to start nodes that require an environment that is not ready, with an actionable error.
+- [x] Implement Rebuild and Reset (remove containers, image, and caches of one environment), and clean up environments of deleted graphs. (Reset is refused while the graph runs.)
+- [x] Add metrics and traces for build duration, outcome, and failures, following existing telemetry names.
 
 #### Definition Sources
 
-- [ ] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands.
+- [x] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands. (**Graph settings → Environment**.)
 - [ ] Read a repository definition from `.leforge/environment.yaml`; support the image and post-create command subset of `.devcontainer/devcontainer.json` when no LeForge file exists. Report unsupported fields instead of ignoring them.
 - [ ] Apply deterministic precedence (interface, then repository, then approved agent proposal) and show which source is in effect.
 - [ ] Treat repository and agent definitions as untrusted: they cannot raise resource limits, mount host paths, request privileges, or widen network policy beyond installation settings.
@@ -94,16 +94,16 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 #### Interface
 
-- [ ] Show the environment of a graph: source, effective definition, state, last build, logs, and cache usage.
-- [ ] Add Rebuild and Reset actions with confirmation, restricted to operators/admins according to the role matrix.
+- [x] Show the environment of a graph: source, effective definition, state, last build, logs, and cache usage. (Cache paths and volumes are listed; volume sizes are not shown yet.)
+- [x] Add Rebuild and Reset actions with confirmation, restricted to operators/admins according to the role matrix.
 - [ ] Show pending environment proposals in Approvals with the full definition and a diff against the current one.
-- [ ] Explain on the agent panel when commands will run (environment name and state) and when the environment blocks a start.
+- [ ] Explain on the agent panel when commands will run (environment name and state) and when the environment blocks a start. — The start refusal names the environment and the agents that need it, and Graph settings lists the agents using it. Pending: showing the environment state on the agent panel itself.
 
 #### Tests and Documentation
 
-- [ ] Unit tests for definition parsing, precedence, hashing, policy enforcement on untrusted definitions, and lifecycle transitions, including build failures and cancellations.
-- [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon.
-- [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset.
+- [ ] Unit tests for definition parsing, precedence, hashing, policy enforcement on untrusted definitions, and lifecycle transitions, including build failures and cancellations. — Done for validation, hashing, the user layer, lifecycle, failures, cancellation, concurrency, interrupted builds and reset. Pending: precedence (arrives with repository and agent sources).
+- [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon. — API integration tests run with a scripted Docker CLI; a manual run against the real `sandbox-daemon` verified Dockerfile build, setup, commit, cache population, uid 10001 workspace writes, `network none`, reset (refused while running) and cleanup on graph deletion. Pending: automating that run and the repository/agent sources.
+- [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset. — Done except proposal approval (not implemented yet).
 - [ ] Document setup, resource requirements of the dedicated daemon, reset, and troubleshooting in the deployment and getting-started guides.
 
 **Done when:** An operator connects a repository, gets a ready environment from the interface, the repository, or an approved agent proposal, and runs agents whose commands execute only inside it; the environment can be rebuilt or reset from the browser, nothing is installed on the host, and agents never access Docker.

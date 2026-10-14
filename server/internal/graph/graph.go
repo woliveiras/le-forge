@@ -280,6 +280,9 @@ func Validate(g *domain.Graph, knownRuntimes map[domain.RuntimeKind]bool) *Repor
 			r.errf("spec.workspace.repo", "%q is not a remote repository URL: use https://, ssh:// or user@host:path (local paths and other transports are refused)", repo)
 		}
 	}
+	if env := g.Spec.Environment; env != nil {
+		validateEnvironment(r, env)
+	}
 	nodes := map[string]*domain.Node{}
 	for i := range g.Spec.Nodes {
 		n := &g.Spec.Nodes[i]

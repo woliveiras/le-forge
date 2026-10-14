@@ -11,8 +11,7 @@ This page explains how it works (architecture), how to use it from the console
 (usage), how to reset it, and how to fix common problems.
 
 - Decision record: [ADR 0009](adr/0009-dedicated-sandbox-daemon.md)
-- Planned next steps (project environments built from your repository):
-  `wip/TASKS.md`, section 3
+- The image agents run in, per graph: [project environments](environments.md)
 
 ## Architecture
 
@@ -139,14 +138,12 @@ nodes:
 
 ### 3. Use a different toolchain
 
-The default image is Python 3.12 with git and make. Until project environments
-are built from your repository (planned, `wip/TASKS.md` section 3), you can:
-
-- edit `Dockerfile.sandbox` and run `docker compose up sandbox-image` to
-  rebuild `leforge/sandbox:latest` inside the daemon; or
-- set **Image** on the agent to any image the daemon can pull (for example
-  `golang:1.26`). Public images are pulled by the daemon on first use and kept
-  in its volume.
+The default image is Python 3.12 with git and make. For a project's toolchain,
+define a [project environment](environments.md) in **Graph settings →
+Environment**: LeForge builds it on this daemon and every docker-isolated agent
+of the graph without an image of its own runs in it. An agent's **Image**
+setting overrides it with any image the daemon can pull; such images must run
+as uid 10001 (or create that user) to write in the workspace.
 
 ## Resetting
 

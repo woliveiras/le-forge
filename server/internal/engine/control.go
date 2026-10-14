@@ -40,17 +40,38 @@ func notFound(err error) error {
 func (e *Engine) Validate(g *domain.Graph) *graph.Report {
 	rep := graph.Validate(g, e.KnownRuntimes())
 	if rep.Valid {
-		pre := e.preflight(g, "")
+		pre := e.preflight(context.Background(), g, "")
 		rep.Warnings = append(rep.Warnings, pre.Errors...)
 	}
 	return rep
 }
 
 // preflight checks what must hold before nodes run: every node that talks
-// to a model must resolve to a usable provider. only limits the check to
-// one node ("" = every enabled node).
-func (e *Engine) preflight(g *domain.Graph, only string) *graph.Report {
+// to a model must resolve to a usable provider, and nodes that run commands
+// in the graph's environment need it built from the current definition.
+// only limits the check to one node ("" = every enabled node).
+func (e *Engine) preflight(ctx context.Context, g *domain.Graph, only string) *graph.Report {
 	rep := &graph.Report{Valid: true, Errors: []graph.Issue{}, Warnings: []graph.Issue{}}
+	if e.opt.Environments != nil && g.Spec.Environment != nil {
+		var users []string
+		for _, n := range g.Spec.Nodes {
+			if (only != "" && n.ID != only) || (only == "" && n.Disabled) {
+				continue
+			}
+			if UsesEnvironment(g, &n) {
+				users = append(users, n.ID)
+			}
+		}
+		if len(users) > 0 {
+			if err := e.opt.Environments.Check(ctx, g); err != nil {
+				rep.Valid = false
+				rep.Errors = append(rep.Errors, graph.Issue{
+					Path:    "spec.environment",
+					Message: fmt.Sprintf("%v (needed by %s)", err, strings.Join(users, ", ")),
+				})
+			}
+		}
+	}
 	if e.opt.Models == nil {
 		return rep
 	}
@@ -173,7 +194,7 @@ func (e *Engine) GraphAction(ctx context.Context, id, action, actor string) erro
 		if err != nil {
 			return err
 		}
-		if rep := e.preflight(g, ""); !rep.Valid {
+		if rep := e.preflight(ctx, g, ""); !rep.Valid {
 			return &ValidationError{Report: rep}
 		}
 	}
@@ -275,7 +296,7 @@ func (e *Engine) NodeAction(ctx context.Context, id, node, action, actor string)
 		if n.Disabled {
 			return fmt.Errorf("%w: node is disabled", ErrConflict)
 		}
-		if rep := e.preflight(g, node); !rep.Valid {
+		if rep := e.preflight(ctx, g, node); !rep.Valid {
 			return &ValidationError{Report: rep}
 		}
 		c.Stopped, c.Paused = false, false
@@ -545,4 +566,10 @@ func (e *Engine) groupStatus(ctx context.Context, g *domain.Graph, c *domain.Cha
 	}
 	pending[node] += gs.Pending
 	return gs
+}
+
+// UsesEnvironment reports whether node n runs its commands in g's
+// environment: docker isolation without an image of its own.
+func UsesEnvironment(g *domain.Graph, n *domain.Node) bool {
+	return g.Spec.Environment != nil && n.Isolation.Mode == domain.IsolationDocker && n.Isolation.Image == ""
 }

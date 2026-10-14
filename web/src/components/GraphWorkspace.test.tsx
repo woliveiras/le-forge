@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Graph, GraphSummary, ValidationResult } from '../api/types';
+import type { Graph, GraphSummary, Info, ValidationResult } from '../api/types';
 import { EventStreamProvider } from '../hooks/useEventStream';
 import { apiError, fakeApi, type Call } from '../test/fakeApi';
 import { GraphWorkspace, type GraphTab } from './GraphWorkspace';
@@ -53,7 +53,7 @@ function promptRule(graph: Graph): ValidationResult {
 
 /** A stateful fake control plane: versioned graph with If-Match checks. */
 function backend(validate: (graph: Graph) => ValidationResult = promptRule) {
-  const state = { current: initial() };
+  const state = { current: initial(), environment: 'absent' as 'absent' | 'building' | 'ready' };
   const perNode = Object.fromEntries(
     ['dev', 'rev', 'agent-3'].flatMap((id) => [
       [`GET /api/v1/graphs/g/nodes/${id}/chat`, () => []],
@@ -74,6 +74,17 @@ function backend(validate: (graph: Graph) => ValidationResult = promptRule) {
       { name: 'shell.exec', capability: 'shell.exec', description: 'Run commands' },
     ],
     'GET /api/v1/providers': () => [],
+    'GET /api/v1/graphs/g/environment': () => ({
+      graph: 'g',
+      state: state.environment,
+      defined: !!state.current.graph.spec.environment,
+      upToDate: state.environment === 'ready',
+      currentHash: 'h1',
+    }),
+    'POST /api/v1/graphs/g/environment/build': () => {
+      state.environment = 'ready';
+      return { graph: 'g', state: 'building', defined: true, upToDate: false, currentHash: 'h1' };
+    },
     'POST /api/v1/graphs/g/start': status,
     'POST /api/v1/graphs/validate': (call: Call) => validate(call.body as Graph),
     'PUT /api/v1/graphs/g': (call: Call) => {
@@ -92,12 +103,19 @@ function backend(validate: (graph: Graph) => ValidationResult = promptRule) {
   return { api, state, puts: () => api.find('PUT', '/api/v1/graphs/g') };
 }
 
-function Harness({ start = 'canvas' as GraphTab }) {
+function Harness({ start = 'canvas' as GraphTab, role = 'admin' as 'viewer' | 'operator' | 'admin' }) {
   const [summary, setSummary] = useState(initial);
   const [tab, setTab] = useState<GraphTab>(start);
   return (
     <EventStreamProvider token="t">
-      <GraphWorkspace summary={summary} tab={tab} onTab={setTab} onSaved={setSummary} onCorrelation={() => undefined} />
+      <GraphWorkspace
+        summary={summary}
+        info={{ identity: { name: role, role } } as Info}
+        tab={tab}
+        onTab={setTab}
+        onSaved={setSummary}
+        onCorrelation={() => undefined}
+      />
     </EventStreamProvider>
   );
 }
@@ -346,6 +364,37 @@ describe('GraphWorkspace editor', () => {
     const body = puts()[0].body as Graph;
     expect(body.spec.workspace).toEqual({ repo: 'https://github.com/woliveiras/bookaneer.git' });
     expect(body.spec.parameters).toEqual([{ name: 'branch', value: 'deps/update' }]);
+  });
+
+  it('defines a project environment in graph settings, saves it and builds it', async () => {
+    const user = userEvent.setup();
+    const { puts, api } = backend(() => valid);
+    renderWorkspace();
+    await user.click(await screen.findByRole('button', { name: 'Graph settings' }));
+    const env = screen.getByRole('group', { name: 'Environment' });
+    await user.selectOptions(within(env).getByLabelText('Source'), 'image');
+    await user.type(within(env).getByLabelText('Base image'), 'golang:1.26');
+    await user.type(within(env).getByLabelText('Setup commands (one per line)'), 'go version{Enter}go mod download');
+    await user.type(within(env).getByLabelText('Cache directories (one per line)'), '/home/sandbox/go/pkg/mod');
+    await user.selectOptions(within(env).getByLabelText('Network for agents'), 'bridge');
+    const status = within(env).getByRole('region', { name: 'Environment status' });
+    expect(within(status).getByText(/Unsaved environment changes/)).toBeTruthy();
+
+    await user.click(toolbarButton('Save graph'));
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect((puts()[0].body as Graph).spec.environment).toEqual({
+      image: 'golang:1.26',
+      setup: ['go version', 'go mod download'],
+      caches: ['/home/sandbox/go/pkg/mod'],
+      network: { run: 'bridge' },
+    });
+
+    const build = await within(status).findByRole('button', { name: 'Build' });
+    await waitFor(() => expect((build as HTMLButtonElement).disabled).toBe(false));
+    await user.click(build);
+    await waitFor(() => expect(api.find('POST', '/api/v1/graphs/g/environment/build')).toHaveLength(1));
+    // The status follows the build until it is ready.
+    expect(await within(status).findByText('Ready', {}, { timeout: 4000 })).toBeTruthy();
   });
 
   it('asks before starting while graph edits are unsaved', async () => {

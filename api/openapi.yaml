@@ -24,6 +24,7 @@ tags:
   - name: system
   - name: graphs
   - name: lifecycle
+  - name: environments
   - name: nodes
   - name: messages
   - name: executions
@@ -264,6 +265,69 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/GraphStatus"}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/environment:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [environments]
+      operationId: getEnvironment
+      summary: Build state of the graph's project environment, compared with the saved definition
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Environment
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Environment"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/environment/build:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    post:
+      tags: [environments]
+      operationId: buildEnvironment
+      summary: Build the environment of the saved graph version in the background
+      description: >-
+        Without force, an environment already built from the current definition is left alone (200).
+        Otherwise the build starts and the response reports state building (202); follow it with GET or the
+        environment.* events.
+      x-leforge-role: operator
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force: {type: boolean, description: Rebuild even when up to date.}
+      responses:
+        "200":
+          description: Already up to date
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Environment"}
+        "202":
+          description: Build started
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Environment"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+  /api/v1/graphs/{id}/environment/reset:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    post:
+      tags: [environments]
+      operationId: resetEnvironment
+      summary: Delete the environment's images and cache volumes (graph must be stopped)
+      x-leforge-role: admin
+      responses:
+        "200":
+          description: Environment after reset (state absent)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Environment"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
   /api/v1/graphs/{id}/nodes/{node}/{action}:
     parameters:
       - $ref: "#/components/parameters/GraphId"
@@ -1190,6 +1254,26 @@ components:
         warnings: {type: array, items: {$ref: "#/components/schemas/ValidationIssue"}}
     ReplicaStatus:
       $ref: "../schemas/event.schema.json#/$defs/ReplicaStatus"
+    Environment:
+      type: object
+      required: [graph, state, defined, upToDate]
+      properties:
+        graph: {type: string}
+        state: {enum: [absent, building, ready, failed]}
+        defined: {type: boolean, description: The saved graph has spec.environment.}
+        currentHash: {type: string, description: Hash of the saved definition.}
+        hash: {type: string, description: Hash of the definition last built.}
+        upToDate: {type: boolean, description: Ready and built from the current definition.}
+        image: {type: string}
+        caches:
+          type: array
+          items: {type: object, properties: {path: {type: string}, volume: {type: string}}}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+        error: {type: string}
+        log: {type: string, description: Tail of the build output (at most 64 KiB).}
+        actor: {type: string}
+        instance: {type: string}
     GraphStatus:
       type: object
       properties:

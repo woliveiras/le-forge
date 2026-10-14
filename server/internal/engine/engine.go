@@ -74,23 +74,31 @@ type SandboxFactory func(ctx context.Context, s SandboxSpec) (tools.Sandbox, err
 
 // Options wires the engine to its adapters.
 type Options struct {
-	Instance    string
-	Store       storage.Store
-	Broker      queue.Broker
-	Bus         *events.Bus
-	Approvals   *hitl.Service
-	Models      Models
-	Tools       ToolGateway
-	Runtimes    map[domain.RuntimeKind]runtime.Runtime
-	Workspaces  *workspace.Manager
-	Sandboxes   SandboxFactory
-	CallbackURL string // base internal URL, e.g. http://forged:8080
-	Log         *slog.Logger
+	Instance   string
+	Store      storage.Store
+	Broker     queue.Broker
+	Bus        *events.Bus
+	Approvals  *hitl.Service
+	Models     Models
+	Tools      ToolGateway
+	Runtimes   map[domain.RuntimeKind]runtime.Runtime
+	Workspaces *workspace.Manager
+	Sandboxes  SandboxFactory
+	// Environments, when set, is consulted before starting nodes that run
+	// commands in the graph's environment (see UsesEnvironment).
+	Environments EnvironmentChecker
+	CallbackURL  string // base internal URL, e.g. http://forged:8080
+	Log          *slog.Logger
 
 	LeaseTTL           time.Duration
 	ReconcileInterval  time.Duration
 	RetryBackoff       time.Duration
 	MaxConcurrentTurns int
+}
+
+// EnvironmentChecker reports whether a graph's environment can serve agents.
+type EnvironmentChecker interface {
+	Check(ctx context.Context, g *domain.Graph) error
 }
 
 type Engine struct {

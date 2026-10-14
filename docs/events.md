@@ -56,6 +56,10 @@ Persisting an event never fails the operation it describes: write errors are log
 | `log` | engine: replica completed (stop policy met / ran once), node actions | `{message, node?}` |
 | `provider.changed` | provider settings: create, update, delete, default (no graph id) | `{action, provider, revision}` (actor = caller) — never credentials |
 | `provider.tested` | provider connection test (no graph id) | `{provider, ok, draft, model, durationMs, error?}`; `level` is `warn` on failure; errors are redacted |
+| `environment.build_started` | `POST …/environment/build` | `{hash, force}` (actor = caller) |
+| `environment.ready` | environment build finished | `{hash, image, durationMs}` |
+| `environment.failed` | environment build failed, timed out or was cancelled | `{hash, durationMs, error}` |
+| `environment.reset` | `POST …/environment/reset`, graph deletion | `{errors}` (number of cleanup steps that failed) |
 
 `stop` and `kill` emit `graph.stopping` immediately; `graph.stopped` follows when the last replica
 has drained.

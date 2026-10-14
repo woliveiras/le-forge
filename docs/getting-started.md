@@ -347,4 +347,5 @@ install Go (it produces Linux binaries, suitable for containers and CI).
 - [Architecture](architecture.md) to understand the engine, queues and runtimes.
 - [Extensibility](extensibility.md) to write an agent in any language or framework.
 - [Sandbox runtime](sandbox-runtime.md) to run agent commands in containers and reset them.
+- [Project environments](environments.md) to give agents your project's toolchain (Go, Node, Python, ...).
 - [Deployment](deployment.md) and [production hardening](production-hardening.md) before going live.

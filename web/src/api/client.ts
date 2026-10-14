@@ -1,5 +1,6 @@
 import type {
   Approval,
+  EnvironmentView,
   Execution,
   FileEntry,
   Graph,
@@ -171,6 +172,11 @@ export const api = {
   graphAction: (id: string, action: GraphAction) =>
     request<GraphStatus>(`${V1}/graphs/${enc(id)}/${action}`, { method: 'POST' }),
   status: (id: string) => request<GraphStatus>(`${V1}/graphs/${enc(id)}/status`),
+  environment: (id: string) => request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment`),
+  buildEnvironment: (id: string, force = false) =>
+    request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment/build`, { method: 'POST', body: { force } }),
+  resetEnvironment: (id: string) =>
+    request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment/reset`, { method: 'POST' }),
 
   nodeAction: (id: string, node: string, action: GraphAction) =>
     request<GraphStatus>(`${V1}/graphs/${enc(id)}/nodes/${enc(node)}/${action}`, { method: 'POST' }),

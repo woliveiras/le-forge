@@ -232,12 +232,13 @@ func TestHTTPFetchSSRF(t *testing.T) {
 }
 
 func TestDockerSandboxArgs(t *testing.T) {
-	s, err := NewDockerSandbox(DockerSandboxConfig{Name: "lf-g-dev-1", Image: "alpine:3", HostDir: "/srv/ws/g", CPU: "1", Memory: "512m", Labels: map[string]string{"leforge.graph": "g"}})
+	s, err := NewDockerSandbox(DockerSandboxConfig{Name: "lf-g-dev-1", Image: "alpine:3", HostDir: "/srv/ws/g", CPU: "1", Memory: "512m", Labels: map[string]string{"leforge.graph": "g"},
+		Volumes: []string{"leforge-env-g-1a2b3c4d:/home/sandbox/go/pkg/mod"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	run := strings.Join(s.RunArgs(), " ")
-	for _, want := range []string{"--network none", "--cpus 1", "--memory 512m", "-v /srv/ws/g:/workspace", "--label leforge.graph=g", "--cap-drop ALL"} {
+	for _, want := range []string{"--network none", "--cpus 1", "--memory 512m", "-v /srv/ws/g:/workspace", "--label leforge.graph=g", "--cap-drop ALL", "-v leforge-env-g-1a2b3c4d:/home/sandbox/go/pkg/mod"} {
 		if !strings.Contains(run, want) {
 			t.Errorf("run args missing %q: %s", want, run)
 		}

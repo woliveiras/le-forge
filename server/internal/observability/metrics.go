@@ -11,6 +11,16 @@ import (
 const ns = "leforge"
 
 var (
+	EnvironmentBuilds = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: ns, Name: "environment_builds_total",
+		Help: "Project environment builds by outcome (ready, failed).",
+	}, []string{"outcome"})
+	EnvironmentBuildSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: ns, Name: "environment_build_duration_seconds",
+		Help:    "Duration of project environment builds.",
+		Buckets: []float64{5, 15, 30, 60, 120, 300, 600, 1200, 2400, 3600, 7200},
+	}, []string{"outcome"})
+
 	MessagesPublished = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: ns, Name: "messages_published_total",
 		Help: "Messages published to a channel.",

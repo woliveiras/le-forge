@@ -455,6 +455,24 @@ function readGraph(init: RequestInit): Graph {
   return (ct.includes('yaml') ? parseYaml(text) : JSON.parse(text)) as Graph;
 }
 
+type MockEnv = {
+  state: 'absent' | 'building' | 'ready' | 'failed';
+  hash?: string;
+  image?: string;
+  log?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  actor?: string;
+  error?: string;
+  caches?: { path: string; volume: string }[];
+};
+const mockEnvs = new Map<string, MockEnv>();
+function mockHash(text: string): string {
+  let h = 0;
+  for (const c of text) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0;
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
 function validate(g: Graph) {
   const errors: { path: string; message: string }[] = [];
   const warnings: { path: string; message: string }[] = [];
@@ -548,6 +566,39 @@ export async function mockFetch(url: string, init: RequestInit): Promise<Respons
     return new Response(q.get('format') === 'json' ? JSON.stringify(s.graph, null, 2) : stringify(s.graph), {
       headers: { 'content-type': 'text/plain' },
     });
+  }
+  if ((mm = p.match(/^\/graphs\/([^/]+)\/environment(?:\/(build|reset))?$/))) {
+    const s = db.graphs.get(decodeURIComponent(mm[1]));
+    if (!s) return err(404, 'graph not found', 'not_found');
+    const id = s.graph.metadata.id;
+    const env = s.graph.spec.environment;
+    const current = env ? mockHash(JSON.stringify(env)) : undefined;
+    const st = mockEnvs.get(id) ?? { state: 'absent' as const };
+    const view = () => {
+      const e = mockEnvs.get(id) ?? { state: 'absent' as const };
+      return { graph: id, defined: !!env, currentHash: current, upToDate: e.state === 'ready' && e.hash === current, ...e };
+    };
+    if (mm[2] === 'build') {
+      if (!env) return err(400, 'the graph defines no environment (spec.environment)', 'invalid');
+      if (st.state === 'building') return err(409, 'an environment build is already running', 'conflict');
+      mockEnvs.set(id, { state: 'building', hash: current, startedAt: now(), actor: 'admin', log: `==> ${env.image ? `Pulling base image ${env.image}` : 'Building the environment Dockerfile'}\n` });
+      emit({ type: 'environment.build_started', graphId: id, data: { hash: current } });
+      setTimeout(() => {
+        const log = `${mockEnvs.get(id)?.log ?? ''}==> Adding the sandbox user (uid 10001)\n${(env.setup ?? []).map((c) => `$ ${c}\n`).join('')}==> Environment ready: leforge-env/${id}:${current}\n`;
+        mockEnvs.set(id, { state: 'ready', hash: current, image: `leforge-env/${id}:${current}`, startedAt: mockEnvs.get(id)?.startedAt, finishedAt: now(), actor: 'admin', log,
+          caches: (env.caches ?? []).map((c) => ({ path: c, volume: `leforge-env-${id}-${mockHash(c)}` })) });
+        emit({ type: 'environment.ready', graphId: id, data: { hash: current } });
+      }, 3000);
+      return json(view(), 202);
+    }
+    if (mm[2] === 'reset') {
+      if (s.record.state !== 'stopped' && s.record.state !== 'failed')
+        return err(409, `graph ${id} is ${s.record.state}; stop it before resetting its environment`, 'conflict');
+      mockEnvs.delete(id);
+      emit({ type: 'environment.reset', graphId: id });
+      return json(view());
+    }
+    return json(view());
   }
   if ((mm = p.match(/^\/graphs\/([^/]+)\/status$/))) {
     const st = statusOf(mm[1]);

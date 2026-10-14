@@ -12,6 +12,7 @@ LeForge is a self-hosted, vendor-neutral **agent factory**. Autonomous AI agents
 | [dev/contracts.md](dev/contracts.md) | HTTP API and Runtime Protocol v1 (wire contracts) |
 | [product-contracts.md](product-contracts.md) | Current-state inventory and design contracts for planned Release 1 capabilities |
 | [sandbox-runtime.md](sandbox-runtime.md) | The Docker daemon dedicated to agent sandboxes: architecture, usage, reset, troubleshooting |
+| [environments.md](environments.md) | Project environments: definition, build lifecycle, usage, recipes, troubleshooting |
 
 ---
 
@@ -455,6 +456,14 @@ Telemetry is optional: without `OTEL_EXPORTER_OTLP_ENDPOINT`, only stdout and `/
 - **Worktree mode:** each replica gets `<root>/.worktrees/<graph>/<node>-<n>` on branch `leforge/<graph>/<node>-<n>`. Worktrees are outside the repository so they never show as untracked, and the branches are never deleted.
 - **Scratch:** each replica has a scratch folder `.leforge/<node>/r<n>` (`@loop`), which is git-ignored.
 - `HostPath` maps platform paths to the Docker daemon's view for sandbox bind mounts. With Compose, `forged` and `sandbox-daemon` mount the workspaces volume at the same path, so no mapping is configured.
+
+### 5.13 Project environments (`internal/environment`)
+
+- **Definition:** `spec.environment` in the graph document (base image or inline Dockerfile, setup commands, per-phase network, caches, timeout), validated by `graph.Validate` and versioned with the graph.
+- **Build:** the `environment.Manager` drives the sandbox daemon through the Docker CLI: pull or build the base, add the sandbox-user layer (uid 10001), run setup with the workspace mounted, commit `leforge-env/<graph>:<hash>`, create cache volumes, drop older images. Builds run in the background under the store lease `environment/<graph>`; status and a 64 KiB log tail live in the KV namespace `environment`.
+- **Use:** `engine.UsesEnvironment` marks docker-isolated nodes without `isolation.image`; the sandbox factory starts them from the ready image with the cache volumes and the run network, and the start preflight refuses them (422, `spec.environment`) while the environment is absent, building, failed or outdated.
+- **Cleanup:** reset (and graph deletion) removes images and cache volumes by graph label; it is refused while the graph runs.
+- **Observability:** `environment.*` events, `leforge_environment_builds_total` / `_build_duration_seconds`, span `environment.build`.
 
 ## 6. Quality attributes
 

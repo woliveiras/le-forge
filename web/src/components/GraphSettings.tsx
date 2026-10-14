@@ -1,6 +1,7 @@
 import type { Graph, Parameter } from '../api/types';
 import type { ElementIssue } from './canvas/edit';
 import { Btn } from './common';
+import { EnvironmentSection } from './EnvironmentSection';
 import { FieldIssues } from './GraphIssues';
 
 /**
@@ -10,10 +11,19 @@ import { FieldIssues } from './GraphIssues';
  */
 export function GraphSettings({
   graph,
+  savedGraph,
+  dirty,
+  running,
+  role,
   issues,
   onChange,
 }: {
   graph: Graph;
+  /** Saved version; the environment is always built from it. */
+  savedGraph: Graph;
+  dirty: boolean;
+  running: boolean;
+  role?: 'viewer' | 'operator' | 'admin';
   /** Validation findings that are not tied to an agent or channel (full paths). */
   issues?: ElementIssue[];
   onChange: (update: (graph: Graph) => Graph) => void;
@@ -93,6 +103,17 @@ export function GraphSettings({
           </label>
           <FieldIssues issues={issues} field="spec.workspace" />
         </fieldset>
+
+        <EnvironmentSection
+          graph={graph}
+          savedGraph={savedGraph}
+          dirty={dirty}
+          running={running}
+          canBuild={role === 'operator' || role === 'admin'}
+          canReset={role === 'admin'}
+          issues={issues}
+          onChange={onChange}
+        />
 
         <fieldset>
           <legend>Parameters</legend>

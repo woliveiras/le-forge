@@ -33,10 +33,42 @@ export interface GraphMetadata {
 export interface GraphSpec {
   parameters?: Parameter[];
   workspace?: { path?: string; git?: boolean; repo?: string };
+  environment?: EnvironmentSpec;
   defaults?: Partial<Pick<GraphNode, 'runtime' | 'model' | 'tools' | 'isolation' | 'loop'>>;
   nodes: GraphNode[];
   channels?: Channel[];
   maxHops?: number;
+}
+
+/** spec.environment: the container image agents' commands run in (docker isolation). */
+export interface EnvironmentSpec {
+  image?: string;
+  dockerfile?: string;
+  setup?: string[];
+  network?: { setup?: 'none' | 'bridge'; run?: 'none' | 'bridge' };
+  caches?: string[];
+  timeout?: Duration;
+  cpu?: string;
+  memory?: string;
+}
+
+export type EnvironmentState = 'absent' | 'building' | 'ready' | 'failed';
+
+/** GET /graphs/{id}/environment: build state compared with the saved definition. */
+export interface EnvironmentView {
+  graph: string;
+  state: EnvironmentState;
+  defined: boolean;
+  currentHash?: string;
+  hash?: string;
+  upToDate: boolean;
+  image?: string;
+  caches?: { path: string; volume: string }[];
+  startedAt?: string;
+  finishedAt?: string;
+  error?: string;
+  log?: string;
+  actor?: string;
 }
 
 export interface Parameter {

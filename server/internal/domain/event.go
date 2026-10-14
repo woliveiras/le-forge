@@ -64,6 +64,11 @@ const (
 	// Installation configuration (no graph id). Data never carries secrets.
 	EvProviderChanged EventType = "provider.changed"
 	EvProviderTested  EventType = "provider.tested"
+
+	EvEnvBuildStarted EventType = "environment.build_started"
+	EvEnvReady        EventType = "environment.ready"
+	EvEnvFailed       EventType = "environment.failed"
+	EvEnvReset        EventType = "environment.reset"
 )
 
 // NewEvent builds an event with a fresh id and timestamp; data is marshalled.

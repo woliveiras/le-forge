@@ -30,8 +30,8 @@ Roles are hierarchical: a higher role can do everything a lower one can.
 | Role | Can |
 |---|---|
 | `viewer` | All `GET`s, `POST /graphs/validate`, event stream |
-| `operator` | + start/stop/pause/resume/kill graphs and nodes, scale, inject messages, operator chat, decide approvals, test model providers |
-| `admin` | + create, update and delete graphs; manage model providers and their credentials |
+| `operator` | + start/stop/pause/resume/kill graphs and nodes, scale, inject messages, operator chat, decide approvals, test model providers, build project environments |
+| `admin` | + create, update and delete graphs; manage model providers and their credentials; reset project environments |
 
 `?access_token=<token>` is accepted **only on `GET`** requests, because `EventSource` cannot send headers.
 Prefer the header everywhere else: query strings end up in proxy logs.
@@ -120,6 +120,22 @@ request through the same gateway agent turns use; `ok` reflects that
 inference. Errors are returned with any echoed credential replaced by
 `[redacted]`. Tests are audited as `provider.tested` events; changes as
 `provider.changed`.
+
+## Project environments
+
+The environment definition is part of the graph (`spec.environment`) and is
+saved with the graph. These endpoints manage its build; see
+[environments.md](environments.md).
+
+| Method and path | Role | Purpose |
+|---|---|---|
+| `GET /api/v1/graphs/{id}/environment` | viewer | Build state compared with the saved definition: `state` (`absent`, `building`, `ready`, `failed`), `defined`, `currentHash`, `upToDate`, `image`, `caches`, `error`, `log` (last 64 KiB). |
+| `POST /api/v1/graphs/{id}/environment/build` | operator | Body `{"force": bool}` (optional). Starts a background build of the saved definition (`202`); an up-to-date environment without `force` is left alone (`200`). `400` without `spec.environment`; `409` while a build runs. |
+| `POST /api/v1/graphs/{id}/environment/reset` | admin | Deletes the environment's images and cache volumes; `409` while the graph is running. |
+
+Starting a graph or node whose docker-isolated agents (without an image of
+their own) need an environment that is not ready returns `422` with an issue
+at `spec.environment`.
 
 ## Event stream (SSE)
 

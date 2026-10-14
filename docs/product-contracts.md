@@ -130,6 +130,36 @@ cause the gateway to select a different connection.
   instruction content and non-secret manifest only. Repository content is
   untrusted input and must be bounded and isolated by workspace.
 
+### Project environments
+
+**Delivered** (see [environments.md](environments.md)):
+
+- `spec.environment` in the graph document is the single effective
+  definition: `image` or `dockerfile`, `setup[]`, `network.setup`/`network.run`
+  (`none`/`bridge`), `caches[]`, `timeout`, `cpu`, `memory`. It is versioned
+  with the graph and saved through the graph `PUT`.
+- Build state per graph: `absent`, `building`, `ready`, `failed`, with the hash
+  of the built definition, image reference, cache volumes, timestamps, actor and
+  a 64 KiB log tail. `upToDate` compares it with the saved definition.
+- `GET /graphs/{id}/environment` (viewer), `POST …/environment/build`
+  (operator, `{force}`), `POST …/environment/reset` (admin, refused while the
+  graph runs). Starting nodes that need an environment that is not up to date
+  returns `422` at `spec.environment`.
+- Events `environment.build_started|ready|failed|reset`; metrics
+  `leforge_environment_builds_total{outcome}` and
+  `leforge_environment_build_duration_seconds{outcome}`; span
+  `environment.build`.
+
+**Planned** (`wip/TASKS.md`, section 3): other sources produce a definition the
+operator accepts, and accepting writes it into `spec.environment` (so the
+precedence interface → repository → agent proposal is decided when accepting,
+and the graph keeps one effective definition):
+
+| Source | Contract |
+|---|---|
+| Repository | `.leforge/environment.yaml` (same fields as `spec.environment`, Dockerfile paths relative to the repository and built with the repository as context) or the image/post-create subset of `.devcontainer/devcontainer.json`; unsupported fields are reported. Shown as "found in the repository"; nothing is used until accepted. |
+| Agent proposal | Tool `environment.propose {image or dockerfile, setup, network, caches, rationale}` opens an approval with the full definition and a diff against the current one; approving it saves the graph with the new definition (new version, actor = approver). `environment.status` returns the build state. Proposals cannot widen network policy or limits beyond installation settings. |
+
 ## 4. User Tasks and Child Executions
 
 ### User-initiated tasks

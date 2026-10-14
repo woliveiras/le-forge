@@ -41,12 +41,51 @@ type GraphMetadata struct {
 type GraphSpec struct {
 	Parameters []Parameter   `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 	Workspace  WorkspaceSpec `json:"workspace,omitempty" yaml:"workspace,omitempty"`
-	Defaults   NodeDefaults  `json:"defaults,omitempty" yaml:"defaults,omitempty"`
-	Nodes      []Node        `json:"nodes" yaml:"nodes"`
-	Channels   []Channel     `json:"channels,omitempty" yaml:"channels,omitempty"`
+	// Environment is the container image agents' commands run in when they
+	// use docker isolation without an image of their own. LeForge builds it
+	// on the sandbox daemon (see internal/environment).
+	Environment *EnvironmentSpec `json:"environment,omitempty" yaml:"environment,omitempty"`
+	Defaults    NodeDefaults     `json:"defaults,omitempty" yaml:"defaults,omitempty"`
+	Nodes       []Node           `json:"nodes" yaml:"nodes"`
+	Channels    []Channel        `json:"channels,omitempty" yaml:"channels,omitempty"`
 	// MaxHops bounds how many agent hops a message chain may take. Cycles are
 	// legal; unbounded cycles are not. 0 means the platform default (64).
 	MaxHops int `json:"maxHops,omitempty" yaml:"maxHops,omitempty"`
+}
+
+// EnvironmentSpec defines a project environment: a base image (or a
+// Dockerfile), setup commands run once with the workspace mounted, and the
+// network and cache policy of the containers built from it.
+type EnvironmentSpec struct {
+	// Image is a base image to pull (e.g. "golang:1.26"). Exactly one of
+	// Image and Dockerfile is set.
+	Image string `json:"image,omitempty" yaml:"image,omitempty"`
+	// Dockerfile is an inline Dockerfile built without a context (no COPY
+	// from the repository).
+	Dockerfile string `json:"dockerfile,omitempty" yaml:"dockerfile,omitempty"`
+	// Setup commands run in order, as the sandbox user, in /workspace with
+	// the graph workspace mounted; their effect on the image (installed
+	// tools, downloaded dependencies outside the workspace) is kept.
+	Setup []string `json:"setup,omitempty" yaml:"setup,omitempty"`
+	// Network per phase: "none" or "bridge" (internet only).
+	Network EnvironmentNetwork `json:"network,omitempty" yaml:"network,omitempty"`
+	// Caches are absolute directories kept in named volumes across sandbox
+	// containers and rebuilds (e.g. the Go module cache).
+	Caches []string `json:"caches,omitempty" yaml:"caches,omitempty"`
+	// Timeout bounds the whole build (default 30m, at most 2h).
+	Timeout Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	// CPU and Memory limit the setup container.
+	CPU    string `json:"cpu,omitempty" yaml:"cpu,omitempty"`
+	Memory string `json:"memory,omitempty" yaml:"memory,omitempty"`
+}
+
+// EnvironmentNetwork is the network of each environment phase.
+type EnvironmentNetwork struct {
+	// Setup defaults to "bridge": installing tools needs the internet.
+	Setup string `json:"setup,omitempty" yaml:"setup,omitempty"`
+	// Run is the default for agent sandboxes ("none"); a node's
+	// isolation.network overrides it.
+	Run string `json:"run,omitempty" yaml:"run,omitempty"`
 }
 
 // Parameter is a graph-wide value substituted into prompts as @name.

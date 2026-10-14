@@ -39,6 +39,9 @@ type DockerSandboxConfig struct {
 	MountPoint string
 	// User to run as inside the container (default: the image's user).
 	User string
+	// Volumes are extra mounts in docker -v syntax ("name:/path"), e.g. an
+	// environment's dependency caches.
+	Volumes []string
 }
 
 // DockerSandbox runs commands inside a long-lived container dedicated to
@@ -105,6 +108,9 @@ func (s *DockerSandbox) RunArgs() []string {
 	}
 	if c.User != "" {
 		args = append(args, "--user", c.User)
+	}
+	for _, v := range c.Volumes {
+		args = append(args, "-v", v)
 	}
 	args = append(args, "-v", c.HostDir+":"+c.MountPoint, "-w", c.MountPoint, "--entrypoint", "sh", c.Image, "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done")
 	return args
@@ -175,7 +181,7 @@ func (s *DockerSandbox) Exec(ctx context.Context, req ExecRequest) (*ExecResult,
 	}
 	runCtx, cancel := context.WithTimeout(ctx, clampTimeout(req.Timeout))
 	defer cancel()
-	cmd := dockerCommand(runCtx, s.cfg.DockerBin, s.cfg.DockerHost, args...)
+	cmd := DockerCommand(runCtx, s.cfg.DockerBin, s.cfg.DockerHost, args...)
 	limit := req.MaxOutput
 	if limit <= 0 {
 		limit = DefaultMaxOutput
@@ -223,13 +229,13 @@ func (s *DockerSandbox) Close() error {
 }
 
 func (s *DockerSandbox) docker(ctx context.Context, args ...string) (string, error) {
-	out, err := dockerCommand(ctx, s.cfg.DockerBin, s.cfg.DockerHost, args...).CombinedOutput()
+	out, err := DockerCommand(ctx, s.cfg.DockerBin, s.cfg.DockerHost, args...).CombinedOutput()
 	return string(out), err
 }
 
-// dockerCommand runs the docker CLI against host (DOCKER_HOST), keeping the
+// DockerCommand runs the docker CLI against host (DOCKER_HOST), keeping the
 // rest of the platform environment (TLS settings, PATH).
-func dockerCommand(ctx context.Context, bin, host string, args ...string) *exec.Cmd {
+func DockerCommand(ctx context.Context, bin, host string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	if host != "" {
 		cmd.Env = append(os.Environ(), "DOCKER_HOST="+host)
@@ -243,7 +249,7 @@ func PingDocker(ctx context.Context, bin, host string) (string, error) {
 	if bin == "" {
 		bin = "docker"
 	}
-	out, err := dockerCommand(ctx, bin, host, "version", "--format", "{{.Server.Version}}").CombinedOutput()
+	out, err := DockerCommand(ctx, bin, host, "version", "--format", "{{.Server.Version}}").CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 		if text == "" {

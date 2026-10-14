@@ -1638,6 +1638,7 @@ section {
   margin-top: 2px;
 }
 .node-editor fieldset {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
@@ -1666,4 +1667,26 @@ section {
 .parameter-row .field-error,
 .parameter-row .field-warning {
   grid-column: 1 / -1;
+}
+.environment-status {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.environment-status h4 {
+  margin: 0;
+}
+.build-log {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+.node-editor textarea,
+.node-editor select,
+.node-editor input:not([type='checkbox']) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
