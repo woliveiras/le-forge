@@ -18,7 +18,7 @@ This document explains how agents run. Implementation: `engine/replica.go`, `eng
 
 | Mode | Turn starts when | Input claiming |
 |---|---|---|---|
-| `once` | Immediately, exactly one turn per run, then `completed`. | Non-blocking fetch. |
+| `once` | Immediately, exactly one turn per run, then `completed` — or `failed` when that turn failed (the reason is in the replica detail and a `log` event with level `error`). Neither is restarted during the run; start the node again to retry. | Non-blocking fetch. |
 | `continuous` | Turn after turn. | Non-blocking: takes what is there, may run with no inputs. |
 | `scheduled` | First turn at start, then on `schedule` (cron, `@hourly`, `@every 15m`). An operator message triggers an extra turn. | Non-blocking. |
 | `event` | A message is waiting or an operator message arrives; otherwise `idle`. | Blocking fetch, 2s wait per cycle. A node with no inputs waits for operator messages only. |

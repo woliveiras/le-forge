@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -32,8 +33,13 @@ func (e *APIError) Error() string {
 
 // IsRetryable reports whether err is worth retrying (rate limit, 5xx,
 // network failure). Context cancellation never is.
+// ErrModelTimeout: the provider did not answer within its timeout. Not
+// retried: a model that needed the whole timeout once will likely need it
+// again, and each retry would hold the turn for another full timeout.
+var ErrModelTimeout = errors.New("model call timed out")
+
 func IsRetryable(err error) bool {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrModelTimeout) {
 		return false
 	}
 	var ae *APIError
@@ -191,6 +197,11 @@ func (c *HTTPClient) once(ctx context.Context, method, path string, payload []by
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			return fmt.Errorf("%w: %s gave no answer within %s (the provider's timeout); the model may still be loading or the machine running it may be short of memory: use a smaller model, free memory, or raise the provider's timeout",
+				ErrModelTimeout, c.Provider, c.Client.Timeout)
 		}
 		return fmt.Errorf("llm %s: %w", c.Provider, err)
 	}

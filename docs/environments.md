@@ -72,7 +72,9 @@ environment ("Used by: ..."). Agents with their own **Image** keep using it;
 agents with process isolation do not use containers at all.
 
 Starting the graph (or one of those agents) is refused while the environment
-is not ready, with the reason and where to fix it — for example
+is not ready. **Run all** then shows the reason with two buttons: **Build and
+start when ready** (builds, waits, and starts the graph) and **Build
+environment** (operators and admins). The message names the cause — for example
 `environment not ready: it has not been built yet; build it in Graph settings →
 Environment (needed by maintainer)`. Saving the graph shows the same message as
 a warning. Agents that do not use the environment are not affected.
@@ -157,7 +159,9 @@ sequenceDiagram
   of workspace files), sets `HOME=/home/sandbox`, and creates the cache
   directories owned by it. The base image needs `/bin/sh`; distroless images are
   not supported.
-- **Setup:** runs as user 10001 with all capabilities dropped, the setup
+- **Setup:** runs as user 10001 with all capabilities dropped, `CI=true` (there
+  is no terminal, so package managers proceed instead of asking for
+  confirmation), the setup
   network, the CPU/memory limits of the definition, and the workspace at
   `/workspace` (cloned first if the graph has a repository). Changes outside
   `/workspace` are committed into the final image; the workspace itself stays
@@ -204,4 +208,5 @@ sequenceDiagram
 | `build interrupted: the LeForge instance running it stopped` | `forged` restarted mid-build | **Build again** |
 | Reset: `stop it before resetting its environment` | The graph is running | Stop the graph, then reset |
 | Agents still use the old image after a rebuild | Their sandbox was created before | Stop and start the agents |
+| `If you are running pnpm in CI, set the CI environment variable to "true"` | An older LeForge ran setup without `CI=true` and pnpm asked to confirm recreating `node_modules` | Build again (setup now runs with `CI=true`) |
 | `COPY failed` in a Dockerfile | Builds have no context | Install from the network, or run the copy as a setup command (the workspace is mounted) |

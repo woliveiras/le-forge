@@ -208,13 +208,20 @@ func (r *replica) run() {
 	r.setState(domain.ReplicaStarting, "")
 
 	completed := false
+	// failedFinal: the replica ended because its work failed (a once-mode
+	// node whose only turn failed). It is not restarted, like a completed
+	// one, but reports failed so nobody mistakes it for success.
+	failedFinal := ""
 	defer func() {
 		r.teardown(log)
-		final := domain.ReplicaStopped
-		if completed {
+		final, detail := domain.ReplicaStopped, ""
+		switch {
+		case failedFinal != "":
+			final, detail = domain.ReplicaFailed, failedFinal
+		case completed:
 			final = domain.ReplicaCompleted
 		}
-		r.setState(final, "")
+		r.setState(final, detail)
 		r.mu.Lock()
 		r.exited = true
 		r.mu.Unlock()
@@ -231,6 +238,7 @@ func (r *replica) run() {
 
 	var schedNext time.Time
 	failures := 0
+	var lastTurnErr error
 	for {
 		if r.isStopping() || ctx.Err() != nil {
 			return
@@ -262,6 +270,11 @@ func (r *replica) run() {
 		switch n.Loop.Mode {
 		case domain.LoopOnce:
 			if r.runIter >= 1 {
+				if lastTurnErr != nil {
+					failedFinal = "its only turn failed: " + truncate(lastTurnErr.Error(), 300)
+					r.fail(ctx, failedFinal)
+					return
+				}
 				r.complete(ctx, "ran once")
 				completed = true
 				return
@@ -314,6 +327,7 @@ func (r *replica) run() {
 
 		// --- turn ------------------------------------------------------------
 		out := r.turn(ctx, n, dels, delSubs, ops)
+		lastTurnErr = out.err
 		switch {
 		case out.err != nil:
 			failures++
@@ -370,6 +384,16 @@ func (r *replica) complete(ctx context.Context, why string) {
 	gr.e.markCompleted(context.Background(), gr.g.Metadata.ID, r.nodeID, r.index, gr.runID)
 	gr.e.bus.Publish(context.Background(), domain.NewEvent(domain.EvLog, gr.g.Metadata.ID, map[string]any{"message": "replica completed: " + why}).
 		WithNode(r.nodeID, r.index))
+}
+
+// fail ends a replica whose work failed: like complete it is not restarted
+// in this run (a new start runs it again), but it reports failed.
+func (r *replica) fail(ctx context.Context, why string) {
+	gr := r.run_l()
+	gr.e.markCompleted(context.Background(), gr.g.Metadata.ID, r.nodeID, r.index, gr.runID)
+	ev := domain.NewEvent(domain.EvLog, gr.g.Metadata.ID, map[string]any{"message": "replica failed: " + why}).WithNode(r.nodeID, r.index)
+	ev.Level = "error"
+	gr.e.bus.Publish(context.Background(), ev)
 }
 
 // wait sleeps until d passes, the replica is poked, or the loop is cancelled.

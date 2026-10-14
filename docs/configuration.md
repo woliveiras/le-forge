@@ -73,7 +73,7 @@ file), so a single variable enables a backend:
 
 | Trigger | Provider name / type | Base URL | Model (env, default) |
 |---|---|---|---|
-| `OLLAMA_BASE_URL` | `ollama` / `ollama` | the variable | `OLLAMA_MODEL`, `llama3.2`; `OLLAMA_CONTEXT_WINDOW` sets its context window (default 32768) |
+| `OLLAMA_BASE_URL` | `ollama` / `ollama` | the variable | `OLLAMA_MODEL`, `llama3.2`; `OLLAMA_CONTEXT_WINDOW` sets its context window (default 32768), `OLLAMA_TIMEOUT_SEC` its per-request timeout (default 300) |
 | `OPENAI_API_KEY` | `openai` / `openai` | `OPENAI_BASE_URL`, `https://api.openai.com/v1` | `OPENAI_MODEL`, `gpt-4o-mini` |
 | `ANTHROPIC_API_KEY` | `anthropic` / `anthropic` | `ANTHROPIC_BASE_URL`, `https://api.anthropic.com` | `ANTHROPIC_MODEL`, `claude-sonnet-5-5` |
 | `OPENROUTER_API_KEY` | `openrouter` / `openrouter` | `https://openrouter.ai/api/v1` | `OPENROUTER_MODEL`, `meta-llama/llama-3.3-70b-instruct` |

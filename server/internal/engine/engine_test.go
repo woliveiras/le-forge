@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -393,4 +394,50 @@ func mustLeases(t *testing.T, s storage.Store) []domain.Lease {
 		t.Fatal(err)
 	}
 	return ls
+}
+
+const onceTwoWays = `
+apiVersion: leforge.io/v1
+kind: Graph
+metadata: {name: once}
+spec:
+  defaults: {runtime: {kind: echo}}
+  nodes:
+    - {id: ok, loop: {mode: once}}
+    - {id: broken, loop: {mode: once}, config: {fail: true}}
+`
+
+// A once-mode node whose only turn failed ends failed (not completed) and
+// is not retried in the same run; a successful one ends completed.
+func TestOnceModeReportsFailedTurns(t *testing.T) {
+	dir := t.TempDir()
+	r := newRig(t, openStore(t, dir), memory.New(), dir, "i1")
+	r.deploy(onceTwoWays)
+	state := func(node string) (domain.ReplicaState, string) {
+		list, _ := r.store.ListReplicaStatus(r.ctx, "once")
+		for _, s := range list {
+			if s.NodeID == node {
+				return s.State, s.Detail
+			}
+		}
+		return "", ""
+	}
+	eventually(t, 15*time.Second, "both replicas finished", func() bool {
+		a, _ := state("ok")
+		b, _ := state("broken")
+		return a == domain.ReplicaCompleted && b == domain.ReplicaFailed
+	})
+	if _, detail := state("broken"); !strings.Contains(detail, "its only turn failed") {
+		t.Fatalf("detail: %q", detail)
+	}
+	// Not retried: one failed execution after a few reconcile intervals.
+	time.Sleep(500 * time.Millisecond)
+	xs, _ := r.store.ListExecutions(r.ctx, storage.ExecutionFilter{GraphID: "once", NodeID: "broken"})
+	if len(xs) != 1 || xs[0].Status != domain.ExecFailed {
+		t.Fatalf("executions of the failed once node: %d", len(xs))
+	}
+	evs, _ := r.store.ListEvents(r.ctx, storage.EventFilter{GraphID: "once", NodeID: "broken", Types: []domain.EventType{domain.EvLog}})
+	if len(evs) == 0 || !strings.Contains(string(evs[0].Data), "replica failed: its only turn failed") || evs[0].Level != "error" {
+		t.Fatalf("log event: %+v", evs)
+	}
 }

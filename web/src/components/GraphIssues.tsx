@@ -59,7 +59,7 @@ export function IssueSummary({
   const errors = rows.filter((row) => row.severity === 'error').length;
   return (
     <div role={errors ? 'alert' : 'status'}>
-      <ul className="issue-list" aria-label="Graph validation">
+      <ul className={`issue-list ${errors ? '' : 'warnings-only'}`} aria-label="Graph validation">
         <li>
           <strong>
             {errors ? `${errors} error${errors > 1 ? 's' : ''} must be fixed before saving` : 'Valid, with warnings'}

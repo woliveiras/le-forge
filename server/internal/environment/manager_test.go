@@ -215,7 +215,7 @@ func TestBuildFromImageWithSetupAndCaches(t *testing.T) {
 	for _, want := range []string{
 		"pull golang:1.26",
 		"build -t leforge-env/bookaneer:" + hash + "-user --label leforge.graph=bookaneer --label leforge.environment=" + hash + " -",
-		"run --name leforge-envbuild-bookaneer --network bridge --cap-drop ALL --security-opt no-new-privileges",
+		"run --name leforge-envbuild-bookaneer --network bridge --cap-drop ALL --security-opt no-new-privileges -e CI=true",
 		"-v /host" + h.ws + ":/workspace -w /workspace --entrypoint sh leforge-env/bookaneer:" + hash + "-user -c set -e",
 		"commit leforge-envbuild-bookaneer leforge-env/bookaneer:" + hash,
 		"volume create --label leforge.graph=bookaneer " + CacheVolume("bookaneer", "/home/sandbox/go/pkg/mod"),
@@ -323,6 +323,17 @@ func TestNotReadyMessages(t *testing.T) {
 	changed.Spec.Environment.Setup = []string{"pnpm install"}
 	if err := h.m.Check(ctx, changed); !errors.Is(err, ErrNotReady) || !strings.Contains(err.Error(), "definition changed") {
 		t.Fatalf("stale: %v", err)
+	}
+	// A failed build of an older definition is also "changed", not "never built".
+	h.docker.set(t, "fail-run", "")
+	if _, err := h.m.Build(ctx, g, true, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if v := h.wait(t, g); v.State != StateFailed {
+		t.Fatalf("forced failing build: %+v", v)
+	}
+	if err := h.m.Check(ctx, changed); !strings.Contains(err.Error(), "definition changed") {
+		t.Fatalf("changed after a failed build: %v", err)
 	}
 	if _, err := h.m.Build(ctx, graphWith(nil), false, "a"); !errors.Is(err, ErrNotDefined) {
 		t.Fatalf("undefined build: %v", err)

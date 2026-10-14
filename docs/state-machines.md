@@ -49,6 +49,7 @@ stateDiagram-v2
   idle --> paused : graph or node paused
   paused --> idle : resumed
   running --> completed : stop policy met / confirm_stop / once
+  running --> failed : once, and its only turn failed
   idle --> completed : idle timeout / iteration or duration limit
   idle --> stopping : stop
   running --> stopping : stop (turn finishes) / kill
@@ -66,6 +67,7 @@ stateDiagram-v2
 | Turn ends | — | `idle`. Failures add exponential back-off (`retryBackoff · 2^(n-1)`, max 5m). |
 | Pause | graph desired `paused` or node override `paused` | `paused`; no new turn starts. |
 | Stop policy | `iterations` / `duration` / `idle` limit reached, `once` done, or `confirm_stop` after a declaration | `completed`; marker `done/<node>#<n> = runId`; not restarted during this run. |
+| Once failed | `once` node whose only turn failed | `failed` with detail `its only turn failed: …` and a `log` event (`level: error`); same marker, so it is not retried in a loop; a new start runs it again. |
 | Stop | graph or node stopped, surplus replica, lease lost | `stopping` → `stopped`; lease released. |
 | Kill | — | Turn context cancelled, then as for stop. |
 

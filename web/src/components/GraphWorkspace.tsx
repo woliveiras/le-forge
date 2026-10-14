@@ -15,6 +15,7 @@ import {
   type EdgeRef,
 } from './canvas/edit';
 import { GraphCanvas, type Selection } from './canvas/GraphCanvas';
+import { EnvironmentBlocker, environmentIssue } from './EnvironmentBlocker';
 import { GraphSettings } from './GraphSettings';
 import { ChannelPanel } from './ChannelPanel';
 import { Badge, Btn, ErrorBox, Icon } from './common';
@@ -70,6 +71,8 @@ export function GraphWorkspace({
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<Validation>();
   const [panelOpen, setPanelOpen] = useState(true);
+  // Set when a start was refused because the environment is not ready.
+  const [envBlock, setEnvBlock] = useState<string>();
   // Graph settings show in the side panel while no agent or channel is selected.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = () => {
@@ -221,8 +224,15 @@ export function GraphWorkspace({
     try {
       setStatus(await api.graphAction(gid, a));
       setError(undefined);
+      setEnvBlock(undefined);
     } catch (e) {
-      setError(errorMessage(e));
+      const blocked = a === 'start' ? environmentIssue(e) : undefined;
+      if (blocked) {
+        setEnvBlock(blocked);
+        setError(undefined);
+      } else {
+        setError(errorMessage(e));
+      }
     }
   };
 
@@ -334,6 +344,15 @@ export function GraphWorkspace({
         </div>
       </div>
       <ErrorBox error={error ?? statusError} />
+      {envBlock && (
+        <EnvironmentBlocker
+          graphId={gid}
+          message={envBlock}
+          canBuild={info?.identity?.role === 'operator' || info?.identity?.role === 'admin'}
+          onStarted={setStatus}
+          onDismiss={() => setEnvBlock(undefined)}
+        />
+      )}
       {saveConflict && (
         <p className="muted small" role="status">
           Someone saved a newer version while you were editing. Your edits are kept here: reload to start from the latest

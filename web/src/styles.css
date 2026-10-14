@@ -1690,3 +1690,19 @@ section {
   min-width: 0;
   box-sizing: border-box;
 }
+.issue-list.warnings-only {
+  border-color: color-mix(in srgb, var(--yellow) 55%, transparent);
+  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+}
+.environment-blocker {
+  margin: 6px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 55%, transparent);
+  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+  display: grid;
+  gap: 6px;
+}
+.environment-blocker p {
+  margin: 0;
+}

@@ -50,6 +50,9 @@ x-forged-env: &forged-env
   OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
   # Context window (num_ctx) LeForge asks Ollama for; empty = 32768.
   OLLAMA_CONTEXT_WINDOW: ${OLLAMA_CONTEXT_WINDOW:-}
+  # Seconds to wait for each answer; empty = 300. Large local models can need
+  # longer the first time they load.
+  OLLAMA_TIMEOUT_SEC: ${OLLAMA_TIMEOUT_SEC:-}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
   OPENAI_MODEL: ${OPENAI_MODEL:-}

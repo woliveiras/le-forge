@@ -307,6 +307,9 @@ func applyEnv(c *Config) {
 			if v, err := strconv.Atoi(os.Getenv("OLLAMA_CONTEXT_WINDOW")); err == nil && v > 0 {
 				p.ContextWindow = v
 			}
+			if v, err := strconv.Atoi(os.Getenv("OLLAMA_TIMEOUT_SEC")); err == nil && v > 0 {
+				p.TimeoutSec = v
+			}
 		}
 	}
 	if os.Getenv("OPENAI_API_KEY") != "" {

@@ -363,8 +363,10 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 		}
 		name := buildContainer(id)
 		_ = m.docker(context.Background(), nil, io.Discard, "rm", "-f", name)
+		// No terminal: CI=true makes package managers (pnpm, npm, yarn,
+		// apt front ends) proceed instead of waiting for a confirmation.
 		run := []string{"run", "--name", name, "--network", SetupNetwork(env),
-			"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+			"--cap-drop", "ALL", "--security-opt", "no-new-privileges", "-e", "CI=true",
 			"--label", "leforge.graph=" + id, "--label", "leforge.environment.build=true",
 			"-v", m.opt.Workspaces.HostPath(dir) + ":/workspace", "-w", "/workspace"}
 		if env.CPU != "" {
@@ -512,7 +514,7 @@ func notReady(v *View) error {
 		return fmt.Errorf("%w: it is being built; agents can start when the build finishes", ErrNotReady)
 	case v.State == StateFailed && v.Hash == v.CurrentHash:
 		return fmt.Errorf("%w: the last build failed (%s); fix the definition or build again in Graph settings → Environment", ErrNotReady, v.Error)
-	case v.State == StateReady:
+	case v.Hash != "" && v.Hash != v.CurrentHash:
 		return fmt.Errorf("%w: the definition changed since the last build; build it in Graph settings → Environment", ErrNotReady)
 	default:
 		return fmt.Errorf("%w: it has not been built yet; build it in Graph settings → Environment", ErrNotReady)

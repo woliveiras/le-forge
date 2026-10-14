@@ -130,6 +130,7 @@ When something goes wrong, the agent's turn fails with the reason, visible in
 | `the model wrote a tool call as text instead of calling the tool` | The model answered with JSON that is not a usable call | Use a model whose connection test passes tool calling |
 | `the model ended the turn without an answer or a tool call` | Empty answer, nothing done | Check the model and the prompt; this often follows a truncated context |
 | `the model's answer was cut off by its output limit` | The answer hit the output token limit | Use a model or provider with a larger output limit |
+| `model call timed out: … gave no answer within 5m0s` | The model server did not answer within the provider's timeout — typical for a large local model that is still loading or a machine short of memory (heavy swapping) | Use a smaller model, close memory-hungry apps, or raise the provider's timeout (**Timeout** under *Limits*, or `OLLAMA_TIMEOUT_SEC` for the provider from `OLLAMA_BASE_URL`) |
 | `the turn used every model round without finishing` | The agent kept calling tools until its budget ran out | Raise **Max tool calls** in the agent's *Limits per turn*, or split the task |
 
 ### Ollama (local, offline after the first pull)

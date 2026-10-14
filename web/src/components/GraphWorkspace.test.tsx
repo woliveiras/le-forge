@@ -397,6 +397,28 @@ describe('GraphWorkspace editor', () => {
     expect(await within(status).findByText('Ready', {}, { timeout: 4000 })).toBeTruthy();
   });
 
+  it('offers to build the environment when a start is refused for it', async () => {
+    const user = userEvent.setup();
+    const { api } = backend(() => valid);
+    api.fetch.mockImplementation(
+      ((route) => async (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith('/api/v1/graphs/g/start')
+          ? apiError(422, 'invalid graph', 'invalid', {
+              valid: false,
+              errors: [{ path: 'spec.environment', message: 'environment not ready: it has not been built yet (needed by dev)' }],
+              warnings: [],
+            })
+          : route(input, init))(api.fetch.getMockImplementation()!),
+    );
+    renderWorkspace();
+    await user.click(await screen.findByRole('button', { name: /Run all/ }));
+    const box = await screen.findByText(/The graph cannot start yet/);
+    expect(box.parentElement?.textContent).toContain('(needed by dev)');
+    expect(screen.getByRole('button', { name: 'Build and start when ready' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText(/The graph cannot start yet/)).toBeNull();
+  });
+
   it('asks before starting while graph edits are unsaved', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.fn(() => false);
