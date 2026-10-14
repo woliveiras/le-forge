@@ -76,8 +76,10 @@ docker compose up -d --build
 
 Out of the box the platform uses the deterministic **mock** model provider, so
 everything works with no model and no Internet. Switch to a real model with
-`docker compose --profile ollama up -d` and `LEFORGE_DEFAULT_PROVIDER=ollama` —
-see [Getting started](docs/getting-started.md).
+`docker compose --profile ollama up -d` and `LEFORGE_DEFAULT_PROVIDER=ollama`,
+or reuse an Ollama installed on your machine with
+`OLLAMA_BASE_URL=http://host.docker.internal:11434` — see
+[Getting started](docs/getting-started.md#ollama-installed-on-the-host).
 
 ## Architecture
 

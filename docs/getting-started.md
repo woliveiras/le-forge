@@ -87,8 +87,9 @@ the field empty when editing to keep it. See
 rotation.
 
 The URL must be reachable from the `forged` container: a model server on
-your machine is `http://host.docker.internal:<port>` on Docker Desktop, and
-the bundled Ollama service is `http://ollama:11434`.
+your machine is `http://host.docker.internal:<port>` (see
+[Ollama installed on the host](#ollama-installed-on-the-host) for Linux and
+listen-address notes), and the bundled Ollama service is `http://ollama:11434`.
 
 The sections below configure providers through environment variables
 instead; those appear in the console as read-only *server configuration*.
@@ -104,6 +105,63 @@ LEFORGE_DEFAULT_PROVIDER=ollama docker compose --profile ollama up -d
 `OLLAMA_BASE_URL` (default `http://ollama:11434`) and `OLLAMA_MODEL` (default
 `llama3.2`) control the provider. Pick a model with tool-calling support for
 native agents (e.g. `llama3.1`, `qwen2.5`).
+
+### Ollama installed on the host
+
+If Ollama already runs natively on your machine, use it instead of the
+container: it can use the host's GPU and is not limited by the memory given to
+Docker.
+
+1. Make Ollama listen on an address containers can reach. By default it only
+   accepts connections from `127.0.0.1`; set `OLLAMA_HOST=0.0.0.0` where Ollama
+   is started (for `ollama serve`, the systemd unit, or the desktop app's
+   environment):
+
+   ```bash
+   OLLAMA_HOST=0.0.0.0 ollama serve
+   ```
+
+   This exposes port 11434 to your network while it runs, without
+   authentication. Restrict it with a firewall on shared or public networks.
+
+2. Pull a model:
+
+   ```bash
+   ollama pull llama3.2
+   ```
+
+3. Point LeForge at the host. Add to `.env`:
+
+   ```dotenv
+   OLLAMA_BASE_URL=http://host.docker.internal:11434
+   ```
+
+   then recreate `forged` so it reads the variable:
+
+   ```bash
+   docker compose up -d forged
+   ```
+
+`host.docker.internal` resolves out of the box on Docker Desktop and Colima.
+With Docker Engine on Linux, map it to the host gateway in a
+`docker-compose.override.yml` next to `docker-compose.yml` (Compose merges it
+automatically):
+
+```yaml
+services:
+  forged:
+    extra_hosts: ["host.docker.internal:host-gateway"]
+```
+
+Instead of the environment variable, you can also add the host Ollama as a
+provider in **Integrations** with the same URL; it is then editable and
+testable from the console.
+
+Check the connection with **Test connection** on the `ollama` provider in
+**Integrations**: it sends a real prompt, so success means agents can use the
+model. A `no such host` error means the URL still points at the bundled
+service (`http://ollama:11434`); `connection refused` usually means Ollama is
+still listening only on `127.0.0.1`.
 
 ### HuggingFace models (Text Generation Inference)
 
