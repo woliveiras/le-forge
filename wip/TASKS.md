@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 4) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments, MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -52,7 +52,60 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** A user can create, configure, validate, save, and start a graph through the visual interface without writing YAML.
 
-### 3. Create the File and Interaction Panel
+### 3. Provide Containerized Project Environments
+
+Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docker-in-Docker, rootless where supported) replaces access to the host daemon; environment definitions come from the interface, the repository, or an approved agent proposal (the agent proposal is delivered last); execution runs without network by default, with an optional host allowlist through an egress proxy.
+
+#### Isolated Container Runtime
+
+- [ ] Add a Docker-in-Docker service to the Compose stack (rootless variant where the host supports it, privileged fallback documented with its risk), with TLS between `forged` and the daemon and its own data volume.
+- [ ] Point the docker sandbox and environment builds at that daemon (`DOCKER_HOST`); remove the need to mount the host Docker socket and document the change.
+- [ ] Make workspaces visible to the dedicated daemon at the paths sandboxes mount (shared volume), replacing `hostRoot` translation for this setup.
+- [ ] Put sandboxes on a network that cannot reach platform services (database, broker, observability, control plane); verify with a test that a sandbox cannot connect to them.
+- [ ] Document reset: removing the daemon's volume deletes every image, container, and cache it created, and the next run rebuilds from definitions.
+
+#### Environment Model and Lifecycle
+
+- [ ] Define the environment contract: source (interface, repository, agent proposal), base image or Dockerfile, setup commands, working directory, resource limits, cache volumes, and network policy per phase (setup, execution); record it in [product-contracts.md](../docs/product-contracts.md).
+- [ ] Persist environments per graph with a content hash of the effective definition; rebuild only when the definition changes or on explicit request.
+- [ ] Implement the lifecycle `pending → building → ready | failed`, with build and setup logs stored and size-limited; record events for state changes with graph and environment identifiers.
+- [ ] Run image builds and setup steps in LeForge with resource limits, timeouts, and cancellation; never through agent-controlled Docker access.
+- [ ] Start agent sandboxes from the ready environment image, with dependency caches mounted per environment; refuse to start nodes that require an environment that is not ready, with an actionable error.
+- [ ] Implement Rebuild and Reset (remove containers, image, and caches of one environment), and clean up environments of deleted graphs.
+- [ ] Add metrics and traces for build duration, outcome, and failures, following existing telemetry names.
+
+#### Definition Sources
+
+- [ ] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands.
+- [ ] Read a repository definition from `.leforge/environment.yaml`; support the image and post-create command subset of `.devcontainer/devcontainer.json` when no LeForge file exists. Report unsupported fields instead of ignoring them.
+- [ ] Apply deterministic precedence (interface, then repository, then approved agent proposal) and show which source is in effect.
+- [ ] Treat repository and agent definitions as untrusted: they cannot raise resource limits, mount host paths, request privileges, or widen network policy beyond installation settings.
+- [ ] Add the `environment.status` tool and the `environment.propose` tool: a proposal (Dockerfile, setup commands, network needs, rationale) opens an approval showing the full definition; nothing is built until a human approves it.
+- [ ] Provide an example proposal flow for a repository using `mise.toml` (base image with mise, `mise install`, dependency download).
+
+#### Network Policy
+
+- [ ] Allow internet access during setup only when the effective policy permits it; run execution with `--network none` by default.
+- [ ] Add an egress proxy service that enforces per-environment host allowlists (for example package registries) when execution needs network, and log denied destinations.
+- [ ] Test that execution without network cannot reach the internet or platform services, and that allowlisted hosts work while others are denied.
+
+#### Interface
+
+- [ ] Show the environment of a graph: source, effective definition, state, last build, logs, and cache usage.
+- [ ] Add Rebuild and Reset actions with confirmation, restricted to operators/admins according to the role matrix.
+- [ ] Show pending environment proposals in Approvals with the full definition and a diff against the current one.
+- [ ] Explain on the agent panel when commands will run (environment name and state) and when the environment blocks a start.
+
+#### Tests and Documentation
+
+- [ ] Unit tests for definition parsing, precedence, hashing, policy enforcement on untrusted definitions, and lifecycle transitions, including build failures and cancellations.
+- [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon.
+- [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset.
+- [ ] Document setup, resource requirements of the dedicated daemon, reset, and troubleshooting in the deployment and getting-started guides.
+
+**Done when:** An operator connects a repository, gets a ready environment from the interface, the repository, or an approved agent proposal, and runs agents whose commands execute only inside it; the environment can be rebuilt or reset from the browser, nothing is installed on the host, and agents never access Docker.
+
+### 4. Create the File and Interaction Panel
 
 #### Workspace API and Security
 
@@ -78,7 +131,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** Users can operate tasks in the browser and inspect results, but no user action in the API or interface directly changes workspace files.
 
-### 4. Configure Model Providers Through the Interface
+### 5. Configure Model Providers Through the Interface
 
 #### Backend and Secrets
 
@@ -102,7 +155,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** An operator creates and tests a provider on the web, selects it for an agent, and runs the agent without exposing the secret to the runtime.
 
-### 5. Integrate User-Configurable MCPs
+### 6. Integrate User-Configurable MCPs
 
 #### Connectivity and Integrations
 
@@ -139,7 +192,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** Connections for each priority integration can be created through the interface, tested, assigned to agents, and audited; unauthorized calls are denied.
 
-### 6. Add Skills and Steering
+### 7. Add Skills and Steering
 
 #### Content Model and Loading
 
@@ -163,7 +216,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** Global instructions are managed in the application, project instructions travel with the repository, and each execution is traceable without allowing instructions to grant privileges.
 
-### 7. Allow Dynamic Delegation to Subagents
+### 8. Allow Dynamic Delegation to Subagents
 
 #### Model, Policies, and Execution
 
@@ -191,7 +244,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** Agents decide when to delegate; operators choose individual approval or bounded automation; the server enforces limits and permissions; the tree is observable and controllable through the web.
 
-### 8. Make the Docker Installation Operable Through the Interface
+### 9. Make the Docker Installation Operable Through the Interface
 
 - [ ] Review `docker-compose` for data persistence, secrets, internal networks, and restart behavior of required services.
 - [ ] Ensure MCP services, providers, storage, and runtimes are reachable as configured without exposing unnecessary ports.
@@ -203,7 +256,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** A new installation can be configured and operated in the browser; infrastructure commands are limited to initial deployment and documented administrative maintenance.
 
-### 9. Guide First Use with Onboarding
+### 10. Guide First Use with Onboarding
 
 #### Journey and Content
 
@@ -227,13 +280,14 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 **Done when:** A new operator can follow onboarding in the browser, understand essential concepts, configure available dependencies, create or adapt an example graph, and run a first task; they can skip steps, resume, and revisit help without server or CLI access.
 
-### 10. Integrated Validation of Release 1
+### 11. Integrated Validation of Release 1
 
-- [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → task → execution → files/diff → approval, when enabled.
+- [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled.
 - [ ] Repeat the flow with both approval-required and automatic delegation policies.
 - [ ] Validate onboarding on a clean installation, including steps that depend on real test MCPs and providers.
 - [ ] Verify that no interface path allows users to directly edit workspace files.
 - [ ] Verify that no secret reaches the browser after saving, the runtime, a prompt, or logs.
+- [ ] Verify that no project toolchain, image, or container is installed or created on the host; everything runs on the LeForge Docker daemon and is removed by its reset.
 - [ ] Verify that data and instructions from one graph/workspace do not appear in another scope.
 - [ ] Run relevant backend, frontend, SDK/runtime, and Docker image tests; record known limitations.
 - [ ] Update user, operations, and troubleshooting guides to reflect delivered behavior.

@@ -9,6 +9,7 @@
 - **Bounded autonomy:** Agents may delegate work, but they cannot expand their own permissions or consume unlimited resources.
 - **Security independent of instructions:** Skills and steering guide agents but do not replace platform-enforced permissions.
 - **Genuine visual construction:** The canvas must allow users to edit graphs, not just view those already defined.
+- **Everything runs in containers:** Project toolchains, dependency installs, builds, and tests run in containers managed by LeForge, never on the operator's machine. Environments can be created, rebuilt, and deleted at will, and deleting the installation's volumes removes everything they produced.
 - **Users operate; they do not edit files:** Users send commands/instructions through the interface; only agents may modify workspace files. Users may inspect files and diffs.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
@@ -47,7 +48,28 @@ Evolve the existing `GraphCanvas.tsx` view to allow users to:
 
 **Acceptance criterion:** Users can create, configure, save, and start a complete graph in the browser without editing YAML or accessing the machine running the service.
 
-### 4. Create the File and Interaction Panel
+### 4. Provide Containerized Project Environments
+
+Agents need the project's real toolchain (for example Go, Node, and pnpm) to install dependencies, build, and run tests. Today the docker sandbox uses one fixed image chosen by the operator and requires mounting the host's Docker socket, which is root-equivalent on the operator's machine.
+
+Give each graph a managed **environment**:
+
+- run every environment build and sandbox container on a Docker daemon dedicated to LeForge (a Docker-in-Docker service in the Compose stack, rootless where the host supports it) instead of the host daemon; images, containers, and caches live in that service's volumes, so removing them resets everything and nothing is installed on the host;
+- keep sandboxes on a network separate from platform services (database, broker, control plane); only the control plane talks to both;
+- define the environment from, in order of precedence:
+  1. a definition configured by the operator in the interface (an image, or a Dockerfile plus setup commands);
+  2. a definition versioned in the repository (`.leforge/environment.yaml`, or `.devcontainer/devcontainer.json` when present);
+  3. a definition proposed by an agent that reads the repository (`mise.toml`, `go.mod`, `package.json`, Dockerfiles), which a human must approve before anything is built;
+- build images and run setup steps in LeForge, never through agent access to Docker; agents get `environment.propose` and `environment.status`, and keep running commands only through `shell.exec` inside the ready environment;
+- apply a network policy per phase: setup may reach the internet to download dependencies; execution defaults to no network, with an optional host allowlist enforced by an egress proxy;
+- keep dependency caches in per-environment volumes so runs do not download everything again;
+- expose environment state (`pending`, `building`, `ready`, `failed`), build logs, **Rebuild**, and **Reset** in the console; Reset removes the environment's containers, image, and caches.
+
+Environment definitions coming from repositories or agents are untrusted content: they cannot change grants, credentials, limits, or network policy beyond what the installation allows.
+
+**Acceptance criterion:** An operator connects a repository, gets a working environment built from the interface, the repository, or an approved agent proposal, runs agents whose commands execute only inside it, and can reset it — all without installing anything on the host or giving agents access to Docker.
+
+### 5. Create the File and Interaction Panel
 
 Add a per-graph workspace to the console, including:
 
@@ -61,7 +83,7 @@ Users may read and inspect files, but cannot edit, delete, or upload them throug
 
 **Acceptance criterion:** Users can start and direct tasks, monitor agents, and inspect changes entirely through the browser, without server access or CLI usage.
 
-### 5. Add MCP Configuration
+### 6. Add MCP Configuration
 
 Implement MCP connection management in the interface, starting with the integrations used by the team:
 
@@ -76,7 +98,7 @@ Use connections and transports that can be reached securely from the Docker envi
 
 **Acceptance criterion:** Users can connect the four priority integrations through the interface, test connections, grant tools to specific agents, and inspect calls and their results.
 
-### 6. Add Skills and Steering
+### 7. Add Skills and Steering
 
 Use hybrid storage with separate responsibilities:
 
@@ -87,7 +109,7 @@ Define clear precedence: global, graph, agent, and task instructions; repository
 
 **Acceptance criterion:** Operators can manage global instructions through the application; project-specific instructions travel with the repository; every execution records the loaded instruction set; no instruction can elevate privileges.
 
-### 7. Allow Dynamic Delegation to Subagents
+### 8. Allow Dynamic Delegation to Subagents
 
 Give orchestrator agents the ability to delegate subtasks when they determine it is necessary, without requiring users to pre-draw every subagent in the graph.
 
@@ -102,7 +124,7 @@ Set global limits for depth, number of children, concurrency, duration, and cost
 
 **Acceptance criterion:** An agent can delegate, receive the result, and continue; the interface displays the execution tree and can stop executions; approval and limits are enforced by the server.
 
-### 8. Prepare Local Docker Operation
+### 9. Prepare Local Docker Operation
 
 Review deployment and documentation so the primary workflow is:
 
@@ -114,7 +136,7 @@ Review deployment and documentation so the primary workflow is:
 
 **Acceptance criterion:** Setting up and operating a new installation does not depend on editing files on the server or submitting tasks through the CLI.
 
-### 9. Guide First Use with Onboarding
+### 10. Guide First Use with Onboarding
 
 Add an onboarding experience in the interface to introduce LeForge and guide operators from initial configuration through their first completed task. The journey must be progressive, resumable, and dismissible without blocking experienced users; guidance must remain available after completion.
 
@@ -148,10 +170,11 @@ After graph creation and operation have stabilized:
 1. **Scope cleanup** and confirmation of the flows that remain.
 2. **API contracts and data model** for the visual editor, workspace, providers, MCP integrations, instructions, and child executions.
 3. **Visual editor**, as the central experience and a dependency for the graph model.
-4. **File and interaction panel**, read-only for users, with tasks and changes tracked by execution.
-5. **Web configuration for models and MCPs**, with protected credentials and Bitbucket, GitHub, Confluence, and Jira integrations.
-6. **Skills and steering**, with hybrid storage, precedence, traceability, and trust boundaries.
-7. **Dynamic delegation**, with a configurable choice between individual approval and bounded automatic execution.
-8. **Guided onboarding**, integrated into delivered screens and flows, with an example graph and resumable help.
-9. **End-to-end tests** for the full interface workflow, including onboarding, authorization, and isolation.
-10. **Component library** as the second release.
+4. **Containerized project environments**, on a Docker daemon dedicated to LeForge, so agents run the project's toolchain without touching the host.
+5. **File and interaction panel**, read-only for users, with tasks and changes tracked by execution.
+6. **Web configuration for models and MCPs**, with protected credentials and Bitbucket, GitHub, Confluence, and Jira integrations.
+7. **Skills and steering**, with hybrid storage, precedence, traceability, and trust boundaries.
+8. **Dynamic delegation**, with a configurable choice between individual approval and bounded automatic execution.
+9. **Guided onboarding**, integrated into delivered screens and flows, with an example graph and resumable help.
+10. **End-to-end tests** for the full interface workflow, including onboarding, authorization, and isolation.
+11. **Component library** as the second release.
