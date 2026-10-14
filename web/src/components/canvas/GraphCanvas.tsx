@@ -17,6 +17,7 @@ import type { Graph, GraphStatus } from '../../api/types';
 import { Btn } from '../common';
 import { AgentNode, PortNode } from './AgentNode';
 import { ChannelEdge } from './ChannelEdge';
+import type { EdgeRef, IssueIndex } from './edit';
 import { buildElements, layout, type AgentNodeData, type ChannelEdgeData } from './model';
 
 export type Selection = { kind: 'node'; id: string } | { kind: 'channel'; id: string } | null;
@@ -31,8 +32,10 @@ interface Props {
   onSelect: (s: Selection) => void;
   editable?: boolean;
   onConnect?: (connection: Connection) => void;
-  onNodesDelete?: (nodes: Node[]) => void;
-  onEdgesDelete?: (edges: Edge[]) => void;
+  /** Delete key on a selection. The graph owner confirms and applies it; the canvas never removes elements itself. */
+  onRemove?: (nodeIds: string[], edges: EdgeRef[]) => void;
+  /** Validation findings to mark on agents and channels. */
+  issues?: IssueIndex;
   onNodePositionChange?: (positions: Record<string, { x: number; y: number }>) => void;
   onAddNode?: (position: { x: number; y: number }, positions: Record<string, { x: number; y: number }>) => void;
 }
@@ -44,8 +47,8 @@ function Canvas({
   onSelect,
   editable = false,
   onConnect,
-  onNodesDelete,
-  onEdgesDelete,
+  onRemove,
+  issues,
   onNodePositionChange,
   onAddNode,
 }: Props) {
@@ -80,7 +83,7 @@ function Canvas({
 
   // Live data: patch node/edge data in place.
   useEffect(() => {
-    const fresh = buildElements(graph, status);
+    const fresh = buildElements(graph, status, issues);
     const nodeData = new Map(fresh.nodes.map((n) => [n.id, n.data]));
     const edgeData = new Map(fresh.edges.map((e) => [e.id, e.data]));
     setNodes((ns) =>
@@ -104,7 +107,7 @@ function Canvas({
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, selection, structureKey]);
+  }, [status, selection, structureKey, issues]);
 
   return (
     <div className="canvas-inner" ref={canvasRef}>
@@ -128,19 +131,32 @@ function Canvas({
           >
             Add agent
           </Btn>
-          <span className="muted small">Drag between agent handles to add a channel · select and press Delete to remove</span>
+          <span className="muted small">
+            Drag between agent handles to add a channel · select (Shift-click or drag for several) and press Delete to remove
+          </span>
         </div>
       )}
       <ReactFlow
-        nodes={nodes.map((node) => ({ ...node, deletable: false }))}
+        nodes={nodes.map((node) => ({ ...node, deletable: editable && node.type === 'agent' }))}
         edges={editable ? edges.map((edge) => ({ ...edge, deletable: true })) : edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={editable ? onConnect : undefined}
-        onNodesDelete={editable ? onNodesDelete : undefined}
-        onEdgesDelete={editable ? onEdgesDelete : undefined}
+        onBeforeDelete={async ({ nodes: removedNodes, edges: removedEdges }) => {
+          if (editable && onRemove) {
+            onRemove(
+              removedNodes.filter((node) => node.type === 'agent').map((node) => node.id),
+              removedEdges.flatMap((edge) => {
+                const data = edge.data as ChannelEdgeData | undefined;
+                return data ? [{ channelId: data.channel.id, target: data.target }] : [];
+              }),
+            );
+          }
+          // The document is the source of truth: the canvas redraws from it.
+          return false;
+        }}
         onNodeDragStop={
           editable
             ? () =>

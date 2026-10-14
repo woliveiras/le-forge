@@ -1,17 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api, errorMessage } from '../api/client';
-import type { Channel, Graph, GraphAction, GraphNode, GraphSummary, Info } from '../api/types';
+import type { Graph, GraphAction, GraphSummary, Info, ValidationResult } from '../api/types';
 import { useGraphStatus } from '../hooks/useData';
+import {
+  addAgent,
+  applyRemoval,
+  connect,
+  describeRemoval,
+  indexIssues,
+  moveAgents,
+  planRemoval,
+  updateChannel,
+  updateNode,
+  type EdgeRef,
+} from './canvas/edit';
 import { GraphCanvas, type Selection } from './canvas/GraphCanvas';
 import { ChannelPanel } from './ChannelPanel';
 import { Badge, Btn, ErrorBox, Icon } from './common';
 import { EventsView } from './EventsView';
 import { FilesView } from './FilesView';
+import { IssueSummary } from './GraphIssues';
 import { MessagesExplorer } from './MessagesExplorer';
 import { NodePanel } from './NodePanel';
 import { YamlEditor } from './YamlEditor';
 
 export type GraphTab = 'canvas' | 'files' | 'events' | 'messages' | 'yaml';
+
+/** A validation result and the draft it was computed for (paths are indices into that draft). */
+interface Validation {
+  graph: Graph;
+  result: ValidationResult;
+}
+
+function asValidationResult(details: unknown): ValidationResult | undefined {
+  const d = details as Partial<ValidationResult> | undefined;
+  return d && Array.isArray(d.errors) ? { valid: false, errors: d.errors, warnings: d.warnings ?? [] } : undefined;
+}
 
 export function GraphWorkspace({
   summary,
@@ -42,12 +66,40 @@ export function GraphWorkspace({
   });
   const [error, setError] = useState<string>();
   const [saveConflict, setSaveConflict] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [validation, setValidation] = useState<Validation>();
   const [panelOpen, setPanelOpen] = useState(true);
   const currentSummary = draftDirty ? { ...summary, graph: draftGraph } : summary;
+  const issues = useMemo(
+    () => validation && indexIssues(validation.graph, validation.result.errors ?? [], validation.result.warnings ?? []),
+    [validation],
+  );
+  const hasErrors = (issues?.errorCount ?? 0) > 0;
 
   useEffect(() => {
     if (!draftDirty) setDraftGraph(summary.graph);
   }, [summary.graph, draftDirty]);
+
+  // While errors are shown, re-check the draft after each pause in editing,
+  // so fixed problems disappear without another save attempt.
+  useEffect(() => {
+    if (!hasErrors || validation?.graph === draftGraph) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api
+        .validateGraph(draftGraph)
+        .then((result) => {
+          if (!cancelled) setValidation({ graph: draftGraph, result });
+        })
+        .catch((cause) => {
+          if (!cancelled) setError(errorMessage(cause));
+        });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [draftGraph, hasErrors, validation]);
 
   const changeGraph = (update: (graph: Graph) => Graph) => {
     setDraftGraph((current) => update(current));
@@ -55,80 +107,109 @@ export function GraphWorkspace({
     setError(undefined);
   };
 
-  const saveGraph = async () => {
+  const resetDraft = (graph: Graph) => {
+    setDraftGraph(graph);
+    setDraftDirty(false);
+    setSaveConflict(false);
+    setValidation(undefined);
+    setError(undefined);
+  };
+
+  const validateDraft = async () => {
+    const candidate = draftGraph;
     try {
-      const validation = await api.validateGraph(draftGraph);
-      if (!validation.valid) {
-        setError((validation.errors ?? []).map((item) => `${item.path}: ${item.message}`).join('\n') || 'Graph is invalid.');
-        return;
-      }
-      const saved = await api.updateGraph(gid, draftGraph, summary.record.version);
+      const result = await api.validateGraph(candidate);
+      setValidation({ graph: candidate, result });
+      setError(undefined);
+      return result;
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return undefined;
+    }
+  };
+
+  /** Saves the draft over `version` (the version the draft was based on, or the latest when overwriting). */
+  const saveGraph = async (version = summary.record.version) => {
+    const candidate = draftGraph;
+    setSaving(true);
+    try {
+      const result = await validateDraft();
+      if (!result?.valid) return;
+      const saved = await api.updateGraph(gid, candidate, version);
       setDraftGraph(saved.graph);
       setDraftDirty(false);
       setSaveConflict(false);
+      // Warnings stay visible after a save; the saved document has the same indices.
+      setValidation((result.warnings ?? []).length ? { graph: candidate, result } : undefined);
       onSaved(saved);
       setError(undefined);
     } catch (e) {
-      setError(errorMessage(e));
+      const details = e instanceof ApiError && e.status === 422 ? asValidationResult(e.details) : undefined;
+      if (details) {
+        setValidation({ graph: candidate, result: details });
+        setError(undefined);
+      } else {
+        setError(errorMessage(e));
+      }
       setSaveConflict(e instanceof ApiError && e.status === 409);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reloadLatest = async () => {
+    if (!confirm('Reload the latest saved graph and discard your local edits?')) return;
+    try {
+      const latest = await api.getGraph(gid);
+      resetDraft(latest.graph);
+      onSaved(latest);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  };
+
+  const overwriteLatest = async () => {
+    if (!confirm('Save your local edits over the latest version? Changes made there since you started editing are replaced.'))
+      return;
+    try {
+      const latest = await api.getGraph(gid);
+      await saveGraph(latest.record.version);
+    } catch (cause) {
+      setError(errorMessage(cause));
     }
   };
 
   const addNode = (position: { x: number; y: number }, positions: Record<string, { x: number; y: number }>) => {
+    let added: string | undefined;
     changeGraph((graph) => {
-      const ids = new Set(graph.spec.nodes.map((node) => node.id));
-      let index = graph.spec.nodes.length + 1;
-      while (ids.has(`agent-${index}`)) index += 1;
-      const id = `agent-${index}`;
-      const node: GraphNode = {
-        id,
-        name: `Agent ${index}`,
-        runtime: { kind: 'native' },
-        prompt: "Describe this agent's task.",
-        loop: { mode: 'event' },
-        position,
-      };
-      return {
-        ...graph,
-        spec: {
-          ...graph.spec,
-          nodes: [
-            ...graph.spec.nodes.map((existing) =>
-              positions[existing.id] ? { ...existing, position: positions[existing.id] } : existing,
-            ),
-            node,
-          ],
-        },
-      };
+      const result = addAgent(graph, position, positions);
+      added = result.id;
+      return result.graph;
     });
+    if (added) {
+      setSelection({ kind: 'node', id: added });
+      setPanelOpen(true);
+    }
   };
 
-  const removeChannelsForNodes = (channels: Channel[] | undefined, removed: Set<string>) =>
-    (channels ?? []).flatMap((channel) => {
-      const to = (channel.to ?? []).filter((id) => !removed.has(id));
-      if (channel.from && removed.has(channel.from)) return [];
-      if ((channel.to ?? []).length > 0 && to.length === 0) return [];
-      return [{ ...channel, to }];
-    });
-
-  const removeSelectedNode = () => {
-    if (selection?.kind !== 'node') return;
-    const node = draftGraph.spec.nodes.find((item) => item.id === selection.id);
-    if (!node || !confirm(`Remove agent "${node.name || node.id}" and its connected channels?`)) return;
-    const removed = new Set([node.id]);
-    changeGraph((graph) => ({
-      ...graph,
-      spec: {
-        ...graph.spec,
-        nodes: graph.spec.nodes.filter((item) => item.id !== node.id),
-        channels: removeChannelsForNodes(graph.spec.channels, removed),
-      },
-    }));
-    setSelection(null);
+  /** Removes agents/edges after the user confirms what that does to the document. */
+  const removeElements = (nodeIds: string[], edges: EdgeRef[], channelIds: string[] = []) => {
+    const removal = planRemoval(draftGraph, nodeIds, edges, channelIds);
+    const message = describeRemoval(draftGraph, removal);
+    if (!message || !confirm(message)) return;
+    changeGraph((graph) => applyRemoval(graph, removal));
+    if (
+      (selection?.kind === 'node' && removal.nodes.includes(selection.id)) ||
+      (selection?.kind === 'channel' && removal.channels.includes(selection.id))
+    ) {
+      setSelection(null);
+    }
   };
 
   const act = async (a: GraphAction) => {
     if (a === 'kill' && !confirm('Kill every turn in flight? Inputs are redelivered; files may be left mid-edit.')) return;
+    if (a === 'start' && draftDirty && !confirm(`Start saved version ${summary.record.version}? Your unsaved graph changes are not included.`))
+      return;
     try {
       setStatus(await api.graphAction(gid, a));
       setError(undefined);
@@ -166,49 +247,40 @@ export function GraphWorkspace({
           ))}
         </div>
         <div className="toolbar-actions">
-          {tab === 'canvas' && (
+          {(tab === 'canvas' || tab === 'yaml') && (
             <>
-              {selection?.kind === 'node' && (
-                <Btn small tone="danger" onClick={removeSelectedNode}>
+              {tab === 'canvas' && selection?.kind === 'node' && (
+                <Btn small tone="danger" onClick={() => removeElements([selection.id], [])}>
                   Remove agent
                 </Btn>
               )}
-              {draftDirty && <Badge tone="warn">unsaved graph changes</Badge>}
-              {saveConflict && (
-                <Btn
-                  small
-                  tone="danger"
-                  onClick={async () => {
-                    if (!confirm('Reload the latest saved graph and discard your local edits?')) return;
-                    try {
-                      const latest = await api.getGraph(gid);
-                      setDraftGraph(latest.graph);
-                      setDraftDirty(false);
-                      setSaveConflict(false);
-                      setError(undefined);
-                      onSaved(latest);
-                    } catch (cause) {
-                      setError(errorMessage(cause));
-                    }
-                  }}
-                >
-                  Reload latest
+              {tab === 'canvas' && selection?.kind === 'channel' && (
+                <Btn small tone="danger" onClick={() => removeElements([], [], [selection.id])}>
+                  Remove channel
                 </Btn>
               )}
-              <Btn small onClick={() => void saveGraph()} disabled={!draftDirty} tone="primary">
+              {saving ? (
+                <Badge>saving…</Badge>
+              ) : (
+                draftDirty && <Badge tone="warn">unsaved graph changes</Badge>
+              )}
+              {saveConflict && (
+                <>
+                  <Btn small tone="danger" onClick={() => void reloadLatest()}>
+                    Reload latest
+                  </Btn>
+                  <Btn small onClick={() => void overwriteLatest()}>
+                    Keep mine and overwrite
+                  </Btn>
+                </>
+              )}
+              <Btn small tone="ghost" onClick={() => void validateDraft()} disabled={saving}>
+                Validate
+              </Btn>
+              <Btn small onClick={() => void saveGraph()} disabled={!draftDirty || saving} tone="primary">
                 Save graph
               </Btn>
-              <Btn
-                small
-                tone="ghost"
-                disabled={!draftDirty}
-                onClick={() => {
-                  setDraftGraph(summary.graph);
-                  setDraftDirty(false);
-                  setSaveConflict(false);
-                  setError(undefined);
-                }}
-              >
+              <Btn small tone="ghost" disabled={!draftDirty || saving} onClick={() => resetDraft(summary.graph)}>
                 Discard
               </Btn>
             </>
@@ -249,6 +321,22 @@ export function GraphWorkspace({
         </div>
       </div>
       <ErrorBox error={error ?? statusError} />
+      {saveConflict && (
+        <p className="muted small" role="status">
+          Someone saved a newer version while you were editing. Your edits are kept here: reload to start from the latest
+          version, or overwrite it with yours.
+        </p>
+      )}
+      {issues && (tab === 'canvas' || tab === 'yaml') && (
+        <IssueSummary
+          index={issues}
+          onSelect={(target) => {
+            setSelection(target);
+            setPanelOpen(true);
+            onTab('canvas');
+          }}
+        />
+      )}
       {tab === 'canvas' && (
         <div className={`floor ${selection && panelOpen ? 'with-panel' : ''}`}>
           <GraphCanvas
@@ -257,78 +345,22 @@ export function GraphWorkspace({
             selection={selection}
             editable
             onAddNode={addNode}
+            issues={issues}
             onConnect={(connection) => {
               if (!connection.source || !connection.target) return;
+              let added: string | undefined;
               changeGraph((graph) => {
-                const existing = new Set((graph.spec.channels ?? []).map((channel) => channel.id));
-                let index = (graph.spec.channels?.length ?? 0) + 1;
-                while (existing.has(`channel-${index}`)) index += 1;
-                const channel: Channel = {
-                  id: `channel-${index}`,
-                  type: 'queue',
-                  from: connection.source,
-                  to: [connection.target],
-                };
-                return { ...graph, spec: { ...graph.spec, channels: [...(graph.spec.channels ?? []), channel] } };
+                const result = connect(graph, connection.source, connection.target);
+                added = result.id;
+                return result.graph;
               });
-            }}
-            onNodePositionChange={(positions) =>
-              changeGraph((graph) => ({
-                ...graph,
-                spec: {
-                  ...graph.spec,
-                  nodes: graph.spec.nodes.map((node) =>
-                    positions[node.id] ? { ...node, position: positions[node.id] } : node,
-                  ),
-                },
-              }))
-            }
-            onNodesDelete={(nodes) => {
-              const removed = new Set(nodes.map((node) => node.id));
-              changeGraph((graph) => ({
-                ...graph,
-                spec: {
-                  ...graph.spec,
-                  nodes: graph.spec.nodes.filter((node) => !removed.has(node.id)),
-                  channels: removeChannelsForNodes(graph.spec.channels, removed),
-                },
-              }));
-              if (selection?.kind === 'node' && removed.has(selection.id)) setSelection(null);
-            }}
-            onEdgesDelete={(edges) => {
-              const removedTargets = new Map<string, Set<string>>();
-              for (const edge of edges) {
-                const data = edge.data as { channel?: Channel; target?: string } | undefined;
-                const channelId = data?.channel?.id;
-                if (!channelId) continue;
-                const targets = removedTargets.get(channelId) ?? new Set<string>();
-                if (data.target) targets.add(data.target);
-                removedTargets.set(channelId, targets);
-              }
-              if (removedTargets.size > 0) {
-                changeGraph((graph) => ({
-                  ...graph,
-                  spec: {
-                    ...graph.spec,
-                    channels: (graph.spec.channels ?? []).flatMap((channel) => {
-                      const targets = removedTargets.get(channel.id);
-                      if (!targets) return [channel];
-                      const explicitTargets = channel.to ?? [];
-                      if (explicitTargets.length === 0 || ![...targets].every((target) => explicitTargets.includes(target))) {
-                        return [];
-                      }
-                      const remaining = explicitTargets.filter((target) => !targets.has(target));
-                      return remaining.length > 0 ? [{ ...channel, to: remaining }] : [];
-                    }),
-                  },
-                }));
-                if (selection?.kind === 'channel' && ![...(draftGraph?.spec.channels ?? [])].some(
-                  (channel) => channel.id === selection.id && (channel.to ?? []).some((target) => !removedTargets.get(channel.id)?.has(target)),
-                )) {
-                  setSelection(null);
-                }
+              if (added) {
+                setSelection({ kind: 'channel', id: added });
+                setPanelOpen(true);
               }
             }}
+            onNodePositionChange={(positions) => changeGraph((graph) => moveAgents(graph, positions))}
+            onRemove={removeElements}
             onSelect={(s) => {
               setSelection(s);
               if (s) setPanelOpen(true);
@@ -349,15 +381,8 @@ export function GraphWorkspace({
                     setDraftDirty(false);
                     onSaved(saved);
                   }}
-                  onUpdateNode={(nodeId, update) =>
-                    changeGraph((graph) => ({
-                      ...graph,
-                      spec: {
-                        ...graph.spec,
-                        nodes: graph.spec.nodes.map((node) => (node.id === nodeId ? { ...node, ...update } : node)),
-                      },
-                    }))
-                  }
+                  issues={issues?.nodes.get(selection.id)}
+                  onUpdateNode={(nodeId, update) => changeGraph((graph) => updateNode(graph, nodeId, update))}
                   onStatus={setStatus}
                 />
               ) : (
@@ -365,17 +390,8 @@ export function GraphWorkspace({
                   summary={currentSummary}
                   status={status}
                   channelId={selection.id}
-                  onUpdateChannel={(channelId, update) =>
-                    changeGraph((graph) => ({
-                      ...graph,
-                      spec: {
-                        ...graph.spec,
-                        channels: (graph.spec.channels ?? []).map((channel) =>
-                          channel.id === channelId ? { ...channel, ...update } : channel,
-                        ),
-                      },
-                    }))
-                  }
+                  issues={issues?.channels.get(selection.id)}
+                  onUpdateChannel={(channelId, update) => changeGraph((graph) => updateChannel(graph, channelId, update))}
                   onShowCorrelation={(c) => {
                     onCorrelation(c);
                     onTab('messages');
@@ -391,7 +407,18 @@ export function GraphWorkspace({
       {tab === 'messages' && (
         <MessagesExplorer graph={summary.graph} info={info} correlationId={correlationId} onCorrelation={onCorrelation} />
       )}
-      {tab === 'yaml' && <YamlEditor summary={summary} onSaved={onSaved} />}
+      {tab === 'yaml' && (
+        <YamlEditor
+          summary={summary}
+          draft={draftGraph}
+          dirty={draftDirty}
+          onChange={(graph) => changeGraph(() => graph)}
+          onLoadVersion={(graph) => changeGraph(() => graph)}
+          onSave={() => {
+            if (draftDirty && !saving) void saveGraph();
+          }}
+        />
+      )}
     </div>
   );
 }

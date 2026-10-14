@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { Channel, ChannelType, GraphStatus, GraphSummary, MessageRecord } from '../api/types';
 import { useAsync, useThrottled } from '../hooks/useData';
 import { useEventStream } from '../hooks/useEventStream';
 import { consumers } from './canvas/model';
+import type { ElementIssue } from './canvas/edit';
 import { Badge, Btn, ErrorBox, Icon, JsonView, StateDot, fmtTime, stateLabel } from './common';
+import { ElementIssues, FieldIssues } from './GraphIssues';
 
 const SEMANTICS: Record<string, string> = {
   queue: 'Point-to-point: every consumer (all target nodes and their replicas) competes over one backlog.',
@@ -19,12 +21,15 @@ export function ChannelPanel({
   channelId,
   onShowCorrelation,
   onUpdateChannel,
+  issues,
 }: {
   summary: GraphSummary;
   status?: GraphStatus;
   channelId: string;
   onShowCorrelation: (correlationId: string) => void;
   onUpdateChannel?: (channelId: string, update: Partial<Channel>) => void;
+  /** Validation findings for this channel. */
+  issues?: ElementIssue[];
 }) {
   const g = summary.graph;
   const gid = g.metadata.id;
@@ -51,6 +56,7 @@ export function ChannelPanel({
         )}
       </div>
       <p className="muted small">{SEMANTICS[type]}</p>
+      <ElementIssues issues={issues} label="Channel validation" />
       <dl className="kv">
         <dt>from</dt>
         <dd>{ch.from || <span className="muted">external ingress (API / injection)</span>}</dd>
@@ -101,6 +107,7 @@ export function ChannelPanel({
                 </option>
               ))}
             </select>
+            <FieldIssues issues={issues} field="type" />
           </label>
           {type === 'topic' && (
             <label>
@@ -110,20 +117,10 @@ export function ChannelPanel({
                 onChange={(event) => onUpdateChannel(ch.id, { topic: event.target.value })}
                 placeholder={ch.id}
               />
+              <FieldIssues issues={issues} field="topic" />
             </label>
           )}
-          <label>
-            Message types (comma-separated)
-            <input
-              value={(ch.types ?? []).join(', ')}
-              onChange={(event) =>
-                onUpdateChannel(ch.id, {
-                  types: event.target.value.split(',').map((value) => value.trim()).filter(Boolean),
-                })
-              }
-              placeholder="task.*, review.*"
-            />
-          </label>
+          <TypesField channel={ch} onChange={(types) => onUpdateChannel(ch.id, { types })} />
           <label>
             Route condition
             <input
@@ -131,6 +128,7 @@ export function ChannelPanel({
               onChange={(event) => onUpdateChannel(ch.id, { when: event.target.value || undefined })}
               placeholder='payload.approved == true'
             />
+            <FieldIssues issues={issues} field="when" />
           </label>
           <label className="check">
             <input
@@ -313,5 +311,30 @@ function InjectForm({
         <ErrorBox error={error} />
       </div>
     </section>
+  );
+}
+
+/** Comma-separated message types. The text is kept as typed so a trailing comma can start the next type. */
+function TypesField({ channel, onChange }: { channel: Channel; onChange: (types: string[] | undefined) => void }) {
+  const joined = (channel.types ?? []).join(', ');
+  const [text, setText] = useState(joined);
+  const parsed = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+  useEffect(() => {
+    // Replace the text only when the channel changed outside this field.
+    setText((current) => (parsed(current).join(', ') === joined ? current : joined));
+  }, [channel.id, joined]);
+  return (
+    <label>
+      Message types (comma-separated)
+      <input
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          const types = parsed(event.target.value);
+          onChange(types.length ? types : undefined);
+        }}
+        placeholder="task.*, review.*"
+      />
+    </label>
   );
 }

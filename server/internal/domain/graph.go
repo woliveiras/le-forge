@@ -20,6 +20,8 @@ type Graph struct {
 	Kind       string        `json:"kind" yaml:"kind"`
 	Metadata   GraphMetadata `json:"metadata" yaml:"metadata"`
 	Spec       GraphSpec     `json:"spec" yaml:"spec"`
+	// Extensions holds "x-" keys, kept verbatim across saves (see extensions.go).
+	Extensions Extensions `json:"-" yaml:"-"`
 }
 
 type GraphMetadata struct {
@@ -32,6 +34,8 @@ type GraphMetadata struct {
 	Version   int       `json:"version,omitempty" yaml:"version,omitempty"`
 	CreatedAt time.Time `json:"createdAt,omitempty" yaml:"createdAt,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitempty" yaml:"updatedAt,omitempty"`
+	// Extensions holds "x-" keys, kept verbatim across saves (see extensions.go).
+	Extensions Extensions `json:"-" yaml:"-"`
 }
 
 type GraphSpec struct {
@@ -98,6 +102,8 @@ type Node struct {
 	Config map[string]any `json:"config,omitempty" yaml:"config,omitempty"`
 	// Position is UI layout only.
 	Position *Position `json:"position,omitempty" yaml:"position,omitempty"`
+	// Extensions holds "x-" keys, kept verbatim across saves (see extensions.go).
+	Extensions Extensions `json:"-" yaml:"-"`
 }
 
 type Position struct {
@@ -359,6 +365,8 @@ type Channel struct {
 	AckWait    Duration `json:"ackWait,omitempty" yaml:"ackWait,omitempty"`       // default 10m
 	Retention  Duration `json:"retention,omitempty" yaml:"retention,omitempty"`   // default 7d
 	Label      string   `json:"label,omitempty" yaml:"label,omitempty"`
+	// Extensions holds "x-" keys, kept verbatim across saves (see extensions.go).
+	Extensions Extensions `json:"-" yaml:"-"`
 }
 
 // TopicName is the logical topic for topic channels.

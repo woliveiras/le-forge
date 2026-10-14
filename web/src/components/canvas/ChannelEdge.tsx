@@ -50,13 +50,15 @@ function ChannelEdgeImpl(props: EdgeProps<Edge<ChannelEdgeData>>) {
 
   const ch = data.channel;
   const active = data.pending > 0 || data.inFlight > 0;
-  const cls = `ch-edge ch-${data.type} ${selected || data.selected ? 'ch-selected' : ''} ${active ? 'ch-active' : ''}`;
+  const errors = (data.issues ?? []).filter((issue) => issue.severity === 'error');
+  const cls = `ch-edge ch-${data.type} ${selected || data.selected ? 'ch-selected' : ''} ${active ? 'ch-active' : ''} ${errors.length ? 'ch-invalid' : ''}`;
   const tip = [
     `${ch.id} (${data.type})`,
     ch.types?.length ? `types: ${ch.types.join(', ')}` : '',
     ch.when ? `when: ${ch.when}` : '',
     ch.approval ? 'approval gate: messages are held until approved' : '',
     data.shared ? 'shared queue: consumers compete for one backlog' : '',
+    ...errors.map((issue) => `error: ${issue.field || 'channel'}: ${issue.message}`),
   ]
     .filter(Boolean)
     .join('\n');
@@ -88,6 +90,11 @@ function ChannelEdgeImpl(props: EdgeProps<Edge<ChannelEdgeData>>) {
             </span>
           )}
           {ch.when && <span className="edge-when">if</span>}
+          {errors.length > 0 && (
+            <span className="edge-invalid" aria-label={`${errors.length} validation errors`}>
+              !
+            </span>
+          )}
           {data.showCount && (
             <span className={`edge-count ${data.pending > 0 ? 'nonzero' : ''}`} title="pending / in flight">
               {data.pending}

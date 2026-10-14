@@ -22,6 +22,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/events"
+	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/hitl"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	_ "github.com/woliveiras/le-forge/server/internal/llm/providers"
@@ -323,10 +324,14 @@ func (a *App) loadGraph(ctx context.Context, file string) error {
 	if err != nil {
 		return err
 	}
-	var g domain.Graph
-	if err := yaml.Unmarshal(b, &g); err != nil {
+	parsed, unknown, err := graph.Decode(b, true)
+	if err != nil {
 		return err
 	}
+	if len(unknown) > 0 {
+		return &engine.ValidationError{Report: &graph.Report{Errors: unknown}}
+	}
+	g := *parsed
 	a.Engine.Validate(&g)
 	if cur, _, err := a.Engine.GetGraph(ctx, g.Metadata.ID, 0); err == nil {
 		// Only save when the document changed, so restarts don't pile up versions.

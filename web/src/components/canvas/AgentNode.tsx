@@ -11,7 +11,9 @@ function runtimeLabel(n: AgentNodeData['node']): string {
 }
 
 function AgentNodeImpl({ data, selected }: NodeProps<Node<AgentNodeData>>) {
-  const { node, status } = data;
+  const { node, status, issues } = data;
+  const errors = (issues ?? []).filter((issue) => issue.severity === 'error');
+  const warnings = (issues ?? []).filter((issue) => issue.severity === 'warning');
   const state = status?.state ?? 'stopped';
   const { desired, label } = nodeCount(node);
   const reps = status?.replicas ?? [];
@@ -32,6 +34,7 @@ function AgentNodeImpl({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         selected ? 'selected' : '',
         node.disabled ? 'disabled' : '',
         stack > 0 ? `stack-${stack}` : '',
+        errors.length ? 'has-errors' : warnings.length ? 'has-warnings' : '',
       ].join(' ')}
       title={node.description}
     >
@@ -43,6 +46,15 @@ function AgentNodeImpl({ data, selected }: NodeProps<Node<AgentNodeData>>) {
         {completed && (
           <span className="mark-completed" title="Completed: stopped by its own stop policy">
             done
+          </span>
+        )}
+        {(errors.length > 0 || warnings.length > 0) && (
+          <span
+            className={errors.length ? 'mark-invalid' : 'mark-warning'}
+            title={[...errors, ...warnings].map((issue) => `${issue.field || 'agent'}: ${issue.message}`).join('\n')}
+            aria-label={errors.length ? `${errors.length} validation errors` : `${warnings.length} validation warnings`}
+          >
+            {errors.length ? `${errors.length} error${errors.length > 1 ? 's' : ''}` : 'warning'}
           </span>
         )}
         {awaiting && (

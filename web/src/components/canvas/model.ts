@@ -1,6 +1,7 @@
 import dagre from '@dagrejs/dagre';
 import type { Edge, Node } from '@xyflow/react';
 import type { Channel, ChannelStatus, ChannelType, Graph, GraphNode, GraphStatus, NodeStatus } from '../../api/types';
+import type { ElementIssue, IssueIndex } from './edit';
 
 export const NODE_W = 240;
 export const NODE_H = 118;
@@ -8,6 +9,7 @@ export const NODE_H = 118;
 export interface AgentNodeData extends Record<string, unknown> {
   node: GraphNode;
   status?: NodeStatus;
+  issues?: ElementIssue[];
 }
 
 export interface PortNodeData extends Record<string, unknown> {
@@ -29,6 +31,7 @@ export interface ChannelEdgeData extends Record<string, unknown> {
   pairIndex: number;
   selected?: boolean;
   onSelect?: (channelId: string) => void;
+  issues?: ElementIssue[];
 }
 
 /** Same glob rules as domain.GlobMatch: '*' any run, '?' one char. */
@@ -80,12 +83,16 @@ function groupCounts(cs: ChannelStatus | undefined, c: Channel, target: string) 
   );
 }
 
-export function buildElements(g: Graph, status?: GraphStatus): { nodes: Node[]; edges: Edge[] } {
+export function buildElements(g: Graph, status?: GraphStatus, issues?: IssueIndex): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = g.spec.nodes.map((n) => ({
     id: n.id,
     type: 'agent',
     position: n.position ?? { x: 0, y: 0 },
-    data: { node: n, status: status?.nodes?.find((s) => s.nodeId === n.id) } satisfies AgentNodeData,
+    data: {
+      node: n,
+      status: status?.nodes?.find((s) => s.nodeId === n.id),
+      issues: issues?.nodes.get(n.id),
+    } satisfies AgentNodeData,
   }));
   const edges: Edge[] = [];
   const pairCount = new Map<string, number>();
@@ -135,6 +142,7 @@ export function buildElements(g: Graph, status?: GraphStatus): { nodes: Node[]; 
           shared: type === 'queue' && targets.length > 1,
           showCount: type !== 'queue' || i === 0,
           pairIndex,
+          issues: issues?.channels.get(c.id),
         } satisfies ChannelEdgeData,
       });
     });

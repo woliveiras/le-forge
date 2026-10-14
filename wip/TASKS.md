@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 4) has been implemented and validated, except for browser-driven end-to-end testing and verification with the real LangGraph adapter. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 4) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -31,24 +31,24 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 #### Model and API
 
-- [ ] Define create, read, update, and delete operations for agents and channels, keeping validation centralized in the backend.
-- [ ] Persist visual positions and required settings without discarding advanced fields or YAML extensions that the interface does not edit.
-- [ ] Use version control/optimistic concurrency when saving graphs and return recoverable conflicts.
-- [ ] Ensure the backend rejects invalid graphs and returns errors associated with the relevant agent, channel, or field.
+- [x] Define create, read, update, and delete operations for agents and channels, keeping validation centralized in the backend. (Decision: the whole-document `PUT /graphs/{id}` with `If-Match` is the only write path; the editor applies agent/channel operations to a draft — `web/src/components/canvas/edit.ts` — and the engine validates on save. Documented in [api.md](../docs/api.md).)
+- [x] Persist visual positions and required settings without discarding advanced fields or YAML extensions that the interface does not edit. (`x-` keys on graph, metadata, nodes and channels round-trip through JSON storage and YAML export; other unknown keys are rejected with their path instead of being dropped.)
+- [x] Use version control/optimistic concurrency when saving graphs and return recoverable conflicts.
+- [x] Ensure the backend rejects invalid graphs and returns errors associated with the relevant agent, channel, or field.
 
 #### Interface
 
 - [x] Add agent creation on the canvas and define valid initial values.
-- [ ] Add editing for agent position, properties, runtime, model, instructions, and permissions.
+- [x] Add editing for agent position, properties, runtime, model, instructions, and permissions. (Name, description, runtime details, model, prompt, loop/schedule/stop, replicas, workspace, approval gates, tool grants and per-tool approval.)
 - [x] Add channel creation by visually connecting agents.
 - [x] Add editing for supported channel type, routing, filters, conditions, approvals, and other properties.
-- [ ] Add multi-selection or appropriate confirmation before removing connected elements.
+- [x] Add multi-selection or appropriate confirmation before removing connected elements. (Toolbar and Delete-key removals, including multi-selection, confirm the agents/channels affected.)
 - [x] Implement editing states: pending changes, save, discard, save in progress, and error.
-- [ ] Show validation errors next to the relevant element and property; allow users to fix and revalidate.
+- [x] Show validation errors next to the relevant element and property; allow users to fix and revalidate.
 - [x] Detect version conflicts, preserve local changes, and provide an explicit recovery path.
 - [x] Preserve drag, zoom, pan, selection, and element positions during real-time state updates.
-- [ ] Keep the YAML editor as an advanced alternative, synchronized with the same model and version control.
-- [ ] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts.
+- [x] Keep the YAML editor as an advanced alternative, synchronized with the same model and version control.
+- [ ] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts. — Covered by component tests against the real API client (`GraphWorkspace.test.tsx`: create, edit, validate/revalidate, save, server 422, discard, conflict overwrite/reload, removal confirmation, YAML sync) and unit tests for the edit operations (`edit.test.ts`, including connect and keyboard removal). Keyboard removal was also checked manually in the browser (mock mode). Pending: browser E2E for drag-to-connect and Delete-key gestures.
 
 **Done when:** A user can create, configure, validate, save, and start a graph through the visual interface without writing YAML.
 

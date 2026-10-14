@@ -1,67 +1,74 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { parse, stringify } from 'yaml';
 import { api, errorMessage } from '../api/client';
-import type { Graph, GraphSummary, ValidationResult } from '../api/types';
+import type { Graph, GraphSummary } from '../api/types';
 import { useAsync } from '../hooks/useData';
 import { Btn, ErrorBox, fmtDateTime } from './common';
 
-/** Edit the graph document as YAML: validate, save with optimistic concurrency, browse versions. */
-export function YamlEditor({ summary, onSaved }: { summary: GraphSummary; onSaved: (s: GraphSummary) => void }) {
+/**
+ * The graph draft as YAML: the advanced view of the same draft the canvas
+ * edits. Valid YAML updates the shared draft as you type, so switching
+ * views never loses work; saving, discarding and validation live in the
+ * workspace toolbar and use the same version check as the canvas.
+ */
+export function YamlEditor({
+  summary,
+  draft,
+  dirty,
+  onChange,
+  onLoadVersion,
+  onSave,
+}: {
+  summary: GraphSummary;
+  draft: Graph;
+  dirty: boolean;
+  onChange: (graph: Graph) => void;
+  onLoadVersion: (graph: Graph) => void;
+  /** Cmd/Ctrl+S: the workspace save (validates, then saves with the version check). */
+  onSave: () => void;
+}) {
   const gid = summary.graph.metadata.id;
-  const [text, setText] = useState(() => stringify(summary.graph));
-  const [dirty, setDirty] = useState(false);
-  const [result, setResult] = useState<ValidationResult>();
+  const [text, setText] = useState(() => stringify(draft));
+  const [parseError, setParseError] = useState<string>();
   const [error, setError] = useState<string>();
-  const [saved, setSaved] = useState<string>();
+  const [notice, setNotice] = useState<string>();
   const versions = useAsync(() => api.graphVersions(gid), [gid, summary.record.version]);
+  // The draft this editor produced last; any other draft came from elsewhere
+  // (canvas, discard, save) and replaces the text.
+  const emitted = useRef<Graph>(draft);
 
   useEffect(() => {
-    if (!dirty) setText(stringify(summary.graph));
-  }, [summary, dirty]);
+    if (draft === emitted.current) return;
+    emitted.current = draft;
+    setText(stringify(draft));
+    setParseError(undefined);
+  }, [draft]);
 
-  const parsed = (): Graph | undefined => {
+  const edit = (next: string) => {
+    setText(next);
+    setNotice(undefined);
+    let graph: unknown;
     try {
-      return parse(text) as Graph;
+      graph = parse(next);
     } catch (e) {
-      setError(`YAML: ${(e as Error).message}`);
-      return undefined;
+      setParseError(`YAML: ${(e as Error).message}`);
+      return;
     }
-  };
-
-  const validate = async () => {
-    setSaved(undefined);
-    const g = parsed();
-    if (!g) return;
-    try {
-      setResult(await api.validateGraph(g));
-      setError(undefined);
-    } catch (e) {
-      setError(errorMessage(e));
+    if (!graph || typeof graph !== 'object' || Array.isArray(graph) || !('spec' in graph)) {
+      setParseError('YAML: the document must be a mapping with a spec.');
+      return;
     }
-  };
-
-  const save = async () => {
-    setSaved(undefined);
-    const g = parsed();
-    if (!g) return;
-    try {
-      const s = await api.updateGraph(gid, g, summary.record.version);
-      onSaved(s);
-      setDirty(false);
-      setResult(undefined);
-      setError(undefined);
-      setSaved(`Saved version ${s.record.version}`);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
+    setParseError(undefined);
+    emitted.current = graph as Graph;
+    onChange(graph as Graph);
   };
 
   const loadVersion = async (v: number) => {
     try {
       const s = await api.getGraph(gid, v);
-      setText(stringify(s.graph));
-      setDirty(true);
-      setSaved(`Loaded version ${v} into the editor – save to restore it as a new version.`);
+      onLoadVersion(s.graph);
+      setNotice(`Loaded version ${v} into the draft – save to restore it as a new version.`);
+      setError(undefined);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -73,70 +80,42 @@ export function YamlEditor({ summary, onSaved }: { summary: GraphSummary; onSave
         <div className="page-head">
           <h2>Definition</h2>
           <span className="muted small">
-            version {summary.record.version}
-            {dirty ? ' · edited' : ''}
+            based on version {summary.record.version}
+            {dirty ? ' · unsaved changes' : ''}
           </span>
-          <Btn small onClick={validate}>
-            Validate
-          </Btn>
-          <Btn small tone="primary" onClick={save} disabled={!dirty}>
-            Save
-          </Btn>
-          <Btn
-            small
-            tone="ghost"
-            disabled={!dirty}
-            onClick={() => {
-              setText(stringify(summary.graph));
-              setDirty(false);
-            }}
-          >
-            Revert
-          </Btn>
           <Btn small tone="ghost" onClick={() => void download(gid).catch((e) => setError(errorMessage(e)))}>
-            Export
+            Export saved
           </Btn>
         </div>
+        <p className="muted small">
+          Advanced view of the graph draft. Keys starting with <code>x-</code> on the graph, metadata, agents and channels
+          are kept as written; other unknown keys are rejected when you validate or save.
+        </p>
         <ErrorBox error={error} />
-        {saved && <div className="ok small">{saved}</div>}
-        {result && (
-          <div className={`validation ${result.valid ? 'ok' : 'bad'}`}>
-            <strong>{result.valid ? 'Valid' : 'Invalid'}</strong>
-            <ul>
-              {(result.errors ?? []).map((e, i) => (
-                <li key={`e${i}`} className="bad">
-                  <code>{e.path}</code> {e.message}
-                </li>
-              ))}
-              {(result.warnings ?? []).map((e, i) => (
-                <li key={`w${i}`} className="warn">
-                  <code>{e.path}</code> {e.message}
-                </li>
-              ))}
-            </ul>
+        {parseError && (
+          <div className="error-box" role="alert">
+            {parseError}
+            <div className="small">The graph view and Save use the last valid YAML until this is fixed.</div>
           </div>
         )}
+        {notice && <div className="ok small">{notice}</div>}
         <textarea
           className="code-editor mono"
           spellCheck={false}
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setDirty(true);
-          }}
+          onChange={(e) => edit(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Tab') {
               e.preventDefault();
               const t = e.currentTarget;
               const s = t.selectionStart;
               const v = t.value.slice(0, s) + '  ' + t.value.slice(t.selectionEnd);
-              setText(v);
-              setDirty(true);
+              edit(v);
               requestAnimationFrame(() => t.setSelectionRange(s + 2, s + 2));
             }
             if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
-              void save();
+              onSave();
             }
           }}
           aria-label="Graph YAML"

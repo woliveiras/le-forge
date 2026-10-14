@@ -6,12 +6,14 @@
   "type": "object",
   "required": ["metadata", "spec"],
   "additionalProperties": false,
+  "patternProperties": {"^x-.+": {"description": "Extension: stored and returned verbatim, never interpreted."}},
   "properties": {
     "apiVersion": {"const": "leforge.io/v1", "description": "Defaults to leforge.io/v1."},
     "kind": {"const": "Graph", "description": "Defaults to Graph."},
     "metadata": {
       "type": "object",
       "additionalProperties": false,
+      "patternProperties": {"^x-.+": {"description": "Extension: stored and returned verbatim, never interpreted."}},
       "anyOf": [{"required": ["id"]}, {"required": ["name"]}],
       "properties": {
         "id": {"$ref": "#/$defs/DNSLabel", "description": "Stable id; derived from name (slug) when omitted."},
@@ -149,6 +151,7 @@
     },
     "Node": {
       "type": "object", "additionalProperties": false,
+      "patternProperties": {"^x-.+": {"description": "Extension: stored and returned verbatim, never interpreted."}},
       "anyOf": [{"required": ["id"]}, {"required": ["name"]}],
       "properties": {
         "id": {"$ref": "#/$defs/DNSLabel"},
@@ -193,6 +196,7 @@
     },
     "Channel": {
       "type": "object", "additionalProperties": false,
+      "patternProperties": {"^x-.+": {"description": "Extension: stored and returned verbatim, never interpreted."}},
       "properties": {
         "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$", "description": "Derived from from/to when omitted."},
         "type": {"enum": ["queue", "topic", "fanout", "broadcast"], "description": "Default queue."},

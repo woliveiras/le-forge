@@ -28,6 +28,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/events"
+	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/hitl"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/llmconfig"
@@ -375,29 +376,39 @@ func (s *Server) listGraphs(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// decodeGraph accepts JSON or YAML (by Content-Type, or sniffed).
-func decodeGraph(r *http.Request) (*domain.Graph, error) {
+// decodeGraph accepts JSON or YAML (by Content-Type, or sniffed). Keys the
+// graph schema does not define are returned as issues rather than dropped.
+func decodeGraph(r *http.Request) (*domain.Graph, []graph.Issue, error) {
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, badRequest("read body: %v", err)
+		return nil, nil, badRequest("read body: %v", err)
 	}
-	var g domain.Graph
 	ct := r.Header.Get("Content-Type")
 	trim := strings.TrimSpace(string(b))
-	if strings.Contains(ct, "yaml") || (!strings.HasPrefix(trim, "{") && trim != "") {
-		if err := yaml.Unmarshal(b, &g); err != nil {
-			return nil, badRequest("invalid YAML: %v", err)
+	isYAML := strings.Contains(ct, "yaml") || (!strings.HasPrefix(trim, "{") && trim != "")
+	g, unknown, err := graph.Decode(b, isYAML)
+	if err != nil {
+		if isYAML {
+			return nil, nil, badRequest("invalid YAML: %v", err)
 		}
-	} else if err := json.Unmarshal(b, &g); err != nil {
-		return nil, badRequest("invalid JSON: %v", err)
+		return nil, nil, badRequest("invalid JSON: %v", err)
 	}
-	return &g, nil
+	return g, unknown, nil
+}
+
+// unknownFieldsError reports undefined keys like any other validation
+// finding (422 with field paths), so editors can point at them.
+func unknownFieldsError(unknown []graph.Issue) error {
+	return &engine.ValidationError{Report: &graph.Report{Valid: false, Errors: unknown, Warnings: []graph.Issue{}}}
 }
 
 func (s *Server) createGraph(w http.ResponseWriter, r *http.Request) error {
-	g, err := decodeGraph(r)
+	g, unknown, err := decodeGraph(r)
 	if err != nil {
 		return err
+	}
+	if len(unknown) > 0 {
+		return unknownFieldsError(unknown)
 	}
 	s.Engine.Validate(g) // normalise to derive the id
 	if _, err := s.Store.GetGraph(r.Context(), g.Metadata.ID, 0); err == nil {
@@ -412,11 +423,16 @@ func (s *Server) createGraph(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) validateGraph(w http.ResponseWriter, r *http.Request) error {
-	g, err := decodeGraph(r)
+	g, unknown, err := decodeGraph(r)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, s.Engine.Validate(g))
+	rep := s.Engine.Validate(g)
+	if len(unknown) > 0 {
+		rep.Errors = append(unknown, rep.Errors...)
+		rep.Valid = false
+	}
+	writeJSON(w, 200, rep)
 	return nil
 }
 
@@ -431,9 +447,12 @@ func (s *Server) getGraph(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) updateGraph(w http.ResponseWriter, r *http.Request) error {
-	g, err := decodeGraph(r)
+	g, unknown, err := decodeGraph(r)
 	if err != nil {
 		return err
+	}
+	if len(unknown) > 0 {
+		return unknownFieldsError(unknown)
 	}
 	id := r.PathValue("id")
 	if g.Metadata.ID == "" {

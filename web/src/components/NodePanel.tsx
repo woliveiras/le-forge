@@ -14,6 +14,8 @@ import { useAsync, useThrottled } from '../hooks/useData';
 import { matches, useEventStream } from '../hooks/useEventStream';
 import { Badge, Btn, Empty, ErrorBox, Icon, StateDot, fmtTime, since, stateLabel } from './common';
 import { describeEvent, eventTone } from './describe';
+import type { ElementIssue } from './canvas/edit';
+import { ElementIssues, FieldIssues } from './GraphIssues';
 import { ModelFields } from './ModelFields';
 
 const LOG_TYPES = [
@@ -38,9 +40,11 @@ interface Props {
   onSaved: (s: GraphSummary) => void;
   onStatus: (s: GraphStatus) => void;
   onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+  /** Validation findings for this agent. */
+  issues?: ElementIssue[];
 }
 
-export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdateNode }: Props) {
+export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdateNode, issues }: Props) {
   const graph = summary.graph;
   const gid = graph.metadata.id;
   const node = graph.spec.nodes.find((n) => n.id === nodeId);
@@ -99,6 +103,7 @@ export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdate
         {node.disabled && <Badge tone="muted">disabled</Badge>}
       </div>
       {node.description && <p className="muted">{node.description}</p>}
+      <ElementIssues issues={issues} label="Agent validation" />
 
       <div className="btn-row">
         <Btn tone="primary" small disabled={busy || node.disabled} onClick={() => act('start')} title="Start">
@@ -202,8 +207,9 @@ export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdate
 
       <OutputLog graphId={gid} nodeId={nodeId} replica={replica} />
       <ChatBox graphId={gid} nodeId={nodeId} replica={replica} />
-      <PromptEditor summary={summary} nodeId={nodeId} onSaved={onSaved} onUpdateNode={onUpdateNode} />
-      <NodeSettings summary={summary} nodeId={nodeId} onUpdateNode={onUpdateNode} />
+      <PromptEditor summary={summary} nodeId={nodeId} onSaved={onSaved} onUpdateNode={onUpdateNode} issues={issues} />
+      {onUpdateNode && <AgentEditor summary={summary} nodeId={nodeId} onUpdateNode={onUpdateNode} issues={issues} />}
+      <NodeSettings summary={summary} nodeId={nodeId} onUpdateNode={onUpdateNode} issues={issues} />
       <Executions graphId={gid} nodeId={nodeId} replica={replica} />
     </div>
   );
@@ -326,11 +332,13 @@ function PromptEditor({
   nodeId,
   onSaved,
   onUpdateNode,
+  issues,
 }: {
   summary: GraphSummary;
   nodeId: string;
   onSaved: (s: GraphSummary) => void;
   onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+  issues?: ElementIssue[];
 }) {
   const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
   const [editing, setEditing] = useState(false);
@@ -371,7 +379,7 @@ function PromptEditor({
         ) : (
           <span className="btn-row">
             <Btn small tone="primary" onClick={save}>
-              Save v{summary.record.version + 1}
+              {onUpdateNode ? 'Apply to draft' : `Save v${summary.record.version + 1}`}
             </Btn>
             <Btn small tone="ghost" onClick={() => setEditing(false)}>
               Cancel
@@ -384,7 +392,12 @@ function PromptEditor({
       ) : (
         <pre className="prompt">{highlightTokens(node.prompt ?? '')}</pre>
       )}
-      <p className="muted small">Prompt changes are picked up on the replica's next turn.</p>
+      <FieldIssues issues={issues} field="prompt" />
+      <p className="muted small">
+        {onUpdateNode
+          ? 'Prompt edits join the graph draft; once saved, replicas pick them up on their next turn.'
+          : "Prompt changes are picked up on the replica's next turn."}
+      </p>
       <ErrorBox error={error} />
     </section>
   );
@@ -419,10 +432,12 @@ function NodeSettings({
   summary,
   nodeId,
   onUpdateNode,
+  issues,
 }: {
   summary: GraphSummary;
   nodeId: string;
   onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
+  issues?: ElementIssue[];
 }) {
   const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
   const defaults = summary.graph.spec.defaults ?? {};
@@ -449,6 +464,18 @@ function NodeSettings({
       tools: checked ? [...current, { name: tool.name }] : current,
     });
   };
+  const setGrantApproval = (name: string, requiresApproval: boolean) => {
+    if (!onUpdateNode) return;
+    onUpdateNode(nodeId, {
+      tools: tools.map((grant) => {
+        if (grantName(grant) !== name) return grant;
+        const object: ToolGrant = typeof grant === 'string' ? { name: grant } : { ...grant };
+        if (requiresApproval) object.requiresApproval = true;
+        else delete object.requiresApproval;
+        return object;
+      }),
+    });
+  };
   const updateExtraGrant = (grant: ToolGrant | string, checked: boolean) => {
     if (!onUpdateNode) return;
     const current = tools.filter((item) => grantName(item) !== grantName(grant));
@@ -458,6 +485,7 @@ function NodeSettings({
     <section>
       <div className="section-head">
         <h3>Tools {usesGraphDefaults ? <span className="muted small">(graph defaults)</span> : null}</h3>
+        <FieldIssues issues={issues} field="tools" />
         {onUpdateNode && toolCatalog.data && (
           <span className="muted small">{tools.length} selected</span>
         )}
@@ -482,23 +510,32 @@ function NodeSettings({
             {visibleTools.map((tool) => {
               const grant = tools.find((item) => grantName(item) === tool.name);
               return (
-                <label className="tool-option" key={tool.name}>
-                  <input
-                    type="checkbox"
-                    checked={!!grant}
-                    onChange={(event) => updateToolGrant(tool, event.target.checked)}
-                  />
-                  <span className="tool-option-copy">
-                    <span className="tool-option-title">
-                      <code>{tool.name}</code>
-                      <span className="badge">{tool.capability}</span>
+                <div key={tool.name}>
+                  <label className="tool-option">
+                    <input
+                      type="checkbox"
+                      checked={!!grant}
+                      onChange={(event) => updateToolGrant(tool, event.target.checked)}
+                    />
+                    <span className="tool-option-copy">
+                      <span className="tool-option-title">
+                        <code>{tool.name}</code>
+                        <span className="badge">{tool.capability}</span>
+                      </span>
+                      <span className="muted small">{tool.description}</span>
                     </span>
-                    <span className="muted small">{tool.description}</span>
-                    {grant && typeof grant !== 'string' && grant.requiresApproval && (
-                      <span className="muted tiny">Approval required</span>
-                    )}
-                  </span>
-                </label>
+                  </label>
+                  {grant && (
+                    <label className="check tiny tool-approval">
+                      <input
+                        type="checkbox"
+                        checked={typeof grant !== 'string' && !!grant.requiresApproval}
+                        onChange={(event) => setGrantApproval(tool.name, event.target.checked)}
+                      />
+                      Require approval for {tool.name}
+                    </label>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -534,70 +571,6 @@ function NodeSettings({
             </li>
           ))}
         </ul>
-      )}
-      {onUpdateNode && (
-        <div className="form node-editor">
-          <h3>Agent configuration</h3>
-          <label>
-            Name
-            <input value={node.name ?? ''} onChange={(event) => onUpdateNode(nodeId, { name: event.target.value })} />
-          </label>
-          <label>
-            Runtime
-            <select
-              value={rt.kind ?? 'native'}
-              onChange={(event) =>
-                onUpdateNode(nodeId, { runtime: { ...node.runtime, kind: event.target.value as NonNullable<GraphNode['runtime']>['kind'] } })
-              }
-            >
-              <option value="native">native</option>
-              <option value="external">external</option>
-              <option value="echo">echo</option>
-            </select>
-          </label>
-          <ModelFields
-            model={node.model}
-            inherited={defaults.model}
-            onChange={(next) => onUpdateNode(nodeId, { model: next })}
-          />
-          <label>
-            Loop mode
-            <select
-              value={loop.mode ?? 'continuous'}
-              onChange={(event) =>
-                onUpdateNode(nodeId, { loop: { ...node.loop, mode: event.target.value as NonNullable<GraphNode['loop']>['mode'] } })
-              }
-            >
-              {(['once', 'continuous', 'scheduled', 'event'] as const).map((mode) => (
-                <option key={mode} value={mode}>
-                  {mode}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Workspace
-            <select
-              value={node.workspace?.mode ?? 'shared'}
-              onChange={(event) =>
-                onUpdateNode(nodeId, {
-                  workspace: { ...node.workspace, mode: event.target.value as 'shared' | 'worktree' },
-                })
-              }
-            >
-              <option value="shared">shared</option>
-              <option value="worktree">worktree</option>
-            </select>
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={!!node.disabled}
-              onChange={(event) => onUpdateNode(nodeId, { disabled: event.target.checked })}
-            />
-            Disable agent
-          </label>
-        </div>
       )}
       <h3>Settings</h3>
       <dl className="kv">
@@ -724,4 +697,273 @@ function Executions({ graphId, nodeId, replica }: { graphId: string; nodeId: str
       )}
     </section>
   );
+}
+
+/** Empty input clears the field so graph defaults apply again. */
+function numberOrUndefined(value: string): number | undefined {
+  if (value.trim() === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+const STOP_FIELD = {
+  iterations: { key: 'maxIterations', label: 'Max turns', kind: 'number' },
+  duration: { key: 'maxDuration', label: 'Max duration (e.g. 2h)', kind: 'duration' },
+  idle: { key: 'idleTimeout', label: 'Idle timeout (e.g. 10m)', kind: 'duration' },
+} as const;
+
+/** Edits an agent's document fields. Every change goes to the graph draft; nothing is saved until the toolbar Save. */
+function AgentEditor({
+  summary,
+  nodeId,
+  onUpdateNode,
+  issues,
+}: {
+  summary: GraphSummary;
+  nodeId: string;
+  onUpdateNode: (nodeId: string, update: Partial<GraphNode>) => void;
+  issues?: ElementIssue[];
+}) {
+  const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
+  const defaults = summary.graph.spec.defaults ?? {};
+  const update = (patch: Partial<GraphNode>) => onUpdateNode(nodeId, patch);
+  const runtime = { ...defaults.runtime, ...node.runtime };
+  const loop = node.loop ?? defaults.loop ?? {};
+  const stop = loop.stop ?? {};
+  const cluster = node.cluster ?? {};
+  const approval = node.approval ?? {};
+  const setLoop = (patch: NonNullable<GraphNode['loop']>) => update({ loop: { ...node.loop, ...patch } });
+  const setStop = (patch: NonNullable<NonNullable<GraphNode['loop']>['stop']>) => setLoop({ stop: { ...node.loop?.stop, ...patch } });
+  const setCluster = (patch: NonNullable<GraphNode['cluster']>) => update({ cluster: { ...node.cluster, ...patch } });
+  const stopField = stop.policy && stop.policy in STOP_FIELD ? STOP_FIELD[stop.policy as keyof typeof STOP_FIELD] : undefined;
+
+  return (
+    <section className="form node-editor" aria-label="Agent configuration">
+      <h3>Agent configuration</h3>
+      <label>
+        ID
+        <input value={node.id} readOnly aria-describedby={`${nodeId}-id-hint`} />
+        <span id={`${nodeId}-id-hint`} className="muted tiny">
+          Channels refer to agents by ID, so it is fixed once created.
+        </span>
+        <FieldIssues issues={issues} field="id" />
+      </label>
+      <label>
+        Name
+        <input value={node.name ?? ''} onChange={(event) => update({ name: event.target.value || undefined })} />
+        <FieldIssues issues={issues} field="name" />
+      </label>
+      <label>
+        Description
+        <textarea
+          rows={2}
+          value={node.description ?? ''}
+          onChange={(event) => update({ description: event.target.value || undefined })}
+        />
+      </label>
+
+      <fieldset>
+        <legend>Runtime</legend>
+        <label>
+          Runtime
+          <select
+            value={runtime.kind ?? 'native'}
+            onChange={(event) =>
+              update({ runtime: { ...node.runtime, kind: event.target.value as NonNullable<GraphNode['runtime']>['kind'] } })
+            }
+          >
+            <option value="native">native</option>
+            <option value="external">external</option>
+            <option value="echo">echo</option>
+          </select>
+        </label>
+        {runtime.kind === 'external' && (
+          <>
+            <label>
+              Framework
+              <input
+                value={node.runtime?.framework ?? ''}
+                placeholder={defaults.runtime?.framework ?? 'langgraph'}
+                onChange={(event) => update({ runtime: { ...node.runtime, framework: event.target.value || undefined } })}
+              />
+            </label>
+            <label>
+              Endpoint
+              <input
+                value={node.runtime?.endpoint ?? ''}
+                placeholder={defaults.runtime?.endpoint ?? 'http://agents:8080'}
+                onChange={(event) => update({ runtime: { ...node.runtime, endpoint: event.target.value || undefined } })}
+              />
+            </label>
+            <label>
+              Image
+              <input
+                value={node.runtime?.image ?? ''}
+                placeholder={defaults.runtime?.image}
+                onChange={(event) => update({ runtime: { ...node.runtime, image: event.target.value || undefined } })}
+              />
+            </label>
+            <p className="muted tiny">An external agent needs an endpoint, command or image.</p>
+          </>
+        )}
+        <FieldIssues issues={issues} field="runtime" />
+        <ModelFields model={node.model} inherited={defaults.model} onChange={(next) => update({ model: next })} />
+        <FieldIssues issues={issues} field="model" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Loop</legend>
+        <label>
+          Loop mode
+          <select
+            value={loop.mode ?? 'continuous'}
+            onChange={(event) => setLoop({ mode: event.target.value as NonNullable<GraphNode['loop']>['mode'] })}
+          >
+            {(['once', 'continuous', 'scheduled', 'event'] as const).map((mode) => (
+              <option key={mode} value={mode}>
+                {mode}
+              </option>
+            ))}
+          </select>
+          <FieldIssues issues={issues} field="loop.mode" />
+        </label>
+        {loop.mode === 'scheduled' && (
+          <label>
+            Schedule
+            <input
+              value={loop.schedule ?? ''}
+              placeholder="@every 1h"
+              onChange={(event) => setLoop({ schedule: event.target.value || undefined })}
+            />
+            <FieldIssues issues={issues} field="loop.schedule" />
+          </label>
+        )}
+        <label>
+          Stop policy
+          <select
+            value={stop.policy ?? 'never'}
+            onChange={(event) => setStop({ policy: event.target.value as NonNullable<typeof stop.policy> })}
+          >
+            {(['never', 'auto', 'iterations', 'duration', 'idle'] as const).map((policy) => (
+              <option key={policy} value={policy}>
+                {policy}
+              </option>
+            ))}
+          </select>
+          <FieldIssues issues={issues} field="loop.stop.policy" />
+        </label>
+        {stopField && (
+          <label>
+            {stopField.label}
+            <input
+              type={stopField.kind === 'number' ? 'number' : 'text'}
+              min={stopField.kind === 'number' ? 1 : undefined}
+              value={String(stop[stopField.key] ?? '')}
+              onChange={(event) =>
+                setStop({
+                  [stopField.key]:
+                    stopField.kind === 'number' ? numberOrUndefined(event.target.value) : event.target.value || undefined,
+                })
+              }
+            />
+            <FieldIssues issues={issues} field={`loop.stop.${stopField.key}`} />
+          </label>
+        )}
+        {fieldIssuesExact(issues, 'loop')}
+      </fieldset>
+
+      <fieldset>
+        <legend>Replicas</legend>
+        <label>
+          Scaling
+          <select
+            value={cluster.mode ?? 'fixed'}
+            onChange={(event) => setCluster({ mode: event.target.value as NonNullable<GraphNode['cluster']>['mode'] })}
+          >
+            <option value="fixed">fixed</option>
+            <option value="autoscale">autoscale</option>
+          </select>
+        </label>
+        {cluster.mode === 'autoscale' ? (
+          <>
+            <label>
+              Min replicas
+              <input
+                type="number"
+                min={1}
+                value={cluster.minReplicas ?? ''}
+                onChange={(event) => setCluster({ minReplicas: numberOrUndefined(event.target.value) })}
+              />
+            </label>
+            <label>
+              Max replicas
+              <input
+                type="number"
+                min={1}
+                max={256}
+                value={cluster.maxReplicas ?? ''}
+                onChange={(event) => setCluster({ maxReplicas: numberOrUndefined(event.target.value) })}
+              />
+            </label>
+          </>
+        ) : (
+          <label>
+            Replicas
+            <input
+              type="number"
+              min={1}
+              max={256}
+              value={cluster.replicas ?? ''}
+              placeholder="1"
+              onChange={(event) => setCluster({ replicas: numberOrUndefined(event.target.value) })}
+            />
+          </label>
+        )}
+        <FieldIssues issues={issues} field="cluster" />
+        <label>
+          Workspace
+          <select
+            value={node.workspace?.mode ?? 'shared'}
+            onChange={(event) => update({ workspace: { ...node.workspace, mode: event.target.value as 'shared' | 'worktree' } })}
+          >
+            <option value="shared">shared</option>
+            <option value="worktree">worktree</option>
+          </select>
+          <FieldIssues issues={issues} field="workspace" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Permissions</legend>
+        <p className="muted tiny">Tool grants are chosen below; these gates hold the agent for a human decision.</p>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!approval.beforeTurn}
+            onChange={(event) => update({ approval: { ...node.approval, beforeTurn: event.target.checked || undefined } })}
+          />
+          Approve each turn before it starts
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!approval.beforeEmit}
+            onChange={(event) => update({ approval: { ...node.approval, beforeEmit: event.target.checked || undefined } })}
+          />
+          Approve output before it is sent
+        </label>
+        <FieldIssues issues={issues} field="approval" />
+        <label className="check">
+          <input type="checkbox" checked={!!node.disabled} onChange={(event) => update({ disabled: event.target.checked || undefined })} />
+          Disable agent
+        </label>
+      </fieldset>
+    </section>
+  );
+}
+
+/** Issues on exactly `field` (not its children, which are shown under their own inputs). */
+function fieldIssuesExact(issues: ElementIssue[] | undefined, field: string) {
+  const own = (issues ?? []).filter((issue) => issue.field === field);
+  return own.length ? <FieldIssues issues={own} field={field} /> : null;
 }

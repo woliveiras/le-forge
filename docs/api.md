@@ -60,7 +60,15 @@ Startup fails if no credential is configured and auth is not explicitly disabled
   | 500 | `internal` | Unexpected; details are logged server-side, never returned |
 * **Optimistic concurrency.** `GET /graphs/{id}` returns `graph.metadata.version`. Send it back as
   `If-Match: 3` on `PUT`; a concurrent edit makes the save fail with 409. Without `If-Match` the save
-  is unconditional (last writer wins).
+  is unconditional (last writer wins). The whole-document `PUT` is the only graph write path: the web
+  editor (canvas and YAML view) edits a local draft and saves it this way, so validation and version
+  checks happen once, on the server.
+* **Strict graph documents.** Graph `POST`/`PUT` reject keys the schema does not define with `422`
+  and one `details.errors[]` entry per key (`path` such as `spec.nodes[0].promt`, message
+  `unknown field "promt"`); `POST /graphs/validate` reports them as errors too. Keys starting with
+  `x-` on the graph, `metadata`, a node or a channel are extensions: they are stored and returned
+  verbatim (JSON, YAML export) and never interpreted. `x-` keys anywhere else are rejected. Free-form
+  maps (`node.config`, `env`, `labels`) are not inspected.
 * **Pagination.** List endpoints take `limit` and return newest first (messages, executions,
   approvals). The event log pages by sequence number (`after=<seq>`) and returns ascending order.
   Defaults: messages 100, executions 50, events 200, approvals 200.

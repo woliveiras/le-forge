@@ -460,6 +460,13 @@ function validate(g: Graph) {
   const warnings: { path: string; message: string }[] = [];
   if (!g?.metadata?.id && !g?.metadata?.name) errors.push({ path: 'metadata.id', message: 'id or name is required' });
   const ids = new Set((g?.spec?.nodes ?? []).map((n) => n.id));
+  // A subset of graph.Validate, so editor error states can be tried in mock mode.
+  (g?.spec?.nodes ?? []).forEach((n, i) => {
+    if ((n.runtime?.kind ?? 'native') === 'native' && !n.prompt?.trim())
+      errors.push({ path: `spec.nodes[${i}].prompt`, message: 'native agents need a prompt' });
+    if (n.loop?.mode === 'scheduled' && !n.loop.schedule)
+      errors.push({ path: `spec.nodes[${i}].loop.schedule`, message: 'scheduled loops need a schedule' });
+  });
   (g?.spec?.channels ?? []).forEach((c, i) => {
     if (c.from && !ids.has(c.from)) errors.push({ path: `spec.channels[${i}].from`, message: `unknown node "${c.from}"` });
     (c.to ?? []).forEach((t, j) => {

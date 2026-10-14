@@ -1572,3 +1572,84 @@ section {
     align-self: flex-start;
   }
 }
+
+/* graph editor validation */
+.agent-node.has-errors {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 16%, transparent);
+}
+.agent-node.has-warnings {
+  border-color: var(--yellow);
+}
+.mark-invalid,
+.mark-warning {
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 0 5px;
+  color: white;
+  background: var(--red);
+}
+.mark-warning {
+  color: #684b1e;
+  background: color-mix(in srgb, var(--yellow) 35%, white);
+}
+.ch-invalid .rail,
+.ch-invalid .rail-outer {
+  stroke: var(--red);
+}
+.edge-invalid {
+  color: white;
+  background: var(--red);
+  border-radius: 999px;
+  padding: 0 5px;
+  font-weight: 600;
+}
+.issue-list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  background: color-mix(in srgb, var(--red) 6%, transparent);
+  font-size: 12px;
+}
+.issue-list li + li {
+  margin-top: 3px;
+}
+.issue-list .warn {
+  color: #684b1e;
+}
+.issue-list .bad {
+  color: var(--red);
+}
+.issue-list button.link {
+  font: inherit;
+}
+.field-error {
+  display: block;
+  color: var(--red);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.field-warning {
+  display: block;
+  color: #684b1e;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.node-editor fieldset {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+.node-editor legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.tool-approval {
+  margin: 0 0 6px 28px;
+  color: var(--muted);
+}
