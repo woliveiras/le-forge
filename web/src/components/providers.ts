@@ -10,6 +10,7 @@ export interface ProviderDraft {
   timeoutSec: string;
   maxRetries: string;
   concurrency: string;
+  contextWindow: string;
   apiKey: string;
   clearKey: boolean;
 }
@@ -24,6 +25,7 @@ export function draftFrom(provider: ProviderInfo | undefined, types: ProviderTyp
     timeoutSec: num(provider?.timeoutSec),
     maxRetries: num(provider?.maxRetries),
     concurrency: num(provider?.concurrency),
+    contextWindow: num(provider?.contextWindow),
     apiKey: '',
     clearKey: false,
   };
@@ -48,6 +50,7 @@ export function inputFromDraft(d: ProviderDraft, mode: 'create' | 'edit'): Provi
     timeoutSec: optionalInt(d.timeoutSec),
     maxRetries: optionalInt(d.maxRetries),
     concurrency: optionalInt(d.concurrency),
+    contextWindow: optionalInt(d.contextWindow),
   };
   input.name = d.name.trim();
   if (mode === 'create' && !input.name) delete input.name;
@@ -61,7 +64,7 @@ export function localErrors(input: ProviderInput, mode: 'create' | 'edit'): Reco
   const out: Record<string, string> = {};
   if (mode === 'create' && !input.name) out.name = 'Enter a name.';
   if (!input.type) out.type = 'Choose a provider type.';
-  for (const k of ['timeoutSec', 'maxRetries', 'concurrency'] as const) {
+  for (const k of ['timeoutSec', 'maxRetries', 'concurrency', 'contextWindow'] as const) {
     if (Number.isNaN(input[k])) out[k] = 'Enter a whole number.';
   }
   if (input.baseUrl && !/^https?:\/\/[^/\s]+/i.test(input.baseUrl)) out.baseUrl = 'Use an http:// or https:// URL.';
@@ -100,11 +103,17 @@ export function describeTest(r: ProviderTestResult): TestSummary {
       }`
     : `model list unavailable (${r.models.error ?? 'unknown error'})`;
   if (r.ok) {
-    const warn = !r.models.ok || r.models.defaultModelListed === false;
+    const toolsFailed = r.tools?.checked && !r.tools.ok;
+    const warn = !r.models.ok || r.models.defaultModelListed === false || toolsFailed;
+    const tools = !r.tools?.checked
+      ? ''
+      : r.tools.ok
+        ? ' Tool calling works.'
+        : ` Tool calling does not work: ${r.tools.error ?? 'no tool call'}${r.tools.reply ? ` (it answered “${r.tools.reply}”)` : ''}. Agents with tools need another model.`;
     return {
       tone: warn ? 'warn' : 'ok',
-      title: `Inference works${r.model ? ` with ${r.model}` : ''}`,
-      detail: `Answered in ${secs(r.inference.durationMs)}${r.inference.reply ? ` (“${r.inference.reply}”)` : ''}; ${models}.`,
+      title: toolsFailed ? `Inference works${r.model ? ` with ${r.model}` : ''}, but not tool calling` : `Inference works${r.model ? ` with ${r.model}` : ''}`,
+      detail: `Answered in ${secs(r.inference.durationMs)}${r.inference.reply ? ` (“${r.inference.reply}”)` : ''}; ${models}.${tools}`,
     };
   }
   return {

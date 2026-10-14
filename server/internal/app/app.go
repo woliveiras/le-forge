@@ -360,21 +360,26 @@ func (a *App) loadGraph(ctx context.Context, file string) error {
 	if len(unknown) > 0 {
 		return &engine.ValidationError{Report: &graph.Report{Errors: unknown}}
 	}
-	g := *parsed
-	a.Engine.Validate(&g)
-	if cur, _, err := a.Engine.GetGraph(ctx, g.Metadata.ID, 0); err == nil {
+	// Compare the effective (normalised) documents, but save the file as
+	// written so its defaults keep applying to nodes that do not override them.
+	var effective domain.Graph
+	if b, err := json.Marshal(parsed); err == nil {
+		_ = json.Unmarshal(b, &effective)
+	}
+	a.Engine.Validate(&effective)
+	if cur, _, err := a.Engine.GetGraph(ctx, effective.Metadata.ID, 0); err == nil {
 		// Only save when the document changed, so restarts don't pile up versions.
-		g.Metadata.Version = cur.Metadata.Version
-		g.Metadata.CreatedAt, g.Metadata.UpdatedAt = cur.Metadata.CreatedAt, cur.Metadata.UpdatedAt
+		effective.Metadata.Version = cur.Metadata.Version
+		effective.Metadata.CreatedAt, effective.Metadata.UpdatedAt = cur.Metadata.CreatedAt, cur.Metadata.UpdatedAt
 		x, _ := yaml.Marshal(cur)
-		y, _ := yaml.Marshal(&g)
+		y, _ := yaml.Marshal(&effective)
 		if string(x) == string(y) {
 			return nil
 		}
 	}
-	_, _, err = a.Engine.SaveGraph(ctx, &g, 0, "bootstrap:"+filepath.Base(file))
+	saved, _, err := a.Engine.SaveGraph(ctx, parsed, 0, "bootstrap:"+filepath.Base(file))
 	if err == nil {
-		a.Log.Info("graph loaded", "graph", g.Metadata.ID, "file", file)
+		a.Log.Info("graph loaded", "graph", saved.Metadata.ID, "file", file)
 	}
 	return err
 }

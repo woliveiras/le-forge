@@ -315,8 +315,16 @@ func TestConnectionTestUsesInference(t *testing.T) {
 		res.Models.DefaultModelListed == nil || !*res.Models.DefaultModelListed || res.Model != "fake-small" {
 		t.Fatalf("result = %+v", res)
 	}
-	if e.fake.Chats() != 1 || e.fake.LastChat()["model"] != "fake-small" {
-		t.Fatalf("the test must send a real chat request: %d %v", e.fake.Chats(), e.fake.LastChat())
+	if e.fake.Chats() != 2 || e.fake.LastChat()["model"] != "fake-small" {
+		t.Fatalf("the test must send a real chat request, then a tool-calling one: %d %v", e.fake.Chats(), e.fake.LastChat())
+	}
+	// The fake answers tool offers in text, like a model without tool calling.
+	if !res.Tools.Checked || res.Tools.OK || res.Tools.Reply != "OK" || !strings.Contains(res.Tools.Error, "tool calling") {
+		t.Fatalf("tools without support: %+v", res.Tools)
+	}
+	e.fake.ToolCalls.Store(true)
+	if res, err := e.m.Test(ctx, "p", "op"); err != nil || !res.OK || !res.Tools.OK || res.Tools.Error != "" {
+		t.Fatalf("tools with support: %+v %v", res, err)
 	}
 	if v, _ := e.m.Get("p"); v.LastTest == nil || !v.LastTest.OK {
 		t.Fatalf("last test must be shown: %+v", v)
@@ -341,8 +349,8 @@ func TestConnectionTestFailuresAreRedactedAndBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.OK || res.Inference.Error == "" || !strings.Contains(res.Inference.Error, "401") {
-		t.Fatalf("wrong key: %+v", res)
+	if res.OK || res.Inference.Error == "" || !strings.Contains(res.Inference.Error, "401") || res.Tools.Checked {
+		t.Fatalf("wrong key (tools are not tried without inference): %+v", res)
 	}
 	b, _ := json.Marshal(res)
 	evs, _ := e.store.ListEvents(ctx, storage.EventFilter{Types: []domain.EventType{domain.EvProviderTested}})
@@ -456,5 +464,21 @@ func TestCorruptStoredDocumentFailsLoad(t *testing.T) {
 	m, _ := llmconfig.New(llmconfig.Options{Store: e.store, Registry: reg, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err := m.Load(ctx); err == nil || !strings.Contains(err.Error(), "corrupt") {
 		t.Fatalf("corrupt settings must fail loudly: %v", err)
+	}
+}
+
+func TestContextWindowIsValidatedAndKept(t *testing.T) {
+	e := newEnv(t)
+	in := e.openaiInput("p")
+	in.ContextWindow = 512
+	if _, err := e.m.Create(ctx, in, "a", 0); issues(t, err)["contextWindow"] == "" {
+		t.Fatal("a window below 1024 tokens must be refused")
+	}
+	in.ContextWindow = 65536
+	if _, err := e.m.Create(ctx, in, "a", 0); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := e.m.Get("p"); v.ContextWindow != 65536 {
+		t.Fatalf("view: %+v", v)
 	}
 }

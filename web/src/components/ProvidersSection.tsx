@@ -207,6 +207,12 @@ function ProviderCard({
       <dl className="integration-details">
         <dt>Default model</dt>
         <dd>{p.defaultModel || 'Not set'}</dd>
+        {(p.contextWindow || p.type === 'ollama') && (
+          <>
+            <dt>Context window</dt>
+            <dd>{p.contextWindow ? `${p.contextWindow.toLocaleString()} tokens` : p.type === 'ollama' ? '32,768 tokens (default)' : ''}</dd>
+          </>
+        )}
         {p.baseUrl && (
           <>
             <dt>Endpoint</dt>
@@ -404,6 +410,18 @@ function ProviderForm({
             </Field>
             <Field label="Concurrent requests" error={errors.concurrency}>
               <input value={draft.concurrency} onChange={(e) => set({ concurrency: e.target.value })} inputMode="numeric" placeholder="unlimited" />
+            </Field>
+            <Field
+              label="Context window (tokens)"
+              error={errors.contextWindow}
+              hint={draft.type === 'ollama' ? 'Sent as num_ctx. Default 32768; larger windows need more memory on the model server.' : 'Prompts that do not fit fail instead of being truncated.'}
+            >
+              <input
+                value={draft.contextWindow}
+                onChange={(e) => set({ contextWindow: e.target.value })}
+                inputMode="numeric"
+                placeholder={draft.type === 'ollama' ? '32768' : 'provider default'}
+              />
             </Field>
           </div>
         </details>

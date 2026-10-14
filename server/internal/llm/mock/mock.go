@@ -5,11 +5,12 @@
 // it produces the smallest response that keeps a turn moving:
 //
 //  1. Metadata["mock_response"] set → returned verbatim (scripted tests).
-//  2. "emit" tool offered and no tool result yet → call emit with a summary
+//  2. "connection_check" tool offered (provider test) → call it with word=OK.
+//  3. "emit" tool offered and no tool result yet → call emit with a summary
 //     of the last user message (a native turn forwards work downstream).
-//  3. "finish" tool offered and a tool result exists → call finish.
-//  4. JSON mode → {"mock":true,"summary":...}.
-//  5. Otherwise → "MOCK: " + summary.
+//  4. "finish" tool offered and a tool result exists → call finish.
+//  5. JSON mode → {"mock":true,"summary":...}.
+//  6. Otherwise → "MOCK: " + summary.
 package mock
 
 import (
@@ -72,6 +73,8 @@ func (p *Provider) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatRes
 	switch {
 	case req.Metadata != nil && req.Metadata["mock_response"] != "":
 		resp.Message.Content = req.Metadata["mock_response"]
+	case hasTool(req.Tools, "connection_check"):
+		call("connection_check", map[string]any{"word": "OK"})
 	case hasTool(req.Tools, "emit") && !hasToolResult:
 		call("emit", map[string]any{"type": "mock.output", "payload": map[string]any{"summary": summary}})
 	case hasTool(req.Tools, "finish") && hasToolResult:

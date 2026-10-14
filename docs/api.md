@@ -63,6 +63,11 @@ Startup fails if no credential is configured and auth is not explicitly disabled
   is unconditional (last writer wins). The whole-document `PUT` is the only graph write path: the web
   editor (canvas and YAML view) edits a local draft and saves it this way, so validation and version
   checks happen once, on the server.
+* **Documents as written.** `GET /graphs/{id}`, versions and export return the document as it was
+  saved: `spec.defaults` are applied when the graph is validated and run, not copied into each
+  node, so changing a default reaches every node that does not set its own value. Only identity
+  derived from names (graph, node and channel ids) is filled in on save. Graphs saved by earlier
+  versions keep the per-node values they were stored with.
 * **Strict graph documents.** Graph `POST`/`PUT` reject keys the schema does not define with `422`
   and one `details.errors[]` entry per key (`path` such as `spec.nodes[0].promt`, message
   `unknown field "promt"`); `POST /graphs/validate` reports them as errors too. Keys starting with
@@ -105,7 +110,7 @@ Create/update body:
 
 ```json
 {"name": "team-openai", "type": "openai", "baseUrl": "https://api.openai.com/v1",
- "defaultModel": "gpt-4o-mini", "timeoutSec": 120, "maxRetries": 2, "concurrency": 8,
+ "defaultModel": "gpt-4o-mini", "timeoutSec": 120, "maxRetries": 2, "concurrency": 8, "contextWindow": 65536,
  "apiKey": {"value": "sk-..."}}
 ```
 
@@ -115,9 +120,11 @@ fields are rejected (server-side `apiKeyEnv`/`apiKeyFile` cannot be set
 through the API). Writes accept `If-Match: <revision>`; a stale revision
 returns `409`. Without it, each write applies to the latest settings.
 
-A connection test lists models (informational) and then sends one short chat
-request through the same gateway agent turns use; `ok` reflects that
-inference. Errors are returned with any echoed credential replaced by
+A connection test lists models (informational), sends one short chat
+request through the same gateway agent turns use (`ok` reflects that
+inference), then offers the model one tool and reports in `tools` whether it
+called it in the structured form agents need (`{checked, ok, reply?, error?}`;
+advisory — a model that writes the call as text fails it). Errors are returned with any echoed credential replaced by
 `[redacted]`. Tests are audited as `provider.tested` events; changes as
 `provider.changed`.
 

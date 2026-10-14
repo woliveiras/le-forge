@@ -23,7 +23,7 @@ function AgentNodeImpl({ data, selected }: NodeProps<Node<AgentNodeData>>) {
   const awaiting = reps.some((r) => r.state === 'awaiting_approval');
   const completed = reps.length > 0 && reps.every((r) => r.state === 'completed');
   const iterations = reps.reduce((a, r) => a + (r.iteration ?? 0), 0);
-  const mode = node.loop?.mode ?? 'continuous';
+  const mode = data.loopMode ?? node.loop?.mode ?? 'once';
   const model = node.model?.name ? `${node.model.provider ? `${node.model.provider}/` : ''}${node.model.name}` : '';
 
   return (

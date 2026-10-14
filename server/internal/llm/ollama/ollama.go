@@ -19,6 +19,19 @@ import (
 
 const defaultBaseURL = "http://localhost:11434"
 
+// DefaultContextWindow is the num_ctx sent when the provider sets none.
+// Ollama's own default (4096, or OLLAMA_CONTEXT_LENGTH) is too small for
+// agents: it silently drops the start of the conversation, task included.
+const DefaultContextWindow = 32768
+
+// ContextWindow is the num_ctx this provider sends.
+func (p *Provider) ContextWindow() int {
+	if p.cfg.ContextWindow > 0 {
+		return p.cfg.ContextWindow
+	}
+	return DefaultContextWindow
+}
+
 func init() {
 	llm.RegisterType("ollama", func(c llm.ProviderConfig) (llm.Provider, error) { return New(c) })
 }
@@ -96,7 +109,7 @@ func (p *Provider) buildRequest(req *llm.ChatRequest) *request {
 	if req.JSON {
 		r.Format = "json"
 	}
-	opts := map[string]any{}
+	opts := map[string]any{"num_ctx": p.ContextWindow()}
 	if req.Temperature != nil {
 		opts["temperature"] = *req.Temperature
 	}
@@ -106,9 +119,7 @@ func (p *Provider) buildRequest(req *llm.ChatRequest) *request {
 	if len(req.Stop) > 0 {
 		opts["stop"] = req.Stop
 	}
-	if len(opts) > 0 {
-		r.Options = opts
-	}
+	r.Options = opts
 	if req.System != "" {
 		r.Messages = append(r.Messages, message{Role: "system", Content: req.System})
 	}
@@ -137,12 +148,21 @@ func (p *Provider) buildRequest(req *llm.ChatRequest) *request {
 }
 
 func (p *Provider) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {
+	window := p.ContextWindow()
+	// Fail before sending what Ollama would truncate without saying so.
+	if est := llm.EstimateTokens(req); est >= window {
+		return nil, fmt.Errorf("%w: about %d tokens for %s's context window of %d; raise the provider's context window or shorten the task", llm.ErrContextExceeded, est, p.cfg.Name, window)
+	}
 	var out response
 	if err := p.http.Do(ctx, http.MethodPost, "/api/chat", p.buildRequest(req), &out); err != nil {
 		return nil, err
 	}
 	if out.Error != "" {
 		return nil, fmt.Errorf("llm %s: %s", p.cfg.Name, out.Error)
+	}
+	// A prompt that filled the window was cut from the start.
+	if out.PromptEvalCount >= window {
+		return nil, fmt.Errorf("%w: the prompt filled %s's context window of %d tokens and was truncated; raise the provider's context window or shorten the task", llm.ErrContextExceeded, p.cfg.Name, window)
 	}
 	msg := llm.ChatMessage{Role: llm.RoleAssistant, Content: out.Message.Content}
 	for i, tc := range out.Message.ToolCalls {

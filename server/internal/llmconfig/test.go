@@ -28,6 +28,19 @@ type TestResult struct {
 	Model     string         `json:"model,omitempty"`
 	Models    ModelsCheck    `json:"models"`
 	Inference InferenceCheck `json:"inference"`
+	// Tools tells whether the model calls tools in the structured form
+	// agents need. It is advisory: OK reflects inference only.
+	Tools ToolsCheck `json:"tools"`
+}
+
+// ToolsCheck is the result of offering the model one tool.
+type ToolsCheck struct {
+	// Checked is false when inference failed, so tools were not tried.
+	Checked bool `json:"checked"`
+	OK      bool `json:"ok"`
+	// Reply is the text the model wrote instead of calling the tool.
+	Reply string `json:"reply,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 type ModelsCheck struct {
@@ -50,6 +63,14 @@ type InferenceCheck struct {
 }
 
 const testPrompt = "This is a connection test from LeForge. Reply with the single word OK."
+
+const toolTestPrompt = "This is a tool-calling test from LeForge. Call the connection_check tool with word set to OK. Do not answer in text."
+
+var toolTestSchema = llm.ToolSchema{
+	Name:        "connection_check",
+	Description: "Confirms that tool calling works. Call it with word=OK.",
+	Parameters:  []byte(`{"type":"object","properties":{"word":{"type":"string"}},"required":["word"]}`),
+}
 
 // Test checks a saved provider (static or managed) through the shared
 // registry.
@@ -120,7 +141,7 @@ func (m *Manager) TestDraft(ctx context.Context, in ProviderInput, actor string)
 	}
 	cfg := llm.ProviderConfig{
 		Name: in.Name, Type: in.Type, BaseURL: in.BaseURL, DefaultModel: in.DefaultModel,
-		TimeoutSec: in.TimeoutSec, MaxRetries: in.MaxRetries, Concurrency: in.Concurrency, APIKeyValue: key,
+		TimeoutSec: in.TimeoutSec, MaxRetries: in.MaxRetries, Concurrency: in.Concurrency, ContextWindow: in.ContextWindow, APIKeyValue: key,
 	}
 	reg, err := llm.NewRegistry([]llm.ProviderConfig{cfg}, cfg.Name)
 	if err != nil {
@@ -200,6 +221,25 @@ func (m *Manager) run(ctx context.Context, reg *llm.Registry, name, defModel str
 			}
 		}
 	}
+	if res.Inference.OK {
+		res.Tools.Checked = true
+		resp, err := reg.Chat(ctx, name, &llm.ChatRequest{
+			Model:     res.Model,
+			Messages:  []llm.ChatMessage{{Role: llm.RoleUser, Content: toolTestPrompt}},
+			Tools:     []llm.ToolSchema{toolTestSchema},
+			MaxTokens: 256,
+			Metadata:  map[string]string{"purpose": "provider-test"},
+		})
+		switch {
+		case err != nil:
+			res.Tools.Error = clean(err)
+		case len(resp.Message.ToolCalls) > 0 && resp.Message.ToolCalls[0].Name == toolTestSchema.Name:
+			res.Tools.OK = true
+		default:
+			res.Tools.Reply = truncate(secrets.Redact(resp.Message.Content, redact...), 200)
+			res.Tools.Error = "the model answered in text instead of calling the tool; agents need a model with tool calling"
+		}
+	}
 	res.OK = res.Inference.OK
 	res.DurationMS = time.Since(start).Milliseconds()
 	return res
@@ -211,6 +251,9 @@ func (m *Manager) tested(ctx context.Context, res *TestResult, actor string) {
 	}
 	if res.Inference.Error != "" {
 		data["error"] = res.Inference.Error
+	}
+	if res.Tools.Checked {
+		data["toolCalling"] = res.Tools.OK
 	}
 	level := "info"
 	if !res.OK {

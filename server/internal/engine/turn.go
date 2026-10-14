@@ -332,7 +332,7 @@ func (r *replica) buildInput(ctx context.Context, gr *graphRun, n *domain.Node, 
 		Iteration: x.Iteration, Agent: n.Runtime.Agent,
 		Prompt: graph.Substitute(n.Prompt, gr.params), Inputs: inputs,
 		Model: n.Model, PendingStop: pendingStop, Workdir: workdir, Branch: branch,
-		Parameters: gr.params, Config: n.Config,
+		Parameters: gr.params, Config: n.Config, MaxToolCalls: n.Limits.MaxToolCalls,
 	}
 	if in.Inputs == nil {
 		in.Inputs = []*domain.Message{}

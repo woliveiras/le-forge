@@ -73,7 +73,7 @@ file), so a single variable enables a backend:
 
 | Trigger | Provider name / type | Base URL | Model (env, default) |
 |---|---|---|---|
-| `OLLAMA_BASE_URL` | `ollama` / `ollama` | the variable | `OLLAMA_MODEL`, `llama3.2` |
+| `OLLAMA_BASE_URL` | `ollama` / `ollama` | the variable | `OLLAMA_MODEL`, `llama3.2`; `OLLAMA_CONTEXT_WINDOW` sets its context window (default 32768) |
 | `OPENAI_API_KEY` | `openai` / `openai` | `OPENAI_BASE_URL`, `https://api.openai.com/v1` | `OPENAI_MODEL`, `gpt-4o-mini` |
 | `ANTHROPIC_API_KEY` | `anthropic` / `anthropic` | `ANTHROPIC_BASE_URL`, `https://api.anthropic.com` | `ANTHROPIC_MODEL`, `claude-sonnet-5-5` |
 | `OPENROUTER_API_KEY` | `openrouter` / `openrouter` | `https://openrouter.ai/api/v1` | `OPENROUTER_MODEL`, `meta-llama/llama-3.3-70b-instruct` |
@@ -101,7 +101,12 @@ Fields: `name`, `type` (`openai`, `vllm`, `lmstudio`, `anthropic`, `ollama`,
 `openrouter`, `huggingface`/`tgi`, `mock`), `baseUrl`, `apiKeyEnv` /
 `apiKeyFile`, `defaultModel`, `headers`, `timeoutSec` (default 300),
 `maxRetries` (default 3; 429/408/5xx/network errors with backoff and
-`Retry-After`), `concurrency` (per-provider in-flight cap, 0 = unlimited).
+`Retry-After`), `concurrency` (per-provider in-flight cap, 0 = unlimited),
+`contextWindow` (tokens per request, prompt plus answer; Ollama receives it as
+`num_ctx` and defaults to 32768 instead of Ollama's own 4096). Prompts that do
+not fit fail the turn with "prompt exceeds the model context window" instead
+of being truncated, which would silently drop the task from the
+conversation.
 
 Nodes select models with `model: {provider, name, temperature, maxTokens}`;
 an empty provider means `llm.default`, an empty name the provider's

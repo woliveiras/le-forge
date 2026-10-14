@@ -293,16 +293,21 @@ func applyEnv(c *Config) {
 	}
 	// Convenience provider definitions from well-known env vars, so a single
 	// variable enables a backend without editing config.
-	addProv := func(name, typ, baseURL, keyEnv, model string) {
+	addProv := func(name, typ, baseURL, keyEnv, model string) *llm.ProviderConfig {
 		for _, p := range c.LLM.Providers {
 			if p.Name == name {
-				return
+				return nil
 			}
 		}
 		c.LLM.Providers = append(c.LLM.Providers, llm.ProviderConfig{Name: name, Type: typ, BaseURL: baseURL, APIKeyEnv: keyEnv, DefaultModel: model})
+		return &c.LLM.Providers[len(c.LLM.Providers)-1]
 	}
 	if u := os.Getenv("OLLAMA_BASE_URL"); u != "" {
-		addProv("ollama", "ollama", u, "", envOr("OLLAMA_MODEL", "llama3.2"))
+		if p := addProv("ollama", "ollama", u, "", envOr("OLLAMA_MODEL", "llama3.2")); p != nil {
+			if v, err := strconv.Atoi(os.Getenv("OLLAMA_CONTEXT_WINDOW")); err == nil && v > 0 {
+				p.ContextWindow = v
+			}
+		}
 	}
 	if os.Getenv("OPENAI_API_KEY") != "" {
 		addProv("openai", "openai", envOr("OPENAI_BASE_URL", "https://api.openai.com/v1"), "OPENAI_API_KEY", envOr("OPENAI_MODEL", "gpt-4o-mini"))

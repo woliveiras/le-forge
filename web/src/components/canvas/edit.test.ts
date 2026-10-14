@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Graph } from '../../api/types';
+import { effectiveLoopMode } from './model';
 import {
   addAgent,
   applyRemoval,
@@ -150,5 +151,16 @@ describe('validation issues', () => {
     expect(fieldIssues(issues, 'loop').map((i) => i.message)).toEqual(['a', 'b']);
     expect(fieldIssues(issues, 'tools').map((i) => i.message)).toEqual(['d']);
     expect(fieldIssues(undefined, 'loop')).toEqual([]);
+  });
+});
+
+describe('effective loop mode', () => {
+  it('applies the node, the graph default, then inputs like the server', () => {
+    const g = graph();
+    expect(effectiveLoopMode(g, g.spec.nodes[0])).toBe('event'); // fed by "in" and "back"
+    expect(effectiveLoopMode(g, { id: 'lonely' })).toBe('once');
+    expect(effectiveLoopMode(g, { id: 'x', loop: { mode: 'scheduled' } })).toBe('scheduled');
+    const withDefault = { ...g, spec: { ...g.spec, defaults: { loop: { mode: 'continuous' as const } } } };
+    expect(effectiveLoopMode(withDefault, { id: 'lonely' })).toBe('continuous');
   });
 });

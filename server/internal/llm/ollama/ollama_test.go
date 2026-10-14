@@ -3,8 +3,11 @@ package ollama
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -77,5 +80,51 @@ func TestModels(t *testing.T) {
 	ms, err := p.Models(context.Background())
 	if err != nil || len(ms) != 1 || ms[0].ID != "llama3:8b" {
 		t.Fatalf("%v %v", ms, err)
+	}
+}
+
+func TestContextWindow(t *testing.T) {
+	var got map[string]any
+	var calls atomic.Int32
+	evalCount := 100
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		got = nil
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"message":{"role":"assistant","content":"ok"},"done_reason":"stop","prompt_eval_count":` +
+			strconv.Itoa(evalCount) + `}`))
+	}))
+	defer srv.Close()
+	ask := func(p *Provider, content string) error {
+		_, err := p.Chat(context.Background(), &llm.ChatRequest{Model: "m", Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: content}}})
+		return err
+	}
+
+	// Default: a window large enough for agents, always sent explicitly.
+	def, _ := New(llm.ProviderConfig{Name: "ol", BaseURL: srv.URL})
+	if err := ask(def, "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if got["options"].(map[string]any)["num_ctx"].(float64) != DefaultContextWindow {
+		t.Fatalf("default num_ctx: %v", got["options"])
+	}
+
+	// Configured window.
+	small, _ := New(llm.ProviderConfig{Name: "ol", BaseURL: srv.URL, ContextWindow: 2048})
+	if err := ask(small, "hi"); err != nil || got["options"].(map[string]any)["num_ctx"].(float64) != 2048 {
+		t.Fatalf("configured num_ctx: %v %v", err, got["options"])
+	}
+
+	// A prompt that cannot fit is refused before it is sent.
+	before := calls.Load()
+	err := ask(small, strings.Repeat("x", 4*2048))
+	if !errors.Is(err, llm.ErrContextExceeded) || !strings.Contains(err.Error(), "context window of 2048") || calls.Load() != before {
+		t.Fatalf("oversized prompt: %v (requests %d→%d)", err, before, calls.Load())
+	}
+
+	// A prompt Ollama reports as filling the window was truncated.
+	evalCount = 2048
+	if err := ask(small, "short"); !errors.Is(err, llm.ErrContextExceeded) || !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("truncated prompt: %v", err)
 	}
 }

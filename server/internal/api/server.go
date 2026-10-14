@@ -429,9 +429,14 @@ func (s *Server) createGraph(w http.ResponseWriter, r *http.Request) error {
 	if len(unknown) > 0 {
 		return unknownFieldsError(unknown)
 	}
-	s.Engine.Validate(g) // normalise to derive the id
-	if _, err := s.Store.GetGraph(r.Context(), g.Metadata.ID, 0); err == nil {
-		return fmt.Errorf("%w: graph %q already exists (use PUT to update)", engine.ErrConflict, g.Metadata.ID)
+	// Derive the id the way normalisation does, without touching the
+	// document (it is stored as written).
+	id := g.Metadata.ID
+	if id == "" {
+		id = graph.Slug(g.Metadata.Name)
+	}
+	if _, err := s.Store.GetGraph(r.Context(), id, 0); err == nil {
+		return fmt.Errorf("%w: graph %q already exists (use PUT to update)", engine.ErrConflict, id)
 	}
 	g, rec, err := s.Engine.SaveGraph(r.Context(), g, 0, identityFrom(r.Context()).Name)
 	if err != nil {
@@ -457,7 +462,8 @@ func (s *Server) validateGraph(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) getGraph(w http.ResponseWriter, r *http.Request) error {
 	v, _ := strconv.Atoi(r.URL.Query().Get("version"))
-	g, rec, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), v)
+	// The document as written: editors must not save defaults back into nodes.
+	g, rec, err := s.Engine.GetGraphDocument(r.Context(), r.PathValue("id"), v)
 	if err != nil {
 		return err
 	}
@@ -530,7 +536,7 @@ func (s *Server) graphVersions(w http.ResponseWriter, r *http.Request) error {
 
 func (s *Server) exportGraph(w http.ResponseWriter, r *http.Request) error {
 	v, _ := strconv.Atoi(r.URL.Query().Get("version"))
-	g, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), v)
+	g, _, err := s.Engine.GetGraphDocument(r.Context(), r.PathValue("id"), v)
 	if err != nil {
 		return err
 	}

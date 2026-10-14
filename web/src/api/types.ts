@@ -399,6 +399,8 @@ export interface ProviderTestResult {
     durationMs?: number;
     error?: string;
   };
+  /** Whether the model calls tools in the structured form agents need (advisory). */
+  tools?: { checked: boolean; ok: boolean; reply?: string; error?: string };
 }
 
 export interface ProviderInfo {
@@ -410,6 +412,8 @@ export interface ProviderInfo {
   timeoutSec?: number;
   maxRetries?: number;
   concurrency?: number;
+  /** Context size in tokens requested from the backend (Ollama num_ctx); 0/absent = the type's default. */
+  contextWindow?: number;
   /** config: defined in the server configuration (read-only here); managed: created in the console. */
   source?: 'config' | 'managed';
   editable?: boolean;
@@ -447,6 +451,7 @@ export interface ProviderInput {
   timeoutSec?: number;
   maxRetries?: number;
   concurrency?: number;
+  contextWindow?: number;
   apiKey?: CredentialUpdate;
 }
 

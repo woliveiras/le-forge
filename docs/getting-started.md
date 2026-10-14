@@ -102,6 +102,36 @@ listen-address notes), and the bundled Ollama service is `http://ollama:11434`.
 The sections below configure providers through environment variables
 instead; those appear in the console as read-only *server configuration*.
 
+### What a model needs to run agents
+
+Agents with tools (shell, git, files) need two things from a model. **Test
+connection** in **Integrations** checks both:
+
+1. **Tool calling.** The model must return tool calls in the provider's
+   structured format. Some models only write the call as JSON text (for
+   example code-tuned Qwen 2.5 variants on Ollama). The test then says
+   *"Inference works, but not tool calling"*. LeForge runs a call written as
+   text when it names an offered tool, but such models are unreliable for long
+   tasks; prefer models whose test passes.
+2. **A large enough context window.** A turn sends the whole conversation
+   (task, tool results, file contents) on every model call. LeForge asks
+   Ollama for 32768 tokens (`num_ctx`) by default — Ollama's own default is
+   4096 and it silently drops the beginning of longer conversations, task
+   included. Change it per provider (**Context window** under *Limits*, or
+   `OLLAMA_CONTEXT_WINDOW` for the provider from `OLLAMA_BASE_URL`). Larger
+   windows need more memory on the machine running the model.
+
+When something goes wrong, the agent's turn fails with the reason, visible in
+**Events** (`execution.failed`) and the agent's **Recent turns**:
+
+| Turn error | Meaning | What to do |
+|---|---|---|
+| `prompt exceeds the model context window` | The conversation no longer fits the provider's context window | Raise the provider's context window, or give the agent a smaller task |
+| `the model wrote a tool call as text instead of calling the tool` | The model answered with JSON that is not a usable call | Use a model whose connection test passes tool calling |
+| `the model ended the turn without an answer or a tool call` | Empty answer, nothing done | Check the model and the prompt; this often follows a truncated context |
+| `the model's answer was cut off by its output limit` | The answer hit the output token limit | Use a model or provider with a larger output limit |
+| `the turn used every model round without finishing` | The agent kept calling tools until its budget ran out | Raise **Max tool calls** in the agent's *Limits per turn*, or split the task |
+
 ### Ollama (local, offline after the first pull)
 
 ```bash
@@ -164,6 +194,11 @@ services:
 Instead of the environment variable, you can also add the host Ollama as a
 provider in **Integrations** with the same URL; it is then editable and
 testable from the console.
+
+LeForge sends the context window (`num_ctx`, default 32768) with every
+request, so `OLLAMA_CONTEXT_LENGTH` on the Ollama side is not needed; set
+`OLLAMA_CONTEXT_WINDOW` in `.env` (and `docker compose up -d forged`) to change
+it for this provider.
 
 Check the connection with **Test connection** on the `ollama` provider in
 **Integrations**: it sends a real prompt, so success means agents can use the

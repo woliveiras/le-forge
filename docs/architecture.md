@@ -262,7 +262,7 @@ type TurnEnv interface { // the only doors out of an agent
 
 | Kind | Implementation | Notes |
 |---|---|---|
-| `native` | `runtime/native`: tool-calling loop (≤40 model rounds). Adds the platform tools `emit`, `state_get`, `state_set` and `finish` to the granted tools. Parses text sentinels for models without tool calling. | No framework and no extra process. |
+| `native` | `runtime/native`: tool-calling loop (at least 40 model rounds, raised to the node's `limits.maxToolCalls` + 1). Adds the platform tools `emit`, `state_get`, `state_set` and `finish` to the granted tools. Parses text sentinels for models without tool calling, and runs a tool call written as a JSON answer when it names an offered tool. A turn **fails** instead of succeeding without work: empty answer without any tool call, answer cut off by the output limit, a tool call written as text that cannot run, or no model rounds left. | No framework and no extra process. Errors name the cause so operators can change the model or the limits. |
 | `external` | `runtime/external`: `POST {endpoint}/v1/turn` (Runtime Protocol v1). The endpoint is either preconfigured (compose service, Kubernetes Service), a child process (`command`, process isolation), or a container (`image`, docker isolation). Launched runtimes are shared per node and reference-counted. | The agent reaches the platform only through `callback.url` with a token scoped to one execution. |
 | `echo` | `runtime/echo`: forwards inputs to outputs; a source node emits `tick`. | Zero-cost topology testing. Config keys: `type`, `fail`, `stopAfter`. |
 

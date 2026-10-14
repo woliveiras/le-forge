@@ -103,9 +103,12 @@ environment:
      && rm -rf /var/lib/apt/lists/*
   setup:
     - go mod download
+    # Keep pnpm's store in its cache, not inside the repository.
+    - pnpm config set store-dir /home/sandbox/.local/share/pnpm/store
     - pnpm -C web install --frozen-lockfile
   caches:
     - /home/sandbox/go/pkg/mod
+    - /home/sandbox/.cache/go-build
     - /home/sandbox/.local/share/pnpm
   network: {setup: bridge, run: bridge}
 ```
@@ -121,7 +124,9 @@ environment:
 
 `pnpm install` and `npm install` write `node_modules` into the workspace (it is
 mounted during setup), so agents see them; Go and pip downloads land in the
-home directory and are kept in the image and the caches.
+home directory and are kept in the image and the caches. Without the
+`store-dir` line pnpm puts its store in a `.pnpm-store/` folder at the root of
+the workspace (the repository), where an agent could commit it.
 
 ## How a build works
 

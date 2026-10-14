@@ -15,6 +15,7 @@ import { matches, useEventStream } from '../hooks/useEventStream';
 import { Badge, Btn, Empty, ErrorBox, Icon, StateDot, fmtTime, since, stateLabel } from './common';
 import { describeEvent, eventTone } from './describe';
 import type { ElementIssue } from './canvas/edit';
+import { effectiveLoopMode } from './canvas/model';
 import { ElementIssues, FieldIssues } from './GraphIssues';
 import { ModelFields } from './ModelFields';
 
@@ -589,7 +590,7 @@ function NodeSettings({
         </dd>
         <dt>loop</dt>
         <dd>
-          {loop.mode ?? 'continuous'}
+          {effectiveLoopMode(summary.graph, node)}
           {loop.schedule ? ` · ${loop.schedule}` : ''}
           {loop.interval ? ` · every ${loop.interval}` : ''}
           {loop.stop?.policy ? ` · stop: ${loop.stop.policy}` : ''}
@@ -824,7 +825,7 @@ function AgentEditor({
         <label>
           Loop mode
           <select
-            value={loop.mode ?? 'continuous'}
+            value={effectiveLoopMode(summary.graph, node)}
             onChange={(event) => setLoop({ mode: event.target.value as NonNullable<GraphNode['loop']>['mode'] })}
           >
             {(['once', 'continuous', 'scheduled', 'event'] as const).map((mode) => (

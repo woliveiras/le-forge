@@ -58,6 +58,7 @@ Request body: `TurnInput`. Response: `200` with `TurnResult`. Dispatch on `TurnI
 | `neighbors` | `{replica,text,at}[]` | Ring clusters: latest broadcast of the two neighbours |
 | `outputs` | `{channel,type,targets,types?,when?}[]` | Where emits can go |
 | `tools` | `{name,description,parameters}[]` | Tools you are granted (JSON Schema parameters) |
+| `maxToolCalls` | int, optional | The node's tool-call budget for this turn (`limits.maxToolCalls`); the gateway enforces it, use it to size your own loop |
 | `model` | `{provider,name,temperature?,maxTokens?}` | The node's model reference |
 | `pendingStop` | bool | Last turn declared `no_further_work`: find work or return `confirm_stop` |
 | `workdir`, `branch` | string | The replica's workspace (as the *platform's* tools see it) and git branch |

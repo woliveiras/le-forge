@@ -58,6 +58,7 @@ type managedProvider struct {
 	TimeoutSec          int        `json:"timeoutSec,omitempty"`
 	MaxRetries          int        `json:"maxRetries,omitempty"`
 	Concurrency         int        `json:"concurrency,omitempty"`
+	ContextWindow       int        `json:"contextWindow,omitempty"`
 	APIKey              string     `json:"apiKey,omitempty"`
 	CredentialUpdatedAt *time.Time `json:"credentialUpdatedAt,omitempty"`
 	CreatedAt           time.Time  `json:"createdAt"`
@@ -95,14 +96,16 @@ type CredentialUpdate struct {
 
 // ProviderInput creates or updates a managed provider.
 type ProviderInput struct {
-	Name         string            `json:"name"`
-	Type         string            `json:"type"`
-	BaseURL      string            `json:"baseUrl,omitempty"`
-	DefaultModel string            `json:"defaultModel,omitempty"`
-	TimeoutSec   int               `json:"timeoutSec,omitempty"`
-	MaxRetries   int               `json:"maxRetries,omitempty"`
-	Concurrency  int               `json:"concurrency,omitempty"`
-	APIKey       *CredentialUpdate `json:"apiKey,omitempty"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"baseUrl,omitempty"`
+	DefaultModel string `json:"defaultModel,omitempty"`
+	TimeoutSec   int    `json:"timeoutSec,omitempty"`
+	MaxRetries   int    `json:"maxRetries,omitempty"`
+	Concurrency  int    `json:"concurrency,omitempty"`
+	// ContextWindow in tokens (0 = the type's default; Ollama: 32768).
+	ContextWindow int               `json:"contextWindow,omitempty"`
+	APIKey        *CredentialUpdate `json:"apiKey,omitempty"`
 }
 
 // CredentialState describes a credential without revealing it.
@@ -120,17 +123,18 @@ type CredentialState struct {
 // ProviderView is the public description of a provider. It extends
 // llm.ProviderInfo (same field names) and never contains a secret.
 type ProviderView struct {
-	Name         string          `json:"name"`
-	Type         string          `json:"type"`
-	BaseURL      string          `json:"baseUrl,omitempty"`
-	DefaultModel string          `json:"defaultModel,omitempty"`
-	Default      bool            `json:"default"`
-	TimeoutSec   int             `json:"timeoutSec,omitempty"`
-	MaxRetries   int             `json:"maxRetries,omitempty"`
-	Concurrency  int             `json:"concurrency,omitempty"`
-	Source       Source          `json:"source"`
-	Editable     bool            `json:"editable"`
-	Credential   CredentialState `json:"credential"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"`
+	BaseURL       string          `json:"baseUrl,omitempty"`
+	DefaultModel  string          `json:"defaultModel,omitempty"`
+	Default       bool            `json:"default"`
+	TimeoutSec    int             `json:"timeoutSec,omitempty"`
+	MaxRetries    int             `json:"maxRetries,omitempty"`
+	Concurrency   int             `json:"concurrency,omitempty"`
+	ContextWindow int             `json:"contextWindow,omitempty"`
+	Source        Source          `json:"source"`
+	Editable      bool            `json:"editable"`
+	Credential    CredentialState `json:"credential"`
 	// Status: ready | unavailable (Error says why).
 	Status    string      `json:"status"`
 	Error     string      `json:"error,omitempty"`
@@ -200,7 +204,7 @@ type Options struct {
 	// InUse lists where a provider is referenced explicitly (graph/node),
 	// so deleting it can be refused. Optional.
 	InUse func(ctx context.Context, provider string) ([]string, error)
-	// TestTimeout bounds a connection test (default 60s).
+	// TestTimeout bounds a connection test (default 180s: two requests, and local models may need to load first).
 	TestTimeout time.Duration
 }
 
@@ -223,7 +227,7 @@ func New(opt Options) (*Manager, error) {
 		opt.Log = slog.Default()
 	}
 	if opt.TestTimeout <= 0 {
-		opt.TestTimeout = 60 * time.Second
+		opt.TestTimeout = 180 * time.Second
 	}
 	return &Manager{opt: opt, tests: map[string]*TestResult{}}, nil
 }
@@ -333,7 +337,7 @@ func (m *Manager) Refresh(ctx context.Context) error {
 func (m *Manager) build(p managedProvider) (llm.ProviderConfig, llm.Provider) {
 	cfg := llm.ProviderConfig{
 		Name: p.Name, Type: p.Type, BaseURL: p.BaseURL, DefaultModel: p.DefaultModel,
-		TimeoutSec: p.TimeoutSec, MaxRetries: p.MaxRetries, Concurrency: p.Concurrency,
+		TimeoutSec: p.TimeoutSec, MaxRetries: p.MaxRetries, Concurrency: p.Concurrency, ContextWindow: p.ContextWindow,
 	}
 	if p.APIKey != "" {
 		key, err := m.opt.Box.Open(p.APIKey, credentialAAD(p.Name))
@@ -439,7 +443,7 @@ func (m *Manager) List() []ProviderView {
 		}
 		if mp, ok := managed[info.Name]; ok {
 			v.Source, v.Editable = SourceManaged, true
-			v.TimeoutSec, v.MaxRetries, v.Concurrency = mp.TimeoutSec, mp.MaxRetries, mp.Concurrency
+			v.TimeoutSec, v.MaxRetries, v.Concurrency, v.ContextWindow = mp.TimeoutSec, mp.MaxRetries, mp.Concurrency, mp.ContextWindow
 			created, updated := mp.CreatedAt, mp.UpdatedAt
 			v.CreatedAt, v.UpdatedAt, v.UpdatedBy = &created, &updated, mp.UpdatedBy
 			v.Credential = CredentialState{Source: "none"}
@@ -452,7 +456,7 @@ func (m *Manager) List() []ProviderView {
 		} else {
 			c := static[info.Name]
 			v.Source = SourceConfig
-			v.TimeoutSec, v.MaxRetries, v.Concurrency = c.TimeoutSec, c.MaxRetries, c.Concurrency
+			v.TimeoutSec, v.MaxRetries, v.Concurrency, v.ContextWindow = c.TimeoutSec, c.MaxRetries, c.Concurrency, c.ContextWindow
 			v.Credential = staticCredential(c)
 		}
 		out = append(out, v)
@@ -602,6 +606,9 @@ func (m *Manager) validate(in *ProviderInput, d *document, existing *managedProv
 	if in.Concurrency < 0 || in.Concurrency > 1000 {
 		add("concurrency", "must be between 0 (unlimited) and 1000")
 	}
+	if in.ContextWindow != 0 && (in.ContextWindow < 1024 || in.ContextWindow > 1<<20) {
+		add("contextWindow", "must be 0 (default) or between 1024 and 1048576 tokens")
+	}
 	if c := in.APIKey; c != nil {
 		switch {
 		case c.Clear && c.Value != "":
@@ -664,7 +671,7 @@ func checkBuild(in *ProviderInput, key string) *ValidationError {
 
 func (m *Manager) applyInput(p *managedProvider, in *ProviderInput, key string, actor string, now time.Time) error {
 	p.Type, p.BaseURL, p.DefaultModel = in.Type, in.BaseURL, in.DefaultModel
-	p.TimeoutSec, p.MaxRetries, p.Concurrency = in.TimeoutSec, in.MaxRetries, in.Concurrency
+	p.TimeoutSec, p.MaxRetries, p.Concurrency, p.ContextWindow = in.TimeoutSec, in.MaxRetries, in.Concurrency, in.ContextWindow
 	p.UpdatedAt, p.UpdatedBy = now, actor
 	if in.APIKey == nil {
 		return nil

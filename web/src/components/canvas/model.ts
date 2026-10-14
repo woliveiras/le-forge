@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import type { Edge, Node } from '@xyflow/react';
-import type { Channel, ChannelStatus, ChannelType, Graph, GraphNode, GraphStatus, NodeStatus } from '../../api/types';
+import type { Channel, ChannelStatus, ChannelType, Graph, GraphNode, GraphStatus, LoopMode, NodeStatus } from '../../api/types';
 import type { ElementIssue, IssueIndex } from './edit';
 
 export const NODE_W = 240;
@@ -8,6 +8,8 @@ export const NODE_H = 118;
 
 export interface AgentNodeData extends Record<string, unknown> {
   node: GraphNode;
+  /** The loop mode the node runs with, defaults applied. */
+  loopMode?: LoopMode;
   status?: NodeStatus;
   issues?: ElementIssue[];
 }
@@ -61,6 +63,17 @@ export function consumers(g: Graph, c: Channel): string[] {
   return out;
 }
 
+/**
+ * The loop mode a node runs with: its own, the graph default, or (like
+ * graph.Normalize on the server) event when something feeds it, else once.
+ * Graph documents are stored as written, so the node often leaves it unset.
+ */
+export function effectiveLoopMode(g: Graph, n: GraphNode): LoopMode {
+  if (n.loop?.mode) return n.loop.mode;
+  if (g.spec.defaults?.loop?.mode) return g.spec.defaults.loop.mode;
+  return (g.spec.channels ?? []).some((c) => consumers(g, c).includes(n.id)) ? 'event' : 'once';
+}
+
 export function nodeCount(n: GraphNode): { desired: number; label: string } {
   const c = n.cluster;
   if (!c || (!c.replicas && !c.maxReplicas && c.mode !== 'autoscale')) return { desired: 1, label: '' };
@@ -90,6 +103,7 @@ export function buildElements(g: Graph, status?: GraphStatus, issues?: IssueInde
     position: n.position ?? { x: 0, y: 0 },
     data: {
       node: n,
+      loopMode: effectiveLoopMode(g, n),
       status: status?.nodes?.find((s) => s.nodeId === n.id),
       issues: issues?.nodes.get(n.id),
     } satisfies AgentNodeData,

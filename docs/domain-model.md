@@ -82,6 +82,11 @@ classDiagram
 | `ToolGrant` | `name` (capability, tool or glob), constraints | Name required. `*` produces a warning. YAML accepts a bare string. |
 | `Channel` | `id`, `type` (`queue`, `topic`, `fanout`, `broadcast`), `from` (empty = ingress), `to`, `topic`, `types`, `when`, `approval` | Id matches `[a-z0-9][a-z0-9_-]{0,62}`. Node references must exist. `when` must compile. A channel without consumers produces a warning. |
 
+Documents are stored as written: `graph.Normalize` fills the defaults below
+when a graph is validated or run, but the stored document keeps only what the
+author set (plus ids derived from names), so `spec.defaults` stays the single
+place to change them.
+
 Documents are strict: decoding at the API boundary (and for bootstrap graph
 files) rejects keys the schema does not define, with the key's path, instead of
 dropping them. Keys starting with `x-` on `Graph`, `metadata`, `Node` and

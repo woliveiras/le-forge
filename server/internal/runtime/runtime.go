@@ -63,6 +63,10 @@ type TurnInput struct {
 	Outputs []OutputInfo `json:"outputs"`
 	// Tools are the tools this node is granted (schemas, for the model).
 	Tools []llm.ToolSchema `json:"tools"`
+	// MaxToolCalls is the node's tool-call budget for this turn
+	// (limits.maxToolCalls); the gateway enforces it, and runtimes may use it
+	// to size their own loops.
+	MaxToolCalls int `json:"maxToolCalls,omitempty"`
 	// Model is the resolved model reference.
 	Model domain.ModelRef `json:"model"`
 	// PendingStop is true when the previous turn declared no further work;

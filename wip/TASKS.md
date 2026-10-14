@@ -48,6 +48,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 - [x] Detect version conflicts, preserve local changes, and provide an explicit recovery path.
 - [x] Preserve drag, zoom, pan, selection, and element positions during real-time state updates.
 - [x] Keep the YAML editor as an advanced alternative, synchronized with the same model and version control.
+- [x] Store graph documents as written: `spec.defaults` are applied when graphs are validated and run, not copied into nodes, so changing a default reaches nodes without their own value (found while running the bookaneer test: changing the default model had no effect). The editor shows effective values (e.g. loop mode) where nodes leave them unset.
 - [x] Edit graph-wide settings in the visual editor (name, description, workspace repository, parameters, max hops) and per-turn agent limits (turn timeout, max tool calls, token budget). Repository URLs must be remote; local paths and non-network transports are rejected on save and before cloning.
 - [ ] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts. — Covered by component tests against the real API client (`GraphWorkspace.test.tsx`: create, edit, validate/revalidate, save, server 422, discard, conflict overwrite/reload, removal confirmation, YAML sync) and unit tests for the edit operations (`edit.test.ts`, including connect and keyboard removal). Keyboard removal was also checked manually in the browser (mock mode). Pending: browser E2E for drag-to-connect and Delete-key gestures.
 
@@ -151,7 +152,9 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Indicate when a credential is configured without revealing its value.
 - [x] Add a connection-test action and show actionable success/error states.
 - [x] Offer default provider/model selection and per-agent configuration in the visual editor.
-- [x] Validate configuration before starting an execution and explain missing or invalid settings. (Warning on save; `422` with the field path when starting a graph/node.)
+- [x] Validate configuration before starting an execution and explain missing or invalid settings.
+- [x] Check tool calling in the provider connection test, and send/configure the context window (Ollama `num_ctx`, default 32768 instead of Ollama's silent 4096 truncation); prompts that do not fit fail with a clear error. (Found running the bookaneer test with local models.)
+- [x] Make native agent turns fail with the cause instead of succeeding without work: tool calls written as text (recovered when they name an offered tool), empty or cut-off answers, and running out of model rounds (rounds now follow `limits.maxToolCalls`). (Warning on save; `422` with the field path when starting a graph/node.)
 - [ ] Verify and document the full path from the LangGraph runtime to the selected provider. — Verified at the protocol level (fake external runtime → `llm/chat` callback → managed provider, with no key in `TurnInput`). Pending: execution with the Python SDK's real LangGraph adapter and documentation of that path.
 - [x] Add tests for encrypted persistence, secret update/removal, connection testing, and per-agent selection.
 - [ ] Add an end-to-end test from interface configuration to an execution that uses the selected provider. — Covered by an API integration test (configure → test → select on node → execute), component interaction tests, and a clean-install HTTP smoke test. Pending: browser-driven test (the project has no browser E2E tooling).

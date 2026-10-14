@@ -26,6 +26,10 @@ type Server struct {
 	Delay time.Duration
 	// FailChat makes chat completions answer HTTP 500.
 	FailChat atomic.Bool
+	// ToolCalls makes requests that offer tools answer with a structured
+	// call to the first tool (arguments {"word":"OK"}); otherwise the model
+	// answers in text, like one without tool calling.
+	ToolCalls atomic.Bool
 
 	mu       sync.Mutex
 	chats    int
@@ -108,6 +112,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		model, _ := body["model"].(string)
+		if tools, _ := body["tools"].([]any); s.ToolCalls.Load() && len(tools) > 0 {
+			fn, _ := tools[0].(map[string]any)["function"].(map[string]any)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"model": model,
+				"choices": []map[string]any{{
+					"message": map[string]any{"role": "assistant", "content": "", "tool_calls": []map[string]any{{
+						"id": "call_1", "type": "function",
+						"function": map[string]any{"name": fn["name"], "arguments": `{"word":"OK"}`},
+					}}},
+					"finish_reason": "tool_calls",
+				}},
+				"usage": map[string]any{"prompt_tokens": 20, "completion_tokens": 5},
+			})
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"model": model,
 			"choices": []map[string]any{{

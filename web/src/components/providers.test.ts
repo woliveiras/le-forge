@@ -30,6 +30,13 @@ describe('provider form helpers', () => {
     expect(inputFromDraft({ ...d, name: '' }, 'create').name).toBeUndefined();
   });
 
+  it('round-trips the context window', () => {
+    const d = draftFrom({ name: 'ol', type: 'ollama', contextWindow: 65536 }, types);
+    expect(d.contextWindow).toBe('65536');
+    expect(inputFromDraft({ ...d, contextWindow: '' }, 'edit').contextWindow).toBeUndefined();
+    expect(localErrors(inputFromDraft({ ...d, contextWindow: 'lots' }, 'edit'), 'edit').contextWindow).toBe('Enter a whole number.');
+  });
+
   it('catches obvious mistakes before a request', () => {
     const errs = localErrors(inputFromDraft({ ...draftFrom(undefined, types), timeoutSec: 'soon', baseUrl: 'ftp://x' }, 'create'), 'create');
     expect(Object.keys(errs).sort()).toEqual(['baseUrl', 'name', 'timeoutSec']);
@@ -65,6 +72,19 @@ describe('describeTest', () => {
 
   it('warns when the default model is not listed', () => {
     expect(describeTest({ ...base, models: { ok: true, count: 3, defaultModelListed: false } }).tone).toBe('warn');
+  });
+
+  it('reports tool calling when it was checked', () => {
+    const works = describeTest({ ...base, tools: { checked: true, ok: true } });
+    expect(works).toMatchObject({ tone: 'ok', title: 'Inference works with m' });
+    expect(works.detail).toContain('Tool calling works.');
+    const textOnly = describeTest({
+      ...base,
+      tools: { checked: true, ok: false, reply: '{"name": "connection_check"}', error: 'the model answered in text instead of calling the tool' },
+    });
+    expect(textOnly.tone).toBe('warn');
+    expect(textOnly.title).toBe('Inference works with m, but not tool calling');
+    expect(textOnly.detail).toContain('Agents with tools need another model');
   });
 
   it('never treats a model list as a passing test', () => {

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -104,11 +105,24 @@ func (e *Engine) preflight(ctx context.Context, g *domain.Graph, only string) *g
 // new version is applied live: behaviour changes (prompt, model, tools, loop
 // settings) on the next turn, structural changes (runtime, isolation,
 // workspace) by gracefully restarting the affected replicas.
+//
+// The document is stored as written: defaults are applied when it is read
+// for validation or execution, not copied into every node, so changing
+// spec.defaults later still reaches nodes that do not set their own value.
+// Only identity derived from names (graph, node and channel ids) is kept.
+// The returned graph is the stored document.
 func (e *Engine) SaveGraph(ctx context.Context, g *domain.Graph, expectedVersion int, actor string) (*domain.Graph, *domain.GraphRecord, error) {
-	rep := e.Validate(g)
+	authored, err := cloneGraph(g)
+	if err != nil {
+		return nil, nil, err
+	}
+	rep := e.Validate(g) // normalises g in place
 	if !rep.Valid {
 		return nil, nil, &ValidationError{Report: rep}
 	}
+	keepIdentity(authored, g)
+	effective := g
+	g = authored
 	_, existsErr := e.store.GetGraph(ctx, g.Metadata.ID, 0)
 	isNew := errors.Is(existsErr, storage.ErrNotFound)
 	now := time.Now().UTC()
@@ -136,7 +150,8 @@ func (e *Engine) SaveGraph(ctx context.Context, g *domain.Graph, expectedVersion
 		return nil, nil, err
 	}
 	// Declare topology now, so work injected before the first start is kept.
-	if err := e.declareTopology(ctx, g, e.replicasFor(ctx, g)); err != nil {
+	effective.Metadata.Version = v
+	if err := e.declareTopology(ctx, effective, e.replicasFor(ctx, effective)); err != nil {
 		e.log.Warn("declare topology", "graph", g.Metadata.ID, "err", err)
 	}
 	evt := domain.EvGraphUpdated
@@ -148,7 +163,51 @@ func (e *Engine) SaveGraph(ctx context.Context, g *domain.Graph, expectedVersion
 	return g, rec, nil
 }
 
-// GetGraph returns a version (0 = latest) with its control record.
+// cloneGraph deep-copies a document (extensions included).
+func cloneGraph(g *domain.Graph) (*domain.Graph, error) {
+	b, err := json.Marshal(g)
+	if err != nil {
+		return nil, fmt.Errorf("copy graph: %w", err)
+	}
+	var out domain.Graph
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("copy graph: %w", err)
+	}
+	return &out, nil
+}
+
+// keepIdentity copies what normalisation derives from names and must stay
+// stable across reads: the graph id, kind and apiVersion, node and channel
+// ids. Node and channel order is unchanged by normalisation.
+func keepIdentity(doc, normalized *domain.Graph) {
+	doc.APIVersion, doc.Kind, doc.Metadata.ID = normalized.APIVersion, normalized.Kind, normalized.Metadata.ID
+	if doc.Metadata.Name == "" {
+		doc.Metadata.Name = normalized.Metadata.Name
+	}
+	for i := range doc.Spec.Nodes {
+		doc.Spec.Nodes[i].ID = normalized.Spec.Nodes[i].ID
+	}
+	for i := range doc.Spec.Channels {
+		doc.Spec.Channels[i].ID = normalized.Spec.Channels[i].ID
+	}
+}
+
+// GetGraphDocument returns a version (0 = latest) as stored - defaults not
+// applied - with its control record. Editors use it; execution uses GetGraph.
+func (e *Engine) GetGraphDocument(ctx context.Context, id string, version int) (*domain.Graph, *domain.GraphRecord, error) {
+	g, err := e.store.GetGraph(ctx, id, version)
+	if err != nil {
+		return nil, nil, notFound(err)
+	}
+	rec, err := e.store.GetGraphRecord(ctx, id)
+	if err != nil {
+		return nil, nil, notFound(err)
+	}
+	return g, rec, nil
+}
+
+// GetGraph returns a version (0 = latest) with defaults applied, and its
+// control record.
 func (e *Engine) GetGraph(ctx context.Context, id string, version int) (*domain.Graph, *domain.GraphRecord, error) {
 	g, err := e.store.GetGraph(ctx, id, version)
 	if err != nil {

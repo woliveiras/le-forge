@@ -55,7 +55,7 @@ Persisting an event never fails the operation it describes: write errors are log
 | `agent.broadcast` | ring clusters, end of each turn | `{text, iteration}` |
 | `log` | engine: replica completed (stop policy met / ran once), node actions | `{message, node?}` |
 | `provider.changed` | provider settings: create, update, delete, default (no graph id) | `{action, provider, revision}` (actor = caller) — never credentials |
-| `provider.tested` | provider connection test (no graph id) | `{provider, ok, draft, model, durationMs, error?}`; `level` is `warn` on failure; errors are redacted |
+| `provider.tested` | provider connection test (no graph id) | `{provider, ok, draft, model, durationMs, error?, toolCalling?}`; `level` is `warn` on failure; errors are redacted |
 | `environment.build_started` | `POST …/environment/build` | `{hash, force}` (actor = caller) |
 | `environment.ready` | environment build finished | `{hash, image, durationMs}` |
 | `environment.failed` | environment build failed, timed out or was cancelled | `{hash, durationMs, error}` |

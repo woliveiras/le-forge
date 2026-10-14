@@ -109,6 +109,32 @@ type ProviderConfig struct {
 	MaxRetries   int               `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
 	// Concurrency caps simultaneous requests to this backend (0 = unlimited).
 	Concurrency int `json:"concurrency,omitempty" yaml:"concurrency,omitempty"`
+	// ContextWindow is the context size in tokens the backend should use for
+	// a request (prompt plus answer). Providers that let the client choose it
+	// (Ollama's num_ctx) send it; 0 means the provider's default. Prompts that
+	// do not fit fail with ErrContextExceeded instead of being truncated.
+	ContextWindow int `json:"contextWindow,omitempty" yaml:"contextWindow,omitempty"`
+}
+
+// ErrContextExceeded: a request does not fit the model's context window.
+// Backends that truncate silently (Ollama) would otherwise drop the start of
+// the conversation, including the task.
+var ErrContextExceeded = errors.New("prompt exceeds the model context window")
+
+// EstimateTokens is a deliberately rough count (about 4 bytes per token)
+// used to catch prompts that cannot fit before sending them.
+func EstimateTokens(req *ChatRequest) int {
+	n := len(req.System)
+	for _, m := range req.Messages {
+		n += len(m.Content) + len(m.Name) + 8
+		for _, tc := range m.ToolCalls {
+			n += len(tc.Name) + len(tc.Arguments)
+		}
+	}
+	for _, t := range req.Tools {
+		n += len(t.Name) + len(t.Description) + len(t.Parameters)
+	}
+	return n / 4
 }
 
 // Factory builds a Provider from its config. Register one per type.

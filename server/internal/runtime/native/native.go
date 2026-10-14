@@ -8,7 +8,12 @@
 // grant because they only touch the agent's own turn: emit, state_get,
 // state_set and finish. For models without native tool calling the runtime
 // also honours text sentinels (NO FURTHER WORK:, CONFIRM STOP:, BROADCAST:,
-// and EMIT {...} lines).
+// and EMIT {...} lines), and runs a tool call the model wrote as a JSON
+// answer instead of a structured call when it names an offered tool.
+//
+// A turn fails rather than "succeeding" without work: an empty answer with
+// no tool call, an answer cut off by the output limit, a tool call written as
+// text that cannot be run, and running out of model rounds are errors.
 package native
 
 import (
@@ -26,9 +31,18 @@ import (
 )
 
 type Runtime struct {
-	// MaxRounds bounds model round-trips per turn (default 40).
+	// MaxRounds bounds model round-trips per turn (default 40). A node's
+	// limits.maxToolCalls raises it: every round but the last calls a tool.
 	MaxRounds int
 }
+
+// Turn errors, so operators can tell model problems from platform ones.
+var (
+	ErrEmptyAnswer    = errors.New("the model ended the turn without an answer or a tool call")
+	ErrAnswerCutOff   = errors.New("the model's answer was cut off by its output limit")
+	ErrToolCallAsText = errors.New("the model wrote a tool call as text instead of calling the tool; choose a model with tool calling (Integrations → Test connection)")
+	ErrOutOfRounds    = errors.New("the turn used every model round without finishing")
+)
 
 func New() *Runtime { return &Runtime{MaxRounds: 40} }
 
@@ -76,7 +90,12 @@ func (r *Runtime) Turn(ctx context.Context, in *runtime.TurnInput, env runtime.T
 	if rounds <= 0 {
 		rounds = 40
 	}
-	for round := 0; round < rounds; round++ {
+	if in.MaxToolCalls+1 > rounds {
+		rounds = in.MaxToolCalls + 1
+	}
+	calls := 0
+	finished := false
+	for round := 0; round < rounds && !finished; round++ {
 		resp, err := env.Chat(ctx, &llm.ChatRequest{System: in.System, Messages: msgs, Tools: toolset})
 		if err != nil {
 			return nil, fmt.Errorf("model call: %w", err)
@@ -85,26 +104,41 @@ func (r *Runtime) Turn(ctx context.Context, in *runtime.TurnInput, env runtime.T
 		res.Usage.OutputTokens += resp.Usage.OutputTokens
 		msg := resp.Message
 		msg.Role = llm.RoleAssistant
+		text := strings.TrimSpace(msg.Content)
+		if len(msg.ToolCalls) == 0 && text != "" {
+			recovered, looksLikeCall := TextToolCalls(text, toolset, round)
+			switch {
+			case len(recovered) > 0:
+				msg.ToolCalls, msg.Content, text = recovered, "", ""
+				env.Output(ctx, fmt.Sprintf("note: the model wrote %d tool call(s) as text instead of calling them; LeForge ran them", len(recovered)))
+			case looksLikeCall:
+				return nil, fmt.Errorf("%w: %s", ErrToolCallAsText, truncate(text, 300))
+			}
+		}
 		msgs = append(msgs, msg)
-		if t := strings.TrimSpace(msg.Content); t != "" {
-			lastText = t
-			env.Output(ctx, t)
+		if text != "" {
+			lastText = text
+			env.Output(ctx, text)
 		}
 		if len(msg.ToolCalls) == 0 {
+			switch {
+			case text == "" && resp.StopReason == "length":
+				return nil, ErrAnswerCutOff
+			case text == "" && calls == 0:
+				return nil, ErrEmptyAnswer
+			}
+			finished = true
 			break
 		}
-		finished := false
 		for _, call := range msg.ToolCalls {
 			out, done := r.call(ctx, env, res, call)
+			calls++
 			msgs = append(msgs, llm.ChatMessage{Role: llm.RoleTool, ToolCallID: call.ID, Name: call.Name, Content: out})
 			finished = finished || done
 		}
-		if finished {
-			break
-		}
-		if round == rounds-1 {
-			env.Output(ctx, fmt.Sprintf("turn ended after %d model rounds", rounds))
-		}
+	}
+	if !finished {
+		return nil, fmt.Errorf("%w (%d rounds, %d tool calls); raise the agent's Max tool calls or split the task", ErrOutOfRounds, rounds, calls)
 	}
 	applySentinels(ctx, env, res, lastText)
 	if res.Summary == "" {
@@ -212,4 +246,70 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// TextToolCalls recognises a tool call a model wrote as its answer: a JSON
+// object {"name": ..., "arguments": {...}} (or an array of them), optionally
+// in a Markdown code fence, naming tools that were offered. It returns the
+// calls to run, or looksLikeCall when the text has that shape but cannot be
+// run (unknown tool, malformed arguments), so the turn fails explicitly.
+func TextToolCalls(text string, offered []llm.ToolSchema, round int) (calls []llm.ToolCall, looksLikeCall bool) {
+	body := strings.TrimSpace(text)
+	if strings.HasPrefix(body, "```") {
+		body = strings.TrimPrefix(body, "```")
+		if i := strings.IndexByte(body, '\n'); i >= 0 {
+			body = body[i+1:] // drop the language tag
+		}
+		body = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(body), "```"))
+	}
+	if !strings.HasPrefix(body, "{") && !strings.HasPrefix(body, "[") {
+		return nil, false
+	}
+	type written struct {
+		Name       string          `json:"name"`
+		Arguments  json.RawMessage `json:"arguments"`
+		Parameters json.RawMessage `json:"parameters"`
+	}
+	var list []written
+	if strings.HasPrefix(body, "[") {
+		if json.Unmarshal([]byte(body), &list) != nil {
+			return nil, strings.Contains(body, `"name"`)
+		}
+	} else {
+		var one written
+		if json.Unmarshal([]byte(body), &one) != nil {
+			return nil, strings.Contains(body, `"name"`) && strings.Contains(body, `"arguments"`)
+		}
+		list = []written{one}
+	}
+	names := map[string]bool{}
+	for _, t := range offered {
+		names[t.Name] = true
+	}
+	for i, w := range list {
+		if w.Name == "" {
+			return nil, len(w.Arguments) > 0 || len(w.Parameters) > 0
+		}
+		name := llm.PlatformToolName(w.Name)
+		if !names[name] {
+			return nil, true
+		}
+		args := w.Arguments
+		if len(args) == 0 {
+			args = w.Parameters
+		}
+		if len(args) == 0 {
+			args = json.RawMessage(`{}`)
+		}
+		args = llm.NormalizeArgs(args)
+		var obj map[string]any
+		if json.Unmarshal(args, &obj) != nil {
+			return nil, true
+		}
+		if _, junk := obj["_raw"]; junk && len(obj) == 1 {
+			return nil, true // arguments were not JSON
+		}
+		calls = append(calls, llm.ToolCall{ID: fmt.Sprintf("text_%d_%d", round, i), Name: name, Arguments: args})
+	}
+	return calls, true
 }
