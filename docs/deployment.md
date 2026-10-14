@@ -10,7 +10,9 @@ change). Every deployment shape is a choice of where those three live.
 ### 1. Single node (Docker Compose)
 
 The default `docker-compose.yml`: one `forged`, PostgreSQL, NATS JetStream,
-the example agents, and the observability stack. Suitable for teams,
+the example agents, `sandbox-daemon` (a Docker daemon dedicated to agent
+command sandboxes, see [sandbox-runtime.md](sandbox-runtime.md)), and the
+observability stack. Suitable for teams,
 evaluation and small production workloads where minutes of downtime during a
 host failure are acceptable.
 
@@ -29,6 +31,9 @@ flowchart LR
     prom --> otel
     grafana --> prom & tempo & loki
     forged -. optional .-> ollama[Ollama / TGI]
+    forged -->|mutual TLS :2376| sbx[sandbox-daemon<br/>Docker-in-Docker]
+    sbx --> ws
+    sbx --> sbxdata[(sandbox-daemon-data)]
   end
 ```
 
@@ -129,6 +134,7 @@ backlog per group and LLM latency tell you where to scale.
 | 4317 / 4318 | OTel collector gRPC / HTTP | forged |
 | 9090, 3000, 3100, 3200 | Prometheus, Grafana, Loki, Tempo | operators |
 | 11434, 80 (tgi) | Ollama, TGI | forged |
+| 2376 | sandbox-daemon (Docker API, mutual TLS) | forged only, on the `sandbox` network; never published |
 
 ## Backup and restore
 

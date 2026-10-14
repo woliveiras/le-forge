@@ -498,7 +498,7 @@ export async function mockFetch(url: string, init: RequestInit): Promise<Respons
       grafanaUrl: 'http://localhost:3000',
       identity: { name: 'admin', role: 'admin' },
     });
-  if (p === '/readyz') return json({ storage: 'ok', queue: 'ok' });
+  if (p === '/readyz') return json({ storage: 'ok', queue: 'ok', sandbox: 'ok' });
   if (p === '/graphs' && m === 'GET') return json([...db.graphs.values()]);
   if (p === '/graphs' && m === 'POST') {
     const g = readGraph(init);

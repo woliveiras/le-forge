@@ -51,7 +51,8 @@ flowchart TB
 | Engine → agent runtime | `POST /v1/turn` | Optional shared secret header; runtime gets no credentials |
 | Agent runtime → platform | `/internal/v1` callbacks | Per-execution random token valid only during the turn |
 | Agent → tools | gateway | Default-deny grants, constraints, approvals, rate limits, audit |
-| Tools → host | sandbox | Path jail, scrubbed env, timeouts; docker: no network, no caps |
+| Tools → host | sandbox | Path jail, scrubbed env, timeouts; docker: separate daemon (`sandbox-daemon`), no network by default, no caps |
+| Sandbox → platform | sandbox-daemon firewall | Drops sandbox traffic to private ranges (PostgreSQL, NATS, forged, LAN) and to the daemon; daemon API needs mutual TLS |
 | Tools → network | http.fetch | Public IPs only (checked at dial time), host allowlist, redirect re-check |
 | Agent → model | LLM gateway | Keys stay server-side; per-turn token budget |
 | Content → agent | prompt | Inputs framed as data in the preamble (mitigation, not a boundary) |
@@ -142,9 +143,10 @@ credentials are re-encrypted at startup.
    on the internal network.
 3. Use OIDC for humans, scoped static tokens (`viewer`/`operator`) for automation.
 4. Run any node holding `shell.exec`, `git.write` or broad `filesystem.write` with
-   `isolation.mode: docker` (or Kubernetes) — and know that docker isolation requires mounting the
-   Docker socket into `forged`, which is root-equivalent on that host: use a dedicated host or a
-   rootless Docker / socket proxy restricted to container create/exec.
+   `isolation.mode: docker` (or Kubernetes). With Compose, sandboxes run on `sandbox-daemon`, a
+   Docker daemon dedicated to LeForge — never mount the host's Docker socket. That service is
+   privileged (Docker-in-Docker): on shared Linux servers run LeForge on a dedicated host or VM.
+   See [sandbox-runtime.md](sandbox-runtime.md).
 5. Constrain writers with `paths` (always exclude `.git` for nodes that also hold git tools).
 6. Put `approval: true` on channels that release, deploy or spend money.
 7. Keep `tools.allowPrivateNetworks` off; give researchers `hosts` allowlists.
@@ -164,6 +166,8 @@ credentials are re-encrypted at startup.
 | Gap | Impact | Plan / workaround |
 |---|---|---|
 | Process sandbox shares the platform's UID | Unrestricted shell can read platform env/data | Docker isolation, or a dedicated sandbox UID |
+| `sandbox-daemon` is privileged Docker-in-Docker | A daemon escape is a host-kernel escape; agents cannot reach the daemon (TLS + firewall), only its unprivileged, capability-less containers | Dedicated host/VM; rootless variant planned |
+| Bridged sandboxes reach the whole internet | Data exfiltration by an agent with `shell.exec` and `network: bridge` | Keep `network: none` unless needed; egress allowlist planned |
 | Kubernetes isolation runs tools in the platform pod (process sandbox) | Same as above | Per-replica tool pods are an extension point |
 | `/metrics` unauthenticated by default | Metadata disclosure | `server.protectMetrics: true` (viewer token), or network policy |
 | `/internal/v1` shares the public listener by default | Reachable if exposed (per-execution tokens still required) | `server.internalAddr: ":8081"` moves it to its own listener; expose only the public port |

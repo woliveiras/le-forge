@@ -427,6 +427,8 @@ export interface ModelInfo {
 export interface ReadyChecks {
   storage: string;
   queue: string;
+  /** Dedicated Docker daemon for agent sandboxes: "ok", "not configured", or the error. Does not affect readiness. */
+  sandbox?: string;
 }
 
 export interface HealthStatus {

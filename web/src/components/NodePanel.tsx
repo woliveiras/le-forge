@@ -735,6 +735,13 @@ function AgentEditor({
   const setLoop = (patch: NonNullable<GraphNode['loop']>) => update({ loop: { ...node.loop, ...patch } });
   const setStop = (patch: NonNullable<NonNullable<GraphNode['loop']>['stop']>) => setLoop({ stop: { ...node.loop?.stop, ...patch } });
   const setCluster = (patch: NonNullable<GraphNode['cluster']>) => update({ cluster: { ...node.cluster, ...patch } });
+  const isolation = { ...defaults.isolation, ...node.isolation };
+  const setIsolation = (patch: NonNullable<GraphNode['isolation']>) => update({ isolation: { ...node.isolation, ...patch } });
+  const grants = node.tools === undefined ? (defaults.tools ?? []) : node.tools;
+  const hasShell = grants.some((grant) => {
+    const name = grantName(grant);
+    return name === '*' || name.startsWith('shell');
+  });
   const stopField = stop.policy && stop.policy in STOP_FIELD ? STOP_FIELD[stop.policy as keyof typeof STOP_FIELD] : undefined;
 
   return (
@@ -931,6 +938,72 @@ function AgentEditor({
           </select>
           <FieldIssues issues={issues} field="workspace" />
         </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Command sandbox</legend>
+        <label>
+          Isolation
+          <select
+            value={isolation.mode ?? 'process'}
+            onChange={(event) => setIsolation({ mode: event.target.value as NonNullable<GraphNode['isolation']>['mode'] })}
+          >
+            <option value="process">process — inside the LeForge server</option>
+            <option value="docker">docker — dedicated sandbox container</option>
+            <option value="kubernetes">kubernetes</option>
+          </select>
+          <FieldIssues issues={issues} field="isolation.mode" />
+        </label>
+        {isolation.mode === 'docker' ? (
+          <>
+            <label>
+              Network
+              <select
+                value={isolation.network ?? 'none'}
+                onChange={(event) => setIsolation({ network: event.target.value === 'none' ? undefined : event.target.value })}
+              >
+                <option value="none">none — no network access</option>
+                <option value="bridge">bridge — internet only, no private networks</option>
+              </select>
+            </label>
+            <label>
+              Image
+              <input
+                value={node.isolation?.image ?? ''}
+                placeholder={defaults.isolation?.image ?? 'installation default (leforge/sandbox:latest)'}
+                onChange={(event) => setIsolation({ image: event.target.value || undefined })}
+              />
+            </label>
+            <label>
+              CPU limit
+              <input
+                value={node.isolation?.cpu ?? ''}
+                placeholder={defaults.isolation?.cpu ?? 'e.g. 2'}
+                onChange={(event) => setIsolation({ cpu: event.target.value || undefined })}
+              />
+            </label>
+            <label>
+              Memory limit
+              <input
+                value={node.isolation?.memory ?? ''}
+                placeholder={defaults.isolation?.memory ?? 'e.g. 2g'}
+                onChange={(event) => setIsolation({ memory: event.target.value || undefined })}
+              />
+            </label>
+            <p className="muted tiny">
+              Commands run in a container on the LeForge sandbox daemon, never on the host. The image must already exist
+              there; see Integrations → Sandbox runtime.
+            </p>
+          </>
+        ) : (
+          hasShell && (
+            <p className="field-warning" role="note">
+              This agent can run shell commands. With process isolation they run inside the LeForge server container and
+              can read its files; choose docker for anything but trusted agents.
+            </p>
+          )
+        )}
+        <FieldIssues issues={issues} field="isolation" />
       </fieldset>
 
       <fieldset>

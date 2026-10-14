@@ -69,7 +69,10 @@ function backend(validate: (graph: Graph) => ValidationResult = promptRule) {
     'GET /api/v1/graphs/g/executions': () => [],
     'GET /api/v1/graphs/g/messages': () => [],
     'GET /api/v1/graphs/g/versions': () => [{ version: state.current.record.version, createdAt: '2026-10-14T10:00:00Z' }],
-    'GET /api/v1/tools': () => [{ name: 'filesystem.read', capability: 'filesystem.read', description: 'Read files' }],
+    'GET /api/v1/tools': () => [
+      { name: 'filesystem.read', capability: 'filesystem.read', description: 'Read files' },
+      { name: 'shell.exec', capability: 'shell.exec', description: 'Run commands' },
+    ],
     'GET /api/v1/providers': () => [],
     'POST /api/v1/graphs/g/start': status,
     'POST /api/v1/graphs/validate': (call: Call) => validate(call.body as Graph),
@@ -267,6 +270,29 @@ describe('GraphWorkspace editor', () => {
     await user.click(toolbarButton('Discard'));
     expect((within(agentEditor()).getByLabelText('Name') as HTMLInputElement).value).toBe('Developer');
     expect(screen.queryByText('unsaved graph changes')).toBeNull();
+  });
+
+  it('configures the command sandbox and warns about shell access under process isolation', async () => {
+    const user = userEvent.setup();
+    const { puts } = backend(() => valid);
+    renderWorkspace('dev');
+    const editor = await screen.findByRole('region', { name: 'Agent configuration' });
+
+    // Granting shell under process isolation explains the risk.
+    expect(within(editor).queryByText(/can run shell commands/)).toBeNull();
+    await user.click(await screen.findByRole('checkbox', { name: /shell\.exec/ }));
+    expect(within(editor).getByText(/can run shell commands/)).toBeTruthy();
+
+    await user.selectOptions(within(editor).getByLabelText('Isolation'), 'docker');
+    expect(within(editor).queryByText(/can run shell commands/)).toBeNull();
+    await user.selectOptions(within(editor).getByLabelText('Network'), 'bridge');
+    await user.type(within(editor).getByLabelText('Memory limit'), '2g');
+
+    await user.click(toolbarButton('Save graph'));
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    const dev = (puts()[0].body as Graph).spec.nodes[0];
+    expect(dev.isolation).toEqual({ mode: 'docker', network: 'bridge', memory: '2g' });
+    expect(dev.tools).toEqual([{ name: 'shell.exec' }]);
   });
 
   it('asks before starting while graph edits are unsaved', async () => {

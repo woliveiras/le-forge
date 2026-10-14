@@ -152,6 +152,11 @@ type DockerIsolation struct {
 	Bin     string `yaml:"bin"`
 	Image   string `yaml:"image"`
 	Network string `yaml:"network"`
+	// Host is the Docker daemon sandboxes run on (DOCKER_HOST syntax, e.g.
+	// tcp://sandbox-daemon:2376). Setting it enables the "sandbox"
+	// readiness check. Empty = the docker CLI default (DOCKER_HOST from the
+	// environment, else the local socket).
+	Host string `yaml:"host"`
 }
 
 type Tools struct {
@@ -259,6 +264,7 @@ func applyEnv(c *Config) {
 	str("LEFORGE_WORKSPACES_HOST", &c.Workspaces.HostRoot)
 	str("LEFORGE_DEFAULT_PROVIDER", &c.LLM.Default)
 	str("LEFORGE_SANDBOX_IMAGE", &c.Isolation.Docker.Image)
+	str("LEFORGE_SANDBOX_DOCKER_HOST", &c.Isolation.Docker.Host)
 	str("LEFORGE_SECRET_KEY_FILE", &c.Secrets.KeyFile)
 	if v := os.Getenv("LEFORGE_SECRET_KEY_GENERATE"); v != "" {
 		c.Secrets.GenerateKeyFile, _ = strconv.ParseBool(v)

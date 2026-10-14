@@ -325,13 +325,22 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) readyz(w http.ResponseWriter, r *http.Request) error {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	checks := map[string]string{"storage": "ok", "queue": "ok"}
+	checks := map[string]string{"storage": "ok", "queue": "ok", "sandbox": "not configured"}
 	code := 200
 	if err := s.Store.Ping(ctx); err != nil {
 		checks["storage"], code = err.Error(), 503
 	}
 	if err := s.Broker.Ping(ctx); err != nil {
 		checks["queue"], code = err.Error(), 503
+	}
+	// The sandbox daemon only matters to docker-isolated agents, so it is
+	// reported but does not make the platform unready.
+	if d := s.Config.Isolation.Docker; d.Host != "" {
+		if _, err := tools.PingDocker(ctx, d.Bin, d.Host); err != nil {
+			checks["sandbox"] = err.Error()
+		} else {
+			checks["sandbox"] = "ok"
+		}
 	}
 	writeJSON(w, code, checks)
 	return nil

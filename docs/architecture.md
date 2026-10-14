@@ -11,6 +11,7 @@ LeForge is a self-hosted, vendor-neutral **agent factory**. Autonomous AI agents
 | [execution-model.md](execution-model.md) | Loop modes, turns, delivery guarantees, clusters, routing, isolation |
 | [dev/contracts.md](dev/contracts.md) | HTTP API and Runtime Protocol v1 (wire contracts) |
 | [product-contracts.md](product-contracts.md) | Current-state inventory and design contracts for planned Release 1 capabilities |
+| [sandbox-runtime.md](sandbox-runtime.md) | The Docker daemon dedicated to agent sandboxes: architecture, usage, reset, troubleshooting |
 
 ---
 
@@ -117,6 +118,7 @@ flowchart LR
   Q[(Broker<br/>NATS · Redis · RabbitMQ · Kafka · fs)]
   S[(Store<br/>PostgreSQL · SQLite · fs)]
   M[(Model servers<br/>Ollama · vLLM · TGI · OpenAI · Anthropic · OpenRouter)]
+  SBX[sandbox-daemon<br/>dedicated Docker · one container per replica]
   OBS[OTel Collector → Tempo · Loki · Prometheus → Grafana]
 
   UI & CLI & EXT --> API
@@ -128,10 +130,11 @@ flowchart LR
   PY -- callbacks --> CB --> TOOLGW & LLMGW
   NAT --> TOOLGW & LLMGW
   LLMGW --> M
+  TOOLGW -- docker isolation · mutual TLS --> SBX
   forged -. OTLP / metrics .-> OBS
 ```
 
-There is one binary, `forged` (`cmd/forged`), which contains the API, the engine and both gateways. You scale it horizontally by running several instances against the same store and broker. Python agents run in a separate process or container (`agents/`) and hold no credentials.
+There is one binary, `forged` (`cmd/forged`), which contains the API, the engine and both gateways. Commands of docker-isolated agents run in containers on `sandbox-daemon`, a Docker daemon dedicated to LeForge (see [sandbox-runtime.md](sandbox-runtime.md)). You scale it horizontally by running several instances against the same store and broker. Python agents run in a separate process or container (`agents/`) and hold no credentials.
 
 ## 5. Subsystems
 
@@ -339,7 +342,7 @@ func (r *Registry) Schemas(p *Principal) []llm.ToolSchema // only granted tools 
 The **sandboxes** are:
 
 - `ProcessSandbox`: working directory confined, scrubbed environment, process-group kill on timeout, capped output;
-- `DockerSandbox`: one container per replica, `--network none`, `--cap-drop ALL`, `no-new-privileges`, workspace bind-mounted.
+- `DockerSandbox`: one container per replica, `--network none` (or `bridge` when the node asks), `--cap-drop ALL`, `no-new-privileges`, workspace bind-mounted. Containers run on the daemon named by `isolation.docker.host`; with Compose that is `sandbox-daemon`, whose firewall keeps sandboxes away from private networks and from the daemon ([sandbox-runtime.md](sandbox-runtime.md), [ADR 0009](adr/0009-dedicated-sandbox-daemon.md)).
 
 **Trade-offs and decisions**
 
@@ -347,7 +350,7 @@ The **sandboxes** are:
 |---|---|---|---|
 | **Gateway-side execution.** Agents never touch the host. | Agent-side tools with advisory permissions. | A single audit and enforcement point, independent of the agent framework. | Every tool call is a function call inside `forged` (native) or an HTTP callback (external). |
 | **Capability grants** instead of per-tool lists. | Tool lists only. | A grant survives new tools being added within a capability, and is readable by humans. | `filesystem.read` grants list, search and stat as well. |
-| **Process sandbox by default.** | Docker by default. | Works everywhere without the Docker socket. | The process sandbox does **not** confine syscalls: an unrestricted `shell.exec` can read outside the workspace. Use docker isolation or constrained `commands` for untrusted work. Docker isolation needs the Docker socket, which is root-equivalent on the host. |
+| **Process sandbox by default.** | Docker by default. | Works everywhere without the Docker socket. | The process sandbox does **not** confine syscalls: an unrestricted `shell.exec` can read outside the workspace. Use docker isolation or constrained `commands` for untrusted work. Docker isolation runs on a daemon dedicated to LeForge (`sandbox-daemon`, privileged Docker-in-Docker) rather than the host socket. |
 | **MCP** | — | — | MCP tool connections are managed by the user and exposed through the tool registry. |
 
 ### 5.7 Human in the loop (`internal/hitl`)
@@ -451,7 +454,7 @@ Telemetry is optional: without `OTEL_EXPORTER_OTLP_ENDPOINT`, only stdout and `/
 - **Graph workspace:** `<root>/<graph>`, or `spec.workspace.path` (absolute paths only with `allowAbsolute`). It is optionally `git init`-ed or cloned from `repo`.
 - **Worktree mode:** each replica gets `<root>/.worktrees/<graph>/<node>-<n>` on branch `leforge/<graph>/<node>-<n>`. Worktrees are outside the repository so they never show as untracked, and the branches are never deleted.
 - **Scratch:** each replica has a scratch folder `.leforge/<node>/r<n>` (`@loop`), which is git-ignored.
-- `HostPath` maps platform paths to the Docker daemon's view for sandbox bind mounts.
+- `HostPath` maps platform paths to the Docker daemon's view for sandbox bind mounts. With Compose, `forged` and `sandbox-daemon` mount the workspaces volume at the same path, so no mapping is configured.
 
 ## 6. Quality attributes
 
@@ -470,6 +473,7 @@ Telemetry is optional: without `OTEL_EXPORTER_OTLP_ENDPOINT`, only stdout and `/
 | Item | Status |
 |---|---|
 | MCP tool provider (`mcp.<server>.*` grants) | Extension point. Grants parse, but no provider is registered. |
+| Sandbox daemon | Privileged Docker-in-Docker (rootless planned); one daemon per installation; no egress allowlist yet (`bridge` = whole internet); runtimes launched from `runtime.image` are not supported there. See [sandbox-runtime.md](sandbox-runtime.md#limitations). |
 | Kubernetes: engine-managed per-replica runtime/tool pods | Extension point. Use `forge k8s render` plus an explicit `endpoint`. Tools for `kubernetes` isolation currently run in the process sandbox of the `forged` pod. |
 | Streaming LLM responses and per-token UI narration | Not implemented. |
 | Event-log pruning | Not implemented: the event log, message history and executions are kept until pruned externally (see [database-schema.md](database-schema.md#retention)). |

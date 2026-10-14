@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"sort"
@@ -28,7 +29,12 @@ type DockerSandboxConfig struct {
 	Memory  string // e.g. "512m"
 	// DockerBin is the docker CLI (default "docker").
 	DockerBin string
-	Labels    map[string]string
+	// DockerHost is the daemon address passed to the CLI as DOCKER_HOST
+	// (e.g. "tcp://sandbox-daemon:2376"). Empty = the CLI's own default.
+	// TLS settings (DOCKER_TLS_VERIFY, DOCKER_CERT_PATH) come from the
+	// platform's environment.
+	DockerHost string
+	Labels     map[string]string
 	// Workdir inside the container (default /workspace).
 	MountPoint string
 	// User to run as inside the container (default: the image's user).
@@ -40,10 +46,11 @@ type DockerSandboxConfig struct {
 // node asks for it, and CPU/memory are capped by the kernel. Commands are
 // started with `docker exec`.
 //
-// Trade-off: driving Docker requires the platform to reach the Docker
-// daemon (usually by mounting /var/run/docker.sock), which is root-equivalent
-// on that host. Run the platform on a dedicated host/VM, or use a rootless
-// daemon or a socket proxy that only allows container create/exec/remove.
+// Trade-off: driving Docker requires the platform to reach a Docker daemon.
+// The Compose stack gives it a daemon of its own (the sandbox-daemon
+// service, Docker-in-Docker) so sandboxes, images and caches never touch the
+// host's Docker; mounting the host's /var/run/docker.sock instead is
+// root-equivalent on that host. See docs/sandbox-runtime.md.
 // In Kubernetes the equivalent is a sandbox pod (or sidecar) per replica;
 // it plugs in by implementing the same Sandbox interface (Exec/Close).
 //
@@ -168,7 +175,7 @@ func (s *DockerSandbox) Exec(ctx context.Context, req ExecRequest) (*ExecResult,
 	}
 	runCtx, cancel := context.WithTimeout(ctx, clampTimeout(req.Timeout))
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, s.cfg.DockerBin, args...)
+	cmd := dockerCommand(runCtx, s.cfg.DockerBin, s.cfg.DockerHost, args...)
 	limit := req.MaxOutput
 	if limit <= 0 {
 		limit = DefaultMaxOutput
@@ -216,6 +223,47 @@ func (s *DockerSandbox) Close() error {
 }
 
 func (s *DockerSandbox) docker(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, s.cfg.DockerBin, args...).CombinedOutput()
+	out, err := dockerCommand(ctx, s.cfg.DockerBin, s.cfg.DockerHost, args...).CombinedOutput()
 	return string(out), err
+}
+
+// dockerCommand runs the docker CLI against host (DOCKER_HOST), keeping the
+// rest of the platform environment (TLS settings, PATH).
+func dockerCommand(ctx context.Context, bin, host string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin, args...)
+	if host != "" {
+		cmd.Env = append(os.Environ(), "DOCKER_HOST="+host)
+	}
+	return cmd
+}
+
+// PingDocker reports whether the daemon at host answers, returning its
+// server version. It backs the "sandbox" readiness check.
+func PingDocker(ctx context.Context, bin, host string) (string, error) {
+	if bin == "" {
+		bin = "docker"
+	}
+	out, err := dockerCommand(ctx, bin, host, "version", "--format", "{{.Server.Version}}").CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		}
+		return "", fmt.Errorf("docker daemon %s unreachable: %s", displayHost(host), firstLine(text))
+	}
+	return text, nil
+}
+
+func displayHost(host string) string {
+	if host == "" {
+		return "(default)"
+	}
+	return host
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }

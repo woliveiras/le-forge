@@ -59,7 +59,9 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
         <div className="section-head">
           <div>
             <h2>LeForge services</h2>
-            <p className="muted small">Basic API availability and the storage and queue readiness checks.</p>
+            <p className="muted small">
+              Basic API availability, the storage and queue readiness checks, and the sandbox runtime used by docker-isolated agents.
+            </p>
           </div>
           <Btn small onClick={() => void readiness.reload()} disabled={readiness.loading}>
             {readiness.loading ? 'Checking…' : 'Check services'}
@@ -99,6 +101,30 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
               />
             </div>
             <p className="muted small">{checks?.queue ?? readiness.error ?? info?.queue ?? 'Waiting for check'}</p>
+          </article>
+          <article className="integration-card" aria-label="Sandbox runtime">
+            <div className="integration-card-head">
+              <h3>Sandbox runtime</h3>
+              <Status
+                state={
+                  !checks?.sandbox
+                    ? undefined
+                    : checks.sandbox === 'ok'
+                      ? 'ok'
+                      : checks.sandbox === 'not configured'
+                        ? 'warning'
+                        : 'error'
+                }
+                idleLabel={readiness.error ? 'Could not check' : readiness.loading ? 'Checking' : 'Not checked'}
+              />
+            </div>
+            <p className="muted small">
+              {checks?.sandbox === 'ok'
+                ? 'Docker daemon dedicated to LeForge is reachable. Agents with docker isolation run their commands there, never on the host.'
+                : checks?.sandbox === 'not configured'
+                  ? 'No sandbox daemon is configured. Agents with docker isolation cannot start; process isolation runs commands inside the LeForge server.'
+                  : (checks?.sandbox ?? readiness.error ?? 'Waiting for check')}
+            </p>
           </article>
         </div>
         {checks && !dependenciesOk && (

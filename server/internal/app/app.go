@@ -266,7 +266,8 @@ func sandboxFactory(cfg *config.Config) engine.SandboxFactory {
 			sb, err := tools.NewDockerSandbox(tools.DockerSandboxConfig{
 				Name:  fmt.Sprintf("leforge-sbx-%s-%s-%d", s.Graph.Metadata.ID, s.Node.ID, s.Replica),
 				Image: img, HostDir: s.HostWorkdir, Network: net,
-				CPU: s.Node.Isolation.CPU, Memory: s.Node.Isolation.Memory, DockerBin: cfg.Isolation.Docker.Bin,
+				CPU: s.Node.Isolation.CPU, Memory: s.Node.Isolation.Memory,
+				DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
 				Labels: map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
 			})
 			if err != nil {

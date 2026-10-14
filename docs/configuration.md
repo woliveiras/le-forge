@@ -38,7 +38,7 @@ provider, duplicate provider names, invalid roles, no API credentials).
 | `queue.dir` | `LEFORGE_QUEUE_DIR` | `data/queues` | Directory for the `fs` broker. |
 | `queue.options` | — | `{}` | Adapter options (map of strings). |
 | `workspaces.root` | `LEFORGE_WORKSPACES` | `data/workspaces` | One directory per graph; worktrees under `.worktrees/`. |
-| `workspaces.hostRoot` | `LEFORGE_WORKSPACES_HOST` | = root | The same directory as the Docker daemon sees it (bind mounts for docker sandboxes when forged runs in a container). |
+| `workspaces.hostRoot` | `LEFORGE_WORKSPACES_HOST` | = root | The same directory as the Docker daemon sees it (bind mounts for docker sandboxes when forged runs in a container). Not needed with Compose: `sandbox-daemon` mounts the workspaces volume at the same path. |
 | `workspaces.allowAbsolute` | — | `false` | Allow graphs to set an absolute `spec.workspace.path`. |
 | `llm.default` | `LEFORGE_DEFAULT_PROVIDER` | `mock` | Provider used when a node names none. Must be configured. |
 | `llm.providers[]` | see [below](#providers-from-environment-variables) | `[{name: mock, type: mock}]` | Model providers. |
@@ -51,6 +51,7 @@ provider, duplicate provider names, invalid roles, no API credentials).
 | `isolation.docker.bin` | — | `docker` | Docker CLI used by docker sandboxes and launched runtimes. |
 | `isolation.docker.image` | `LEFORGE_SANDBOX_IMAGE` | `leforge/sandbox:latest` | Default sandbox image. |
 | `isolation.docker.network` | — | `none` | Default sandbox network. |
+| `isolation.docker.host` | `LEFORGE_SANDBOX_DOCKER_HOST` | — | Docker daemon for sandboxes (`DOCKER_HOST` syntax). Compose sets `tcp://sandbox-daemon:2376` with `DOCKER_TLS_VERIFY`/`DOCKER_CERT_PATH`. Setting it enables the `sandbox` readiness check. See [sandbox-runtime.md](sandbox-runtime.md). |
 | `tools.allowPrivateNetworks` | — | `false` | Let `http.fetch` reach loopback/private/link-local addresses (SSRF guard off). |
 | `observability.serviceName` | `OTEL_SERVICE_NAME` | `leforge` | OTel service name. |
 | `observability.otlpEndpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP/HTTP base URL; empty disables trace/log export. |

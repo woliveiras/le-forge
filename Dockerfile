@@ -23,8 +23,9 @@ RUN go build -ldflags "-s -w -X github.com/woliveiras/le-forge/server/internal/a
 
 FROM alpine:3.22
 # git: workspaces and worktrees; python3: QA agents run test suites through
-# shell.exec in the process sandbox; docker-cli: docker isolation (only used
-# when the Docker socket is mounted); tini: signal handling for children.
+# shell.exec in the process sandbox; docker-cli: docker isolation, talking to
+# the dedicated sandbox daemon (LEFORGE_SANDBOX_DOCKER_HOST); tini: signal
+# handling for children.
 RUN apk add --no-cache ca-certificates git python3 tini docker-cli tzdata \
  && addgroup -S -g 10001 leforge && adduser -S -u 10001 -G leforge -h /var/lib/leforge leforge \
  && mkdir -p /var/lib/leforge/data /var/lib/leforge/workspaces /app \

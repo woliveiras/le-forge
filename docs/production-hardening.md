@@ -58,8 +58,11 @@ setting or file that implements it.
       (no network, all capabilities dropped, `no-new-privileges`, CPU/memory
       limits), or run forged under a sandboxed runtime class
       (**gVisor** `runsc` or **Kata Containers**) on Kubernetes.
-- [ ] Mounting the Docker socket into forged (docker isolation) grants root on
-      that host: dedicate the host or use rootless Docker / a remote daemon.
+- [ ] Run docker isolation on a daemon dedicated to LeForge — never mount the
+      host's Docker socket into forged (root on that host). Compose ships
+      `sandbox-daemon` for this; it is privileged Docker-in-Docker, so run
+      LeForge on a dedicated host or VM. Keep agents on `network: none`
+      unless they must download packages. See [sandbox runtime](sandbox-runtime.md).
 - [ ] Containers: non-root (uid 10001), read-only root filesystem, seccomp
       `RuntimeDefault`, `automountServiceAccountToken: false` (the shipped
       manifests do this).

@@ -10,6 +10,7 @@
 | [0006](0006-sqlite-default-postgres-production.md) | SQLite by default, PostgreSQL in production | Accepted |
 | [0007](0007-nats-jetstream-default.md) | NATS JetStream as the default broker | Accepted |
 | [0008](0008-offline-mock-provider.md) | Deterministic mock provider as the default model | Accepted |
+| [0009](0009-dedicated-sandbox-daemon.md) | A Docker daemon dedicated to agent sandboxes | Proposed |
 
 Format: context, decision, consequences, alternatives considered. New ADRs
 take the next number with status *Proposed* in the pull request that

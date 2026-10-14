@@ -8,7 +8,7 @@ VERSION   ?= dev
 NAMESPACE ?= leforge
 GRAPH     ?= examples/graphs/software-factory.yaml
 
-.PHONY: help build test test-go test-python test-web lint fmt up down logs images k8s-render clean
+.PHONY: help build test test-go test-python test-web test-sandbox lint fmt up down logs images k8s-render clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -28,6 +28,9 @@ test-python: ## SDK and example agent tests (stdlib unittest)
 
 test-web: ## Type-check and run the web console tests (Vitest, jsdom)
 	cd web && npm ci --no-audit --no-fund && npx tsc --noEmit && npm test
+
+test-sandbox: ## Sandbox runtime isolation checks against the Compose stack (needs Docker; see docs/sandbox-runtime.md)
+	./scripts/test-sandbox-runtime.sh
 
 lint: ## gofmt check and go vet
 	@out=$$(docker run --rm -v "$$(pwd)/server:/src" -w /src golang:1.26-alpine gofmt -l .); \
@@ -49,7 +52,7 @@ logs: ## Follow control-plane logs
 images: ## Build all container images
 	docker build --build-arg VERSION=$(VERSION) -t leforge/forged:$(VERSION) .
 	docker build -f agents/Dockerfile -t leforge/agents:$(VERSION) .
-	docker build -f Dockerfile.sandbox -t leforge/sandbox:$(VERSION) .
+	docker build -f Dockerfile.sandbox -t leforge/sandbox:$(VERSION) .   # outside Compose; Compose builds it inside sandbox-daemon
 
 k8s-render: ## Render platform manifests (kustomize) and agent runtimes for GRAPH
 	kubectl kustomize deploy/kubernetes

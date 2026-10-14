@@ -146,6 +146,7 @@ Full tree: [docs/folder-structure.md](docs/folder-structure.md).
 - [Getting started](docs/getting-started.md) — install, model providers, first graph, running without Docker
 - [Architecture](docs/architecture.md) — C4 views, domain model, state machines, sequences, queue and execution model
 - [Security model](docs/security.md) — threat model, tool permission model, isolation
+- [Sandbox runtime](docs/sandbox-runtime.md) — agent commands in containers on a Docker daemon dedicated to LeForge
 - [Configuration reference](docs/configuration.md)
 - [Deployment](docs/deployment.md) — single node, HA, Kubernetes, backup, upgrades, air-gapped
 - [Production hardening](docs/production-hardening.md)

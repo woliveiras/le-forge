@@ -7,6 +7,11 @@
 # Console  http://localhost:8080   (token: LEFORGE_ADMIN_TOKEN from local .env)
 # Grafana  http://localhost:3000   (anonymous viewer; admin password from local .env)
 #
+# Agent tool sandboxes (isolation.mode: docker) run on sandbox-daemon, a Docker
+# daemon dedicated to LeForge: nothing is built or started on the host's Docker,
+# and `docker compose down -v` removes every image, container and cache it made.
+# See docs/sandbox-runtime.md.
+#
 # Images are pinned; to run fully air-gapped, `docker compose pull && docker compose build`
 # once while online (or load images from a registry mirror) and models into the volumes.
 
@@ -32,6 +37,12 @@ x-forged-env: &forged-env
   LEFORGE_BOOTSTRAP_GRAPHS: /app/examples/graphs
   LEFORGE_BOOTSTRAP_START: ${LEFORGE_BOOTSTRAP_START:-hello-echo,software-factory}
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  # Tool sandboxes run on the dedicated sandbox-daemon over mutual TLS. The
+  # workspaces volume is mounted at the same path there, so no host path
+  # translation (LEFORGE_WORKSPACES_HOST) is needed.
+  LEFORGE_SANDBOX_DOCKER_HOST: tcp://sandbox-daemon:2376
+  DOCKER_TLS_VERIFY: "1"
+  DOCKER_CERT_PATH: /certs/client
   # Optional providers: each one is enabled by setting its variable (.env).
   # The ollama provider is registered by default (it costs nothing until a
   # node or LEFORGE_DEFAULT_PROVIDER selects it); the others only when set.
@@ -60,6 +71,8 @@ services:
     volumes:
       - workspaces:/var/lib/leforge/workspaces
       - forged-data:/var/lib/leforge/data
+      - sandbox-certs-client:/certs/client:ro
+    networks: [default, sandbox]
     depends_on:
       nats: {condition: service_healthy}
       postgres: {condition: service_healthy}
@@ -167,14 +180,61 @@ services:
     shm_size: 1g
     restart: unless-stopped
 
-  # Builds the default sandbox image used by nodes with isolation.mode: docker
-  # (`docker compose --profile sandbox build`). Docker isolation also requires
-  # mounting the Docker socket into forged - see docs/security.md first.
+  # --- tool sandboxes -------------------------------------------------------
+  # Docker daemon dedicated to LeForge (Docker-in-Docker). forged starts one
+  # sandbox container per replica here; agents never talk to it. It shares
+  # only the workspaces volume and the "sandbox" network with forged, and its
+  # firewall keeps sandbox containers away from every private network
+  # (postgres, nats, forged, your LAN). privileged is required by
+  # Docker-in-Docker; see docs/sandbox-runtime.md for what that means.
+  sandbox-daemon:
+    image: docker:28.5.2-dind
+    hostname: sandbox-daemon
+    privileged: true
+    entrypoint: ["/leforge/entrypoint.sh"]
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+      DOCKER_TLS_SAN: DNS:sandbox-daemon
+    volumes:
+      - ./deploy/sandbox-daemon/entrypoint.sh:/leforge/entrypoint.sh:ro
+      - ./deploy/sandbox-daemon/healthcheck.sh:/leforge/healthcheck.sh:ro
+      - sandbox-daemon-data:/var/lib/docker
+      - sandbox-certs-ca:/certs/ca
+      - sandbox-certs-server:/certs/server
+      - sandbox-certs-client:/certs/client
+      - workspaces:/var/lib/leforge/workspaces
+    networks: [sandbox]
+    healthcheck:
+      test: ["CMD", "/leforge/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
+    restart: unless-stopped
+
+  # Builds the default sandbox image (Dockerfile.sandbox) inside sandbox-daemon
+  # on every `up`; layers are cached in its volume, so later runs are instant.
+  # Rebuild after editing Dockerfile.sandbox: docker compose up sandbox-image
   sandbox-image:
-    profiles: [sandbox]
-    build: {context: ., dockerfile: Dockerfile.sandbox}
-    image: leforge/sandbox:latest
-    command: ["true"]
+    image: docker:28.5.2-cli
+    environment:
+      DOCKER_HOST: tcp://sandbox-daemon:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
+    volumes:
+      - ./Dockerfile.sandbox:/src/Dockerfile.sandbox:ro
+      - sandbox-certs-client:/certs/client:ro
+    command: ["sh", "-c", "docker build --quiet -t leforge/sandbox:latest - < /src/Dockerfile.sandbox"]
+    networks: [sandbox]
+    depends_on:
+      sandbox-daemon: {condition: service_healthy}
+    restart: "no"
+
+networks:
+  default:
+  # Only forged, sandbox-daemon and sandbox-image join it. Sandbox containers
+  # live on sandbox-daemon's own bridges behind its firewall.
+  sandbox:
 
 volumes:
   workspaces:
@@ -186,3 +246,7 @@ volumes:
   loki-data:
   ollama-models:
   hf-models:
+  sandbox-daemon-data:
+  sandbox-certs-ca:
+  sandbox-certs-server:
+  sandbox-certs-client:

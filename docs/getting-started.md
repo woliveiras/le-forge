@@ -15,7 +15,7 @@ for name in LEFORGE_ADMIN_TOKEN LEFORGE_RUNTIME_SECRET POSTGRES_PASSWORD GRAFANA
 done > .env
 chmod 600 .env
 docker compose up -d --build
-docker compose ps              # forged, agents, nats, postgres, otel-collector, prometheus, tempo, loki, grafana
+docker compose ps              # forged, agents, nats, postgres, sandbox-daemon, otel-collector, prometheus, tempo, loki, grafana
 ```
 
 | URL | What |
@@ -36,7 +36,15 @@ LEFORGE_BOOTSTRAP_START=hello-echo
 ```
 
 To run the lighter stack without observability: `docker compose up -d forged`
-(it pulls in `nats`, `postgres` and `agents`).
+(it pulls in `nats`, `postgres` and `agents`). Add `sandbox-daemon sandbox-image`
+to that command when agents should run commands in containers.
+
+`sandbox-daemon` is a Docker daemon dedicated to LeForge: agents with docker
+isolation run their commands in containers there, never on your machine's
+Docker. `sandbox-image` builds the default sandbox image inside it on every
+`up` and then exits (status `Exited (0)` is expected). The console shows its
+state under **Integrations → Sandbox runtime**. See
+[sandbox runtime](sandbox-runtime.md).
 
 ## 2. Watch work move
 
@@ -244,6 +252,16 @@ source nodes emit a `tick` per turn. `config: {fail: true}` makes a node fail
 (to test retries and dead-lettering); `config: {stopAfter: N}` exercises the
 auto-stop handshake. See `examples/graphs/hello-echo.yaml`.
 
+### Run agent commands in containers
+
+Agents that hold `shell.exec` or the git tools should run their commands in a
+container: select the agent, open **Agent configuration → Command sandbox**,
+set **Isolation** to `docker`, and choose **Network** `none` (default) or
+`bridge` when it must download dependencies. Commands then run on
+`sandbox-daemon`, can reach the internet only when bridged, and never reach
+LeForge's services or your network. Details, reset and troubleshooting:
+[sandbox runtime](sandbox-runtime.md).
+
 ### Prompt tokens
 
 | Token | Meaning |
@@ -294,4 +312,5 @@ install Go (it produces Linux binaries, suitable for containers and CI).
 
 - [Architecture](architecture.md) to understand the engine, queues and runtimes.
 - [Extensibility](extensibility.md) to write an agent in any language or framework.
+- [Sandbox runtime](sandbox-runtime.md) to run agent commands in containers and reset them.
 - [Deployment](deployment.md) and [production hardening](production-hardening.md) before going live.
