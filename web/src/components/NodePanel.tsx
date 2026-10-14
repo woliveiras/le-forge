@@ -735,6 +735,7 @@ function AgentEditor({
   const setLoop = (patch: NonNullable<GraphNode['loop']>) => update({ loop: { ...node.loop, ...patch } });
   const setStop = (patch: NonNullable<NonNullable<GraphNode['loop']>['stop']>) => setLoop({ stop: { ...node.loop?.stop, ...patch } });
   const setCluster = (patch: NonNullable<GraphNode['cluster']>) => update({ cluster: { ...node.cluster, ...patch } });
+  const setLimits = (patch: NonNullable<GraphNode['limits']>) => update({ limits: { ...node.limits, ...patch } });
   const isolation = { ...defaults.isolation, ...node.isolation };
   const setIsolation = (patch: NonNullable<GraphNode['isolation']>) => update({ isolation: { ...node.isolation, ...patch } });
   const grants = node.tools === undefined ? (defaults.tools ?? []) : node.tools;
@@ -750,11 +751,11 @@ function AgentEditor({
       <label>
         ID
         <input value={node.id} readOnly aria-describedby={`${nodeId}-id-hint`} />
-        <span id={`${nodeId}-id-hint`} className="muted tiny">
-          Channels refer to agents by ID, so it is fixed once created.
-        </span>
-        <FieldIssues issues={issues} field="id" />
       </label>
+      <span id={`${nodeId}-id-hint`} className="muted tiny">
+        Channels refer to agents by ID, so it is fixed once created.
+      </span>
+      <FieldIssues issues={issues} field="id" />
       <label>
         Name
         <input value={node.name ?? ''} onChange={(event) => update({ name: event.target.value || undefined })} />
@@ -1004,6 +1005,49 @@ function AgentEditor({
           )
         )}
         <FieldIssues issues={issues} field="isolation" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Limits per turn</legend>
+        <p className="muted tiny">
+          A turn that exceeds a limit fails and its input is redelivered. Long tasks (dependency upgrades, large
+          refactors) need more time and tool calls than the defaults.
+        </p>
+        <label>
+          Turn timeout
+          <input
+            value={node.limits?.turnTimeout ?? ''}
+            placeholder="30m"
+            onChange={(event) => setLimits({ turnTimeout: event.target.value || undefined })}
+          />
+          <FieldIssues issues={issues} field="limits.turnTimeout" />
+        </label>
+        <label>
+          Max tool calls
+          <input
+            type="number"
+            min={1}
+            value={node.limits?.maxToolCalls ?? ''}
+            placeholder="50"
+            onChange={(event) => setLimits({ maxToolCalls: numberOrUndefined(event.target.value) })}
+          />
+          <FieldIssues issues={issues} field="limits.maxToolCalls" />
+        </label>
+        <label>
+          Token budget
+          <input
+            type="number"
+            min={1}
+            value={node.limits?.maxTokens ?? ''}
+            placeholder="unlimited"
+            aria-describedby={`${nodeId}-tokens-hint`}
+            onChange={(event) => setLimits({ maxTokens: numberOrUndefined(event.target.value) })}
+          />
+        </label>
+        <span id={`${nodeId}-tokens-hint`} className="muted tiny">
+          Input plus output tokens the agent may use in one turn.
+        </span>
+        <FieldIssues issues={issues} field="limits.maxTokens" />
       </fieldset>
 
       <fieldset>

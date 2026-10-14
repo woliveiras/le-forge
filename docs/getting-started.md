@@ -243,6 +243,40 @@ forge inject summariser docs document '{"text":"..."}'
 (With the compose alias, copy the file into the container first or use
 `curl -X POST -H 'Content-Type: application/yaml' --data-binary @my-first-graph.yaml`.)
 
+### Build and configure a graph in the browser
+
+Everything above can be done from the console instead of YAML:
+
+1. **Graphs → New graph**, keep or adjust the template, **Create**. The graph
+   opens on the **Graph** tab.
+2. **Graph settings** (toolbar) edits graph-wide values:
+   - **Name** and **Description**;
+   - **Repository URL**: a remote repository (`https://…`, `ssh://…` or
+     `user@host:path`) cloned into the graph workspace the first time the
+     graph starts, while the workspace is empty. Changing it later does not
+     replace an existing workspace. Local paths and `file://` are refused, so a
+     graph cannot copy another graph's workspace or the server's files.
+     Private repositories need credentials, which are not supported yet;
+   - **Parameters**: values used in prompts as `@name`;
+   - **Max hops**: how long a chain of agent-to-agent messages may get.
+3. **Add agent**, then select it to configure it in **Agent configuration**:
+   name, runtime, provider and model, prompt (**Edit → Apply to draft**), loop
+   and stop policy, replicas, **Command sandbox** (see below), **Limits per
+   turn**, approval gates, and tools in **Tools**.
+4. Drag from one agent's right handle to another's left handle to add a
+   channel, then select it to set its type, message types, route condition
+   and **Require approval before delivery**. A channel with approval and no consumer is a
+   convenient "notify me" endpoint: its messages wait in **Approvals**.
+5. **Save graph**. Problems are listed above the canvas and next to the field
+   that caused them; fix them and they clear on their own.
+6. **Run all** (or **Start** on one agent) and follow **Live output**,
+   **Messages**, **Events** and **Approvals**.
+
+**Limits per turn** bound one agent turn: **Turn timeout** (default `30m`),
+**Max tool calls** (default 50) and **Token budget** (unlimited by default). A
+turn that exceeds one fails and its input is redelivered, so raise them for
+long tasks such as dependency upgrades (for example `2h` and 300 calls).
+
 ### Dry-run a topology for free
 
 Set `runtime: {kind: echo}` (per node or in `spec.defaults`) to run the whole

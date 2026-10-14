@@ -295,6 +295,59 @@ describe('GraphWorkspace editor', () => {
     expect(dev.tools).toEqual([{ name: 'shell.exec' }]);
   });
 
+  it('edits per-turn limits for long tasks', async () => {
+    const user = userEvent.setup();
+    const { puts } = backend(() => valid);
+    renderWorkspace('dev');
+    const editor = await screen.findByRole('region', { name: 'Agent configuration' });
+    await user.type(within(editor).getByLabelText('Turn timeout'), '2h');
+    await user.type(within(editor).getByLabelText('Max tool calls'), '300');
+    await user.click(toolbarButton('Save graph'));
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    expect((puts()[0].body as Graph).spec.nodes[0].limits).toEqual({ turnTimeout: '2h', maxToolCalls: 300 });
+  });
+
+  it('edits graph settings: repository and parameters, with graph-level errors linked to the panel', async () => {
+    const user = userEvent.setup();
+    const { puts } = backend((graph) =>
+      graph.spec.workspace?.repo?.startsWith('/')
+        ? {
+            valid: false,
+            errors: [{ path: 'spec.workspace.repo', message: 'is not a remote repository URL' }],
+            warnings: [],
+          }
+        : valid,
+    );
+    renderWorkspace();
+    await user.click(await screen.findByRole('button', { name: 'Graph settings' }));
+    const settings = screen.getByRole('region', { name: 'Graph configuration' });
+
+    const repo = within(settings).getByLabelText('Repository URL');
+    await user.type(repo, '/var/lib/leforge/workspaces/other');
+    await user.click(toolbarButton('Save graph'));
+    const summary = await screen.findByRole('list', { name: 'Graph validation' });
+    expect(within(settings).getByText('is not a remote repository URL')).toBeTruthy();
+    expect(puts()).toHaveLength(0);
+
+    // The summary links graph-level problems back to the settings panel.
+    await user.click(within(summary).getByRole('button', { name: 'Graph settings' }));
+    await user.clear(within(screen.getByRole('region', { name: 'Graph configuration' })).getByLabelText('Repository URL'));
+    await user.type(
+      within(screen.getByRole('region', { name: 'Graph configuration' })).getByLabelText('Repository URL'),
+      'https://github.com/woliveiras/bookaneer.git',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add parameter' }));
+    const parameter = screen.getByRole('group', { name: 'Parameter 1' });
+    await user.type(within(parameter).getByLabelText('Name'), 'branch');
+    await user.type(within(parameter).getByLabelText('Value'), 'deps/update');
+
+    await user.click(toolbarButton('Save graph'));
+    await waitFor(() => expect(puts()).toHaveLength(1));
+    const body = puts()[0].body as Graph;
+    expect(body.spec.workspace).toEqual({ repo: 'https://github.com/woliveiras/bookaneer.git' });
+    expect(body.spec.parameters).toEqual([{ name: 'branch', value: 'deps/update' }]);
+  });
+
   it('asks before starting while graph edits are unsaved', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.fn(() => false);

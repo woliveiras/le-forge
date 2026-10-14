@@ -48,6 +48,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 - [x] Detect version conflicts, preserve local changes, and provide an explicit recovery path.
 - [x] Preserve drag, zoom, pan, selection, and element positions during real-time state updates.
 - [x] Keep the YAML editor as an advanced alternative, synchronized with the same model and version control.
+- [x] Edit graph-wide settings in the visual editor (name, description, workspace repository, parameters, max hops) and per-turn agent limits (turn timeout, max tool calls, token budget). Repository URLs must be remote; local paths and non-network transports are rejected on save and before cloning.
 - [ ] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts. — Covered by component tests against the real API client (`GraphWorkspace.test.tsx`: create, edit, validate/revalidate, save, server 422, discard, conflict overwrite/reload, removal confirmation, YAML sync) and unit tests for the edit operations (`edit.test.ts`, including connect and keyboard removal). Keyboard removal was also checked manually in the browser (mock mode). Pending: browser E2E for drag-to-connect and Delete-key gestures.
 
 **Done when:** A user can create, configure, validate, save, and start a graph through the visual interface without writing YAML.

@@ -32,7 +32,16 @@ export function ElementIssues({ issues, label }: { issues?: ElementIssue[]; labe
 }
 
 /** Summary of a validation run, with links to the affected elements. */
-export function IssueSummary({ index, onSelect }: { index: IssueIndex; onSelect: (s: Selection) => void }) {
+export function IssueSummary({
+  index,
+  onSelect,
+  onOpenSettings,
+}: {
+  index: IssueIndex;
+  onSelect: (s: Selection) => void;
+  /** Opens graph settings, where graph-level findings are edited. */
+  onOpenSettings?: () => void;
+}) {
   const rows: { key: string; severity: ElementIssue['severity']; text: string; target?: Selection }[] = [];
   for (const issue of index.graph) rows.push({ key: `g${rows.length}`, severity: issue.severity, text: `${issue.path}: ${issue.message}` });
   for (const [id, list] of index.nodes)
@@ -61,6 +70,10 @@ export function IssueSummary({ index, onSelect }: { index: IssueIndex; onSelect:
             {row.target ? (
               <button type="button" className="link" onClick={() => onSelect(row.target!)}>
                 {row.target.kind === 'node' ? 'Agent' : 'Channel'} {row.target.id}
+              </button>
+            ) : onOpenSettings ? (
+              <button type="button" className="link" onClick={onOpenSettings}>
+                Graph settings
               </button>
             ) : null}{' '}
             {row.text}

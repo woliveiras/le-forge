@@ -1653,3 +1653,17 @@ section {
   margin: 0 0 6px 28px;
   color: var(--muted);
 }
+.parameter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+}
+.parameter-row input {
+  width: 100%;
+  min-width: 0;
+}
+.parameter-row .field-error,
+.parameter-row .field-warning {
+  grid-column: 1 / -1;
+}

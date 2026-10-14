@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/graph"
 )
 
 type Manager struct {
@@ -105,7 +106,17 @@ func (m *Manager) Ensure(ctx context.Context, g *domain.Graph) (string, error) {
 	if repo := g.Spec.Workspace.Repo; repo != "" {
 		entries, _ := os.ReadDir(dir)
 		if len(entries) == 0 {
-			if _, err := m.git(ctx, filepath.Dir(dir), "clone", repo, dir); err != nil {
+			// Graphs saved before repository URLs were validated may still
+			// hold a local path; never clone one (see graph.RepoKind).
+			if graph.RepoKind(repo) == graph.RepoInvalid {
+				return "", fmt.Errorf("clone %s: not a remote repository URL (use https://, ssh:// or user@host:path)", repo)
+			}
+			// Only network transports, also for submodules and redirects;
+			// "--" keeps the URL from being read as an option.
+			if _, err := m.git(ctx, filepath.Dir(dir),
+				"-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "protocol.http.allow=always",
+				"-c", "protocol.ssh.allow=always", "-c", "protocol.git.allow=always",
+				"clone", "--", repo, dir); err != nil {
 				return "", fmt.Errorf("clone %s: %w", repo, err)
 			}
 			return dir, nil

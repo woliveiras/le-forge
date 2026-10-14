@@ -106,6 +106,7 @@ production data. CI automation is outside the scope of this update.
 |---|---|---|
 | Authorisation of agents | Default-deny capability grants; gateway as the single enforcement point for native and external agents; model only sees granted schemas | `tools/policy.go`, `tools/gateway.go` |
 | Filesystem | Workspace jail with symlink resolution; per-grant path globs | `tools.ResolvePath`, `CheckPath` |
+| Workspace repositories | `spec.workspace.repo` must be a remote URL (validated on save and again before cloning); clones run with `protocol.allow=never` except https/http/ssh/git and `--` before the URL, so no local path, `file://` or `ext::` transport is used | `graph/repo.go`, `workspace/workspace.go` |
 | Commands | Allowlists; metacharacter rejection; argv execution without shell when restricted; timeouts (2 m default, 30 m max) with process-group kill; 64 KiB output cap | `tools/builtin_shell.go`, `sandbox_process.go` |
 | Network | SSRF guard at dial time; host allowlists incl. redirects | `tools/builtin_http.go` |
 | Isolation | Docker sandbox: `--network none`, `--cap-drop ALL`, `no-new-privileges`, CPU/memory limits, only the workspace mounted | `tools/sandbox_docker.go` |

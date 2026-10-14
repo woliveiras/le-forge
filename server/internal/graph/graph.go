@@ -271,6 +271,15 @@ func Validate(g *domain.Graph, knownRuntimes map[domain.RuntimeKind]bool) *Repor
 		}
 		params[p.Name] = true
 	}
+	if repo := g.Spec.Workspace.Repo; repo != "" {
+		switch RepoKind(repo) {
+		case RepoRemote:
+		case RepoInsecure:
+			r.warnf("spec.workspace.repo", "%q is fetched over unencrypted http; use https", repo)
+		default:
+			r.errf("spec.workspace.repo", "%q is not a remote repository URL: use https://, ssh:// or user@host:path (local paths and other transports are refused)", repo)
+		}
+	}
 	nodes := map[string]*domain.Node{}
 	for i := range g.Spec.Nodes {
 		n := &g.Spec.Nodes[i]

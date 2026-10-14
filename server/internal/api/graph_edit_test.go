@@ -146,3 +146,32 @@ spec:
 		t.Fatalf("export: %d %s", resp.StatusCode, exported)
 	}
 }
+
+// Repository URLs entered in the console must point at a remote host: a
+// local path would clone another graph's workspace or platform files.
+func TestGraphRepositoryMustBeRemote(t *testing.T) {
+	srv := setup(t)
+	const repoDoc = `
+apiVersion: leforge.io/v1
+kind: Graph
+metadata: {name: repo-demo}
+spec:
+  workspace: {repo: REPO}
+  defaults: {runtime: {kind: echo}}
+  nodes: [{id: a}]
+`
+	var bad struct {
+		Details struct {
+			Errors []struct{ Path, Message string }
+		}
+	}
+	for _, repo := range []string{"/var/lib/leforge/workspaces/other", "'file:///etc'", "'ext::sh -c id'"} {
+		if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", strings.Replace(repoDoc, "REPO", repo, 1), &bad); c != 422 ||
+			len(bad.Details.Errors) == 0 || bad.Details.Errors[0].Path != "spec.workspace.repo" {
+			t.Fatalf("repo %s: %d %+v", repo, c, bad)
+		}
+	}
+	if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", strings.Replace(repoDoc, "REPO", "https://github.com/woliveiras/bookaneer.git", 1), nil); c != 201 {
+		t.Fatalf("https repo: %d", c)
+	}
+}

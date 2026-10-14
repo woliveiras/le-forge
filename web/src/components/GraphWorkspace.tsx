@@ -15,6 +15,7 @@ import {
   type EdgeRef,
 } from './canvas/edit';
 import { GraphCanvas, type Selection } from './canvas/GraphCanvas';
+import { GraphSettings } from './GraphSettings';
 import { ChannelPanel } from './ChannelPanel';
 import { Badge, Btn, ErrorBox, Icon } from './common';
 import { EventsView } from './EventsView';
@@ -69,6 +70,13 @@ export function GraphWorkspace({
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<Validation>();
   const [panelOpen, setPanelOpen] = useState(true);
+  // Graph settings show in the side panel while no agent or channel is selected.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = () => {
+    setSelection(null);
+    setSettingsOpen(true);
+    setPanelOpen(true);
+  };
   const currentSummary = draftDirty ? { ...summary, graph: draftGraph } : summary;
   const issues = useMemo(
     () => validation && indexIssues(validation.graph, validation.result.errors ?? [], validation.result.warnings ?? []),
@@ -249,6 +257,11 @@ export function GraphWorkspace({
         <div className="toolbar-actions">
           {(tab === 'canvas' || tab === 'yaml') && (
             <>
+              {tab === 'canvas' && (
+                <Btn small tone="ghost" onClick={openSettings} aria-pressed={settingsOpen && !selection}>
+                  Graph settings
+                </Btn>
+              )}
               {tab === 'canvas' && selection?.kind === 'node' && (
                 <Btn small tone="danger" onClick={() => removeElements([selection.id], [])}>
                   Remove agent
@@ -335,10 +348,14 @@ export function GraphWorkspace({
             setPanelOpen(true);
             onTab('canvas');
           }}
+          onOpenSettings={() => {
+            openSettings();
+            onTab('canvas');
+          }}
         />
       )}
       {tab === 'canvas' && (
-        <div className={`floor ${selection && panelOpen ? 'with-panel' : ''}`}>
+        <div className={`floor ${(selection || settingsOpen) && panelOpen ? 'with-panel' : ''}`}>
           <GraphCanvas
             graph={draftGraph}
             status={status}
@@ -363,9 +380,18 @@ export function GraphWorkspace({
             onRemove={removeElements}
             onSelect={(s) => {
               setSelection(s);
+              setSettingsOpen(false);
               if (s) setPanelOpen(true);
             }}
           />
+          {!selection && settingsOpen && panelOpen && (
+            <aside className="side-panel" aria-label="Graph settings">
+              <button type="button" className="icon-btn panel-close" onClick={() => setSettingsOpen(false)} aria-label="Close panel">
+                <Icon name="x" />
+              </button>
+              <GraphSettings graph={draftGraph} issues={issues?.graph} onChange={changeGraph} />
+            </aside>
+          )}
           {selection && panelOpen && (
             <aside className="side-panel" aria-label="Details">
               <button type="button" className="icon-btn panel-close" onClick={() => setPanelOpen(false)} aria-label="Close panel">
