@@ -183,3 +183,10 @@ After graph creation and operation have stabilized:
 9. **Guided onboarding**, integrated into delivered screens and flows, with an example graph and resumable help.
 10. **End-to-end tests** for the full interface workflow, including onboarding, authorization, and isolation.
 11. **Component library** as the second release.
+
+Compose delivery note: development-service selection and reviewed list-form
+`depends_on` groups are implemented for up to three image-based helpers per
+replica. Variants are standalone (no override merging). Runtime-only helpers use
+private internal networks and atomic CPU/memory/count admission; idle suspension
+preserves their data. Advanced Compose fields remain explicitly unsupported; see
+`docs/environments.md` for the accepted subset and lifecycle.

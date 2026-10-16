@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path"
@@ -18,7 +19,8 @@ import (
 
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
-	Capacity *sandboxcapacity.Manager
+	Capacity    *sandboxcapacity.Manager
+	EnforceSwap bool
 	// Name of the container (unique per replica).
 	Name string
 	// Image to run (needs /bin/sh and whatever tools agents call: git, go...).
@@ -126,7 +128,7 @@ func (s *DockerSandbox) RunArgs() []string {
 	}
 	if c.Memory != "" {
 		args = append(args, "--memory", c.Memory)
-		if c.Capacity != nil {
+		if c.Capacity != nil || c.EnforceSwap {
 			args = append(args, "--memory-swap", c.Memory)
 		}
 	}
@@ -406,15 +408,16 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}"}, ids...)
+	args := append([]string{"inspect", "--format", `{{.Name}} {{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}} {{if index .Config.Labels "leforge.capacity-group"}}{{index .Config.Labels "leforge.capacity-group"}}{{else}}-{{end}}`}, ids...)
 	out, err = docker(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("inspect active sandboxes: %w: %s", err, out)
 	}
 	var result []sandboxcapacity.Container
+	groups := map[string]int{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) != 4 {
+		if len(fields) != 4 && len(fields) != 5 {
 			return nil, fmt.Errorf("invalid sandbox inventory response")
 		}
 		if fields[1] == "false" {
@@ -435,7 +438,25 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 		if nano%1000000 != 0 {
 			cpu++
 		}
-		result = append(result, sandboxcapacity.Container{MilliCPU: cpu, Name: strings.TrimPrefix(fields[0], "/"), Memory: memory})
+		name := strings.TrimPrefix(fields[0], "/")
+		if len(fields) == 5 && fields[4] != "-" {
+			name = fields[4]
+			if memory <= 0 || cpu <= 0 {
+				return nil, fmt.Errorf("unbounded companion in sandbox group %s", name)
+			}
+			if index, ok := groups[name]; ok {
+				previous := &result[index]
+				if memory > math.MaxInt64-previous.Memory || cpu > math.MaxInt64-previous.MilliCPU {
+					return nil, fmt.Errorf("sandbox inventory overflow")
+				}
+				previous.Memory += memory
+				previous.MilliCPU += cpu
+				previous.Count++
+				continue
+			}
+			groups[name] = len(result)
+		}
+		result = append(result, sandboxcapacity.Container{Count: 1, MilliCPU: cpu, Name: name, Memory: memory})
 	}
 	return result, nil
 }

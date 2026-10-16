@@ -135,9 +135,13 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 			return nil, fmt.Errorf("select an existing Compose service")
 		}
 		for key := range service {
-			if key != "image" && key != "build" {
-				return nil, fmt.Errorf("unsupported selected service field %q; companion services and runtime settings are not supported yet", key)
+			if key != "image" && key != "build" && key != "depends_on" {
+				return nil, fmt.Errorf("unsupported selected service field %q; only image, build and depends_on are supported", key)
 			}
+		}
+		env.Companions, err = composeCompanions(services, sel.Service)
+		if err != nil {
+			return nil, err
 		}
 		if image, ok := service["image"]; ok {
 			var valid bool
@@ -197,6 +201,9 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 		}
 	default:
 		return nil, fmt.Errorf("unsupported source")
+	}
+	if sel.Source != "compose" && len(env.Companions) > 0 {
+		return nil, fmt.Errorf("repository companions require Compose review")
 	}
 	if sel.Source != "compose" && sel.Service != "" {
 		return nil, fmt.Errorf("service is only valid for Compose")

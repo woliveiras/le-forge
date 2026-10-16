@@ -290,6 +290,13 @@ func (m *Manager) generationUsers(ctx context.Context, g sharedGeneration) ([]st
 	}
 	for _, graph := range graphs {
 		referenced := (graph.Spec.Environment != nil && graph.Spec.Environment.Image == g.Image) || graph.Spec.Defaults.Isolation.Image == g.Image
+		if graph.Spec.Environment != nil {
+			for _, companion := range graph.Spec.Environment.Companions {
+				if companion.Image == g.Image {
+					referenced = true
+				}
+			}
+		}
 		for _, node := range graph.Spec.Nodes {
 			if node.Isolation.Image == g.Image {
 				referenced = true

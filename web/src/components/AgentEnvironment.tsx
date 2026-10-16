@@ -31,6 +31,7 @@ function GraphEnvironment({ graph }: { graph: Graph }) {
   }, [status.reload]);
   return <>
     <p>Graph environment: {graph.metadata.name || id}. Commands run in its isolated sandbox.</p>
+    {!!graph.spec.environment?.companions?.length && <p>Reviewed runtime services: {graph.spec.environment.companions.map(service => service.name).join(", ")}. Each replica has its own internal network and service data; startup requires capacity for the entire group.</p>}
     <ErrorBox error={status.error} />
     {status.error ? <p>Environment readiness could not be verified.</p> : status.data ? <>
       <EnvironmentProgress view={status.data} />

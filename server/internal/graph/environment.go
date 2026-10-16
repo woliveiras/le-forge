@@ -18,6 +18,12 @@ var reservedCacheDirs = []string{"/", "/workspace", "/bin", "/sbin", "/usr", "/l
 
 func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 	const p = "spec.environment"
+	if err := domain.ValidateCompanions(env.Companions); err != nil {
+		r.errf(p+".companions", "%s", err)
+	}
+	if len(env.Companions) > 0 && env.Network.Run != "" && env.Network.Run != "none" {
+		r.errf(p+".network.run", "companions require the isolated internal runtime network")
+	}
 	image, dockerfile := strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile)
 	switch {
 	case image == "" && dockerfile == "":

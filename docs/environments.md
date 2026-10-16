@@ -44,10 +44,12 @@ Supported inputs in this first version:
   root as the default context. `ONBUILD`, remote ADD, custom parser directives,
   instruction flags other than `COPY --from=<stage-or-image>` and heredocs are not supported.
   Use JSON array operands for filenames containing spaces.
-- Compose: select one service containing only `image` or `build`. Build accepts
-  a local context path, optional Dockerfile path and optional named `target`. Only that context is uploaded.
-  Other selected-service settings, interpolation,
-  overrides and companion-service startup are not supported.
+- Compose: explicitly select a development service with `image` or `build`, plus
+  optional list-form `depends_on`. Build supports local context, Dockerfile and
+  target. Review the complete dependency closure before accepting; see
+  [Compose runtime services](#compose-runtime-services) for supported fields and limits.
+  Standard filenames and `compose.*.yml/yaml` / `docker-compose.*.yml/yaml`
+  variants are independent candidates. Files are never merged implicitly.
 
 Discovery returns paths, hashes, service names and errors, not file contents.
 Review returns the normalized definition for inspection. Invalid higher-priority
@@ -59,8 +61,8 @@ When no definition exists, **Analyze repository** uses the configured default
 model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
-Additional Compose/devcontainer features, agent-callable environment tools,
-global CPU accounting is enforced across execution, build and setup. Explicit shared-resource cleanup is available
+Additional Compose/devcontainer features and agent-callable environment tools remain planned.
+Global CPU accounting is enforced across execution, build and setup. Explicit shared-resource cleanup is available
 through the admin API described below.
 Shared build/execution concurrency and memory budgets are available in
 [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
@@ -609,3 +611,54 @@ sequential build, setup and cache copies. The default per-pipeline CPU request i
 overrides it within `totalCPU`. Dedicated BuildKit workers and all setup/cache
 helpers have kernel CPU caps. See [global CPU admission and upgrade](sandbox-runtime.md#global-cpu-admission-and-upgrade)
 for values, defaults, and migration of memory-only reservations.
+
+### Compose runtime services
+
+Discovery follows the existing priority; Compose is considered after Dockerfiles.
+Choose the file and development service, then **Review environment**. The selected
+service may use only `image` or `build` and list-form `depends_on`. Dependencies
+are resolved transitively in deterministic order; cycles, missing services and
+more than three helpers are rejected. Unrelated services never start. Variants
+are standalone documents; override merging, includes and profiles are unsupported.
+
+Each helper supports only a literal `image`, optional nonempty `command` argument
+array and list-form `depends_on`. No helper builds, environment/env_file/secrets,
+interpolation, mounts/volumes, ports, privileges, custom networks, resource
+overrides or health/optional dependency conditions are accepted. Unsupported
+settings produce validation errors rather than being silently ignored. Images
+must work as uid/gid 10001, with all capabilities dropped and no-new-privileges.
+Helper names use lowercase letters, digits and hyphens (up to 40 characters).
+The runtime checks that containers stay running; it does not guarantee application
+readiness. Clients must retry connections when their dependency is still starting.
+
+The review lists helper images/commands and requires a checkbox acknowledging
+services, networking, resources and lifecycle before **Accept into draft**.
+Admin **Save graph** persists the normalized companions and reviewed source hash;
+source edits and tampering are rejected before saving/building. Builds and setup
+never start helpers. Helpers start only with an agent using the graph environment;
+an agent with an explicit image does not use the Compose group.
+
+Each replica gets its own internal Docker network, helper containers and writable
+layers. Services resolve by their Compose names. No host ports, host mounts or
+external network are attached to helpers. Agent network overrides must be empty
+or `none` for a group; the reviewed internal network enables local service
+communication. The development service's Compose command is unsupported: the
+agent sandbox remains the command executor. A helper consumes installation-default
+CPU/memory and one slot. The whole group reserves CPU, memory and container slots
+atomically before starting anything, avoiding partial-admission deadlocks. Oversize
+groups fail immediately; temporarily unavailable capacity waits cancellably.
+
+Idle suspension stops the entire group, confirms every stop, and releases its
+reservation while preserving service data. Resume reacquires the complete budget.
+Explicit task teardown removes group containers, helper-owned anonymous volumes
+and the internal network; workspace/private cache volumes remain governed by the
+existing task lifecycle. Failed cleanup retains capacity. Definition ownership
+labels prevent adoption/removal of another group's resources; stop the old task
+before replacing its definition. Images follow the existing daemon lifecycle;
+helper images are not published as shared environment cache generations. Explicit
+helper references to an existing shared generation protect it from cleanup.
+
+`make test-compose` validates reviewed Compose against the real dedicated daemon
+using already cached `alpine:3.22`: DNS communication, no default route/published
+ports, per-replica data isolation, CPU/memory limits, atomic admission, suspension,
+resume and independent teardown. It does not fetch credentials or pull fixtures.

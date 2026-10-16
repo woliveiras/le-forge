@@ -125,3 +125,27 @@ func TestConcurrentCPURequestsCannotOverbook(t *testing.T) {
 		t.Fatal(admitted)
 	}
 }
+
+func TestAtomicGroupCountAndInventory(t *testing.T) {
+	m := manager(t)
+	m.Policy.MaxActive = 3
+	ctx := context.Background()
+	if err := m.ReserveGroup(ctx, "group", 64<<20, 1000, 2, empty); err != nil {
+		t.Fatal(err)
+	}
+	inventory := func(context.Context) ([]Container, error) {
+		return []Container{{Name: "group", Memory: 64 << 20, MilliCPU: 1000, Count: 2}}, nil
+	}
+	if err := m.ReserveGroup(ctx, "group", 64<<20, 1000, 2, inventory); err != nil {
+		t.Fatal(err)
+	}
+	wait, cancel := context.WithTimeout(ctx, 40*time.Millisecond)
+	defer cancel()
+	if err := m.ReserveGroup(wait, "another", 64<<20, 1000, 2, inventory); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	slots, err := m.load(ctx)
+	if err != nil || len(slots) != 1 || slots["group"].Count != 2 {
+		t.Fatal(slots, err)
+	}
+}

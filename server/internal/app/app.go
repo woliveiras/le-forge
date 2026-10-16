@@ -301,12 +301,14 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 			img := s.Node.Isolation.Image
 			net := s.Node.Isolation.Network
 			var volumes []string
+			var companions []domain.Companion
 			if engine.UsesEnvironment(s.Graph, s.Node) {
 				env, err := envs.SandboxFor(ctx, s.Graph)
 				if err != nil {
 					return nil, err
 				}
 				img, volumes = env.Image, env.Volumes
+				companions = env.Companions
 				if net == "" {
 					net = env.Network
 				}
@@ -322,7 +324,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				slog.Info("sandbox capacity", "graph", s.Graph.Metadata.ID, "node", s.Node.ID, "sandbox", name, "state", state)
 				bus.Publish(context.Background(), domain.NewEvent("sandbox.capacity", s.Graph.Metadata.ID, map[string]any{"node": s.Node.ID, "replica": s.Replica, "state": state}))
 			}
-			sb, err := tools.NewDockerSandbox(tools.DockerSandboxConfig{
+			sandboxConfig := tools.DockerSandboxConfig{
 				Capacity: &budget,
 				Name:     fmt.Sprintf("leforge-sbx-%s-%s-%d", s.Graph.Metadata.ID, s.Node.ID, s.Replica),
 				Image:    img, HostDir: s.HostWorkdir, Network: net,
@@ -330,7 +332,18 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
 				Labels:  map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
 				Volumes: volumes,
-			})
+			}
+			if len(companions) > 0 {
+				sb, err := tools.NewComposeSandbox(sandboxConfig, companions)
+				if err != nil {
+					return nil, err
+				}
+				if err := sb.Start(ctx); err != nil {
+					return nil, err
+				}
+				return sb, nil
+			}
+			sb, err := tools.NewDockerSandbox(sandboxConfig)
 			if err != nil {
 				return nil, err
 			}

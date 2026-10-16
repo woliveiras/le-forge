@@ -276,7 +276,7 @@ func (s cleanupFailureStore) KVList(ctx context.Context, ns, prefix string) (map
 	return s.Store.KVList(ctx, ns, prefix)
 }
 func TestCleanupFailsClosedOnStorageAndMalformedReferences(t *testing.T) {
-	for _, scenario := range []string{"storage", "malformed", "definition"} {
+	for _, scenario := range []string{"storage", "malformed", "definition", "companion"} {
 		t.Run(scenario, func(t *testing.T) {
 			h := setup(t)
 			g := cleanupFixture(t, h, "shared_state")
@@ -287,9 +287,13 @@ func TestCleanupFailsClosedOnStorageAndMalformedReferences(t *testing.T) {
 				if err := h.store.KVPut(context.Background(), kvNamespace, "unknown", []byte("{")); err != nil {
 					t.Fatal(err)
 				}
-			case "definition":
+			case "definition", "companion":
 				graph := graphWith(nil)
 				graph.Spec.Defaults.Isolation.Image = g.Image
+				if scenario == "companion" {
+					graph.Spec.Defaults.Isolation.Image = ""
+					graph.Spec.Environment = &domain.EnvironmentSpec{Image: "alpine", Companions: []domain.Companion{{Name: "cache", Image: g.Image}}}
+				}
 				if _, err := h.store.SaveGraph(context.Background(), graph, 0); err != nil {
 					t.Fatal(err)
 				}
@@ -298,7 +302,7 @@ func TestCleanupFailsClosedOnStorageAndMalformedReferences(t *testing.T) {
 			if item.Removed || item.Eligible {
 				t.Fatalf("%+v", item)
 			}
-			if scenario != "definition" && item.Error == "" {
+			if scenario != "definition" && scenario != "companion" && item.Error == "" {
 				t.Fatal("failure hidden")
 			}
 			calls := strings.Join(h.docker.calls(t), "\n")

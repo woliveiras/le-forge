@@ -291,3 +291,63 @@ func TestExternalCopyReviewSaveAndRevalidation(t *testing.T) {
 		t.Fatalf("review/save/stale validation invoked Docker: %s", data)
 	}
 }
+
+func TestComposeCompanionsReviewAndSaveAPI(t *testing.T) {
+	root := t.TempDir()
+	bin, log := fakeDaemonCLI(t)
+	srv, _ := setupApp(t, func(c *config.Config) { c.Workspaces.Root = root; c.Isolation.Docker.Bin = bin })
+	doc := `apiVersion: leforge.io/v1
+kind: Graph
+metadata: {name: compose-review}
+spec: {nodes: [{id: worker, runtime: {kind: echo}}]}
+`
+	if code := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", doc, nil); code != 201 {
+		t.Fatal(code)
+	}
+	dir := filepath.Join(root, "compose-review")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "compose.yaml")
+	body := []byte("services: {dev: {image: alpine, depends_on: [cache]}, cache: {image: alpine, command: [sleep, infinity]}}")
+	if err := os.WriteFile(source, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	base := "/api/v1/graphs/compose-review"
+	var d environment.Discovery
+	if code := call(t, srv, "GET", base+"/environment/discovery", viewerTok, "", "", &d); code != 200 {
+		t.Fatal(code)
+	}
+	sel, _ := json.Marshal(environment.Selection{Source: d.Source, Path: d.Candidates[0].Path, SHA256: d.Candidates[0].SHA256, Service: "dev"})
+	var env domain.EnvironmentSpec
+	if code := call(t, srv, "POST", base+"/environment/resolve", viewerTok, "application/json", string(sel), &env); code != 200 || len(env.Companions) != 1 {
+		t.Fatal(code, env)
+	}
+	var saved struct {
+		Graph domain.Graph `json:"graph"`
+	}
+	call(t, srv, "GET", base, viewerTok, "", "", &saved)
+	if saved.Graph.Spec.Environment != nil {
+		t.Fatal("review saved environment")
+	}
+	saved.Graph.Spec.Environment = &env
+	graphJSON, _ := json.Marshal(saved.Graph)
+	if code := callIfMatch(t, srv, "PUT", base, viewerTok, string(graphJSON), 1, nil); code != 403 {
+		t.Fatal(code)
+	}
+	if code := callIfMatch(t, srv, "PUT", base, adminTok, string(graphJSON), 1, &saved); code != 200 {
+		t.Fatal(code)
+	}
+	if len(saved.Graph.Spec.Environment.Companions) != 1 {
+		t.Fatal("companions lost on persistence")
+	}
+	if err := os.WriteFile(source, append(body, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, srv, "POST", base+"/environment/build", operatorTok, "application/json", "{}", nil); code != 400 {
+		t.Fatal("stale helper review built", code)
+	}
+	if data, err := os.ReadFile(log); err == nil && strings.TrimSpace(string(data)) != "" {
+		t.Fatal("Docker ran during review", string(data))
+	}
+}

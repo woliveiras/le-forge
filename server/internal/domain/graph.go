@@ -72,6 +72,7 @@ type EnvironmentOrigin struct {
 // Dockerfile), setup commands run once with the workspace mounted, and the
 // network and cache policy of the containers built from it.
 type EnvironmentSpec struct {
+	Companions []Companion `json:"companions,omitempty" yaml:"companions,omitempty"`
 	// Target selects a named Dockerfile stage; empty builds the final stage.
 	Target string             `json:"target,omitempty" yaml:"target,omitempty"`
 	Origin *EnvironmentOrigin `json:"origin,omitempty" yaml:"origin,omitempty"`

@@ -118,3 +118,26 @@ it('reviews a named build stage and invalidates acceptance when the stage change
   await user.click(screen.getByRole('button', { name: 'Accept into draft' }));
   expect(onAccept).toHaveBeenCalledWith(env);
 });
+
+it('requires a fresh review of auxiliary services before accepting a Compose environment', async () => {
+  const user = userEvent.setup();
+  const env = { image: 'alpine', companions: [{ name: 'cache', image: 'redis:7' }] };
+  fakeApi({ [`GET ${discoveryPath}`]: () => ({ source: 'compose', status: 'review_required', candidates: [candidate] }), [`POST ${resolvePath}`]: () => env });
+  const onAccept = vi.fn();
+  render(<EnvironmentDiscovery graphId="g" disabled={false} onAccept={onAccept} />);
+  await user.click(screen.getByRole('button', { name: 'Discover environment' }));
+  await user.selectOptions(await screen.findByLabelText('Repository definition'), 'compose.yaml');
+  await user.selectOptions(screen.getByLabelText('Development service'), 'dev');
+  await user.click(screen.getByRole('button', { name: 'Review environment' }));
+  const accept = await screen.findByRole('button', { name: 'Accept into draft' });
+  expect(accept).toHaveProperty('disabled', true);
+  expect(screen.getByRole('region', { name: 'Review auxiliary services' }).textContent).toContain('redis:7');
+  await user.click(screen.getByRole('checkbox'));
+  expect(accept).toHaveProperty('disabled', false);
+  await user.selectOptions(screen.getByLabelText('Development service'), 'db');
+  await user.click(screen.getByRole('button', { name: 'Review environment' }));
+  expect(await screen.findByRole('button', { name: 'Accept into draft' })).toHaveProperty('disabled', true);
+  await user.click(screen.getByRole('checkbox'));
+  await user.click(screen.getByRole('button', { name: 'Accept into draft' }));
+  expect(onAccept).toHaveBeenCalledWith(env);
+});

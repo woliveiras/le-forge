@@ -80,8 +80,7 @@ func Discover(ctx context.Context, dir string) (Discovery, error) {
 			if base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.") || strings.HasSuffix(base, ".Dockerfile") {
 				groups[2] = append(groups[2], name)
 			}
-			switch base {
-			case "compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml":
+			if composeFilename(base) {
 				groups[3] = append(groups[3], name)
 			}
 			return nil
@@ -230,4 +229,12 @@ func inspectDefinition(source string, data []byte) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// Variants are independent candidates, never implicitly merged as overrides.
+func composeFilename(name string) bool {
+	if name == "compose.yaml" || name == "compose.yml" || name == "docker-compose.yaml" || name == "docker-compose.yml" {
+		return true
+	}
+	return (strings.HasPrefix(name, "compose.") || strings.HasPrefix(name, "docker-compose.")) && (strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml"))
 }

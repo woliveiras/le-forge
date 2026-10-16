@@ -54,6 +54,7 @@ export interface EnvironmentDiscovery {
  candidates: { path: string; sha256: string; services?: string[]; targets?: string[]; error?: string }[];
 }
 export interface EnvironmentSpec {
+ companions?: { name: string; image: string; command?: string[] }[];
  origin?: EnvironmentSelection & { files: Record<string, string>; dockerfilePath?: string; contextSHA256?: string };
 
   image?: string;

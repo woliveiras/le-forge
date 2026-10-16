@@ -74,6 +74,7 @@ func (m *Manager) CPU(request string) (int64, error) {
 }
 
 type reservation struct {
+	Count    int   `json:"count,omitempty"`
 	Memory   int64 `json:"memory"`
 	MilliCPU int64 `json:"milliCPU"`
 }

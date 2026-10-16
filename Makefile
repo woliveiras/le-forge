@@ -8,7 +8,7 @@ VERSION   ?= dev
 NAMESPACE ?= leforge
 GRAPH     ?= examples/graphs/software-factory.yaml
 
-.PHONY: help build test test-go test-python test-web test-sandbox test-sandbox-capacity test-environment-context lint fmt up down logs images k8s-render clean
+.PHONY: help build test test-compose test-go test-python test-web test-sandbox test-sandbox-capacity test-environment-context lint fmt up down logs images k8s-render clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -28,6 +28,9 @@ test-python: ## SDK and example agent tests (stdlib unittest)
 
 test-web: ## Type-check and run the web console tests (Vitest, jsdom)
 	cd web && npm ci --no-audit --no-fund && npx tsc --noEmit && npm test
+
+test-compose: ## Reviewed Compose services on the dedicated daemon (cached alpine:3.22 required)
+	./scripts/test-compose-runtime.sh
 
 test-sandbox: ## Sandbox runtime isolation checks against the Compose stack (needs Docker; see docs/sandbox-runtime.md)
 	./scripts/test-sandbox-runtime.sh

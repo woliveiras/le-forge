@@ -535,3 +535,18 @@ respects inherited isolation and image overrides, shows environment readiness
 and errors, and presents recent per-replica admission history. Structured status
 is persisted independently of build logs. Exact changed-file diffs, durable
 execution queue positions/ETAs and browser E2E remain planned.
+
+### Reviewed Compose dependency groups
+
+Implemented: standard Compose filenames and explicit standalone variants,
+development service selection, transitive list-form dependencies and mandatory
+helper review in the console. Up to three prebuilt helpers run only during agent
+execution, each replica in its own internal network. CPU/memory/count admission
+is atomic for the entire group; suspension preserves helper data, and explicit
+teardown removes only owned containers/network/helper anonymous volumes. Source
+fingerprints and role-based graph saving remain authoritative.
+
+Unsupported: implicit override merging, helper builds, environment/secret injection,
+mounts, ports, privileges, network overrides, application-health conditions and
+helper availability during build/setup. Rejection is explicit; unrelated services
+never start. See [Compose services](environments.md#compose-runtime-services).

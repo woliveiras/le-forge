@@ -17,12 +17,13 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
   const [preview, setPreview] = useState<EnvironmentSpec>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [companionsReviewed, setCompanionsReviewed] = useState(false);
   const candidate = result?.candidates.find((item) => item.path === selected);
 
   const discover = async () => {
     setBusy(true);
     setError(undefined);
-    setPreview(undefined);
+    setPreview(undefined); setCompanionsReviewed(false);
     setResult(undefined);
     setSelected('');
     setService(''); setTarget('');
@@ -36,7 +37,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
     if (!candidate || !result) return;
     setBusy(true);
     setError(undefined);
-    setPreview(undefined);
+    setPreview(undefined); setCompanionsReviewed(false);
     try {
       setPreview(await api.resolveEnvironment(graphId, {
         source: result.source, path: candidate.path, sha256: candidate.sha256,
@@ -59,7 +60,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
       <p className="muted small">Source: {result.source}</p>
       <label>Repository definition
         <select disabled={busy || disabled} value={selected} onChange={(event) => {
-          setSelected(event.target.value); setService(''); setTarget(''); setPreview(undefined); setError(undefined);
+          setSelected(event.target.value); setService(''); setTarget(''); setPreview(undefined); setCompanionsReviewed(false); setError(undefined);
         }}>
           <option value="">Select a definition</option>
           {result.candidates.map((item) => <option key={item.path} value={item.path}>{item.path}</option>)}
@@ -68,7 +69,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
       <ErrorBox error={candidate?.error} />
       {!!candidate?.services?.length && <label>Development service
         <select disabled={busy || disabled} value={service} onChange={(event) => {
-          setService(event.target.value); setPreview(undefined); setError(undefined);
+          setService(event.target.value); setPreview(undefined); setCompanionsReviewed(false); setError(undefined);
         }}>
           <option value="">Select a service</option>
           {candidate.services.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -76,7 +77,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
       </label>}
       {!!candidate?.targets?.length && <label>Build stage
         <select disabled={busy || disabled} value={target} onChange={(event) => {
-          setTarget(event.target.value); setPreview(undefined); setError(undefined);
+          setTarget(event.target.value); setPreview(undefined); setCompanionsReviewed(false); setError(undefined);
         }}>
           <option value="">Final stage (default)</option>
           {candidate.targets.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -87,7 +88,14 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
     {preview && <>
       <p>Review the image, setup commands and network settings below. Nothing has been saved or built.</p>
       <pre aria-label="Environment proposal">{JSON.stringify({ ...preview, origin: undefined }, null, 2)}</pre>
-      <Btn small disabled={disabled || busy} onClick={() => { onAccept(preview); setPreview(undefined); setResult(undefined); }}>Accept into draft</Btn>
+      {!!preview.companions?.length && <section aria-label="Review auxiliary services">
+        <h4>Auxiliary services</h4>
+        <p>These dependencies start only when the agent runs, in private containers for each replica. They share an internal network with the agent, without published ports or internet access. Build and setup do not start them.</p>
+        <ul>{preview.companions.map(item => <li key={item.name}><strong>{item.name}</strong>: <code>{item.image}</code>{item.command && <pre>{JSON.stringify(item.command)}</pre>}</li>)}</ul>
+        <p>Each helper uses the installation CPU/memory defaults. The entire group waits for capacity together. Services run as uid 10001; startup checks container running state, not application health. Stop/reset removes ephemeral helper data; idle suspension preserves it.</p>
+        <label><input type="checkbox" checked={companionsReviewed} disabled={disabled || busy} onChange={e => setCompanionsReviewed(e.target.checked)} /> I reviewed these auxiliary services and their internal network</label>
+      </section>}
+      <Btn small disabled={disabled || busy || (!!preview.companions?.length && !companionsReviewed)} onClick={() => { onAccept(preview); setPreview(undefined); setCompanionsReviewed(false); setResult(undefined); }}>Accept into draft</Btn>
     </>}
   </section>;
 }

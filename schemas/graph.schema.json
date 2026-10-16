@@ -66,6 +66,7 @@
       "type": "object", "additionalProperties": false,
       "description": "Project environment: the image docker-isolated agents without an image of their own run commands in. Built by LeForge on the sandbox daemon. Exactly one of image or dockerfile.",
       "properties": {
+        "companions": {"type": "array", "maxItems": 3, "items": {"type": "object", "additionalProperties": false, "required": ["name", "image"], "properties": {"name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"}, "image": {"type": "string", "minLength": 1}, "command": {"type": "array", "maxItems": 64, "items": {"type": "string"}}}}},
         "image": {"type": "string", "description": "Base image to pull, e.g. golang:1.26."},
         "dockerfile": {"type": "string", "description": "Inline Dockerfile; accepted repository definitions include a validated build context."},
         "context": {"type": "string", "description": "Repository-relative context for an accepted environment."},

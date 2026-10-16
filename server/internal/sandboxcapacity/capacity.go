@@ -70,6 +70,7 @@ func (p Policy) Validate() error {
 }
 
 type Container struct {
+	Count    int
 	MilliCPU int64
 	Name     string
 	Memory   int64
@@ -164,13 +165,22 @@ func (m *Manager) Reserve(ctx context.Context, name string, memory int64, invent
 	return m.ReserveCPU(ctx, name, memory, cpu, inventory)
 }
 
-func (m *Manager) ReserveCPU(ctx context.Context, name string, memory, cpu int64, inventory Inventory) (resultErr error) {
+func (m *Manager) ReserveCPU(ctx context.Context, name string, memory, cpu int64, inventory Inventory) error {
+	return m.ReserveGroup(ctx, name, memory, cpu, 1, inventory)
+}
+
+// ReserveGroup admits an entire runtime group atomically, preventing a main
+// container from holding capacity while waiting for its own dependencies.
+func (m *Manager) ReserveGroup(ctx context.Context, name string, memory, cpu int64, countRequest int, inventory Inventory) (resultErr error) {
 	ctx, span := observability.Start(ctx, "sandbox.admit")
 	defer func() { observability.EndSpan(span, resultErr) }()
 	if m.Store == nil || m.Scope == "" || name == "" || inventory == nil {
 		return fmt.Errorf("sandbox capacity requires store, scope, container name and inventory")
 	}
 
+	if countRequest < 1 || countRequest > m.Policy.MaxActive {
+		return fmt.Errorf("sandbox group exceeds container count budget")
+	}
 	if _, err := m.Memory(strconv.FormatInt(memory, 10)); err != nil {
 		return err
 	}
@@ -201,6 +211,12 @@ func (m *Manager) ReserveCPU(ctx context.Context, name string, memory, cpu int64
 				if v.Memory <= 0 || v.MilliCPU <= 0 {
 					return fmt.Errorf("invalid or legacy sandbox reservation %s without CPU accounting; stop/reset its owner before admitting work", k)
 				}
+				if v.Count == 0 {
+					v.Count = 1
+				}
+				if v.Count < 1 {
+					return fmt.Errorf("invalid group reservation count")
+				}
 				usage[k] = v
 			}
 			for _, c := range active {
@@ -208,11 +224,12 @@ func (m *Manager) ReserveCPU(ctx context.Context, name string, memory, cpu int64
 					return fmt.Errorf("running sandbox %s has no memory/CPU cap; stop it before admitting more work", c.Name)
 				}
 				v := usage[c.Name]
+				v.Count = max(v.Count, max(c.Count, 1))
 				v.Memory = max(v.Memory, c.Memory)
 				v.MilliCPU = max(v.MilliCPU, c.MilliCPU)
 				usage[c.Name] = v
 			}
-			if previous, ok := usage[name]; ok && (previous.Memory != memory || previous.MilliCPU != cpu) {
+			if previous, ok := usage[name]; ok && (previous.Memory != memory || previous.MilliCPU != cpu || previous.Count != countRequest) {
 				return fmt.Errorf("sandbox %s has a different reserved memory/CPU limit; stop it before changing limits", name)
 			}
 			used := int64(0)
@@ -222,17 +239,17 @@ func (m *Manager) ReserveCPU(ctx context.Context, name string, memory, cpu int64
 				if k == name {
 					continue
 				}
-				count++
+				count += min(v.Count, m.Policy.MaxActive-count)
 				used += min(v.Memory, total-used)
 				usedCPU += min(v.MilliCPU, totalCPU-usedCPU)
 			}
-			if count >= m.Policy.MaxActive || memory > total-used || cpu > totalCPU-usedCPU {
+			if countRequest > m.Policy.MaxActive-count || memory > total-used || cpu > totalCPU-usedCPU {
 				if _, existing := usage[name]; existing {
 					return fmt.Errorf("existing sandbox reservations exceed the configured budget; stop sandboxes before reducing limits")
 				}
 				return nil
 			}
-			slots[name] = reservation{Memory: memory, MilliCPU: cpu}
+			slots[name] = reservation{Memory: memory, MilliCPU: cpu, Count: countRequest}
 			if err := m.save(ctx, slots); err != nil {
 				return err
 			}
