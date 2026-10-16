@@ -14,31 +14,51 @@ is installed on your machine, and agents never get access to Docker.
 | Understand what happens on Build | [How a build works](#how-a-build-works) |
 | Fix a failed build | [Troubleshooting](#troubleshooting) |
 
-**Available through the API:** `GET /api/v1/graphs/{id}/environment/discovery`
-(viewer) inspects an existing checkout, preserving explicit graph configuration.
-It finds `.leforge/environment.yaml`, then `.devcontainer/devcontainer.json`,
-then Dockerfiles, then standard Compose filenames. It returns candidate paths,
-content hashes, Compose service names and structural errors, without file
-contents, saving, cloning, building or executing anything. Multiple candidates
-remain available for review; malformed higher-priority files block fallback.
-A missing checkout is an error, not an empty repository. Scans exclude `.git`,
-`node_modules`, `vendor` and `.venv`, reject definition symlinks, and are limited
-to 10,000 entries and 256 KiB per definition. Devcontainer inspection currently
-accepts strict JSON with `name`, `image` and string `postCreateCommand` only.
-Dockerfiles and Compose receive basic structural inspection, not full build or
-policy validation. `proposal_required` means no definition was found; it does
-not launch an analysis agent. Acceptance, policy validation and UI integration
-remain planned.
+**Repository discovery and acceptance are available** in **Graph settings →
+Environment → Discover from repository**, for an existing checkout without an
+explicit environment. Discovery follows `.leforge/environment.yaml` →
+`.devcontainer/devcontainer.json` → Dockerfiles → standard Compose filenames.
+Select a file (and a development service for Compose), choose **Review
+environment**, inspect the normalized settings, then **Accept into draft**.
+An admin must **Save graph** before an operator can **Build**. Review and
+acceptance never start a build automatically. Save pending repository/workspace
+changes before discovery. If the checkout does not exist yet, discovery reports
+that error; it does not clone the repository.
 
-**Planned, not available yet:** accept discovered environments in this order:
-`.leforge/environment.yaml` → `.devcontainer/devcontainer.json` → Dockerfiles
-→ Docker Compose. When none exists, an agent will analyze the repository and
-propose an environment, requiring developer approval before building or running
-the task. No LeForge-specific file will be required. Compatible images and
-caches will be reusable across tasks, with isolated workspaces and limits on
-active resources. See the [planned contracts](product-contracts.md#planned-discovery-and-acceptance)
-and [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
-The instructions below describe the currently delivered, per-graph workflow.
+Accepted definitions record source paths and hashes in `spec.environment.origin`.
+Saving and building re-read the files and verify the normalized settings. If a
+source or referenced Dockerfile changes, remove the old environment, save, then
+discover and review again. An explicit manual environment still takes precedence;
+remove and save it before discovering another. To customize accepted settings,
+remove the accepted definition and configure a manual image or Dockerfile.
+
+Supported inputs in this first version:
+
+- LeForge YAML: the environment fields documented below, with an inline
+  Dockerfile or a repository-relative Dockerfile path. Repository files cannot
+  set `origin`, CPU/memory overrides, or execution networking beyond `none`.
+- Devcontainer: strict JSON with `name`, `image` and a string `postCreateCommand`.
+  JSON comments, trailing commas and other fields produce an explicit error.
+- Dockerfiles: builds without repository context. `COPY`, `ADD`, `ONBUILD`,
+  custom parser directives, instruction flags and heredocs are not supported.
+- Compose: select one service containing only `image` or `build`. Build accepts
+  a local context path and optional Dockerfile path to locate the file, but
+  does not upload that context. Other selected-service settings, interpolation,
+  overrides and companion-service startup are not supported.
+
+Discovery returns paths, hashes, service names and errors, not file contents.
+Review returns the normalized definition for inspection. Invalid higher-priority
+files block fallback. Scans exclude `.git`, `node_modules`, `vendor` and `.venv`,
+reject symlinks in definition paths, and are limited to 10,000 entries and
+256 KiB per file. All reads remain inside the authorized workspace.
+
+**Planned, not available yet:** when no definition exists, an analysis agent
+will propose one for developer approval. Currently `proposal_required` only
+reports the absence of a definition; configure an environment manually instead.
+Full build contexts, additional Compose/devcontainer features, reuse across tasks
+and global resource budgets also remain planned. See the
+[planned contracts](product-contracts.md#planned-discovery-and-acceptance) and
+[implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
 
 ## Usage from the browser
 
@@ -212,6 +232,8 @@ sequenceDiagram
 
 | Method and path | Role | Purpose |
 |---|---|---|
+| `GET /api/v1/graphs/{id}/environment/discovery` | viewer | Read-only candidate discovery in an existing checkout. |
+| `POST /api/v1/graphs/{id}/environment/resolve` | viewer | Review `{source, path, sha256, service?}`; returns a validated definition with origin. No save/build. |
 | `GET /api/v1/graphs/{id}/environment` | viewer | State compared with the saved definition (`defined`, `currentHash`, `upToDate`, `image`, `log`, ...). |
 | `POST /api/v1/graphs/{id}/environment/build` | operator | Start a build (`202`); `{"force": true}` rebuilds an up-to-date environment, otherwise that is a no-op (`200`). `409` while a build runs, `400` without `spec.environment`. |
 | `POST /api/v1/graphs/{id}/environment/reset` | admin | Delete images and caches. `409` while the graph runs. |

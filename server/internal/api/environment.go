@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/environment"
+	"github.com/woliveiras/le-forge/server/internal/graph"
 )
 
 // Project environments (spec.environment): state of the build for the
@@ -109,4 +111,54 @@ func (s *Server) discoverEnvironment(w http.ResponseWriter, r *http.Request) err
 	}
 	writeJSON(w, http.StatusOK, result)
 	return nil
+}
+
+// resolveEnvironment validates a selected candidate for explicit review. Saving
+// the returned definition uses the existing versioned graph write path.
+func (s *Server) resolveEnvironment(w http.ResponseWriter, r *http.Request) error {
+	g, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), 0)
+	if err != nil {
+		return err
+	}
+	var selection environment.Selection
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4097))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&selection); err != nil {
+		return badRequest("invalid environment selection")
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return badRequest("expected one selection")
+	}
+	if s.Workspaces == nil {
+		return engine.ErrNotFound
+	}
+	dir, err := s.Workspaces.GraphDir(g)
+	if err != nil {
+		return badRequest("invalid workspace")
+	}
+	env, err := environment.Resolve(r.Context(), dir, selection)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, env)
+	return nil
+}
+
+func (s *Server) validateEnvironmentOrigin(ctx context.Context, g *domain.Graph) error {
+	if g.Spec.Environment == nil || g.Spec.Environment.Origin == nil {
+		return nil
+	}
+	if s.Workspaces == nil {
+		return engine.ErrNotFound
+	}
+	copy := *g
+	if copy.Metadata.ID == "" {
+		copy.Metadata.ID = graph.Slug(copy.Metadata.Name)
+	}
+	dir, err := s.Workspaces.GraphDir(&copy)
+	if err != nil {
+		return badRequest("invalid workspace")
+	}
+	return environment.ValidateAccepted(ctx, dir, g.Spec.Environment)
 }

@@ -75,3 +75,15 @@ func isReservedCacheDir(dir string) bool {
 	}
 	return strings.HasPrefix(dir, "/workspace/") || strings.HasPrefix(dir, "/proc/") || strings.HasPrefix(dir, "/sys/") || strings.HasPrefix(dir, "/dev/")
 }
+
+// ValidateEnvironment exposes the same checks used when saving graphs.
+func ValidateEnvironment(env *domain.EnvironmentSpec) *Report {
+	r := &Report{}
+	if env == nil {
+		r.errf("spec.environment", "set an environment")
+	} else {
+		validateEnvironment(r, env)
+	}
+	r.Valid = len(r.Errors) == 0
+	return r
+}

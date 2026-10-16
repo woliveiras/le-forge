@@ -111,6 +111,7 @@ export function GraphSettings({
           running={running}
           canBuild={role === 'operator' || role === 'admin'}
           canReset={role === 'admin'}
+          canAccept={role === 'admin'}
           issues={issues}
           onChange={onChange}
         />

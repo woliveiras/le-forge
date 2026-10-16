@@ -310,6 +310,38 @@ paths:
         "400":
           description: Workspace unavailable or scan failed; no fallback is performed
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/environment/resolve:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    post:
+      tags: [environments]
+      operationId: resolveEnvironment
+      summary: Validate a discovered candidate and return its definition for review
+      description: >-
+        Read-only. Verifies source priority and hash, normalizes supported fields, and records
+        referenced file hashes in origin. Acceptance uses the existing admin graph PUT with
+        If-Match. Saving and building revalidate the files and definition; neither happens here.
+      x-leforge-role: viewer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source, path, sha256]
+              properties:
+                source: {type: string, enum: [leforge, devcontainer, dockerfile, compose]}
+                path: {type: string}
+                sha256: {type: string, minLength: 64, maxLength: 64}
+                service: {type: string, description: Required for a Compose candidate}
+      responses:
+        "200":
+          description: Validated environment definition; no save or build performed
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EnvironmentDefinition"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "404": {$ref: "#/components/responses/NotFound"}
   /api/v1/graphs/{id}/environment/build:
     parameters: [{$ref: "#/components/parameters/GraphId"}]
     post:
@@ -319,7 +351,7 @@ paths:
       description: >-
         Without force, an environment already built from the current definition is left alone (200).
         Otherwise the build starts and the response reports state building (202); follow it with GET or the
-        environment.* events.
+        environment.* events. Accepted repository definitions and source hashes are revalidated before any build or cache hit.
       x-leforge-role: operator
       requestBody:
         required: false
@@ -1285,6 +1317,30 @@ components:
         warnings: {type: array, items: {$ref: "#/components/schemas/ValidationIssue"}}
     ReplicaStatus:
       $ref: "../schemas/event.schema.json#/$defs/ReplicaStatus"
+    EnvironmentDefinition:
+      type: object
+      properties:
+        image: {type: string}
+        dockerfile: {type: string}
+        setup: {type: array, items: {type: string}}
+        network:
+          type: object
+          properties:
+            setup: {type: string, enum: [none, bridge]}
+            run: {type: string, enum: [none, bridge]}
+        caches: {type: array, items: {type: string}}
+        timeout: {type: string}
+        cpu: {type: string}
+        memory: {type: string}
+        origin:
+          type: object
+          required: [source, path, sha256, files]
+          properties:
+            source: {type: string}
+            path: {type: string}
+            sha256: {type: string}
+            service: {type: string}
+            files: {type: object, additionalProperties: {type: string}}
     Environment:
       type: object
       required: [graph, state, defined, upToDate]

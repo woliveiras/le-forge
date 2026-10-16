@@ -41,7 +41,20 @@ export interface GraphSpec {
 }
 
 /** spec.environment: the container image agents' commands run in (docker isolation). */
+export interface EnvironmentSelection {
+ source: string;
+ path: string;
+ sha256: string;
+ service?: string;
+}
+export interface EnvironmentDiscovery {
+ source: string;
+ status: 'configured' | 'review_required' | 'invalid' | 'proposal_required';
+ candidates: { path: string; sha256: string; services?: string[]; error?: string }[];
+}
 export interface EnvironmentSpec {
+ origin?: EnvironmentSelection & { files: Record<string, string> };
+
   image?: string;
   dockerfile?: string;
   setup?: string[];

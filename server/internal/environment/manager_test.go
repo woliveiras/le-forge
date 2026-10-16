@@ -422,3 +422,24 @@ func TestTailBufferKeepsTheEnd(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestBuildValidatesAcceptedRepositoryBeforeDocker(t *testing.T) {
+	h := setup(t)
+	writeDiscoveryFile(t, h.ws, ".leforge/environment.yaml", "image: alpine")
+	env, err := Resolve(context.Background(), h.ws, discoverSelection(t, h.ws, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := graphWith(env)
+	writeDiscoveryFile(t, h.ws, ".leforge/environment.yaml", "image: debian")
+	if _, err := h.m.Build(context.Background(), g, false, "operator"); !errors.Is(err, ErrInvalidDefinition) {
+		t.Fatalf("stale definition %v", err)
+	}
+	if len(h.docker.calls(t)) != 0 {
+		t.Fatal("Docker invoked before validation")
+	}
+	v, err := h.m.Get(context.Background(), g)
+	if err != nil || v.State != StateAbsent {
+		t.Fatalf("%+v %v", v, err)
+	}
+}

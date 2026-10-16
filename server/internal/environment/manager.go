@@ -170,6 +170,18 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 	if env == nil {
 		return nil, ErrNotDefined
 	}
+	// Validate before returning a cached image or starting any Docker operation.
+	dir := ""
+	if env.Origin != nil {
+		var err error
+		dir, err = m.opt.Workspaces.Ensure(ctx, g)
+		if err != nil {
+			return nil, fmt.Errorf("%w: cannot prepare repository: %v", ErrInvalidDefinition, err)
+		}
+	}
+	if err := ValidateAccepted(ctx, dir, env); err != nil {
+		return nil, err
+	}
 	id := g.Metadata.ID
 	cur, err := m.Get(ctx, g)
 	if err != nil {

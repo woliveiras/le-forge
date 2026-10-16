@@ -133,4 +133,25 @@ describe('EnvironmentSection', () => {
     const apply = (n: number) => onChange.mock.calls[n][0](graph()) as Graph;
     expect(apply(0).spec.environment).toEqual({ image: '' });
   });
+  it('connects repository acceptance to the draft without saving or building', async () => {
+    const user = userEvent.setup();
+    const env = { image: 'alpine', origin: { source: 'leforge', path: '.leforge/environment.yaml', sha256: 'hash', files: { '.leforge/environment.yaml': 'hash' } } };
+    const client = fakeApi({
+      'GET /api/v1/graphs/g/environment/discovery': () => ({ source: 'leforge', status: 'review_required', candidates: [{ path: '.leforge/environment.yaml', sha256: 'hash' }] }),
+      'POST /api/v1/graphs/g/environment/resolve': () => env,
+    });
+    const { onChange } = renderSection({ graph: graph(), savedGraph: graph(), canAccept: true });
+    await user.click(screen.getByRole('button', { name: 'Discover environment' }));
+    await user.selectOptions(await screen.findByLabelText('Repository definition'), '.leforge/environment.yaml');
+    await user.click(screen.getByRole('button', { name: 'Review environment' }));
+    await user.click(await screen.findByRole('button', { name: 'Accept into draft' }));
+    expect(onChange.mock.calls[0][0](graph()).spec.environment).toEqual(env);
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it('does not offer repository acceptance to a build-only operator', () => {
+    renderSection({ graph: graph(), savedGraph: graph(), canBuild: true, canAccept: false });
+    expect(screen.queryByRole('button', { name: 'Discover environment' })).toBeNull();
+  });
+
 });

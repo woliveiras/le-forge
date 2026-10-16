@@ -136,7 +136,8 @@ cause the gateway to select a different connection.
 
 - `spec.environment` in the graph document is the single effective
   definition: `image` or `dockerfile`, `setup[]`, `network.setup`/`network.run`
-  (`none`/`bridge`), `caches[]`, `timeout`, `cpu`, `memory`. It is versioned
+  (`none`/`bridge`), `caches[]`, `timeout`, `cpu`, `memory`, and optional
+  `origin` for accepted repository definitions. It is versioned
   with the graph and saved through the graph `PUT`.
 - Build state per graph: `absent`, `building`, `ready`, `failed`, with the hash
   of the built definition, image reference, cache volumes, timestamps, actor and
@@ -156,16 +157,29 @@ reads an existing checkout without mutation. Explicit `spec.environment` returns
 devcontainer, Dockerfile, Compose precedence. Results contain `source`, `status`
 (`review_required`, `invalid`, or `proposal_required`) and `candidates` with
 `path`, `sha256`, optional `services` and `error`. No source contents are returned.
-Discovery performs bounded structural inspection only; accepting definitions,
-full policy validation, build contexts, agent analysis and reuse are not delivered.
-Missing/unreadable checkouts or scan limits return an error, never a fallback.
-See [discovery limitations](environments.md) for supported inputs and limits.
+Discovery performs bounded structural inspection. `POST …/environment/resolve`
+(viewer) accepts `{source, path, sha256, service?}`, verifies the selected candidate,
+normalizes supported fields and returns an environment with
+`origin: {source, path, sha256, service?, files: {path: sha256}}` for review.
+The console requires explicit selection, review and acceptance into the draft.
+Persistence uses the existing **admin-only** graph PUT and optimistic concurrency;
+acceptance never starts a build. Source and referenced-file hashes and normalized
+settings are checked again on graph save and before build (including cache hits).
+Stale files/settings and unsupported fields return `400` without starting Docker;
+graph version conflicts retain the existing `409` behavior.
+
+Supported input subsets and limits are documented in [environments.md](environments.md).
+Repository definitions cannot set origin, CPU/memory overrides or execution
+networking beyond `none`; unhandled Compose settings and context-dependent
+Dockerfiles fail explicitly. These are conservative input restrictions, not a
+new installation-wide policy configuration. Missing/unreadable checkouts or scan
+limits return an error, never a fallback. Discovery does not clone a repository.
 
 **Planned — not implemented yet** (tracked in
 [TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
-repository definition acceptance, approved agent proposals, reuse across tasks and global
-resource scheduling extend the delivered per-graph environment above. These
-are target contracts, not currently available API or console features.
+Full repository build contexts and format support, approved agent proposals,
+reuse across tasks and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
+only the capabilities explicitly described as delivered above are available.
 
 #### Planned discovery and acceptance
 

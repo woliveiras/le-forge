@@ -1,6 +1,9 @@
 import type {
   Approval,
   EnvironmentView,
+  EnvironmentDiscovery,
+  EnvironmentSelection,
+  EnvironmentSpec,
   Execution,
   FileEntry,
   Graph,
@@ -173,6 +176,9 @@ export const api = {
     request<GraphStatus>(`${V1}/graphs/${enc(id)}/${action}`, { method: 'POST' }),
   status: (id: string) => request<GraphStatus>(`${V1}/graphs/${enc(id)}/status`),
   environment: (id: string) => request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment`),
+  discoverEnvironment: (id: string) => request<EnvironmentDiscovery>(`${V1}/graphs/${enc(id)}/environment/discovery`),
+  resolveEnvironment: (id: string, selection: EnvironmentSelection) =>
+    request<EnvironmentSpec>(`${V1}/graphs/${enc(id)}/environment/resolve`, { method: 'POST', body: selection }),
   buildEnvironment: (id: string, force = false) =>
     request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment/build`, { method: 'POST', body: { force } }),
   resetEnvironment: (id: string) =>

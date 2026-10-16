@@ -53,10 +53,22 @@ type GraphSpec struct {
 	MaxHops int `json:"maxHops,omitempty" yaml:"maxHops,omitempty"`
 }
 
+// EnvironmentOrigin identifies the repository snapshot accepted by the operator.
+// Build revalidates both the source and the normalized definition.
+type EnvironmentOrigin struct {
+	Source  string            `json:"source" yaml:"source"`
+	Path    string            `json:"path" yaml:"path"`
+	SHA256  string            `json:"sha256" yaml:"sha256"`
+	Service string            `json:"service,omitempty" yaml:"service,omitempty"`
+	Files   map[string]string `json:"files" yaml:"files"`
+}
+
 // EnvironmentSpec defines a project environment: a base image (or a
 // Dockerfile), setup commands run once with the workspace mounted, and the
 // network and cache policy of the containers built from it.
 type EnvironmentSpec struct {
+	Origin *EnvironmentOrigin `json:"origin,omitempty" yaml:"origin,omitempty"`
+
 	// Image is a base image to pull (e.g. "golang:1.26"). Exactly one of
 	// Image and Dockerfile is set.
 	Image string `json:"image,omitempty" yaml:"image,omitempty"`

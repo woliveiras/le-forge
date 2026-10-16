@@ -115,6 +115,7 @@ func (s *Server) routes() {
 		{"GET /api/v1/graphs/{id}/status", R, s.graphStatus},
 		{"GET /api/v1/graphs/{id}/environment", R, s.getEnvironment},
 		{"GET /api/v1/graphs/{id}/environment/discovery", R, s.discoverEnvironment},
+		{"POST /api/v1/graphs/{id}/environment/resolve", R, s.resolveEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/build", O, s.buildEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/reset", A, s.resetEnvironment},
 		{"POST /api/v1/graphs/{id}/nodes/{node}/{action}", O, s.nodeAction},
@@ -203,7 +204,7 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusForbidden, "forbidden", err.Error(), nil)
 	case errors.Is(err, environment.ErrBuildRunning):
 		writeErr(w, http.StatusConflict, "conflict", err.Error(), nil)
-	case errors.Is(err, environment.ErrNotDefined):
+	case errors.Is(err, environment.ErrNotDefined), errors.Is(err, environment.ErrInvalidDefinition):
 		writeErr(w, http.StatusBadRequest, "invalid", err.Error(), nil)
 	case errors.Is(err, tools.ErrUnknownTool):
 		writeErr(w, http.StatusNotFound, "not_found", err.Error(), nil)
@@ -439,6 +440,9 @@ func (s *Server) createGraph(w http.ResponseWriter, r *http.Request) error {
 	if _, err := s.Store.GetGraph(r.Context(), id, 0); err == nil {
 		return fmt.Errorf("%w: graph %q already exists (use PUT to update)", engine.ErrConflict, id)
 	}
+	if err := s.validateEnvironmentOrigin(r.Context(), g); err != nil {
+		return err
+	}
 	g, rec, err := s.Engine.SaveGraph(r.Context(), g, 0, identityFrom(r.Context()).Name)
 	if err != nil {
 		return err
@@ -496,6 +500,9 @@ func (s *Server) updateGraph(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return badRequest("If-Match must be a version number")
 		}
+	}
+	if err := s.validateEnvironmentOrigin(r.Context(), g); err != nil {
+		return err
 	}
 	g, rec, err := s.Engine.SaveGraph(r.Context(), g, expected, identityFrom(r.Context()).Name)
 	if err != nil {

@@ -6,6 +6,7 @@ import { useEventStream } from '../hooks/useEventStream';
 import type { ElementIssue } from './canvas/edit';
 import { Badge, Btn, ErrorBox, fmtDateTime } from './common';
 import { FieldIssues } from './GraphIssues';
+import { EnvironmentDiscovery } from './EnvironmentDiscovery';
 
 type Source = 'none' | 'image' | 'dockerfile';
 
@@ -34,6 +35,7 @@ export function EnvironmentSection({
   running,
   canBuild,
   canReset,
+  canAccept = false,
   issues,
   onChange,
 }: {
@@ -45,6 +47,7 @@ export function EnvironmentSection({
   running: boolean;
   canBuild: boolean;
   canReset: boolean;
+  canAccept?: boolean;
   issues?: ElementIssue[];
   onChange: (update: (graph: Graph) => Graph) => void;
 }) {
@@ -60,9 +63,9 @@ export function EnvironmentSection({
       if (env && !confirm('Remove the environment definition from this graph? Agents with docker isolation will use the default sandbox image.')) return;
       setEnv(undefined);
     } else if (next === 'image') {
-      setEnv({ ...env, image: env?.image ?? '', dockerfile: undefined });
+      setEnv({ ...env, origin: undefined, image: env?.image ?? '', dockerfile: undefined });
     } else {
-      setEnv({ ...env, image: undefined, dockerfile: env?.dockerfile ?? 'FROM debian:bookworm-slim\nRUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*\n' });
+      setEnv({ ...env, origin: undefined, image: undefined, dockerfile: env?.dockerfile ?? 'FROM debian:bookworm-slim\nRUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*\n' });
     }
   };
 
@@ -73,6 +76,21 @@ export function EnvironmentSection({
         The container image agents run their commands in when their Command sandbox uses docker isolation without an
         image of their own. LeForge builds it on its own sandbox daemon, never on your machine.
       </p>
+      {canAccept && (
+        <EnvironmentDiscovery
+          key={savedGraph.metadata.id + ':' + savedGraph.metadata.version}
+          graphId={savedGraph.metadata.id}
+          disabled={!!env || !!savedGraph.spec.environment || JSON.stringify(graph.spec.workspace ?? {}) !== JSON.stringify(savedGraph.spec.workspace ?? {})}
+          onAccept={setEnv}
+        />
+      )}
+      {env?.origin && (
+        <p className="muted small">
+          Accepted from {env.origin.path}{env.origin.service ? ` · ${env.origin.service}` : ''}.
+          The repository files and settings will be checked again before building.
+          To customize the definition manually, remove it and choose a new source.
+        </p>
+      )}
       <label>
         Source
         <select value={source} onChange={(event) => changeSource(event.target.value as Source)}>
