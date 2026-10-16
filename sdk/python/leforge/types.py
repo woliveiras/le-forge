@@ -208,6 +208,7 @@ class ToolResult:
     data: Any = None
     is_error: bool = False
     truncated: bool = False
+    yield_turn: bool = False  # Wire field "yield" is a Python keyword.
 
     @classmethod
     def from_json(cls, d: Dict[str, Any]) -> "ToolResult":
@@ -216,11 +217,15 @@ class ToolResult:
             data=d.get("data"),
             is_error=bool(d.get("isError")),
             truncated=bool(d.get("truncated")),
+            yield_turn=bool(d.get("yield")),
         )
 
     def to_json(self) -> Dict[str, Any]:
-        return _drop_empty({"content": self.content, "data": self.data, "isError": self.is_error,
-                            "truncated": self.truncated}) or {"content": ""}
+        out = _drop_empty({"content": self.content, "data": self.data, "isError": self.is_error,
+                           "truncated": self.truncated}) or {"content": ""}
+        if self.yield_turn:
+            out["yield"] = True
+        return out
 
 
 @dataclass

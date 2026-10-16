@@ -200,7 +200,9 @@ last replica stops.
 `ToolResult.yield` is an optional boolean. When true, the runtime must finish its
 current turn immediately, without more tools/model calls, completion signals or
 outputs. Native runtime implements this directly; external runtimes should honor
-it. The engine independently rejects subsequent callbacks and discards outputs
+it. The Python SDK exposes the wire field as `ToolResult.yield_turn`; custom
+runtime loops must check it and return without further work. This field does not
+automatically interrupt an arbitrary framework loop. The engine independently rejects subsequent callbacks and discards outputs
 from that turn, including outputs submitted before the gate. It acknowledges the
 input and persists the pending review without holding a runtime request open.
 
