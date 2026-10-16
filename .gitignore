@@ -12,3 +12,5 @@ web/dist/
 /server/forged
 /server/forge
 .claude
+.DS_Store
+server/bin
