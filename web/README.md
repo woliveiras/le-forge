@@ -99,7 +99,7 @@ an "ingress" pill, and topics with no subscribers get a "no subscribers" pill.
 Deep links: `#/g/<graph>/canvas?sel=node:<id>` or `?sel=channel:<id>`, and
 `#/g/<graph>/messages?c=<correlation id>`.
 
-## Browser environment journeys
+## Browser journeys
 
 With local Go, Git and Node installed, run from the repository root:
 
@@ -113,6 +113,8 @@ make test-e2e
 
 Playwright builds the production console and a test-only Go controller
 (`server/cmd/forge-e2e`, build tag `e2e`), bound to `127.0.0.1:18089`.
+Set `LEFORGE_E2E_PORT=18101` (or another free port) to isolate concurrent
+worktree runs; both Playwright and the controller use the override.
 The port must be free: the suite never reuses a running installation. Each run
 creates temporary repositories, SQLite storage, credentials and workspaces,
 removed when the controller shuts down. Tests use fixed public fixture tokens.
@@ -123,6 +125,16 @@ manager and execution engine. Docker commands and the analysis provider are
 controlled fixtures; execution uses the echo runtime. These tests verify browser
 orchestration, not container isolation or external model behavior. Run
 `make test-environment-context` separately for the dedicated-daemon coverage.
+
+The graph connection journey (`e2e/graph-connections.spec.ts`) creates agents,
+moves their cards and drags between real React Flow handles. It checks invalid
+schedule validation without persisting the draft, saves and reloads connected
+agents, cancels and confirms Delete for an agent and its affected channels, and
+then cancels and confirms deletion of the remaining connection. API reads and
+browser reopening verify persisted nodes, positions and channels. Only the
+starting graph is seeded via the API; no browser responses are intercepted.
+Run it alone with `LEFORGE_E2E_PORT=18101 npm run test:e2e -- graph-connections.spec.ts`
+from `web/`. The test uses no shared Docker daemon.
 
 The suite covers discovery/review/acceptance, approval before build and automatic
 resume, compatible reuse in another task, rejection, analysis failure and build
