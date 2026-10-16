@@ -20,6 +20,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
 type analysisProvider struct{}
@@ -46,18 +47,7 @@ func run() error {
 	}
 	defer os.RemoveAll(root)
 	bin := filepath.Join(root, "docker-fixture")
-	// Consume build input so context uploads exercise the production tar pipe.
-	script := `#!/bin/sh
-case "$1" in
- version) echo linux/arm64;;
- build) data=$(cat); case "$data" in *E2E_BUILD_FAIL*) echo 'E2E controlled build failure' >&2; exit 1;; esac;;
- buildx) if [ "$2" = build ]; then data=$(cat); case "$data" in *E2E_BUILD_FAIL*) echo 'E2E controlled build failure' >&2; exit 1;; esac; fi;;
- inspect) echo "No such container" >&2; exit 1;;
- exec) echo e2e-executed;;
-esac
-exit 0
-`
-	if err := os.WriteFile(bin, []byte(script), 0700); err != nil {
+	if err := os.WriteFile(bin, []byte(dockerFixture), 0700); err != nil {
 		return err
 	}
 	cfg := config.Default()
@@ -73,6 +63,8 @@ exit 0
 	cfg.Auth.Tokens = []config.Token{{Name: "e2e-admin", Role: config.RoleAdmin, Token: "e2e-admin-token"}, {Name: "e2e-viewer", Role: config.RoleViewer, Token: "e2e-viewer-token"}}
 	cfg.Isolation.Docker.Bin = bin
 	cfg.Isolation.Docker.Host = ""
+	cfg.Isolation.Docker.IdleTimeout = time.Second
+	cfg.Isolation.Docker.Capacity = sandboxcapacity.Policy{TotalCPU: "1", DefaultCPU: "0.1", TotalMemory: "256m", DefaultMemory: "32m", MaxActive: 10}
 	cfg.Observability.LogLevel = "error"
 	cfg.Engine.ReconcileInterval = 100 * time.Millisecond
 	if err := cfg.Validate(); err != nil {
@@ -85,7 +77,7 @@ exit 0
 		return err
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
-	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure"} {
+	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
@@ -102,8 +94,11 @@ exit 0
 				return err
 			}
 		}
-		if strings.HasPrefix(id, "discover-") || id == "build-failure" {
+		if strings.HasPrefix(id, "discover-") || id == "build-failure" || id == "retry-build" {
 			body := "FROM alpine:3.22\nRUN echo ready\n"
+			if id == "retry-build" {
+				body = "FROM alpine:3.22\nRUN E2E_FAIL_ONCE\n"
+			}
 			if id == "build-failure" {
 				body = "FROM alpine:3.22\nRUN E2E_BUILD_FAIL\n"
 			}
@@ -112,6 +107,26 @@ exit 0
 			}
 		}
 		g := &domain.Graph{Metadata: domain.GraphMetadata{Name: id}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Loop: domain.LoopSpec{Mode: domain.LoopOnce}, Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}, Isolation: domain.IsolationSpec{Mode: domain.IsolationDocker}}}}}
+
+		node := &g.Spec.Nodes[0]
+		switch id {
+		case "cpu-holder", "memory-holder":
+			node.Loop = domain.LoopSpec{Mode: domain.LoopContinuous, Interval: domain.Duration(100 * time.Millisecond)}
+			if id == "cpu-holder" {
+				node.Isolation.CPU = "0.8"
+			} else {
+				node.Isolation.Memory = "224m"
+			}
+		case "cpu-waiter":
+			node.Isolation.CPU = "0.4"
+		case "memory-waiter":
+			node.Isolation.Memory = "64m"
+		case "idle-resume":
+			node.Loop = domain.LoopSpec{Mode: domain.LoopEvent}
+			if err := os.WriteFile(filepath.Join(dir, "preserved.txt"), []byte("workspace survives suspension\n"), 0600); err != nil {
+				return err
+			}
+		}
 		if strings.HasPrefix(id, "discover-") {
 			g.Spec.Workspace.Repo = "https://example.invalid/same-repository.git"
 		}

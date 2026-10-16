@@ -126,6 +126,17 @@ orchestration, not container isolation or external model behavior. Run
 
 The suite covers discovery/review/acceptance, approval before build and automatic
 resume, compatible reuse in another task, rejection, analysis failure and build
-failure. Failed tests retain screenshots and traces in `web/test-results/`;
+failure. Recovery journeys also exercise CPU-only and memory-only admission
+waits, cancellation followed by a fresh start, successful build retry after a
+transient failure, and idle suspension/message-driven resume. They read the same
+workspace file through the Files screen before and after resume. The disposable
+installation has a 1 CPU / 256 MiB budget, ten slots, and a one-second idle timeout;
+continuous holders reserve 0.8 CPU or 224 MiB, so only the intended budget is
+exhausted. The Docker fixture persists container running/stopped state and fails
+one marked build exactly once; it does not enforce cgroups or execute commands.
+`make test-sandbox-capacity` separately verifies real cgroups and container,
+workspace and cache preservation on the dedicated daemon.
+
+Failed tests retain screenshots and traces in `web/test-results/`;
 `cd web && npx playwright show-report` opens the HTML report. There are no automatic
 retries, intercepted browser API responses or fixed sleeps.

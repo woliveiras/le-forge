@@ -609,8 +609,11 @@ failed and cancelled admission; no queue position or ETA is inferred. Browser
 environment journeys are covered by `make test-e2e` (see
 [the web testing guide](../web/README.md#browser-environment-journeys)). These use
 the real controller with deterministic Docker/model fixtures. Component/client
-integration and dedicated-daemon tests cover additional presentation contracts,
-capacity transitions and real container behavior.
+integration and dedicated-daemon tests cover additional presentation contracts
+and real container behavior. Browser recovery tests cover CPU-only/memory-only
+execution waits, cancellation and retry, and idle suspension/resume with workspace
+contents preserved. The fixture models Docker lifecycle; `make test-sandbox-capacity`
+verifies the corresponding real daemon resource limits and preservation.
 
 CPU admission shares the same durable reservation as memory/count throughout
 sequential build, setup and cache copies. The default per-pipeline CPU request is
