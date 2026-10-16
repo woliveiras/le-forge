@@ -13,9 +13,9 @@ schemas alongside the code.
 
 | Surface | Current contract and implementation | Known boundary |
 |---|---|---|
-| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | No first-class user task, MCP connection, skill/steering, or delegation resource yet. |
+| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); no first-class user task, MCP connection or delegation resource yet. |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
-| Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | No delegation request contract or effective-instruction snapshot is sent yet. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
+| Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; no delegation request contract is sent yet. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
 | Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | `mcp.*` is an extension point only; there is no managed MCP registry or per-connection authorization implementation. |
 | Workspace | `GET /api/v1/graphs/{id}/files` and `/files/content` are viewer-readable. Paths are resolved inside the graph/worktree root; `.git` is hidden, directory results are capped, file content is limited to 4 MiB and served as plain text with a deny-all CSP. | No Git status/diff/history API or task-to-change attribution yet. No user-facing workspace write/delete/upload API. |
 | Persistence | `storage.Store` persists graph versions/control records, events, messages, executions, approvals, operator messages, replica status, KV, leases, and revisioned installation settings. Settings use compare-and-set revisions. Provider credentials are encrypted before storage. See [database schema](database-schema.md). | Future install-wide records should use settings or an explicitly designed store entity; graph/workspace data must remain scoped. |
@@ -101,16 +101,19 @@ cause the gateway to select a different connection.
 
 ### Skills and project steering
 
+Implemented contracts and explicit bounds are documented in [Skills and steering](instructions.md).
+The API/schema/runtime references are updated with the implementation.
+
 - Application-managed skills are installation resources with stable IDs,
   immutable revision history, a title/description, an enabled flag, and a
-  versioned Markdown body. Proposed API: `GET/POST /api/v1/skills`,
+  versioned Markdown body. API: `GET/POST /api/v1/skills`,
   `GET/PUT/DELETE /api/v1/skills/{skillId}`. Reads require `viewer`; writes
   require `admin` and use `If-Match`. `DELETE` disables a skill rather than
   erasing revisions; it returns `409` while an active graph version selects
   that skill. Existing execution manifests remain resolvable.
 - Graphs opt into skills by ID through a graph-level instruction reference;
   nodes may narrow the selected set but may not add unapproved privileges.
-- The proposed graph field is `spec.instructions: {skillIds: string[],
+- The graph field is `spec.instructions: {skillIds: string[],
   projectSteering: boolean}`; omission means no application skill or project
   steering is loaded. Nodes may optionally name a subset of the graph's
   selected skill IDs. A node cannot reference a skill that its graph did not

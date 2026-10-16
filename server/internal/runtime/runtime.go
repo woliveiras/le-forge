@@ -38,6 +38,8 @@ type ReplicaContext struct {
 // TurnInput is everything an agent knows at the start of a turn. It is also
 // the request body of the external Runtime Protocol (POST /v1/turn).
 type TurnInput struct {
+	Instructions *domain.InstructionSnapshot `json:"instructions,omitempty"`
+
 	ExecutionID string `json:"executionId"`
 	GraphID     string `json:"graphId"`
 	GraphName   string `json:"graphName"`

@@ -111,3 +111,13 @@ stateDiagram-v2
 One injected request therefore yields one trace spanning every agent, broker hop, tool call and
 model call it caused — across processes and brokers — and one correlation id that selects all of
 its messages in history.
+
+## Instruction events
+
+`instruction.skill.updated` carries `skill_id`, `revision`, `deleted` and the authenticated actor. The atomic skill revision retains the durable audit. `execution.instructions.loaded` carries `entries` and `remaining_budget` with graph/node/execution correlation; bodies are excluded. See [instruction audit](instructions.md).
+
+The loaded event also includes `omitted`. The turn span records
+`leforge.instructions.entries` and `leforge.instructions.omitted`. Metrics
+`leforge_instruction_loads_total{outcome="loaded|failed"}` and
+`leforge_instruction_load_duration_seconds` cover resolution plus persistence;
+labels contain no skill IDs, paths or content.

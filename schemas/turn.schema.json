@@ -17,6 +17,7 @@
       "type": "object",
       "required": ["executionId", "graphId", "graphName", "nodeId", "nodeName", "replica", "replicas", "iteration", "prompt", "system", "inputs", "outputs", "tools", "model", "workdir"],
       "properties": {
+        "instructions": {"$ref":"instructions.schema.json#/$defs/Snapshot"},
         "executionId": {"type": "string"},
         "graphId": {"type": "string"},
         "graphName": {"type": "string"},
@@ -26,7 +27,7 @@
         "replicas": {"type": "integer", "minimum": 0},
         "iteration": {"type": "integer", "minimum": 1, "description": "Lifetime turn counter of this replica."},
         "agent": {"type": "string", "description": "Agent name to dispatch to (node runtime.agent)."},
-        "prompt": {"type": "string", "description": "Node prompt with parameters substituted."},
+        "prompt": {"type": "string", "description": "Node prompt with parameters substituted, prefixed with opt-in untrusted guidance. Legacy graphs retain the original prompt."},
         "system": {"type": "string", "description": "Platform preamble: situation, inputs, outputs, tools, stop protocol."},
         "inputs": {"type": "array", "items": {"$ref": "#/$defs/Message"}, "description": "Messages claimed for this turn (leased to it)."},
         "operatorMessages": {"type": "array", "items": {"type": "string"}},

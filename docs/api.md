@@ -332,3 +332,7 @@ Browser regression: `cd web && LEFORGE_E2E_PORT=18103 npx playwright test e2e/gi
 The optional port overrides the normal 18089 disposable server. This journey
 uses real SQLite, the native tool gateway, temporary Git repositories and an
 artificial model response; no shared Docker daemon or external provider is used.
+
+## Skills and instructions
+
+See [Skills and steering](instructions.md) for registry CRUD, mandatory revision headers, graph/agent associations and inspection endpoints.

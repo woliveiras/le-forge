@@ -213,3 +213,7 @@ Names are encoded to be case-safe and valid on Windows.
 
 Known limitations: lease expiry uses each instance's clock (keep NTP in sync well within
 `engine.leaseTTL`); on Windows a crashed fs-store process leaves a stale `LOCK` to delete by hand.
+
+## Instruction records
+
+Existing settings CAS stores `instructions/skills/{id}` with current revision plus immutable history and actor/time, and `instructions/executions/{executionId}` as a create-only manifest. No SQL migration. See [limits and deletion semantics](instructions.md).

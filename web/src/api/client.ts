@@ -1,3 +1,4 @@
+import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
 import type {
   Approval,
   HistoryRetentionPolicy,
@@ -157,6 +158,11 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  skills: () => request<Skill[]>(`${V1}/skills`),
+  saveSkill: (input: SkillInput, revision?: number) => request<Skill>(`${V1}/skills${revision ? '/' + enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', body: input, headers: revision ? {'If-Match': String(revision)} : undefined}),
+  deleteSkill: (id: string, revision: number) => request<Skill>(`${V1}/skills/${enc(id)}`, {method: 'DELETE', headers: {'If-Match': String(revision)}}),
+  instructions: (id: string, node: string) => request<InstructionSnapshot>(`${V1}/graphs/${enc(id)}/instructions`, {query: {node}}),
+  executionInstructions: (id: string) => request<InstructionSnapshot>(`${V1}/executions/${enc(id)}/instructions`),
   environmentBlockedHistory: (id: string) => request<{ requests: (import("./types").ProxyRequest & { proxy: string; phase: string })[]; retentionDays: number; limit: number; collectedAt?: string }>(`${V1}/graphs/${encodeURIComponent(id)}/environment/blocked-history`),
   environmentProxies: (id: string) => request<ProxyView>(`${V1}/graphs/${encodeURIComponent(id)}/environment/proxies`),
   historyRetention: () => request<HistoryRetentionView>(`${V1}/blocked-history-retention`),

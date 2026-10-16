@@ -18,6 +18,7 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/graph"
+	"github.com/woliveiras/le-forge/server/internal/instructions"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
@@ -188,6 +189,39 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	defer e.execs.unregister(x.ID)
 
 	in := r.buildInput(turnCtx, gr, n, x, inputs, ops, pendingStop, env.principal)
+	instructionStart := time.Now()
+	manager := instructions.Manager{Store: e.store}
+	snapshot, instructionErr := manager.Resolve(turnCtx, gr.g, n, in.Workdir, in.Prompt, in.OperatorMessages)
+	if snapshot != nil {
+		snapshot.ExecutionID = x.ID
+		instructionErr = errors.Join(instructionErr, manager.SaveSnapshot(turnCtx, snapshot))
+	}
+	observability.InstructionLoadSeconds.Observe(time.Since(instructionStart).Seconds())
+	if instructionErr != nil {
+		observability.InstructionLoads.WithLabelValues("failed").Inc()
+		nackAll(dels, e.opt.RetryBackoff)
+		// Restore operator requests: a failed context load must not consume them.
+		for _, op := range ops {
+			copy := *op
+			copy.Consumed = nil
+			instructionErr = errors.Join(instructionErr, e.store.PutOperatorMessage(context.WithoutCancel(turnCtx), &copy))
+		}
+		finish(domain.ExecFailed, "instruction context unavailable: "+instructionErr.Error())
+		return turnOutcome{err: instructionErr}
+	}
+	observability.InstructionLoads.WithLabelValues("loaded").Inc()
+	omitted := 0
+	for _, entry := range snapshot.Entries {
+		if !entry.Included {
+			omitted++
+		}
+	}
+	span.SetAttributes(attribute.Int("leforge.instructions.omitted", omitted), attribute.Int("leforge.instructions.entries", len(snapshot.Entries)))
+	in.Instructions = snapshot
+	if instructions.Enabled(gr.g) {
+		in.Prompt = instructions.Context(*snapshot) + "\n" + in.Prompt
+	}
+	e.bus.Publish(turnCtx, domain.NewEvent("execution.instructions.loaded", gid, map[string]any{"entries": len(snapshot.Entries), "remaining_budget": snapshot.Budget, "omitted": omitted}).WithNode(n.ID, r.index).WithExecution(x.ID).WithTrace(x.TraceID))
 	if e.opt.CallbackURL != "" {
 		in.Callback = &runtime.Callback{URL: strings.TrimRight(e.opt.CallbackURL, "/") + "/internal/v1/executions/" + x.ID, Token: token}
 	}
