@@ -27,7 +27,8 @@ that error; it does not clone the repository.
 
 Accepted definitions record source paths and hashes in `spec.environment.origin`.
 Saving and building re-read the files and verify the normalized settings. If a
-source or referenced Dockerfile changes, remove the old environment, save, then
+source, referenced Dockerfile, or included context file changes, remove the old
+environment, save, then
 discover and review again. An explicit manual environment still takes precedence;
 remove and save it before discovering another. To customize accepted settings,
 remove the accepted definition and configure a manual image or Dockerfile.
@@ -39,11 +40,13 @@ Supported inputs in this first version:
   set `origin`, CPU/memory overrides, or execution networking beyond `none`.
 - Devcontainer: strict JSON with `name`, `image` and a string `postCreateCommand`.
   JSON comments, trailing commas and other fields produce an explicit error.
-- Dockerfiles: builds without repository context. `COPY`, `ADD`, `ONBUILD`,
-  custom parser directives, instruction flags and heredocs are not supported.
+- Dockerfiles: local `COPY` and `ADD` (including local archives), with the repository
+  root as the default context. `ONBUILD`, remote ADD, custom parser directives,
+  instruction flags (including `COPY --from`) and heredocs are not supported.
+  Use JSON array operands for filenames containing spaces.
 - Compose: select one service containing only `image` or `build`. Build accepts
-  a local context path and optional Dockerfile path to locate the file, but
-  does not upload that context. Other selected-service settings, interpolation,
+  a local context path and optional Dockerfile path. Only that context is uploaded.
+  Other selected-service settings, interpolation,
   overrides and companion-service startup are not supported.
 
 Discovery returns paths, hashes, service names and errors, not file contents.
@@ -55,10 +58,39 @@ reject symlinks in definition paths, and are limited to 10,000 entries and
 **Planned, not available yet:** when no definition exists, an analysis agent
 will propose one for developer approval. Currently `proposal_required` only
 reports the absence of a definition; configure an environment manually instead.
-Full build contexts, additional Compose/devcontainer features, reuse across tasks
+Additional Compose/devcontainer features, reuse across tasks
 and global resource budgets also remain planned. See the
 [planned contracts](product-contracts.md#planned-discovery-and-acceptance) and
 [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
+
+### Repository build contexts
+
+Accepted Dockerfiles use a validated tar snapshot sent to the dedicated sandbox
+Docker daemon. LeForge YAML can set `context` relative to the repository root;
+Compose uses its `build.context`. A standalone discovered Dockerfile defaults to
+`.` (repository root), including when the Dockerfile is in a subdirectory.
+Manual inline Dockerfiles still have no repository context.
+
+The snapshot applies Docker ignore patterns, including `!` exceptions and `**`.
+A Dockerfile-specific `<Dockerfile>.dockerignore` takes precedence over the
+context's `.dockerignore`. `.git`, `.env`, and `.env.*` are always excluded,
+even if an ignore negation would include them. Included symlinks and special
+files are rejected; ignored files are not read. Context paths cannot escape the
+authorized workspace. Limits are 10,000 scanned entries and 64 MiB of included
+file content. Use ignore rules to keep dependency/build output out of the context.
+
+Review records `origin.contextSHA256` and the referenced `origin.dockerfilePath`.
+The digest includes paths, modes, content, and effective ignore rules, but not
+modification timestamps. Save and build revalidate it, including before cached
+builds. Changes require discovery, review and acceptance again. The exact
+snapshot checked immediately before Docker is the snapshot sent to the builder.
+The context digest also contributes to the resulting image tag.
+
+To run the opt-in integration test against an **already running** dedicated
+sandbox daemon: `make test-environment-context` (local Go and Docker required).
+It builds temporary fixtures, checks COPY, archive ADD, ignore rules, stale
+acceptance and build errors, and executes the image as UID 10001 without network.
+It removes only its own temporary test images and containers.
 
 ## Usage from the browser
 
@@ -184,7 +216,7 @@ sequenceDiagram
   UI->>F: POST /graphs/{id}/environment/build
   F->>S: acquire lease environment/{id}, status building
   F-->>UI: 202 building
-  F->>D: pull image, or build the Dockerfile (no context)
+  F->>D: pull image, or build the Dockerfile (validated context for repository definitions)
   F->>D: build the sandbox-user layer (uid 10001, HOME, cache dirs)
   F->>D: run setup in leforge-envbuild-{id} (workspace mounted, setup network)
   F->>D: commit → leforge-env/{id}:{hash}
@@ -252,4 +284,4 @@ sequenceDiagram
 | Reset: `stop it before resetting its environment` | The graph is running | Stop the graph, then reset |
 | Agents still use the old image after a rebuild | Their sandbox was created before | Stop and start the agents |
 | `If you are running pnpm in CI, set the CI environment variable to "true"` | An older LeForge ran setup without `CI=true` and pnpm asked to confirm recreating `node_modules` | Build again (setup now runs with `CI=true`) |
-| `COPY failed` in a Dockerfile | Builds have no context | Install from the network, or run the copy as a setup command (the workspace is mounted) |
+| `COPY failed` in a Dockerfile | Source missing, ignored, or outside the selected context | Check the accepted context and ignore rules; manual inline Dockerfiles have no context |

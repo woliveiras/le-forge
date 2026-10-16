@@ -53,10 +53,11 @@ export interface EnvironmentDiscovery {
  candidates: { path: string; sha256: string; services?: string[]; error?: string }[];
 }
 export interface EnvironmentSpec {
- origin?: EnvironmentSelection & { files: Record<string, string> };
+ origin?: EnvironmentSelection & { files: Record<string, string>; dockerfilePath?: string; contextSHA256?: string };
 
   image?: string;
   dockerfile?: string;
+  context?: string;
   setup?: string[];
   network?: { setup?: 'none' | 'bridge'; run?: 'none' | 'bridge' };
   caches?: string[];

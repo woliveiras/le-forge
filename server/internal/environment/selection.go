@@ -90,6 +90,7 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 			return nil, fmt.Errorf("repository definitions cannot set origin")
 		}
 		if env.Dockerfile != "" && !strings.Contains(env.Dockerfile, "\n") && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(env.Dockerfile)), "FROM ") {
+			origin.DockerfilePath = env.Dockerfile
 			content, err := read(env.Dockerfile)
 			if err != nil {
 				return nil, err
@@ -113,6 +114,7 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 		}
 	case "dockerfile":
 		env.Dockerfile = string(data)
+		origin.DockerfilePath = sel.Path
 	case "compose":
 		var doc map[string]any
 		if err := yaml.Unmarshal(data, &doc); err != nil {
@@ -177,7 +179,9 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 			if !fsLocal(contextDir) || !fsLocal(dockerfile) {
 				return nil, fmt.Errorf("build paths must stay inside the repository")
 			}
-			content, err := read(path.Join(path.Dir(sel.Path), contextDir, dockerfile))
+			env.Context = path.Join(path.Dir(sel.Path), contextDir)
+			origin.DockerfilePath = path.Join(env.Context, dockerfile)
+			content, err := read(origin.DockerfilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -212,10 +216,21 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 			return nil, err
 		}
 	}
+	env.Origin = origin
+	if env.Dockerfile != "" && env.Context == "" {
+		env.Context = "."
+	}
 	if err := graph.ValidateEnvironment(env).Err(); err != nil {
 		return nil, err
 	}
-	env.Origin = origin
+	if env.Context != "" {
+		snapshot, err := SnapshotContext(ctx, dir, env)
+		if err != nil {
+			return nil, fmt.Errorf("capture build context: %w", err)
+		}
+		origin.ContextSHA256 = snapshot.SHA256
+		snapshot.Close()
+	}
 	return env, nil
 }
 
@@ -231,8 +246,8 @@ func fsLocal(name string) bool {
 	return true
 }
 
-// Current builds have no repository context. Fail explicitly instead of letting
-// COPY/ADD or external frontends silently change the accepted build semantics.
+// Repository COPY/ADD use local context inputs only. Remote sources, custom
+// frontends and additional privileged build features remain unsupported.
 func validateRepositoryDockerfile(text string) error {
 	pending := ""
 	for _, raw := range strings.Split(text, "\n") {
@@ -259,12 +274,16 @@ func validateRepositoryDockerfile(text string) error {
 			return fmt.Errorf("Dockerfile instruction requires an argument")
 		}
 		switch strings.ToUpper(fields[0]) {
+		case "COPY", "ADD":
+			if err := validateCopySources(strings.TrimSpace(strings.TrimPrefix(line, fields[0]))); err != nil {
+				return err
+			}
 		case "FROM", "RUN", "ENV", "ARG", "WORKDIR", "USER", "SHELL", "LABEL", "CMD", "ENTRYPOINT", "EXPOSE", "STOPSIGNAL", "HEALTHCHECK":
 			if strings.HasPrefix(fields[1], "--") || strings.Contains(line, "<<") {
 				return fmt.Errorf("Dockerfile flags and heredocs are not supported")
 			}
 		default:
-			return fmt.Errorf("unsupported Dockerfile instruction %q; repository COPY/ADD and build contexts are not supported yet", fields[0])
+			return fmt.Errorf("unsupported Dockerfile instruction %q", fields[0])
 		}
 	}
 	if pending != "" {
@@ -294,4 +313,40 @@ func ValidateAccepted(ctx context.Context, dir string, env *domain.EnvironmentSp
 		return fmt.Errorf("%w: definition or referenced files changed after review", ErrInvalidDefinition)
 	}
 	return nil
+}
+
+// Docker handles wildcard expansion and local ADD archive extraction inside
+// the daemon. No source may reference a remote URL, variable or parent path.
+func validateCopySources(arguments string) error {
+	_, err := copyOperands(arguments)
+	return err
+}
+
+func copyOperands(arguments string) ([]string, error) {
+	if strings.HasPrefix(arguments, "--") {
+		return nil, fmt.Errorf("COPY/ADD flags are not supported")
+	}
+	var operands []string
+	if strings.HasPrefix(arguments, "[") {
+		if err := json.Unmarshal([]byte(arguments), &operands); err != nil {
+			return nil, fmt.Errorf("invalid COPY/ADD JSON operands")
+		}
+	} else {
+		if strings.ContainsAny(arguments, "\"'") {
+			return nil, fmt.Errorf("use JSON array syntax for COPY/ADD paths containing spaces")
+		}
+		operands = strings.Fields(arguments)
+	}
+	if len(operands) < 2 {
+		return nil, fmt.Errorf("COPY/ADD require a local source and destination")
+	}
+	for _, source := range operands[:len(operands)-1] {
+		if !fsLocal(source) {
+			return nil, fmt.Errorf("COPY/ADD sources must be local paths inside the context; remote URLs, variables and traversal are not supported")
+		}
+	}
+	if strings.TrimSpace(operands[len(operands)-1]) == "" {
+		return nil, fmt.Errorf("COPY/ADD destination is empty")
+	}
+	return operands, nil
 }

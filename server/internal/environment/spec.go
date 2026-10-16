@@ -37,13 +37,15 @@ func Hash(env *domain.EnvironmentSpec) string {
 	}
 	sort.Strings(caches)
 	b, _ := json.Marshal(struct {
-		V          int      `json:"v"`
-		Image      string   `json:"image,omitempty"`
-		Dockerfile string   `json:"dockerfile,omitempty"`
-		Setup      []string `json:"setup,omitempty"`
-		Network    string   `json:"network"`
-		Caches     []string `json:"caches,omitempty"`
-	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches})
+		V             int      `json:"v"`
+		Image         string   `json:"image,omitempty"`
+		Dockerfile    string   `json:"dockerfile,omitempty"`
+		Setup         []string `json:"setup,omitempty"`
+		Network       string   `json:"network"`
+		Caches        []string `json:"caches,omitempty"`
+		Context       string   `json:"context,omitempty"`
+		ContextSHA256 string   `json:"contextSHA256,omitempty"`
+	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Context, contextHash(env)})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])[:12]
 }
@@ -109,3 +111,10 @@ func SetupScript(cmds []string) string {
 }
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+func contextHash(env *domain.EnvironmentSpec) string {
+	if env.Origin == nil {
+		return ""
+	}
+	return env.Origin.ContextSHA256
+}

@@ -160,7 +160,7 @@ devcontainer, Dockerfile, Compose precedence. Results contain `source`, `status`
 Discovery performs bounded structural inspection. `POST …/environment/resolve`
 (viewer) accepts `{source, path, sha256, service?}`, verifies the selected candidate,
 normalizes supported fields and returns an environment with
-`origin: {source, path, sha256, service?, files: {path: sha256}}` for review.
+`origin: {source, path, sha256, service?, files: {path: sha256}, dockerfilePath?, contextSHA256?}` for review.
 The console requires explicit selection, review and acceptance into the draft.
 Persistence uses the existing **admin-only** graph PUT and optimistic concurrency;
 acceptance never starts a build. Source and referenced-file hashes and normalized
@@ -170,14 +170,16 @@ graph version conflicts retain the existing `409` behavior.
 
 Supported input subsets and limits are documented in [environments.md](environments.md).
 Repository definitions cannot set origin, CPU/memory overrides or execution
-networking beyond `none`; unhandled Compose settings and context-dependent
-Dockerfiles fail explicitly. These are conservative input restrictions, not a
+networking beyond `none`; unhandled Compose settings and unsupported Dockerfile
+features fail explicitly. Local COPY/ADD contexts are confined to the workspace,
+filtered by ignore rules, bounded, hashed on acceptance, and revalidated before
+save and build. The validated tar snapshot is sent to the dedicated daemon. These are conservative input restrictions, not a
 new installation-wide policy configuration. Missing/unreadable checkouts or scan
 limits return an error, never a fallback. Discovery does not clone a repository.
 
 **Planned — not implemented yet** (tracked in
 [TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
-Full repository build contexts and format support, approved agent proposals,
+Additional format support, approved agent proposals,
 reuse across tasks and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
 only the capabilities explicitly described as delivered above are available.
 

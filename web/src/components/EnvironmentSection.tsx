@@ -122,7 +122,7 @@ export function EnvironmentSection({
         <>
           <span className="muted tiny">
             {source === 'dockerfile'
-              ? 'Runs as root while building, so install system packages here. There is no build context: COPY from the repository is not available.'
+              ? 'Runs as root while building, so install system packages here. Manual Dockerfiles have no build context. Accept a discovered repository definition to use COPY or ADD.'
               : 'Use an image with the toolchain you need. Installing system packages needs a Dockerfile; setup commands run without root.'}
           </span>
           <LinesField

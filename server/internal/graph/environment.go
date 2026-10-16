@@ -29,6 +29,19 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 	case dockerfile != "" && !hasFromLine(dockerfile):
 		r.errf(p+".dockerfile", "a Dockerfile needs a FROM instruction")
 	}
+	if env.Context != "" {
+		if env.Dockerfile == "" || env.Origin == nil {
+			r.errf(p+".context", "requires an accepted repository Dockerfile")
+		}
+		if path.IsAbs(env.Context) || strings.ContainsAny(env.Context, "\\:$\x00") {
+			r.errf(p+".context", "must be a repository-relative path")
+		}
+		for _, part := range strings.Split(env.Context, "/") {
+			if part == ".." {
+				r.errf(p+".context", "must not traverse outside the repository")
+			}
+		}
+	}
 	for i, cmd := range env.Setup {
 		if strings.TrimSpace(cmd) == "" {
 			r.errf(fmt.Sprintf("%s.setup[%d]", p, i), "empty setup command")

@@ -1322,6 +1322,7 @@ components:
       properties:
         image: {type: string}
         dockerfile: {type: string}
+        context: {type: string, description: Repository-relative build context for an accepted definition.}
         setup: {type: array, items: {type: string}}
         network:
           type: object
@@ -1341,6 +1342,8 @@ components:
             sha256: {type: string}
             service: {type: string}
             files: {type: object, additionalProperties: {type: string}}
+            dockerfilePath: {type: string}
+            contextSHA256: {type: string}
     Environment:
       type: object
       required: [graph, state, defined, upToDate]

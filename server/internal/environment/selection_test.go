@@ -60,7 +60,7 @@ func TestResolveRejectsUnsafeOrUnsupportedDefinitions(t *testing.T) {
 		{".leforge/environment.yaml", "image: alpine\ncaches: [/workspace]", ""},
 		{".leforge/environment.yaml", "image: alpine\ncpu: '100'", ""},
 		{".leforge/environment.yaml", "image: alpine\nprivileged: true", ""},
-		{"Dockerfile", "FROM alpine\nCOPY . /workspace", ""},
+		{"Dockerfile", "FROM alpine\nCOPY ../outside /workspace", ""},
 		{"Dockerfile", "FROM alpine\nRUN --mount=type=secret,id=key cat /key", ""},
 		{"Dockerfile", "# syntax=evil/frontend\nFROM alpine", ""},
 		{"Dockerfile", "FROM alpine\nONBUILD RUN echo hello", ""},

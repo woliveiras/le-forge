@@ -172,7 +172,7 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 	}
 	// Validate before returning a cached image or starting any Docker operation.
 	dir := ""
-	if env.Origin != nil {
+	if env.Origin != nil || env.Context != "" {
 		var err error
 		dir, err = m.opt.Workspaces.Ensure(ctx, g)
 		if err != nil {
@@ -350,7 +350,25 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 	} else {
 		fmt.Fprintln(log, "==> Building the environment Dockerfile")
 		args := append([]string{"build", "--pull", "-t", baseTag}, labels...)
-		if err := m.docker(ctx, strings.NewReader(env.Dockerfile), log, append(args, "-")...); err != nil {
+		var input io.Reader = strings.NewReader(env.Dockerfile)
+		if env.Context != "" {
+			dir, err := m.opt.Workspaces.Ensure(ctx, g)
+			if err != nil {
+				return "", nil, fmt.Errorf("prepare build context: %w", err)
+			}
+			snapshot, err := SnapshotContext(ctx, dir, env)
+			if err != nil {
+				return "", nil, fmt.Errorf("capture build context: %w", err)
+			}
+			defer snapshot.Close()
+			if env.Origin == nil || snapshot.SHA256 != env.Origin.ContextSHA256 {
+				return "", nil, fmt.Errorf("%w: build context changed after review", ErrInvalidDefinition)
+			}
+			fmt.Fprintln(log, "==> Sending validated repository build context")
+			input = snapshot.File
+			args = append(args, "--file", contextDockerfile)
+		}
+		if err := m.docker(ctx, input, log, append(args, "-")...); err != nil {
 			return "", nil, fmt.Errorf("build Dockerfile: %w", err)
 		}
 		base = baseTag

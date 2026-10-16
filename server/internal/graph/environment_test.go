@@ -48,3 +48,23 @@ func TestValidateEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateRepositoryContext(t *testing.T) {
+	for _, name := range []string{".", "service", "packages/app"} {
+		env := &domain.EnvironmentSpec{Dockerfile: "FROM alpine", Context: name, Origin: &domain.EnvironmentOrigin{}}
+		if err := ValidateEnvironment(env).Err(); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	for _, env := range []*domain.EnvironmentSpec{
+		{Dockerfile: "FROM alpine", Context: "."},
+		{Image: "alpine", Context: ".", Origin: &domain.EnvironmentOrigin{}},
+		{Dockerfile: "FROM alpine", Context: "../outside", Origin: &domain.EnvironmentOrigin{}},
+		{Dockerfile: "FROM alpine", Context: "/absolute", Origin: &domain.EnvironmentOrigin{}},
+		{Dockerfile: "FROM alpine", Context: "$VARIABLE", Origin: &domain.EnvironmentOrigin{}},
+	} {
+		if err := ValidateEnvironment(env).Err(); err == nil {
+			t.Fatalf("accepted invalid context: %+v", env)
+		}
+	}
+}

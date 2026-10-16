@@ -56,6 +56,10 @@ type GraphSpec struct {
 // EnvironmentOrigin identifies the repository snapshot accepted by the operator.
 // Build revalidates both the source and the normalized definition.
 type EnvironmentOrigin struct {
+	// DockerfilePath selects a Dockerfile-specific ignore file when present.
+	DockerfilePath string `json:"dockerfilePath,omitempty" yaml:"dockerfilePath,omitempty"`
+	ContextSHA256  string `json:"contextSHA256,omitempty" yaml:"contextSHA256,omitempty"`
+
 	Source  string            `json:"source" yaml:"source"`
 	Path    string            `json:"path" yaml:"path"`
 	SHA256  string            `json:"sha256" yaml:"sha256"`
@@ -72,8 +76,10 @@ type EnvironmentSpec struct {
 	// Image is a base image to pull (e.g. "golang:1.26"). Exactly one of
 	// Image and Dockerfile is set.
 	Image string `json:"image,omitempty" yaml:"image,omitempty"`
-	// Dockerfile is an inline Dockerfile built without a context (no COPY
-	// from the repository).
+	// Context is a repository-relative directory, captured and fingerprinted
+	// during repository acceptance. Empty retains the inline-only build path.
+	Context string `json:"context,omitempty" yaml:"context,omitempty"`
+	// Dockerfile is the accepted inline build definition.
 	Dockerfile string `json:"dockerfile,omitempty" yaml:"dockerfile,omitempty"`
 	// Setup commands run in order, as the sandbox user, in /workspace with
 	// the graph workspace mounted; their effect on the image (installed
