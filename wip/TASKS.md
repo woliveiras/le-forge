@@ -175,6 +175,54 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 **Done when:** Users can operate tasks in the browser and inspect results, but no user action in the API or interface directly changes workspace files.
 
+### 4a. Durable Human Review and Application Previews
+
+Planned work; no item below is delivered. See `PLAN.md`, section 5a. Container
+workflow assertions elsewhere in this checklist apply to managed Docker
+environments, not to the explicitly selected native `process` execution mode.
+
+#### Review Contract and Continuation
+
+- [ ] Define durable review, candidate snapshot, evidence, preview generation, authorized reviewer and continuation contracts. Preserve existing approval clients and document new API/event contracts.
+- [ ] Support managed preview, external CI URL, local branch validation and explicit acceptance without manual execution; enforce operator-required review methods and accurately record the chosen method.
+- [ ] Freeze candidate content, include dirty workspace changes in its identity, supersede stale reviews and revalidate identity before continuation. Do not equate a branch name with immutable evidence.
+- [ ] Persist the pending gate and release the active turn/input lease. Atomically record decisions and continuation work, with idempotent consumers and restart recovery; never auto-approve on timeout.
+- [ ] Implement approve, request changes, reject/cancel and review expiry. Keep preview expiry distinct from review expiry, and keep PR creation, merge and deploy authorization separate.
+
+#### Service Supervision and Resource Ownership
+
+- [ ] Implement policy-checked Docker service start/status/stop against a frozen candidate, using argv, workspace-relative directory, approved HTTP port, readiness path and bounded lifetime. Do not run persistent servers through `shell.exec`.
+- [ ] Supervise process exit/readiness and bounded logs; persist queued/starting/ready/failed/expired/stopped states and generation IDs. Remove routes when readiness is lost.
+- [ ] Reserve CPU/memory/slots and approved helper services through shared admission; keep active preview leases alive across idle suspension and enforce TTL/renewal bounds.
+- [ ] Reconcile sessions after controller restart; restart expired sessions only after admission/readiness. Revoke access on completion, cancellation or supersession; stop owned processes without deleting persistent data. Surface cleanup errors and retain accounting until confirmed release.
+
+#### Protected HTTP Access
+
+- [ ] Ship and manage the preview gateway as part of LeForge, with local operation as the default and no external preview service, cloud account, public DNS or third-party tunnel dependency. Bind host-facing listeners and Compose published ports to loopback by default.
+- [ ] Design and implement a narrowly scoped relay from the dedicated sandbox network to the built-in gateway on a separate preview origin. Support authenticated HTTP on loopback; require TLS for remote access unless carried entirely through an explicitly configured secure private tunnel. Register only approved session/port targets; prevent arbitrary forwarding, SSRF and lateral access to other sessions, platform services, LAN or Docker API.
+- [ ] Provide a reachable host per preview and support HTTP, redirects, application cookies and WebSockets without requiring application path-prefix changes. Document required local/remote DNS, TLS and private-tunnel configuration.
+- [ ] Enforce per-session authorization even where existing platform roles are installation-wide. Implement browser authentication exchange, session-scoped cookies, CSRF/CORS policy and stripping of platform credentials before upstream forwarding.
+- [ ] Implement explicitly issued, short-lived, revocable human client credentials in a dedicated gateway header; preserve application Authorization headers. Keep secrets out of URLs, logs, model context and cURL/Postman exports.
+- [ ] Enforce request/body/connection limits and close active streams/WebSockets on expiry or revocation. Keep ingress and egress policy independent and use isolated test data for mutable API requests.
+
+#### Interface, Integrations and Validation
+
+- [ ] Show candidate/check evidence, instructions, pending gate, preview readiness/URL, failures and expiry; provide open/copy URL, credential-free cURL/Postman templates, decision actions and bounded restart/renewal.
+- [ ] Accept manually attached external CI/PR evidence with explicit unverified provenance. Later add provider adapters with authenticated event validation and exact repository/revision matching; external links alone cannot approve a gate.
+- [ ] Add lifecycle/access/decision/continuation events, bounded metrics and traces with correlation IDs; redact credentials and exclude HTTP payloads from access logs.
+- [ ] Add unit tests for policy, invalid command/path/port inputs, state transitions, candidate invalidation, expiry, authorization, dependency errors and continuation idempotency.
+- [ ] Add real integration tests spanning storage/queue/controller, Docker supervisor, gateway and HTTP application: readiness failure, process crash, capacity waits, restart recovery, duplicate decisions, stale evidence, cleanup failure, token revocation and concurrent review sessions.
+- [ ] Add browser E2E against a real preview route for React assets/navigation/cookies/WebSockets and approval/request-changes; verify backend GET and mutable HTTP requests with real cURL and a documented manual Postman run. Cover application auth alongside gateway auth, denied cross-session access, blocked internal targets and expiry of active connections.
+- [ ] Verify the default local journey without external gateway services or public DNS, including local hostname resolution, transport-appropriate authentication cookies, native/Compose gateway packaging and denial of access from other machines. Use prepared fixtures so package downloads and model-provider access do not obscure gateway independence.
+- [ ] Test a remote-host topology where the reviewer cannot reach sandbox IPs, and verify external CI, local branch review and acceptance without manual execution. Demonstrate that accepting a review does not itself merge or deploy.
+- [ ] Add user/operator setup and troubleshooting documentation, run relevant unit/integration/browser checks and record results before marking this feature delivered.
+- [ ] Later: add native process supervision under an explicit host-execution policy, reusing the review contract and clearly reporting its weaker isolation.
+
+**Done when:** The remote Docker web and HTTP review journeys in `PLAN.md` 5a
+pass, including protected access, durable human waiting, exact candidate binding,
+recovery and resource release. A stored link or a blocking `human.ask` call alone
+does not satisfy this milestone.
+
 ### 5. Configure Model Providers Through the Interface
 
 #### Backend and Secrets

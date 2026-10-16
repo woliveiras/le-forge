@@ -9,7 +9,7 @@
 - **Bounded autonomy:** Agents may delegate work, but they cannot expand their own permissions or consume unlimited resources.
 - **Security independent of instructions:** Skills and steering guide agents but do not replace platform-enforced permissions.
 - **Genuine visual construction:** The canvas must allow users to edit graphs, not just view those already defined.
-- **Everything runs in containers:** Project toolchains, dependency installs, builds, and tests run in containers managed by LeForge, never on the operator's machine. Environments can be created, rebuilt, and deleted at will, and deleting the installation's volumes removes everything they produced.
+- **Containers are the primary managed workflow:** Project environments run on LeForge's dedicated daemon. Native `process` execution remains supported as an explicit trust choice with the platform user's OS rights; it does not gain container isolation. Deployment location and execution isolation are separate choices (see the README). Resource cleanup must preserve persistent data and respect ownership and approval policy.
 - **Users operate; they do not edit files:** Users send commands/instructions through the interface; only agents may modify workspace files. Users may inspect files and diffs.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
@@ -87,6 +87,160 @@ Add a per-graph workspace to the console, including:
 Users may read and inspect files, but cannot edit, delete, or upload them through the console. Only authorized agents may modify the workspace; every operation must respect workspace boundaries and permissions without exposing the server's filesystem.
 
 **Acceptance criterion:** Users can start and direct tasks, monitor agents, and inspect changes entirely through the browser, without server access or CLI usage.
+
+### 5a. Human Review with Managed or External Previews
+
+**Status: planned, not implemented.** Existing approvals, workspaces, Docker
+environments and operator messages provide foundations. They do not currently
+provide managed long-running application processes or authenticated preview URLs.
+
+Make human review a durable workflow step tied to the exact proposed change.
+The agent prepares the change, runs required checks, supplies review instructions,
+and requests review. The platform persists the request and yields execution;
+no model call, tool invocation or input-message lease stays open for the human's
+entire review. Approval resumes the configured downstream work exactly once
+at the business-operation level through idempotent continuation handling.
+Reuse approval storage/decision conventions, but add a durable continuation:
+`human.ask` alone is not a lifecycle manager for this workflow.
+
+#### Review choices and evidence
+
+- Managed preview: LeForge runs the candidate and supplies a protected URL for
+  browser testing or an HTTP base URL for cURL/Postman.
+- External preview: attach a CI-provided environment URL and its build/revision
+  evidence. LeForge does not imply that it hosts or controls that environment.
+- Local branch review: show repository, branch and commit so the human can
+  fetch and test it independently, then record the decision in LeForge.
+- Review without manual execution: explicitly record that the human accepted
+  based on the diff, checks or other evidence. Do not label this as a successful
+  manual test. Operator policy can require a specific review method; the agent
+  cannot waive it. The default product flow permits explicit acceptance without
+  a preview when policy allows it.
+
+A PR on GitHub, GitLab, Bitbucket or another provider is an optional handoff and
+evidence source, not a prerequisite for review. PR creation may trigger an
+external CI preview. Creating a PR, passing CI, approving a review, merging and
+deploying are distinct actions with separate authorization. A provider event
+may satisfy a gate only under an explicitly configured policy and after actor,
+repository and exact revision verification. Start with manually attached
+external links; provider-specific automation is a later increment.
+
+Each review records graph, task/execution, requester, authorized reviewers,
+candidate identity (commit plus any uncommitted-content snapshot), checks,
+instructions, preview generation or external evidence, expiry, decision,
+review method, actor and timestamp. Freeze the candidate used by a preview;
+editing the working branch must not silently change what the reviewer sees.
+New candidate content supersedes the prior review and invalidates its approval
+for the new candidate. The continuation verifies the approved identity again.
+
+#### Managed application sessions
+
+Introduce a platform-managed service lifecycle separate from `shell.exec`.
+An authorized agent requests a command/argv, workspace-relative directory,
+HTTP port, readiness path and bounded lifetime under operator policy. These
+are proposed API/tool inputs, not existing supported configuration. The platform
+validates them and starts a supervised process using the project's prepared
+environment and frozen candidate, with required approved helper services.
+
+The first increment targets Docker environments on local or remote installations.
+Native execution can use the same review contract, but a native supervisor and
+local binding policy are a later backend; it must clearly report the weaker
+isolation. Neither implementation may turn arbitrary user-supplied URLs, host
+paths or network addresses into forwarding targets.
+
+Track session states independently from review decisions: queued, starting,
+ready, failed, expired and stopped. Expose readiness failures and bounded logs;
+a process starting successfully is not proof that HTTP is ready. Unexpected
+exit removes routing immediately and leaves the review pending or unavailable,
+never approved. A restart creates a new session generation for the same frozen
+candidate and requires readiness again.
+
+Account for preview CPU, memory, slots and helper services in the installation's
+shared capacity budget. While a preview lease is active, ordinary sandbox idle
+suspension must not stop it. Leases have a maximum lifetime and bounded renewal;
+expiry releases compute and revokes access while preserving the candidate and
+review record. Users can restart an expired preview after capacity admission.
+Cancellation, supersession and review completion revoke routing and stop owned
+processes. Retain workspace and persistent test data unless separately authorized
+for deletion. Cleanup failures remain visible and retain resource accounting.
+Controller restarts reconcile leases, sessions and pending continuations.
+
+#### Access from browsers and HTTP clients
+
+The preview gateway is a component shipped and managed as part of LeForge,
+not an external service. It works locally by default: browser, gateway and
+sandbox can all run on the user's machine, without a cloud account, third-party
+tunnel, public domain or external preview service. Bind its host-facing listener
+to loopback only by default, including Compose port publication. Provide local
+preview addressing without requiring public DNS; test supported browsers and
+HTTP clients. This does not remove network requirements of the application,
+dependency downloads or the selected model provider.
+
+Use authentication and a separate preview origin from the console. Loopback-only
+HTTP is supported for the default local workflow; require TLS for remote access
+unless HTTP is carried entirely through an explicitly configured secure private
+tunnel. Keep local authentication enabled and use appropriate cookie settings
+for each transport. Prefer a dedicated host per session so applications using
+absolute paths, redirects, cookies and WebSockets do not need a URL prefix.
+The URL routes only to a registered session's approved HTTP port. A scoped
+relay on the dedicated sandbox network connects it to the gateway; it must not
+open general access to platform services, the Docker API, LAN or other sessions.
+Inbound review access and outbound application egress are separate policies;
+the existing egress proxy does not provide this ingress feature.
+
+Browser access uses an authenticated exchange into a session-scoped cookie on
+the preview origin. Never forward the console cookie or platform authorization
+headers to the application. cURL/Postman use a short-lived, revocable credential
+scoped to one preview, issued explicitly to the human through a secure UI flow;
+the gateway consumes it in a dedicated header so application `Authorization`
+headers remain usable. Do not put credentials in URLs, prompts, exported
+collections, logs or events. Application authentication remains independent.
+
+Enforce review/session authorization on every HTTP request and WebSocket
+handshake; bound and terminate existing connections on revocation or expiry.
+Define CSRF protection for browser cookie access, exact CORS origins, request
+size/time limits and WebSocket limits. HTTP methods needed for API testing may
+mutate isolated test data; they must not expose production credentials or data.
+Provide copyable base URLs and credential-free cURL/Postman templates, plus
+test-account instructions without embedding secret values.
+
+For remote hosting, the same LeForge gateway must be reachable through an administrator-
+configured domain/TLS route or private tunnel. The agent cannot create public
+exposure itself. A local browser must receive a reachable gateway URL, never
+the sandbox's internal address or the remote server's `localhost`.
+
+#### Gate outcomes and delivery
+
+The console presents the candidate, check results, instructions, review options,
+preview state and URL. Actions are approve, request changes, reject/cancel, and
+restart/extend preview within policy. Request changes returns feedback to the
+agent and requires a new review for the next candidate. Decision and continuation
+creation must be atomic or use a transactional outbox; duplicate decisions and
+replayed deliveries must not duplicate downstream effects. Review expiration
+never auto-approves this gate; preview expiry alone is not review rejection.
+
+Record session lifecycle, readiness, access denials, review decisions and
+continuation outcomes with correlation IDs, bounded metrics and traces. Exclude
+credentials and request/response bodies from access logs. Distinguish technical
+readiness, automated test success and a human's explicit approval in the UI.
+
+Deliver in order: durable review/candidate contract with manual external/local
+evidence; Docker service supervisor and resource leases; scoped HTTP gateway
+and browser/client authentication; integrated console flow and recovery tests;
+then native supervision and automated SCM/CI adapters. End-to-end acceptance
+requires the gateway and UI increments, not only a stored URL.
+
+**Acceptance criterion:** On a local installation, the bundled gateway exposes
+browser and cURL/Postman previews through loopback without public DNS, cloud
+services or third-party tunnels; other machines cannot reach that listener.
+On a remotely hosted LeForge installation, a React
+candidate in an isolated Docker environment is accessible in the reviewer's
+browser, and an HTTP backend is testable using cURL/Postman. The graph stays
+pending until an authorized decision, survives controller restart, rejects
+stale approval, and releases access/compute at the end of the session. Tests
+demonstrate isolation from other sessions and platform services. External CI,
+local branch review and explicit acceptance without manual execution remain
+available according to policy, without requiring a managed preview or a PR.
 
 ### 6. Add MCP Configuration
 
@@ -177,6 +331,8 @@ After graph creation and operation have stabilized:
 3. **Visual editor**, as the central experience and a dependency for the graph model.
 4. **Containerized project environments**, on a Docker daemon dedicated to LeForge, so agents run the project's toolchain without touching the host.
 5. **File and interaction panel**, read-only for users, with tasks and changes tracked by execution.
+   Follow with **durable human review and preview sessions** (section 5a):
+   candidate identity, supervised services, protected HTTP access and resumable gates.
 6. **Web configuration for models and MCPs**, with protected credentials and Bitbucket, GitHub, Confluence, and Jira integrations.
 7. **Skills and steering**, with hybrid storage, precedence, traceability, and trust boundaries.
 8. **Dynamic delegation**, with a configurable choice between individual approval and bounded automatic execution.
