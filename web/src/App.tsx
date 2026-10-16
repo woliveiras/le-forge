@@ -30,7 +30,7 @@ function parseRoute(hash: string): Route {
   if (parts[0] === 'skills') return { view: 'skills' };
   if (parts[0] === 'integrations') return { view: 'integrations' };
   if (parts[0] === 'g' && parts[1]) {
-    const tab = (['canvas', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
+    const tab = (['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
       ? (parts[2] as GraphTab)
       : 'canvas';
     const c = new URLSearchParams(qs ?? '').get('c') ?? undefined;

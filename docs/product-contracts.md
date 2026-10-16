@@ -661,3 +661,20 @@ tool calls. Rejection/expiration/stale inputs/build or sandbox failures remain
 visible errors. Pending approval is cancelled on caller timeout where possible;
 approved durable work may finish after a turn ends. Restart continuation uses
 existing queue/execution retry semantics. See the environment/tool documentation.
+
+### Task activity in the console
+
+**Implemented:** Each graph has an Activity tab aggregating the existing authorized
+status, executions, messages, approvals, reviews and events APIs. It shows current
+replica state/detail separately from historical executions and their recorded
+summaries/errors. Selecting an execution restricts events and approvals by its
+execution ID and messages by input/output IDs or emitting execution metadata;
+sharing an agent does not establish causality. Reviews remain graph-wide.
+
+The view refreshes on events and every five seconds, with manual retry and explicit
+per-source errors. Failed sections are not shown as an empty successful response.
+It displays at most 100 recent executions, 100 recent messages and 300 recent
+events; it does not claim complete history, a new persisted task entity, or a work
+completion percentage. Operators/admins use existing approval actions; environment
+approval remains admin-only. Viewers have no decision controls. Server authorization
+continues to apply to every read and mutation. Workspace inspection remains read-only.

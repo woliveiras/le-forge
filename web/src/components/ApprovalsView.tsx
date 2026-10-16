@@ -54,7 +54,7 @@ export function ApprovalsView({ onChanged }: { onChanged: () => void }) {
   );
 }
 
-function ApprovalCard({ a, onDone }: { a: Approval; onDone: () => void }) {
+export function ApprovalCard({ a, onDone, canDecide = true }: { a: Approval; onDone: () => void; canDecide?: boolean }) {
   const [comment, setComment] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState<string>();
@@ -84,7 +84,7 @@ function ApprovalCard({ a, onDone }: { a: Approval; onDone: () => void }) {
         {a.expiresAt ? ` · expires ${fmtDateTime(a.expiresAt)}` : ''}
       </p>
       {a.detail !== undefined && a.detail !== null && <JsonView value={a.detail} label="detail" open={a.kind !== 'question'} />}
-      {a.status === 'pending' ? (
+      {a.status === 'pending' && !canDecide ? <p>Waiting for an authorized operator to decide.</p> : a.status === 'pending' ? (
         <div className="form">
           {a.kind === 'question' && (
             <label>

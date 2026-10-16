@@ -24,9 +24,10 @@ import { FilesView } from './FilesView';
 import { IssueSummary } from './GraphIssues';
 import { MessagesExplorer } from './MessagesExplorer';
 import { NodePanel } from './NodePanel';
+import { TaskActivity } from './TaskActivity';
 import { YamlEditor } from './YamlEditor';
 
-export type GraphTab = 'canvas' | 'files' | 'events' | 'messages' | 'yaml';
+export type GraphTab = 'canvas' | 'activity' | 'files' | 'events' | 'messages' | 'yaml';
 
 /** A validation result and the draft it was computed for (paths are indices into that draft). */
 interface Validation {
@@ -243,7 +244,7 @@ export function GraphWorkspace({
     <div className="workspace">
       <div className="toolbar">
         <div className="tabs" role="tablist">
-          {(['canvas', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
+          {(['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -254,7 +255,9 @@ export function GraphWorkspace({
             >
               {t === 'canvas'
                 ? 'Graph'
-                : t === 'files'
+                : t === 'activity'
+                  ? 'Activity'
+                  : t === 'files'
                   ? 'Files'
                   : t === 'yaml'
                     ? 'Definition'
@@ -455,6 +458,7 @@ export function GraphWorkspace({
           )}
         </div>
       )}
+      {tab === 'activity' && <TaskActivity key={gid} graphId={gid} role={info?.identity?.role} />}
       {tab === 'events' && <EventsView graph={summary.graph} info={info} />}
       {tab === 'files' && <FilesView summary={summary} status={status} />}
       {tab === 'messages' && (
