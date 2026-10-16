@@ -2,8 +2,8 @@
 
 The editor, provider/LangGraph, workspace/Git and skills/steering branches were
 reviewed together on `codex/integrate-parallel-deliveries`, based on `ee71557`.
-This record covers those four deliveries, not completion of Release 1 or the
-separate human-review/preview work.
+The initial record covers those four deliveries. The later integration with
+Docker human review/previews is recorded below; neither completes Release 1.
 
 ## Integrated changes
 
@@ -50,7 +50,7 @@ several sessions were testing concurrently. Each suite retains its assertions,
 timeouts and failure handling. The real-daemon browser suite runs separately
 from other sandbox validation to avoid competing test workloads.
 
-## Results
+## Initial four-delivery results
 
 All commands above passed on the integrated code:
 
@@ -69,6 +69,45 @@ real broker/PostgreSQL and dedicated-daemon tests remain opt-in, as described
 below. Browser test results are from this combined branch, not merely the
 individual sessions' earlier reports.
 
+## Preview integration and main validation
+
+After the preview session completed, merge `1598749` combined its `ef12c93`
+implementation and the preserved sandbox acceptance documentation with the four
+parallel deliveries. Conflicts were resolved by retaining both API families,
+client types, event/runtime contracts, test targets and checklist evidence.
+
+Two additional cross-feature checks/fixes were committed:
+
+- `d2bc221`: real engine/storage/review integration for a `once` task with
+  skills. Approval resumes exactly once with the human decision and current
+  skill revision; rejection does not resume. The earlier execution manifest
+  remains immutable after the skill changes.
+- `5f3c186`: Python `ToolResult.yield_turn` preserves the review protocol's
+  `yield` field. Unit serialization and real HTTP callback tests cover legacy
+  results, yielded results and denied callbacks. Custom framework loops still
+  need to honor this signal; the engine enforces the review gate independently.
+
+The combined result was fast-forwarded into `main`, then the general suites,
+lint, build and provider journey were repeated directly in the primary checkout.
+All checks passed:
+
+| Check | Final result |
+| --- | --- |
+| `GOFLAGS=-p=1 make test PYTHON=/path/to/python3` | Go unit/integration packages, 13 SDK + 14 agent + 3 wrapper Python tests, TypeScript and 124 web tests passed on `main`. |
+| `make lint` and `make build` | gofmt/vet and all four binaries, including the Linux preview relay, passed on `main`. |
+| Engine review/skills integration | Approval and rejection passed locally; the full engine package then passed in the test container and again in the general `main` run. |
+| `LEFORGE_E2E_PORT=18110 make test-e2e` | 13 combined Chromium scenarios passed. |
+| `make test-e2e-providers` with the documented Python/port variables | Python adapter tests, Go callback integration and 3 Chromium scenarios passed; repeated on `main` after the SDK fix. |
+| `make test-e2e-real` | 8 real-sandbox Chromium scenarios passed, including the original six environment journeys plus React/HTTP/WebSocket review approval and request-changes/new-review. |
+| `make test-preview` | Real Docker HTTP/cURL, cache isolation, recovery, expiry/restart and shutdown test passed. |
+| Contracts/history | Combined OpenAPI parsed with review, skill, instruction and Git routes; diff whitespace check passed; both source histories are ancestors of `main`. |
+
+The browser/sandbox checks ran sequentially on the combined code in the
+integration worktree before the fast-forward. General tests, build and provider
+checks also ran in the primary checkout. Subsequent changes are documentation
+only. Interactive Postman and a public DNS/TLS deployment were not tested; the
+preview guide distinguishes these from the tested private-forwarder topology.
+
 ## Remaining scope
 
 - Live broker/PostgreSQL conformance suites require their documented
@@ -83,7 +122,8 @@ individual sessions' earlier reports.
   128 retained revisions. See [instruction contracts](instructions.md).
 - MCPs, dynamic delegation, onboarding, full release acceptance, universal
   change provenance and the deferred rootless variant remain separate work.
-- The primary checkout contains concurrent human-review/preview changes.
-  This integration is committed in its own attached worktree; that checkout
-  was not reset, overwritten or merged while it had uncommitted work. No push,
-  release or deployment was performed.
+- Integration initially stayed in its attached worktree while preview work
+  was active. After that session finished, preview commit `ef12c93` and the
+  preexisting sandbox documentation (`5cb92c0`) were preserved and merged with
+  the four deliveries in `1598749`. `main` then advanced by fast-forward. No
+  source history was rewritten, and no push, release or deployment was performed.
