@@ -71,6 +71,8 @@ type Invocation struct {
 // Result is returned to the agent. Content is text for the model; Data is
 // optional structured output for programmatic callers.
 type Result struct {
+	// Yield ends the current turn after persisting a durable continuation gate.
+	Yield     bool            `json:"yield,omitempty"`
 	Content   string          `json:"content"`
 	Data      json.RawMessage `json:"data,omitempty"`
 	IsError   bool            `json:"isError,omitempty"`

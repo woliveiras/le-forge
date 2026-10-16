@@ -190,3 +190,18 @@ nodes:
 Launched runtimes receive `PORT`, `HOST`, `LEFORGE_URL` and `LEFORGE_RUNTIME_SECRET` in a minimal
 environment (no platform secrets), are shared by all replicas of the node, and are stopped when the
 last replica stops.
+
+### Yielding for durable human review
+
+`ToolResult.yield` is an optional boolean. When true, the runtime must finish its
+current turn immediately, without more tools/model calls, completion signals or
+outputs. Native runtime implements this directly; external runtimes should honor
+it. The engine independently rejects subsequent callbacks and discards outputs
+from that turn, including outputs submitted before the gate. It acknowledges the
+input and persists the pending review without holding a runtime request open.
+
+A later turn carries `Human review result: <json>` in operator context, with
+`reviewId`, `state`, `candidate`, `method`, and `comment`. Request changes requires
+new work and a new review. A decision grants no merge/deploy/push permissions.
+The outbox inserts its continuation message once, including across a controller
+restart; side effects in a retried turn still need ordinary idempotency handling.

@@ -13,6 +13,31 @@ type resumableSandbox interface {
 	Start(context.Context) error
 }
 
+// Durable review holds no active turn. Its application lives in a separate
+// preview sandbox, so the agent's container can release its capacity now.
+func (r *replica) suspendForReview(ctx context.Context) {
+	sb, ok := r.sandbox.(resumableSandbox)
+	if !ok {
+		return
+	}
+	r.mu.Lock()
+	skip := r.sandboxSuspended || time.Now().Before(r.suspendRetry)
+	r.mu.Unlock()
+	if skip {
+		return
+	}
+	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := r.sandboxTransition(bounded, "suspend", sb.Suspend)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err == nil {
+		r.sandboxSuspended = true
+	} else {
+		r.suspendRetry = time.Now().Add(30 * time.Second)
+	}
+}
+
 // Only the replica loop invokes lifecycle transitions, never a timer racing an
 // active runtime. Waiting for approvals/tool calls remains part of the turn.
 func (r *replica) sandboxIdleDelay() time.Duration {

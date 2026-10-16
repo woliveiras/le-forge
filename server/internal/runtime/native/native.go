@@ -135,6 +135,9 @@ func (r *Runtime) Turn(ctx context.Context, in *runtime.TurnInput, env runtime.T
 			calls++
 			msgs = append(msgs, llm.ChatMessage{Role: llm.RoleTool, ToolCallID: call.ID, Name: call.Name, Content: out})
 			finished = finished || done
+			if done {
+				break
+			}
 		}
 	}
 	if !finished {
@@ -208,7 +211,7 @@ func (r *Runtime) call(ctx context.Context, env runtime.TurnEnv, res *runtime.Tu
 	if out.Truncated {
 		content += "\n…(output truncated)"
 	}
-	return content, false
+	return content, out.Yield
 }
 
 var (

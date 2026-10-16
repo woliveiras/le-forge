@@ -41,6 +41,9 @@ func main() {
 	}
 }
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "preview-app" {
+		return previewApp()
+	}
 	if os.Getenv("LEFORGE_E2E_REAL") == "1" {
 		return runReal()
 	}
@@ -55,6 +58,7 @@ func run() error {
 	}
 	cfg := config.Default()
 	cfg.Instance = "browser-e2e"
+	cfg.Preview.Addr = ""
 	cfg.LLM = config.LLM{}
 	cfg.Server.Addr = "127.0.0.1:18089"
 	cfg.Server.InternalAddr = ""

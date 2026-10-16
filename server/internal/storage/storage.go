@@ -81,6 +81,8 @@ type Store interface {
 
 	// --- operator messages ------------------------------------------------
 	PutOperatorMessage(ctx context.Context, m *domain.OperatorMessage) error
+	// PutOperatorMessageOnce inserts without overwriting a previously consumed message.
+	PutOperatorMessageOnce(ctx context.Context, m *domain.OperatorMessage) error
 	// ConsumeOperatorMessages atomically marks and returns unconsumed messages
 	// addressed to this replica (or to any replica: Replica == -1).
 	ConsumeOperatorMessages(ctx context.Context, graph, node string, replica int) ([]*domain.OperatorMessage, error)

@@ -25,6 +25,8 @@ type EgressConfig struct {
 
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
+	// Command replaces the idle entrypoint for platform-managed preview services.
+	Command []string
 	// ValidateAdmission rechecks installation policy on start/resume, including after capacity waits.
 	BeforeRemove       func(context.Context) error
 	ValidateAdmission  func(context.Context) error
@@ -165,7 +167,12 @@ func (s *DockerSandbox) RunArgs() []string {
 	for _, v := range c.Volumes {
 		args = append(args, "-v", v)
 	}
-	args = append(args, "-v", c.HostDir+":"+c.MountPoint, "-w", c.MountPoint, "--entrypoint", "sh", c.Image, "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done")
+	args = append(args, "-v", c.HostDir+":"+c.MountPoint, "-w", c.MountPoint)
+	if len(c.Command) > 0 {
+		args = append(args, "--pids-limit", "512", "--log-opt", "max-size=1m", "--log-opt", "max-file=1", "--entrypoint", c.Command[0], c.Image)
+		return append(args, c.Command[1:]...)
+	}
+	args = append(args, "--entrypoint", "sh", c.Image, "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done")
 	return args
 }
 

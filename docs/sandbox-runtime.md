@@ -357,3 +357,179 @@ reservation records to bypass this check. Stop existing workloads before
 upgrading all controllers, and restart them under the new policy; running legacy
 containers without CPU caps also block admission. No automatic deletion of
 workspaces or user resources is performed by the upgrade.
+
+## Human review and application previews
+
+The built-in preview gateway runs in `forged`, independently of the console
+listener. It is local by default: `127.0.0.1:8082`, with one host per review at
+`http://<review-id>.localhost:8082`. Compose publishes only
+`127.0.0.1:8082:8082`. No external gateway, public DNS, cloud account or third-party
+tunnel is required. Chromium is exercised by the browser acceptance test.
+Clients whose resolver does not recognize `*.localhost` can use cURL's
+`--resolve '<review-id>.localhost:8082:127.0.0.1'`, or a local hosts entry.
+
+### Requesting a review
+
+Grant `review.request` on a Docker node. Starting an application also requires
+`shell.exec` and its command restrictions/approval; a review grant alone cannot
+launch arbitrary commands. Example node fragment:
+
+```yaml
+isolation: {mode: docker}
+tools:
+  - name: review.request
+  - name: shell.exec
+    commands: [npm]
+config:
+  reviewPolicy:
+    reviewers: [alice] # authenticated operator/admin identity names
+    requiredMethod: managed
+```
+
+Omit `reviewPolicy` to allow any authenticated operator and all review methods.
+It is saved graph configuration, never an agent-supplied permission. The agent
+runs its tests/build first, then invokes:
+
+```json
+{
+  "title": "Validate the dependency update",
+  "instructions": "Open the page, navigate and submit the test form.",
+  "command": ["npm", "run", "dev", "--", "--host", "127.0.0.1"],
+  "cwd": ".",
+  "port": 5173,
+  "readyPath": "/",
+  "lifetimeSeconds": 1800,
+  "checks": ["npm test passed", "npm run build passed"]
+}
+```
+
+The configured image/environment must already contain the runtime and dependencies.
+Readiness accepts HTTP 2xx/3xx at the selected path, without following redirects.
+The application must listen on the declared port on loopback or all interfaces
+inside its container. Commands are argv, not interpolated shell strings; use
+`shell.exec` for terminating preparation commands, not background servers.
+
+LeForge copies the workspace (including dirty changes, excluding `.git`) and
+binds the review to its SHA-256 identity. Capture rejects escaping symlinks,
+special files and candidates over 2 GiB or 200,000 entries. Each generation runs
+from a separate copy; environment caches are mounted read-only and copied into
+private writable container storage. The code digest does not attest the contents
+of dependency caches or external services. Use deterministic dependencies and
+isolated test data. Agent-reported checks are displayed as unverified evidence.
+
+### Human validation
+
+Open **Approvals → Application reviews**. The card shows the candidate,
+instructions, reported checks, readiness, expiry and preview URL. **Open preview**
+uses a one-use exchange token (one minute) and a host-only HttpOnly cookie
+(15 minutes). Credentials never appear in the URL or agent context. Allow the
+console popup. A new open operation can renew browser access while the session
+is still active.
+
+For cURL/Postman, select **Generate HTTP client credential**, copy the masked
+value into a private local variable and keep it separate from application auth:
+
+```sh
+# Supply LEFORGE_PREVIEW_TOKEN privately; do not put the value in saved scripts.
+curl 'http://<review-id>.localhost:8082/api/items' \
+  -H "X-LeForge-Preview-Token: $LEFORGE_PREVIEW_TOKEN" \
+  -H 'Authorization: Bearer <application-test-token>'
+curl 'http://<review-id>.localhost:8082/api/items' \
+  -H "X-LeForge-Preview-Token: $LEFORGE_PREVIEW_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"name":"review fixture"}'
+```
+
+In Postman, set the base URL to the card's URL and add header
+`X-LeForge-Preview-Token: {{previewToken}}`; store its value privately, outside
+shared/exported collections. Configure the application's Authorization separately.
+Send a GET and a test-data mutation, inspect status/body, then revoke access and
+verify the same request is denied. This is the manual Postman acceptance recipe;
+automated acceptance exercises the equivalent requests using HTTP and real cURL.
+
+Choose the actual review method and **Approve candidate**, **Request changes**
+(with feedback), or **Reject**. Approval rechecks the source digest and lets the
+agent continue; modifying the candidate afterward prevents completion until a
+new review. Request changes returns feedback to a new turn. Rejection ends the
+node's work without publishing success. Stopping the node/graph cancels its gate.
+No decision merges, pushes, deploys, or authorizes any of those separate actions.
+
+Without `command`, the same gate supports `externalUrl` (HTTPS CI/PR link,
+unverified provenance), `local` branch validation, or `without_execution` explicit
+acceptance. The operator can require one method using `reviewPolicy.requiredMethod`.
+Branch names and external links are not immutable proof; compare the candidate
+and record what was actually checked. Provider-specific PR/CI automation is not
+implemented by this feature.
+
+### Isolation, capacity and recovery
+
+A narrowly scoped stdio relay (`forge-preview`, shipped in the image) connects
+only to the registered loopback port via the dedicated Docker daemon. Application
+ports are never published. Preview ingress does not grant outbound network
+access or access to platform services; existing environment policy still applies.
+Approved companion services and their limits use the existing sandbox factory
+and shared CPU/memory/slot admission. The idle agent sandbox is suspended while
+the separately accounted preview is active. Cache copies run inside its limits.
+
+Gateway limits are 8 MiB per request body, 32 concurrent requests per review,
+30 seconds for response headers and 15 minutes per connection. Browser requests
+use an exact-origin policy. Gateway credentials are stripped before proxying;
+application Authorization is preserved, application cookies are host-only and
+WebSockets are supported. Revocation/expiry closes active streams within the
+one-second revalidation interval. Application cookies and mutation behavior are
+still the application's responsibility; use disposable test accounts/data.
+
+A preview lasts 30 minutes by default (request range 60 seconds–2 hours).
+**Extend preview** is bounded by the review's 24-hour deadline. Preview expiry
+stops compute and revokes credentials, while the gate stays pending. **Restart
+preview** creates a new generation from the frozen candidate and rechecks
+capacity/readiness. A review deadline never auto-approves work. Startup/readiness
+failure revokes the route and stops compute; cleanup failures retain accounting
+and are retried. **Application logs** returns the last 100 lines, capped at 64 KiB;
+application authors must keep secrets out of their own logs.
+
+Review records, decisions and idempotent continuation messages survive controller
+restart. Existing preview generations reconnect; their TTL remains in force.
+If the controller is offline, gateway access is unavailable and container cleanup
+waits for reconciliation after restart. Continuation delivery is idempotent, but
+external side effects still require the application's usual idempotency controls.
+Snapshots, stopped containers and work directories are retained; this feature
+does not delete persistent data automatically. Plan disk retention separately.
+
+### Remote installation and troubleshooting
+
+For a private remote server, forward the gateway port over your existing secure
+transport to local port 8082 and retain `baseUrl: http://localhost:8082`; forward
+the console too and configure its exact origin. The browser reaches the gateway,
+not sandbox IPs. The acceptance harness exercises this topology through a private
+forwarder to a dedicated daemon.
+
+For direct remote access, configure `preview.baseUrl: https://preview.example.com`,
+DNS for `*.preview.example.com`, an appropriate wildcard TLS certificate/key,
+and reachable `preview.addr`. The gateway requires TLS for nonlocal access;
+HTTP on a public listener is rejected. Configure the exact console HTTPS origin
+in `preview.consoleOrigins`. The administrator supplies DNS, TLS and network
+access; LeForge does not publish a public endpoint automatically.
+
+An unknown host returns 404; wrong/expired credentials return 401/403; an unready
+session cannot issue access. A popup timeout usually means wrong console origins,
+blocked popups, missing local hostname resolution, or an unreachable gateway.
+Readiness failure usually means a wrong port/path, missing dependencies, a server
+binding only IPv6, or exhausted capacity. Inspect the card and application logs.
+Build the Linux relay with `make build` for native control-plane runs; Compose
+images already include it. A native control plane can manage Docker previews;
+managed previews of native `process` nodes are not supported.
+
+Validation: `make test-preview` exercises a real Docker HTTP app, cURL, network-none
+isolation, controller recovery, expiry/restart and shutdown. The real browser
+suite (`make test-e2e-real`) exercises React, routing, cookies, application auth,
+WebSockets and the human gate. Unit/integration suites cover storage, controller,
+policy, stale candidates, concurrent decisions, failure and revocation paths.
+
+Validation recorded on 2026-10-16: `make test` passed (Go suites, 8 SDK tests,
+14 example-agent tests and 115 console tests), `make lint` and `make build`
+passed, `make test-preview` passed against the real dedicated daemon, and
+`make test-e2e-real` passed all eight Chromium scenarios. Targeted review/engine
+race-detector tests and OpenAPI YAML validation also passed. Postman GUI and a
+public DNS/TLS deployment were not executed; use the recipes above for those
+installation-specific checks.

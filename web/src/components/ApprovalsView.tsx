@@ -1,3 +1,4 @@
+import { ReviewsView } from './ReviewsView';
 import { useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { Approval, ApprovalStatus } from '../api/types';
@@ -34,6 +35,7 @@ export function ApprovalsView({ onChanged }: { onChanged: () => void }) {
           </select>
         </label>
       </div>
+      <ReviewsView />
       <ErrorBox error={list.error} />
       {(list.data ?? []).length === 0 && !list.loading && <Empty>Nothing waiting for a human.</Empty>}
       <div className="cards">

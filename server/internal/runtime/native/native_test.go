@@ -171,3 +171,20 @@ func TestRoundsFollowTheToolCallBudget(t *testing.T) {
 		t.Fatalf("out of rounds must fail the turn: %v", err)
 	}
 }
+
+type yieldingEnv struct{ scriptedEnv }
+
+func (e *yieldingEnv) InvokeTool(ctx context.Context, name string, args json.RawMessage) (*tools.Result, error) {
+	e.tools = append(e.tools, name)
+	return &tools.Result{Content: "Waiting for human review", Yield: true}, nil
+}
+func TestDurableToolYieldEndsModelTurn(t *testing.T) {
+	env := &yieldingEnv{scriptedEnv: scriptedEnv{replies: []*llm.ChatResponse{{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "one", Name: "review.request", Arguments: json.RawMessage(`{}`)}, {ID: "two", Name: "shell.exec", Arguments: json.RawMessage(`{}`)}}}}}}}
+	_, err := New().Turn(context.Background(), &runtime.TurnInput{}, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env.tools) != 1 || len(env.asked) != 1 {
+		t.Fatalf("continued after yield: tools=%v calls=%d", env.tools, len(env.asked))
+	}
+}

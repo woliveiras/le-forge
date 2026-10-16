@@ -850,3 +850,21 @@ func cloneLimited[T any](in []*T, limit int) []*T {
 	}
 	return out
 }
+
+func (s *Store) PutOperatorMessageOnce(ctx context.Context, m *domain.OperatorMessage) error {
+	if m == nil || m.ID == "" {
+		return fmt.Errorf("fsstore: operator message id is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return err
+	}
+	if _, ok := s.operator[m.ID]; ok {
+		return nil
+	}
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = time.Now().UTC()
+	}
+	return s.putOperatorLocked(clone(m))
+}

@@ -1,5 +1,6 @@
 import type {
   Approval,
+  HumanReview,
   HistoryRetentionPolicy,
   HistoryRetentionView,
   ProxyView,
@@ -157,6 +158,10 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  reviews: () => request<HumanReview[]>(`${V1}/reviews`),
+  reviewAction: (id: string, action: string, body: Record<string, unknown> = {}) => request<HumanReview>(`${V1}/reviews/${enc(id)}/${enc(action)}`, { method: 'POST', body }),
+  previewCredential: (id: string, browser: boolean) => request<{token: string; url: string}>(`${V1}/reviews/${enc(id)}/credential`, { method: 'POST', body: {browser} }),
+  previewLogs: (id: string) => request<{logs: string}>(`${V1}/reviews/${enc(id)}/logs`, {method: 'POST', body: {}}),
   environmentBlockedHistory: (id: string) => request<{ requests: (import("./types").ProxyRequest & { proxy: string; phase: string })[]; retentionDays: number; limit: number; collectedAt?: string }>(`${V1}/graphs/${encodeURIComponent(id)}/environment/blocked-history`),
   environmentProxies: (id: string) => request<ProxyView>(`${V1}/graphs/${encodeURIComponent(id)}/environment/proxies`),
   historyRetention: () => request<HistoryRetentionView>(`${V1}/blocked-history-retention`),

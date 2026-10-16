@@ -62,11 +62,15 @@ type ToolGateway interface {
 
 // SandboxSpec describes the sandbox a replica needs.
 type SandboxSpec struct {
-	Graph       *domain.Graph
-	Node        *domain.Node
-	Replica     int
-	Workdir     string // platform path
-	HostWorkdir string // daemon path (docker bind mounts)
+	Name           string
+	Command        []string
+	ExtraVolumes   []string
+	ReadOnlyCaches bool
+	Graph          *domain.Graph
+	Node           *domain.Node
+	Replica        int
+	Workdir        string // platform path
+	HostWorkdir    string // daemon path (docker bind mounts)
 }
 
 // SandboxFactory builds the command sandbox of a replica.
@@ -74,6 +78,12 @@ type SandboxFactory func(ctx context.Context, s SandboxSpec) (tools.Sandbox, err
 
 // Options wires the engine to its adapters.
 type Options struct {
+	Reviews interface {
+		Pending(context.Context, string, string, int) (bool, error)
+		AssertApproved(context.Context, string, string, int) error
+		Terminal(context.Context, string, string, int) (string, error)
+		Cancel(context.Context, string, string, string) error
+	}
 	SandboxIdleTimeout time.Duration
 	Instance           string
 	Store              storage.Store

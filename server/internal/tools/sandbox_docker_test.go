@@ -103,3 +103,16 @@ func TestPingDocker(t *testing.T) {
 		t.Fatalf("start against a down daemon: %v", err)
 	}
 }
+
+func TestPreviewUsesExplicitEntrypointWithBoundedLogs(t *testing.T) {
+	sb, err := NewDockerSandbox(DockerSandboxConfig{Name: "preview", Image: "fixture", HostDir: "/workspace", CPU: "0.5", Memory: "128m", Command: []string{"/leforge-preview/forge-preview", "serve", "/leforge-preview/config.json"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(sb.RunArgs(), " ")
+	for _, want := range []string{"--network none", "--cap-drop ALL", "--cpus 0.5", "--memory 128m", "--log-opt max-size=1m", "--entrypoint /leforge-preview/forge-preview fixture serve /leforge-preview/config.json"} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("missing %q: %s", want, args)
+		}
+	}
+}

@@ -36,6 +36,7 @@ func Run(t *testing.T, newStore func(t *testing.T) storage.Store) {
 		{"Approvals", testApprovals},
 		{"ApprovalRace", testApprovalRace},
 		{"OperatorMessages", testOperatorMessages},
+		{"OperatorMessageOutbox", testOperatorMessageOutbox},
 		{"ReplicaStatus", testReplicaStatus},
 		{"KV", testKV},
 		{"Leases", testLeases},
@@ -958,5 +959,26 @@ func testSettingsRace(t *testing.T, s storage.Store) {
 	must(t, err)
 	if st.Revision != 2 {
 		t.Fatalf("revision after race = %d", st.Revision)
+	}
+}
+
+func testOperatorMessageOutbox(t *testing.T, s storage.Store) {
+	ctx := context.Background()
+	m := &domain.OperatorMessage{ID: "outbox", GraphID: "g", NodeID: "n", Replica: 0, Text: "decision"}
+	if err := s.PutOperatorMessageOnce(ctx, nil); err == nil {
+		t.Fatal("nil message accepted")
+	}
+	must(t, s.PutOperatorMessageOnce(ctx, m))
+	must(t, s.PutOperatorMessageOnce(ctx, m))
+	got, err := s.ConsumeOperatorMessages(ctx, "g", "n", 0)
+	must(t, err)
+	if len(got) != 1 {
+		t.Fatal(got)
+	}
+	must(t, s.PutOperatorMessageOnce(ctx, m))
+	got, err = s.ConsumeOperatorMessages(ctx, "g", "n", 0)
+	must(t, err)
+	if len(got) != 0 {
+		t.Fatal("consumed continuation resurrected")
 	}
 }

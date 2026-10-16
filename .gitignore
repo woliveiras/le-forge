@@ -18,3 +18,6 @@ web/playwright-report/
 web/test-results/
 web/playwright-report-real/
 web/test-results-real/
+
+# Compiled React fixture for real sandbox preview tests.
+web/preview-fixture-dist/

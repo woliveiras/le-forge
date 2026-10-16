@@ -270,3 +270,35 @@ to subsequent reads/collection/retention sweeps, including histories of deleted
 graphs; saving is not a synchronous purge of every history. Storage failures return
 an error. Lower limits can permanently discard history; higher limits do not
 restore discarded records. Publication: `installation.history_retention.updated`.
+
+## Durable application reviews
+
+These routes require an operator/admin and the review's optional reviewer allowlist.
+They do not replace the existing `/approvals` contract. Creation is the agent tool
+`review.request`, scoped to its own graph/node/replica and Docker workspace.
+
+| Route | Request/result |
+| --- | --- |
+| `GET /api/v1/reviews` | Authorized review views, candidate digest, request evidence, state/session, generation, revision, expiry, actor/time/method and preview URL; no internal paths, graph snapshots or credential hashes. |
+| `POST /api/v1/reviews/{id}/decide` | `{state, method, comment, revision}`. States: `approved`, `changes_requested`, `rejected`. Methods: `managed`, `external`, `local`, `without_execution`. Revision is the preview generation; terminal/repeated/stale decisions return 409. |
+| `POST /api/v1/reviews/{id}/credential` | `{browser: false}` returns a private 15-minute client token and URL with `Cache-Control: no-store`; `true` issues a one-use browser exchange token valid for one minute. |
+| `POST /api/v1/reviews/{id}/restart` | `{}`; restart failed/expired/stopped preview with a fresh generation and fresh admission. |
+| `POST /api/v1/reviews/{id}/renew` | `{}`; extend a ready preview within the review deadline. |
+| `POST /api/v1/reviews/{id}/revoke-access` | `{}`; invalidate all browser/client credentials and active streams. |
+| `POST /api/v1/reviews/{id}/logs` | `{}`; bounded application logs for a managed preview. |
+
+Invalid requests return 400, denied reviewers/policies 403, missing records 404,
+and unavailable/stale sessions or conflicting decisions 409. Stop/kill of the
+owning graph/node cancels pending reviews through the existing lifecycle routes.
+Review states are `pending`, `approved`, `changes_requested`, `rejected`,
+`cancelled`, `expired`, `superseded`. Session states are `none`, `queued`,
+`starting`, `ready`, `failed`, `expired`, `stopped`. Preview expiry does not approve
+or reject a still-pending review. `superseded` means the source changed between
+approval and delivery of its continuation. Delivery uses a durable outbox and
+insert-once operator message; it does not promise exactly-once external effects.
+
+The separate gateway accepts `X-LeForge-Preview-Token` or its own host-only
+browser cookie, never a platform bearer token as preview authentication.
+`/_leforge/connect` and `/_leforge/access` implement the console-origin-checked
+browser handshake; application paths are otherwise preserved. See
+[preview operations](sandbox-runtime.md#human-review-and-application-previews).

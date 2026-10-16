@@ -15,10 +15,12 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/environmentpolicy"
 	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
 type Config struct {
+	Preview       Preview       `yaml:"preview"`
 	Instance      string        `yaml:"instance"`
 	Server        Server        `yaml:"server"`
 	Auth          Auth          `yaml:"auth"`
@@ -35,6 +37,17 @@ type Config struct {
 	// Graphs are loaded (created or updated) at startup from these files or
 	// directories - GitOps-style bootstrapping of example or production graphs.
 	Bootstrap Bootstrap `yaml:"bootstrap"`
+}
+
+type Preview struct {
+	Addr           string   `yaml:"addr"`
+	BaseURL        string   `yaml:"baseUrl"`
+	ConsoleOrigins []string `yaml:"consoleOrigins"`
+	RelayBinary    string   `yaml:"relayBinary"`
+	TLSCert        string   `yaml:"tlsCert"`
+	TLSKey         string   `yaml:"tlsKey"`
+	// ContainerLocal requires the host port to be published only on loopback.
+	ContainerLocal bool `yaml:"containerLocal"`
 }
 
 type Server struct {
@@ -200,6 +213,7 @@ type Bootstrap struct {
 func Default() *Config {
 	host, _ := os.Hostname()
 	return &Config{
+		Preview:  Preview{Addr: "127.0.0.1:8082", BaseURL: "http://localhost:8082", ConsoleOrigins: []string{"http://localhost:8080"}, RelayBinary: "bin/forge-preview-linux"},
 		Instance: host,
 		Server: Server{
 			Addr:         ":8080",
@@ -256,6 +270,12 @@ func applyEnv(c *Config) {
 		}
 	}
 	str("LEFORGE_INSTANCE", &c.Instance)
+	str("LEFORGE_PREVIEW_ADDR", &c.Preview.Addr)
+	str("LEFORGE_PREVIEW_BASE_URL", &c.Preview.BaseURL)
+	str("LEFORGE_PREVIEW_RELAY", &c.Preview.RelayBinary)
+	if v := os.Getenv("LEFORGE_PREVIEW_CONTAINER_LOCAL"); v != "" {
+		c.Preview.ContainerLocal, _ = strconv.ParseBool(v)
+	}
 	str("LEFORGE_ADDR", &c.Server.Addr)
 	str("LEFORGE_INTERNAL_URL", &c.Server.InternalURL)
 	str("LEFORGE_INTERNAL_ADDR", &c.Server.InternalAddr)
@@ -358,6 +378,18 @@ func splitList(s string) []string {
 }
 
 func (c *Config) Validate() error {
+	if c.Preview.Addr != "" {
+		addr := c.Preview.Addr
+		if c.Preview.ContainerLocal {
+			addr = "127.0.0.1:8082"
+		}
+		if err := review.ValidateGateway(addr, c.Preview.BaseURL); err != nil {
+			return fmt.Errorf("preview: %w", err)
+		}
+		if strings.HasPrefix(c.Preview.BaseURL, "https://") && (c.Preview.TLSCert == "" || c.Preview.TLSKey == "") {
+			return fmt.Errorf("remote preview requires tlsCert and tlsKey")
+		}
+	}
 	if err := c.Isolation.Docker.EnvironmentPolicy.Validate(); err != nil {
 		return err
 	}

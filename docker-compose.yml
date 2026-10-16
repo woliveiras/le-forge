@@ -19,6 +19,9 @@ name: leforge
 
 x-forged-env: &forged-env
   LEFORGE_INSTANCE: forged-1
+  # Only the host loopback publication below exposes the built-in gateway.
+  LEFORGE_PREVIEW_ADDR: 0.0.0.0:8082
+  LEFORGE_PREVIEW_CONTAINER_LOCAL: "true"
   LEFORGE_ADMIN_TOKEN: ${LEFORGE_ADMIN_TOKEN:?Set LEFORGE_ADMIN_TOKEN in .env}
   LEFORGE_STORAGE_TYPE: ${LEFORGE_STORAGE_TYPE:-postgres}
   LEFORGE_STORAGE_DSN: ${LEFORGE_STORAGE_DSN:-postgres://leforge:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/leforge?sslmode=disable}
@@ -72,7 +75,7 @@ services:
     build: {context: ., dockerfile: Dockerfile}
     image: leforge/forged:dev
     environment: *forged-env
-    ports: ["8080:8080"]
+    ports: ["8080:8080", "127.0.0.1:8082:8082"]
     volumes:
       - workspaces:/var/lib/leforge/workspaces
       - forged-data:/var/lib/leforge/data

@@ -35,6 +35,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/llmconfig"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
+	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/secrets"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 	"github.com/woliveiras/le-forge/server/internal/tools"
@@ -45,16 +46,18 @@ import (
 var Version = "dev"
 
 type Deps struct {
-	Config     *config.Config
-	Engine     *engine.Engine
-	Store      storage.Store
-	Broker     queue.Broker
-	Bus        *events.Bus
-	Approvals  *hitl.Service
-	Models     *llm.Registry
-	Providers  *llmconfig.Manager
-	Tools      *tools.Registry
-	Workspaces *workspace.Manager
+	Reviews        *review.Manager
+	PreviewGateway *review.Gateway
+	Config         *config.Config
+	Engine         *engine.Engine
+	Store          storage.Store
+	Broker         queue.Broker
+	Bus            *events.Bus
+	Approvals      *hitl.Service
+	Models         *llm.Registry
+	Providers      *llmconfig.Manager
+	Tools          *tools.Registry
+	Workspaces     *workspace.Manager
 	// Environments is optional; without it the environment routes answer 404.
 	Environments *environment.Manager
 	Proposals    *environment.Proposals
@@ -101,6 +104,8 @@ func (s *Server) routes() {
 	O := config.RoleOperator
 	A := config.RoleAdmin
 	routes := []route{
+		{"GET /api/v1/reviews", O, s.listReviews},
+		{"POST /api/v1/reviews/{review}/{action}", O, s.reviewAction},
 		{"GET /healthz", "", s.healthz},
 		{"GET /readyz", "", s.readyz},
 		{"GET /api/v1/info", R, s.info},

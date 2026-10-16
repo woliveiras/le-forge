@@ -177,46 +177,38 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 ### 4a. Durable Human Review and Application Previews
 
-Planned work; no item below is delivered. See `PLAN.md`, section 5a. Container
-workflow assertions elsewhere in this checklist apply to managed Docker
-environments, not to the explicitly selected native `process` execution mode.
+Delivered for Docker sandboxes. See `PLAN.md` section 5a and the operational
+contract in `docs/sandbox-runtime.md#human-review-and-application-previews`.
+The explicitly selected native `process` mode remains outside managed preview
+supervision.
 
 #### Review Contract and Continuation
 
-- [ ] Define durable review, candidate snapshot, evidence, preview generation, authorized reviewer and continuation contracts. Preserve existing approval clients and document new API/event contracts.
-- [ ] Support managed preview, external CI URL, local branch validation and explicit acceptance without manual execution; enforce operator-required review methods and accurately record the chosen method.
-- [ ] Freeze candidate content, include dirty workspace changes in its identity, supersede stale reviews and revalidate identity before continuation. Do not equate a branch name with immutable evidence.
-- [ ] Persist the pending gate and release the active turn/input lease. Atomically record decisions and continuation work, with idempotent consumers and restart recovery; never auto-approve on timeout.
-- [ ] Implement approve, request changes, reject/cancel and review expiry. Keep preview expiry distinct from review expiry, and keep PR creation, merge and deploy authorization separate.
+- [x] Persist candidate SHA-256, frozen content including dirty changes, generation, reviewer/method policy, decision actor/time and a durable continuation outbox. Preserve existing approval clients.
+- [x] Support managed HTTP previews and manually supplied external URLs, local validation, and acceptance without execution; label reported checks/external links as unverified.
+- [x] Yield the runtime turn and release its input lease; block further model/tool callbacks and output. Recheck candidate identity at decision, continuation delivery and completion.
+- [x] Implement approve, request changes, reject, lifecycle cancellation and review expiry. Keep preview expiry separate; decisions do not merge or deploy.
+- [x] Insert continuation messages once across controller recovery without resetting consumed messages. External effects retain normal idempotency requirements.
 
-#### Service Supervision and Resource Ownership
+#### Service Supervision and Protected Access
 
-- [ ] Implement policy-checked Docker service start/status/stop against a frozen candidate, using argv, workspace-relative directory, approved HTTP port, readiness path and bounded lifetime. Do not run persistent servers through `shell.exec`.
-- [ ] Supervise process exit/readiness and bounded logs; persist queued/starting/ready/failed/expired/stopped states and generation IDs. Remove routes when readiness is lost.
-- [ ] Reserve CPU/memory/slots and approved helper services through shared admission; keep active preview leases alive across idle suspension and enforce TTL/renewal bounds.
-- [ ] Reconcile sessions after controller restart; restart expired sessions only after admission/readiness. Revoke access on completion, cancellation or supersession; stop owned processes without deleting persistent data. Surface cleanup errors and retain accounting until confirmed release.
+- [x] Supervise an explicitly authorized argv/cwd/HTTP port/readiness path in Docker with bounded lifetime, process group termination and bounded logs.
+- [x] Reuse shared CPU/memory/slot admission and approved helper configuration; suspend the agent sandbox during human waiting, keep preview accounting separate, and copy caches into private runtime storage.
+- [x] Reconnect after controller restart; stop on readiness loss, expiry or decision, expose cleanup failures, retry cleanup and retain accounting until confirmed release. Preserve persistent workspaces/snapshots/containers.
+- [x] Bundle a local-by-default gateway with loopback host publication and per-review origins, without external services or public DNS. Supply a scoped stdio relay without published application ports.
+- [x] Authenticate browser exchange/cookies and dedicated client headers per session, preserve application Authorization, enforce origins and body/concurrency/stream bounds, and revoke active streams.
+- [x] Support HTTP, React routes/assets, application cookies and WebSockets. Document remote TLS/DNS/private-tunnel configuration and local resolver troubleshooting.
 
-#### Protected HTTP Access
+#### Interface, Contracts and Validation
 
-- [ ] Ship and manage the preview gateway as part of LeForge, with local operation as the default and no external preview service, cloud account, public DNS or third-party tunnel dependency. Bind host-facing listeners and Compose published ports to loopback by default.
-- [ ] Design and implement a narrowly scoped relay from the dedicated sandbox network to the built-in gateway on a separate preview origin. Support authenticated HTTP on loopback; require TLS for remote access unless carried entirely through an explicitly configured secure private tunnel. Register only approved session/port targets; prevent arbitrary forwarding, SSRF and lateral access to other sessions, platform services, LAN or Docker API.
-- [ ] Provide a reachable host per preview and support HTTP, redirects, application cookies and WebSockets without requiring application path-prefix changes. Document required local/remote DNS, TLS and private-tunnel configuration.
-- [ ] Enforce per-session authorization even where existing platform roles are installation-wide. Implement browser authentication exchange, session-scoped cookies, CSRF/CORS policy and stripping of platform credentials before upstream forwarding.
-- [ ] Implement explicitly issued, short-lived, revocable human client credentials in a dedicated gateway header; preserve application Authorization headers. Keep secrets out of URLs, logs, model context and cURL/Postman exports.
-- [ ] Enforce request/body/connection limits and close active streams/WebSockets on expiry or revocation. Keep ingress and egress policy independent and use isolated test data for mutable API requests.
-
-#### Interface, Integrations and Validation
-
-- [ ] Show candidate/check evidence, instructions, pending gate, preview readiness/URL, failures and expiry; provide open/copy URL, credential-free cURL/Postman templates, decision actions and bounded restart/renewal.
-- [ ] Accept manually attached external CI/PR evidence with explicit unverified provenance. Later add provider adapters with authenticated event validation and exact repository/revision matching; external links alone cannot approve a gate.
-- [ ] Add lifecycle/access/decision/continuation events, bounded metrics and traces with correlation IDs; redact credentials and exclude HTTP payloads from access logs.
-- [ ] Add unit tests for policy, invalid command/path/port inputs, state transitions, candidate invalidation, expiry, authorization, dependency errors and continuation idempotency.
-- [ ] Add real integration tests spanning storage/queue/controller, Docker supervisor, gateway and HTTP application: readiness failure, process crash, capacity waits, restart recovery, duplicate decisions, stale evidence, cleanup failure, token revocation and concurrent review sessions.
-- [ ] Add browser E2E against a real preview route for React assets/navigation/cookies/WebSockets and approval/request-changes; verify backend GET and mutable HTTP requests with real cURL and a documented manual Postman run. Cover application auth alongside gateway auth, denied cross-session access, blocked internal targets and expiry of active connections.
-- [ ] Verify the default local journey without external gateway services or public DNS, including local hostname resolution, transport-appropriate authentication cookies, native/Compose gateway packaging and denial of access from other machines. Use prepared fixtures so package downloads and model-provider access do not obscure gateway independence.
-- [ ] Test a remote-host topology where the reviewer cannot reach sandbox IPs, and verify external CI, local branch review and acceptance without manual execution. Demonstrate that accepting a review does not itself merge or deploy.
-- [ ] Add user/operator setup and troubleshooting documentation, run relevant unit/integration/browser checks and record results before marking this feature delivered.
-- [ ] Later: add native process supervision under an explicit host-execution policy, reusing the review contract and clearly reporting its weaker isolation.
+- [x] Show candidate evidence, instructions, readiness/expiry/errors, preview URL, browser opening, private credential issuance, cURL template, logs, decisions, revoke/restart/renew actions.
+- [x] Document API, tool yield/continuation, configuration, lifecycle events and bounded metrics/traces without credential or HTTP payload logging.
+- [x] Add unit/integration coverage for invalid inputs, permissions, stale candidates, concurrent decisions, cleanup failure, expiry, generation changes, cross-session credentials, storage recovery and engine gating.
+- [x] Exercise real Docker HTTP requests and cURL, network-none/no-published-port isolation, private cache mutation, controller reconstruction, expiry/restart and final shutdown (`make test-preview`).
+- [x] Exercise real Chromium React navigation, mutable HTTP with application auth, cookies, WebSockets, approve/revoke and request-changes/new-review (`make test-e2e-real`), through a private gateway forwarder while sandbox IPs remain unreachable.
+- [x] Provide a manual Postman recipe and remote TLS configuration. Automated tests use HTTP/cURL and a private remote topology; an interactive Postman session and a public DNS/TLS deployment are not claimed as tested.
+- [ ] Later: native process supervision under explicit host-execution policy, with its weaker isolation clearly reported.
+- [ ] Later: provider-specific PR/CI adapters with authenticated event validation and exact revision matching. Manual external/local review already works.
 
 **Done when:** The remote Docker web and HTTP review journeys in `PLAN.md` 5a
 pass, including protected access, durable human waiting, exact candidate binding,
