@@ -194,6 +194,7 @@ Full tree: [docs/folder-structure.md](docs/folder-structure.md).
 ## Documentation
 
 - [Getting started](docs/getting-started.md) — install, model providers, first graph, running without Docker
+- [Contributing](CONTRIBUTING.md#development-setup) — development environment with asdf or mise, tool versions and checks
 - [Architecture](docs/architecture.md) — C4 views, domain model, state machines, sequences, queue and execution model
 - [Security model](docs/security.md) — threat model, tool permission model, isolation
 - [Sandbox runtime](docs/sandbox-runtime.md) — agent commands in containers on a Docker daemon dedicated to LeForge

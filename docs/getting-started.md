@@ -344,7 +344,10 @@ LeForge's services or your network. Details, reset and troubleshooting:
 
 ## 5. Run without Docker
 
-You need Go 1.26+, Python 3.10+, git and (for the console) Node 20+.
+You need Go 1.26+, Python 3.10+, git and (for the console) Node 22.22.2+
+within the Node 22 line. For development aligned with the container versions,
+use Go 1.26, Python 3.12 and Node 22; see the
+[asdf or mise setup instructions](../CONTRIBUTING.md#local-toolchain-versions).
 
 ```bash
 # console (optional)
