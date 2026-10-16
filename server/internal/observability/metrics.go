@@ -11,6 +11,9 @@ import (
 const ns = "leforge"
 
 var (
+	SandboxAdmissions       = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "sandbox_capacity_transitions_total", Help: "Sandbox admission transitions by bounded state."}, []string{"state"})
+	SandboxAdmissionSeconds = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "sandbox_admission_duration_seconds", Help: "Time spent waiting for sandbox capacity, including inventory and reservation."})
+
 	EnvironmentBuilds = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: ns, Name: "environment_builds_total",
 		Help: "Project environment builds by outcome (ready, failed).",

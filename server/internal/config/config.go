@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
 type Config struct {
@@ -149,9 +150,10 @@ type Isolation struct {
 }
 
 type DockerIsolation struct {
-	Bin     string `yaml:"bin"`
-	Image   string `yaml:"image"`
-	Network string `yaml:"network"`
+	Capacity sandboxcapacity.Policy `yaml:"capacity"`
+	Bin      string                 `yaml:"bin"`
+	Image    string                 `yaml:"image"`
+	Network  string                 `yaml:"network"`
 	// Host is the Docker daemon sandboxes run on (DOCKER_HOST syntax, e.g.
 	// tcp://sandbox-daemon:2376). Setting it enables the "sandbox"
 	// readiness check. Empty = the docker CLI default (DOCKER_HOST from the
@@ -212,7 +214,7 @@ func Default() *Config {
 			PreviousKeysEnv: "LEFORGE_SECRET_KEY_PREVIOUS",
 		},
 		Isolation: Isolation{
-			Docker: DockerIsolation{Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
+			Docker: DockerIsolation{Capacity: sandboxcapacity.DefaultPolicy(), Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
 		},
 		Observability: Observability{ServiceName: "leforge", LogLevel: "info", LogFormat: "json", TraceSampleRatio: 1},
 		Engine: Engine{
@@ -352,6 +354,9 @@ func splitList(s string) []string {
 }
 
 func (c *Config) Validate() error {
+	if err := c.Isolation.Docker.Capacity.Validate(); err != nil {
+		return fmt.Errorf("isolation.docker.capacity: %w", err)
+	}
 	if c.Instance == "" {
 		c.Instance = "leforge-0"
 	}

@@ -8,13 +8,17 @@ import (
 	"os/exec"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
+	Capacity *sandboxcapacity.Manager
 	// Name of the container (unique per replica).
 	Name string
 	// Image to run (needs /bin/sh and whatever tools agents call: git, go...).
@@ -60,9 +64,11 @@ type DockerSandboxConfig struct {
 // Timeouts kill the `docker exec` client; a command that ignores the hang-up
 // may keep running in the container until the sandbox is closed.
 type DockerSandbox struct {
-	cfg     DockerSandboxConfig
-	mu      sync.Mutex
-	started bool
+	cfg      DockerSandboxConfig
+	mu       sync.Mutex
+	started  bool
+	lifetime context.Context
+	stop     context.CancelFunc
 }
 
 func NewDockerSandbox(cfg DockerSandboxConfig) (*DockerSandbox, error) {
@@ -78,7 +84,15 @@ func NewDockerSandbox(cfg DockerSandboxConfig) (*DockerSandbox, error) {
 	if cfg.MountPoint == "" {
 		cfg.MountPoint = "/workspace"
 	}
-	return &DockerSandbox{cfg: cfg}, nil
+	if cfg.Capacity != nil {
+		n, err := cfg.Capacity.Memory(cfg.Memory)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Memory = strconv.FormatInt(n, 10)
+	}
+	lifetime, stop := context.WithCancel(context.Background())
+	return &DockerSandbox{cfg: cfg, lifetime: lifetime, stop: stop}, nil
 }
 
 func (s *DockerSandbox) Kind() string { return "docker" }
@@ -105,6 +119,9 @@ func (s *DockerSandbox) RunArgs() []string {
 	}
 	if c.Memory != "" {
 		args = append(args, "--memory", c.Memory)
+		if c.Capacity != nil {
+			args = append(args, "--memory-swap", c.Memory)
+		}
 	}
 	if c.User != "" {
 		args = append(args, "--user", c.User)
@@ -118,12 +135,45 @@ func (s *DockerSandbox) RunArgs() []string {
 
 // Start creates (or reuses) the sandbox container. Idempotent.
 func (s *DockerSandbox) Start(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	unregister := context.AfterFunc(s.lifetime, cancel)
+	defer unregister()
+	if s.lifetime.Err() != nil {
+		return s.lifetime.Err()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.started {
 		return nil
 	}
+	if s.cfg.Capacity != nil {
+		n, _ := strconv.ParseInt(s.cfg.Memory, 10, 64)
+		if err := s.cfg.Capacity.Reserve(ctx, s.cfg.Name, n, s.inventory); err != nil {
+			return err
+		}
+		if err := s.startContainer(ctx); err != nil {
+			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			out, removeErr := s.docker(cleanup, "rm", "-f", s.cfg.Name)
+			if removeErr == nil || strings.Contains(out, "No such container") {
+				return errors.Join(err, s.cfg.Capacity.Release(cleanup, s.cfg.Name))
+			}
+			return errors.Join(err, fmt.Errorf("sandbox cleanup failed; reservation retained: %v: %s", removeErr, out))
+		}
+		s.started = true
+		return nil
+	}
+	return s.startContainer(ctx)
+}
+
+func (s *DockerSandbox) startContainer(ctx context.Context) error {
 	out, err := s.docker(ctx, "inspect", "-f", "{{.State.Running}}", s.cfg.Name)
+	if err == nil && s.cfg.Capacity != nil {
+		if out, e := s.docker(ctx, "update", "--memory", s.cfg.Memory, "--memory-swap", s.cfg.Memory, s.cfg.Name); e != nil {
+			return fmt.Errorf("apply sandbox memory cap: %v: %s", e, out)
+		}
+	}
 	switch {
 	case err == nil && strings.TrimSpace(out) == "true":
 	case err == nil:
@@ -216,14 +266,18 @@ func (s *DockerSandbox) Exec(ctx context.Context, req ExecRequest) (*ExecResult,
 
 // Close removes the sandbox container.
 func (s *DockerSandbox) Close() error {
+	s.stop()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	out, err := s.docker(ctx, "rm", "-f", s.cfg.Name)
-	s.started = false
 	if err != nil && !strings.Contains(out, "No such container") {
 		return fmt.Errorf("docker rm %s: %v: %s", s.cfg.Name, err, out)
+	}
+	s.started = false
+	if s.cfg.Capacity != nil {
+		return s.cfg.Capacity.Release(ctx, s.cfg.Name)
 	}
 	return nil
 }
@@ -272,4 +326,39 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+func (s *DockerSandbox) inventory(ctx context.Context) ([]sandboxcapacity.Container, error) {
+	out, err := s.docker(ctx, "ps", "-q", "--filter", "label=leforge.sandbox=true")
+	if err != nil {
+		return nil, fmt.Errorf("list active sandboxes: %v: %s", err, out)
+	}
+	ids := strings.Fields(out)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}}"}, ids...)
+	out, err = s.docker(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("inspect active sandboxes: %v: %s", err, out)
+	}
+	var result []sandboxcapacity.Container
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("invalid sandbox inventory response")
+		}
+		if fields[1] == "false" {
+			continue
+		}
+		if fields[1] != "true" {
+			return nil, fmt.Errorf("invalid sandbox state")
+		}
+		memory, err := strconv.ParseInt(fields[2], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, sandboxcapacity.Container{Name: strings.TrimPrefix(fields[0], "/"), Memory: memory})
+	}
+	return result, nil
 }

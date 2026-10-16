@@ -60,7 +60,9 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-global resource budgets and shared-resource reclamation remain planned.
+global build admission, idle suspension and shared-resource reclamation remain planned.
+Execution-sandbox concurrency and memory budgets are available in
+[sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 Prepared-image and cache-snapshot reuse is available as described below. See the
 [contracts](product-contracts.md#planned-discovery-and-acceptance) and
 [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
@@ -316,8 +318,9 @@ Existing graph status records retain their image/cache references. This
 conservative retention protects other tasks and supports reuse after all graphs
 have stopped. Explicit reclamation of unused shared generations is still
 planned; Reset is not a shared-storage garbage collector. Reuse reduces build
-work and downloads; global active-container limits and idle suspension, needed
-to bound total RAM, are still planned.
+work and downloads; execution-sandbox memory/concurrency limits are now available through
+`isolation.docker.capacity`. Build admission and idle suspension remain planned;
+the execution budget alone does not cap the whole Docker VM.
 
 ## Recipes
 

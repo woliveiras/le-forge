@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/runtime/echo"
 	"github.com/woliveiras/le-forge/server/internal/runtime/external"
 	"github.com/woliveiras/le-forge/server/internal/runtime/native"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 	"github.com/woliveiras/le-forge/server/internal/secrets"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 	"github.com/woliveiras/le-forge/server/internal/storage/stores"
@@ -153,7 +155,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.Engine, err = engine.New(engine.Options{
 		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
-		Sandboxes: sandboxFactory(cfg, a.Environments), Environments: a.Environments, EnvironmentProposals: a.Proposals,
+		Sandboxes: sandboxFactory(cfg, a.Environments, a.Store, a.Bus), Environments: a.Environments, EnvironmentProposals: a.Proposals,
 		CallbackURL: cfg.Server.InternalURL, Log: log,
 		LeaseTTL: cfg.Engine.LeaseTTL, ReconcileInterval: cfg.Engine.ReconcileInterval,
 		RetryBackoff: cfg.Engine.RetryBackoff, MaxConcurrentTurns: cfg.Engine.MaxConcurrentTurns,
@@ -277,7 +279,16 @@ func openBroker(ctx context.Context, cfg *config.Config) (queue.Broker, error) {
 // Docker-isolated nodes without an image of their own use the graph's
 // environment when it defines one (its image, caches and run network);
 // otherwise the installation's default sandbox image.
-func sandboxFactory(cfg *config.Config, envs *environment.Manager) engine.SandboxFactory {
+func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage.Store, bus *events.Bus) engine.SandboxFactory {
+	host := cfg.Isolation.Docker.Host
+	if host == "" {
+		host = os.Getenv("DOCKER_HOST")
+	}
+	scope := fmt.Sprintf("%x", sha256.Sum256([]byte(host)))
+	capacity := &sandboxcapacity.Manager{Store: store, Policy: cfg.Isolation.Docker.Capacity, Scope: scope, Notify: func(name, state string) {
+		slog.Info("sandbox capacity", "sandbox", name, "state", state)
+	}}
+
 	return func(ctx context.Context, s engine.SandboxSpec) (tools.Sandbox, error) {
 		switch s.Node.Isolation.Mode {
 		case domain.IsolationDocker:
@@ -300,9 +311,15 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager) engine.Sandbo
 			if net == "" {
 				net = cfg.Isolation.Docker.Network
 			}
+			budget := *capacity
+			budget.Notify = func(name, state string) {
+				slog.Info("sandbox capacity", "graph", s.Graph.Metadata.ID, "node", s.Node.ID, "sandbox", name, "state", state)
+				bus.Publish(context.Background(), domain.NewEvent("sandbox.capacity", s.Graph.Metadata.ID, map[string]any{"node": s.Node.ID, "replica": s.Replica, "state": state}))
+			}
 			sb, err := tools.NewDockerSandbox(tools.DockerSandboxConfig{
-				Name:  fmt.Sprintf("leforge-sbx-%s-%s-%d", s.Graph.Metadata.ID, s.Node.ID, s.Replica),
-				Image: img, HostDir: s.HostWorkdir, Network: net,
+				Capacity: &budget,
+				Name:     fmt.Sprintf("leforge-sbx-%s-%s-%d", s.Graph.Metadata.ID, s.Node.ID, s.Replica),
+				Image:    img, HostDir: s.HostWorkdir, Network: net,
 				CPU: s.Node.Isolation.CPU, Memory: s.Node.Isolation.Memory,
 				DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
 				Labels:  map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
@@ -312,7 +329,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager) engine.Sandbo
 				return nil, err
 			}
 			if err := sb.Start(ctx); err != nil {
-				return nil, err
+				return nil, errors.Join(err, sb.Close())
 			}
 			return sb, nil
 		case domain.IsolationKubernetes:

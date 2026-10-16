@@ -199,3 +199,64 @@ your services.
 - **Kubernetes isolation** still runs tools in the `forged` pod.
 - **No egress allowlist yet:** `bridge` means "the whole internet".
 - **One daemon per installation:** caches and images are shared by all graphs.
+
+## Global execution-sandbox capacity
+
+`isolation.docker.capacity` applies across graphs and replicas using the same
+installation store and dedicated Docker daemon. Defaults are:
+
+```yaml
+isolation:
+  docker:
+    capacity:
+      maxActive: 4
+      totalMemory: 4g
+      defaultMemory: 1g
+```
+
+A node's `isolation.memory` overrides `defaultMemory`. Requests must fit the
+whole budget and Docker's 6 MiB minimum. Values accept integer bytes or `k`, `m`,
+`g` suffixes. Zero/negative limits and a default larger than the total are
+configuration errors. Configure the same policy and daemon address on every
+controller sharing a store. The platform always passes `--memory` and an equal
+`--memory-swap` to execution sandboxes, so swap cannot expand their reservation.
+Existing containers must have a finite cap before new work can be admitted.
+
+Admission counts reserved memory, not fluctuating RSS. A 1 GiB sandbox consumes
+1 GiB of the budget even while idle. Both the container count and sum of memory
+limits must fit before creation/start. Excess work remains in replica startup,
+with `sandbox.capacity` events and structured logs (`waiting`, `admitted`,
+`cancelled`, `failed`, `released`). Waiting is cancellable by stopping the graph;
+there is no FIFO guarantee. Idle suspension remains planned, so stop unneeded
+nodes/graphs to free capacity.
+
+Reservations are durable and admission is serialized with a storage lease.
+The controller also inspects running containers carrying `leforge.sandbox=true`
+on the dedicated daemon; containers surviving a restart still count. A container
+name reuses its existing reservation rather than counting twice. Reservations
+are released only after Docker confirms removal. Failed removal/storage writes
+retain the reservation and report errors instead of admitting excess work.
+Sandbox teardown errors are logged. Ordinary failed starts attempt cleanup.
+
+After a crash during startup, a reservation can remain even if no container was
+created. Resume that same graph/node and then stop it to complete cleanup; do not
+edit accounting or delete the store to make room. Restore daemon connectivity
+before retrying failed cleanup. Stop existing sandboxes before lowering limits
+or changing their reserved memory. All controllers must share the same store;
+independent installations must not use the same daemon for concurrent admission.
+
+The budget covers Docker **execution sandboxes**, including idle ones. It does
+not cap the Docker daemon, image builds, environment setup/cache-copy helpers,
+external agent runtimes, process/Kubernetes isolation, or the operating system.
+Leave headroom in the Colima/Docker VM. Global build admission and automatic idle
+suspension remain separate planned work.
+
+Metrics use bounded state labels:
+
+- `leforge_sandbox_capacity_transitions_total{state}` records admission transitions.
+- `leforge_sandbox_admission_duration_seconds` records waiting/admission latency.
+
+Run `make test-sandbox-capacity` against the already running dedicated daemon to
+verify real cgroup memory/swap caps, waiting, release, controller recreation and
+network/user isolation. It creates and removes only its temporary containers and
+workspace volumes. Unit and storage/CLI integration tests run under `make test`.

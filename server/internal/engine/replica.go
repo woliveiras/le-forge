@@ -476,7 +476,9 @@ func (r *replica) teardown(log interface{ Warn(string, ...any) }) {
 		}
 	}
 	if r.sandbox != nil {
-		_ = r.sandbox.Close()
+		if err := r.sandbox.Close(); err != nil {
+			log.Warn("sandbox removal or capacity release failed", "err", err)
+		}
 	}
 }
 

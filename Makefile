@@ -8,7 +8,7 @@ VERSION   ?= dev
 NAMESPACE ?= leforge
 GRAPH     ?= examples/graphs/software-factory.yaml
 
-.PHONY: help build test test-go test-python test-web test-sandbox test-environment-context lint fmt up down logs images k8s-render clean
+.PHONY: help build test test-go test-python test-web test-sandbox test-sandbox-capacity test-environment-context lint fmt up down logs images k8s-render clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -31,6 +31,9 @@ test-web: ## Type-check and run the web console tests (Vitest, jsdom)
 
 test-sandbox: ## Sandbox runtime isolation checks against the Compose stack (needs Docker; see docs/sandbox-runtime.md)
 	./scripts/test-sandbox-runtime.sh
+
+test-sandbox-capacity: ## Real sandbox capacity/cgroup checks (running dedicated daemon and local Go required)
+	./scripts/test-sandbox-capacity.sh
 
 test-environment-context: ## Real COPY/ADD sandbox checks (running dedicated daemon and local Go required)
 	./scripts/test-environment-context.sh
