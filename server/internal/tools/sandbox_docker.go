@@ -17,10 +17,20 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
+// EgressConfig is supplied by the installation after environment policy validation.
+type EgressConfig struct {
+	Image string
+	Hosts []string
+}
+
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
-	Capacity    *sandboxcapacity.Manager
-	EnforceSwap bool
+	Egress             *EgressConfig
+	RequireStandalone  bool
+	ProxyEnv           map[string]string
+	DisableExternalDNS bool
+	Capacity           *sandboxcapacity.Manager
+	EnforceSwap        bool
 	// Name of the container (unique per replica).
 	Name string
 	// Image to run (needs /bin/sh and whatever tools agents call: git, go...).
@@ -76,6 +86,9 @@ type DockerSandbox struct {
 }
 
 func NewDockerSandbox(cfg DockerSandboxConfig) (*DockerSandbox, error) {
+	if cfg.Egress != nil {
+		return nil, fmt.Errorf("egress requires managed proxy group")
+	}
 	if cfg.Name == "" || cfg.Image == "" || cfg.HostDir == "" {
 		return nil, errors.New("docker sandbox: name, image and hostDir are required")
 	}
@@ -122,6 +135,17 @@ func (s *DockerSandbox) RunArgs() []string {
 	sort.Strings(keys)
 	for _, k := range keys {
 		args = append(args, "--label", k+"="+c.Labels[k])
+	}
+	if c.DisableExternalDNS {
+		args = append(args, "--dns", "127.0.0.1")
+	}
+	envKeys := make([]string, 0, len(c.ProxyEnv))
+	for k := range c.ProxyEnv {
+		envKeys = append(envKeys, k)
+	}
+	sort.Strings(envKeys)
+	for _, k := range envKeys {
+		args = append(args, "--env", k+"="+c.ProxyEnv[k])
 	}
 	if c.CPU != "" {
 		args = append(args, "--cpus", c.CPU)
@@ -194,6 +218,15 @@ func (s *DockerSandbox) startContainer(ctx context.Context) error {
 	} else if !strings.Contains(out, "No such object") && !strings.Contains(out, "No such container") {
 		s.retained = true // ambiguous inspection must never trigger destructive cleanup
 		return fmt.Errorf("inspect sandbox: %w: %s", err, out)
+	}
+	if err == nil && s.cfg.RequireStandalone {
+		group, e := s.docker(ctx, "inspect", "--format", `{{index .Config.Labels "leforge.compose"}}`, s.cfg.Name)
+		if e != nil {
+			return fmt.Errorf("inspect sandbox ownership: %w", e)
+		}
+		if strings.TrimSpace(group) != "" && strings.TrimSpace(group) != "<no value>" {
+			return fmt.Errorf("sandbox belongs to a managed service/proxy group; stop the previous task before replacement")
+		}
 	}
 	if err == nil && s.cfg.Capacity != nil {
 		if out, e := s.docker(ctx, "update", "--cpus", s.cfg.CPU, "--memory", s.cfg.Memory, "--memory-swap", s.cfg.Memory, s.cfg.Name); e != nil {

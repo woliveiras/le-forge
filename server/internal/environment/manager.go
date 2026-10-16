@@ -605,10 +605,11 @@ func (m *Manager) Exists(ctx context.Context, graphID string) (bool, error) {
 
 // Sandbox is what a docker sandbox needs from a ready environment.
 type Sandbox struct {
-	Companions []domain.Companion
-	Image      string
-	Volumes    []string // "volume:/path"
-	Network    string   // default network of agent sandboxes
+	AllowedHosts []string
+	Companions   []domain.Companion
+	Image        string
+	Volumes      []string // "volume:/path"
+	Network      string   // default network of agent sandboxes
 }
 
 // SandboxFor returns the environment image for g, or ErrNotReady with an
@@ -635,7 +636,7 @@ func (m *Manager) SandboxFor(ctx context.Context, g *domain.Graph) (*Sandbox, er
 	if !v.UpToDate {
 		return nil, notReady(v)
 	}
-	sb := &Sandbox{Companions: g.Spec.Environment.Companions, Image: v.Image, Network: g.Spec.Environment.Network.Run}
+	sb := &Sandbox{AllowedHosts: g.Spec.Environment.Network.AllowedHosts, Companions: g.Spec.Environment.Companions, Image: v.Image, Network: g.Spec.Environment.Network.Run}
 	for _, c := range v.Caches {
 		sb.Volumes = append(sb.Volumes, c.Volume+":"+c.Path)
 	}

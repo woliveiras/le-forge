@@ -62,7 +62,9 @@ flowchart LR
 Each sandbox is started with `--cap-drop ALL`, `--security-opt no-new-privileges`,
 CPU and memory limits when the agent sets them, the label `leforge.sandbox=true`,
 only the replica's workspace mounted at `/workspace`, and **no network**
-(`--network none`) unless the agent selects `bridge`. Agents never receive
+(`--network none`) unless an approved network mode is selected. Environments
+using `egress` receive an internal network and a managed HTTP/HTTPS proxy;
+`bridge` remains unrestricted within the daemon firewall. Agents never receive
 Docker access: they only call `shell.exec` and the git tools, and LeForge runs
 the command for them.
 
@@ -167,7 +169,7 @@ Sandbox containers are recreated automatically the next time an agent runs.
 | `sandbox-daemon` exits with "refusing to run without firewall rules" | The kernel lacks iptables support needed by Docker-in-Docker | Run on a Linux kernel/VM with iptables (Docker Desktop and Colima include it); check `docker compose logs sandbox-daemon` |
 | Agent start fails with `docker run ...: Unable to find image` | The image is not in the daemon and cannot be pulled (offline, private registry) | Use `leforge/sandbox:latest` or rebuild it; for other images, run once while online |
 | Commands cannot download packages | The agent uses network `none` | Set **Network** to `bridge` for that agent |
-| A sandbox needs to call a private service (internal registry, proxy) | Private ranges are blocked by design | Not supported yet; an egress allowlist is planned (`wip/TASKS.md`, section 3) |
+| A sandbox needs to call a private service (internal registry, proxy) | Private ranges are blocked by design | Private destinations remain unsupported, including through the runtime egress proxy; public-host allowlists are documented in `docs/environments.md` |
 
 Run the automated checks at any time:
 
@@ -197,7 +199,10 @@ your services.
   Run external agents as services and point `runtime.endpoint` at them (the
   Compose `agents` service is an example).
 - **Kubernetes isolation** still runs tools in the `forged` pod.
-- **No egress allowlist yet:** `bridge` means "the whole internet".
+- **Runtime egress is opt-in:** `bridge` remains unrestricted; use environment
+  `network.run: egress` with approved `allowedHosts` for HTTP/HTTPS destination
+  restrictions. See `docs/environments.md`; setup/build and registry traffic are
+  outside the runtime proxy.
 - **One daemon per installation:** caches and images are shared by all graphs.
 
 ## Global execution-sandbox capacity

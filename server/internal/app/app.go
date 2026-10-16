@@ -302,6 +302,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 			net := s.Node.Isolation.Network
 			var volumes []string
 			var companions []domain.Companion
+			var allowedHosts []string
 			if engine.UsesEnvironment(s.Graph, s.Node) {
 				env, err := envs.SandboxFor(ctx, s.Graph)
 				if err != nil {
@@ -309,6 +310,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				}
 				img, volumes = env.Image, env.Volumes
 				companions = env.Companions
+				allowedHosts = env.AllowedHosts
 				if net == "" {
 					net = env.Network
 				}
@@ -336,7 +338,17 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				Labels:  map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
 				Volumes: volumes,
 			}
-			if len(companions) > 0 {
+			if net == "egress" {
+				if len(allowedHosts) == 0 {
+					return nil, fmt.Errorf("egress requires an accepted environment with allowedHosts")
+				}
+				sandboxConfig.Egress = &tools.EgressConfig{Image: cfg.Isolation.Docker.EgressImage, Hosts: allowedHosts}
+				sandboxConfig.Network = "none"
+			}
+			if len(allowedHosts) > 0 && net != "egress" && net != "none" {
+				return nil, fmt.Errorf("an egress environment cannot override its network with unrestricted bridge")
+			}
+			if len(companions) > 0 || sandboxConfig.Egress != nil {
 				sb, err := tools.NewComposeSandbox(sandboxConfig, companions)
 				if err != nil {
 					return nil, err
@@ -346,6 +358,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				}
 				return sb, nil
 			}
+			sandboxConfig.RequireStandalone = true
 			sb, err := tools.NewDockerSandbox(sandboxConfig)
 			if err != nil {
 				return nil, err

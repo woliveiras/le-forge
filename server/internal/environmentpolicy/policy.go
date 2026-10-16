@@ -10,6 +10,7 @@ import (
 )
 
 type Policy struct {
+	EgressHosts           []string `yaml:"egressHosts" json:"egressHosts"`
 	SetupNetworks         []string `yaml:"setupNetworks" json:"setupNetworks"`
 	RunNetworks           []string `yaml:"runNetworks" json:"runNetworks"`
 	DisableAgentProposals bool     `yaml:"disableAgentProposals" json:"disableAgentProposals"`
@@ -27,13 +28,16 @@ func networks(list []string) []string {
 }
 
 func (p Policy) Validate() error {
+	if err := domain.ValidateEgressHosts(p.EgressHosts); err != nil {
+		return err
+	}
 	for field, list := range map[string][]string{"setupNetworks": p.SetupNetworks, "runNetworks": p.RunNetworks} {
 		if len(networks(list)) == 0 {
 			return fmt.Errorf("environment policy %s must not be empty", field)
 		}
 		for _, network := range networks(list) {
-			if network != "none" && network != "bridge" {
-				return fmt.Errorf("environment policy %s supports only none and bridge", field)
+			if network != "none" && network != "bridge" && !(field == "runNetworks" && network == "egress") {
+				return fmt.Errorf("environment policy %s has an unsupported network mode", field)
 			}
 		}
 	}
@@ -59,6 +63,21 @@ func (p Policy) Check(e *domain.EnvironmentSpec) error {
 	}
 	if e == nil {
 		return nil
+	}
+	if err := domain.ValidateEgressHosts(e.Network.AllowedHosts); err != nil {
+		return err
+	}
+	if e.Network.Run == "egress" {
+		if len(e.Network.AllowedHosts) == 0 {
+			return fmt.Errorf("egress requires allowedHosts")
+		}
+		for _, host := range e.Network.AllowedHosts {
+			if !slices.Contains(p.EgressHosts, host) {
+				return fmt.Errorf("installation does not permit a requested egress host")
+			}
+		}
+	} else if len(e.Network.AllowedHosts) > 0 {
+		return fmt.Errorf("allowedHosts requires execution network egress")
 	}
 	setup := e.Network.Setup
 	if setup == "" {

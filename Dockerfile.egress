@@ -1,0 +1,12 @@
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+COPY server/go.mod server/go.sum ./
+RUN go mod download
+COPY server/internal/domain/ ./internal/domain/
+COPY server/internal/egress/ ./internal/egress/
+COPY server/cmd/forge-egress/ ./cmd/forge-egress/
+RUN CGO_ENABLED=0 go build -trimpath -o /forge-egress ./cmd/forge-egress
+FROM scratch
+COPY --from=build /forge-egress /forge-egress
+USER 10001:10001
+ENTRYPOINT ["/forge-egress"]

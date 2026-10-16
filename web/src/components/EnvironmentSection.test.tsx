@@ -164,3 +164,13 @@ it('explains reuse, writable cache isolation and shared reset retention', async 
  expect(within(status()).getByText(/Workspaces and writable caches remain isolated/)).toBeTruthy();
  expect(within(status()).getByText(/Reset preserves shared snapshots/)).toBeTruthy();
 });
+
+it('offers reviewed egress and preserves the explicit host list when editing it', async () => {
+  fakeApi({ 'GET /api/v1/graphs/g/environment': () => view() });
+  const env = { image: 'alpine', network: { run: 'egress' as const, allowedHosts: ['example.com'] } };
+  const { onChange } = renderSection({ graph: graph(env), savedGraph: graph(env) });
+  expect((screen.getByLabelText('Network for agents') as HTMLSelectElement).value).toBe('egress');
+  expect((screen.getByLabelText('Allowed hosts (one exact DNS name per line)') as HTMLTextAreaElement).value).toBe('example.com');
+  await userEvent.selectOptions(screen.getByLabelText('Network for agents'), 'none');
+  expect(onChange.mock.calls.at(-1)?.[0](graph(env)).spec.environment?.network).toEqual({ run: 'none', allowedHosts: undefined });
+});

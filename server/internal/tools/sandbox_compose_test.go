@@ -29,6 +29,7 @@ if [ "$1" = network ]; then
  case "$1" in
  inspect) if [ ! -f "$d/network" ]; then echo 'No such network'; exit 1; fi; cat "$d/network";;
  create) for arg in "$@"; do case "$arg" in leforge.compose=*) echo "${arg#leforge.compose=}" > "$d/network";; esac; done;;
+ connect) for arg in "$@"; do last=$arg; done; if [ -f "$d/fail-uplink" ]; then exit 1; fi; echo true > "$d/$last.uplink";;
  rm) rm -f "$d/network";;
  esac
  exit 0
@@ -39,7 +40,7 @@ for arg in "$@"; do last=$arg; done
 case "$op" in
  inspect)
  if [ ! -f "$d/$last.hash" ]; then echo 'No such container'; exit 1; fi
- case "$*" in *Config.Labels*) cat "$d/$last.hash";; *) cat "$d/$last.running";; esac;;
+ case "$*" in *NetworkSettings*) if [ -f "$d/$last.uplink" ]; then cat "$d/$last.uplink"; else echo false; fi;; *Config.Labels*) cat "$d/$last.hash";; *) cat "$d/$last.running";; esac;;
  run)
  name=''; hash=''
  while [ $# -gt 0 ]; do
@@ -181,5 +182,99 @@ func TestComposeRejectsChangedOwnershipAndOversize(t *testing.T) {
 	cfg.Network = "bridge"
 	if _, err := NewComposeSandbox(cfg, fixtureCompanions); err == nil {
 		t.Fatal("network widened")
+	}
+}
+
+func TestEgressGroupLifecycleIntegration(t *testing.T) {
+	cfg, dir := composeFixture(t)
+	cfg.Egress = &EgressConfig{Image: "proxy:fixture", Hosts: []string{"example.com"}}
+	if _, err := NewDockerSandbox(cfg); err == nil {
+		t.Fatal("proxy config ignored by plain sandbox")
+	}
+	s, err := NewComposeSandbox(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := s.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "calls"))
+	for _, want := range []string{"--internal", "--hosts example.com", "network connect bridge leforge-sbx-test-svc-leforge-egress", "--env HTTPS_PROXY=http://leforge-egress:3128", "--dns 127.0.0.1"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatal(want, string(data))
+		}
+	}
+	if err := s.Suspend(ctx); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := NewComposeSandbox(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = restored.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	changed := cfg
+	changed.Egress = &EgressConfig{Image: "proxy:fixture", Hosts: []string{"other.example"}}
+	denied, err := NewComposeSandbox(changed, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = denied.Start(ctx); err == nil {
+		t.Fatal("adopted stale allowlist")
+	}
+	if err := restored.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEgressUplinkFailureStopsGroup(t *testing.T) {
+	cfg, dir := composeFixture(t)
+	cfg.Egress = &EgressConfig{Image: "proxy:fixture", Hosts: []string{"example.com"}}
+	if err := os.WriteFile(filepath.Join(dir, "fail-uplink"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewComposeSandbox(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Start(context.Background()); err == nil {
+		t.Fatal("uplink failure ignored")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, cfg.Name+"-svc-leforge-egress.running"))
+	if err != nil || strings.TrimSpace(string(data)) != "false" {
+		t.Fatal("proxy not stopped", string(data), err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStandaloneCannotAdoptProxyGroup(t *testing.T) {
+	cfg, dir := composeFixture(t)
+	cfg.RequireStandalone = true
+	// Unit boundary: this caller must reject group ownership before starting or
+	// updating any container, even if no admission manager was supplied.
+	cfg.Capacity = nil
+	if err := os.WriteFile(filepath.Join(dir, cfg.Name+".hash"), []byte("owned-proxy-group"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, cfg.Name+".running"), []byte("false"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewDockerSandbox(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Start(context.Background()); err == nil || !strings.Contains(err.Error(), "managed service/proxy group") {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "calls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "start ") || strings.Contains(string(data), "update ") {
+		t.Fatal("adopted group container", string(data))
 	}
 }

@@ -136,7 +136,8 @@ cause the gateway to select a different connection.
 
 - `spec.environment` in the graph document is the single effective
   definition: `image` or `dockerfile`, `setup[]`, `network.setup`/`network.run`
-  (`none`/`bridge`), `caches[]`, `timeout`, `cpu`, `memory`, and optional
+  (`none`/`bridge`, plus runtime `egress` with `network.allowedHosts`),
+  `caches[]`, `timeout`, `cpu`, `memory`, and optional
   `origin` for accepted repository definitions. It is versioned
   with the graph and saved through the graph `PUT`.
 - Build state per graph: `absent`, `building`, `ready`, `failed`, with the hash
@@ -254,8 +255,26 @@ Dockerfiles use the same supported subset as untrusted repository definitions.
 Policies are startup configuration; existing running containers are not revoked.
 Omitted lists preserve `none`/`bridge` compatibility; runtime defaults to `none`.
 Dockerfile RUN follows preparation networking. Registry access and per-host
-allowlists need separate controls; the egress proxy remains planned. See
+allowlists for setup/build need separate controls; runtime HTTP/HTTPS egress
+allowlists are implemented. See
 `docs/environments.md` for configuration, migration and verification boundaries.
+
+#### Delivered runtime egress subset
+
+`network.run: egress` plus `network.allowedHosts` selects a managed per-replica
+HTTP/HTTPS proxy. The installation must permit egress and every exact host in
+`environmentPolicy.egressHosts`. Manual, repository and agent definitions follow
+the same ceiling and approval/provenance checks. The agent's internal network has
+no direct internet route or host gateway address; the proxy alone has an uplink.
+Public-IP validation and pinned dials block private DNS answers/rebinding. Requests
+outside the list are denied and logged without paths or credentials. Proxy
+lifecycle participates in global capacity, idle suspension and group ownership.
+Changed lists require replacing the old task group; they do not rebuild images.
+
+This delivers runtime HTTP/80 and CONNECT/443 destination restrictions, not TLS
+content inspection, private-service access, arbitrary protocols or setup/build
+proxying. Registry access remains a separate daemon concern. See
+`docs/environments.md` for configuration, image provisioning and tested limits.
 
 #### Delivered reuse subset
 

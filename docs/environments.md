@@ -221,9 +221,10 @@ image copies by tag and digest, and an unavailable registry.
    packages in the Dockerfile instead.
 4. **Network during setup**: `bridge` (default) lets setup download packages;
    `none` for fully offline builds.
-5. **Network for agents**: `none` (default) or `bridge` (internet only — never
-   LeForge's services or your network). An agent's own **Network** setting in
-   its Command sandbox wins.
+5. **Network for agents**: `none` (default), unrestricted `bridge` when permitted,
+   or `egress` with exact **Allowed hosts**. Installation policy bounds both
+   environment and agent overrides; an egress environment cannot override to
+   unrestricted bridge. See the runtime proxy section below.
 6. **Cache directories** (optional): absolute paths kept in volumes across
    agent restarts and rebuilds, e.g. `/home/sandbox/go/pkg/mod`.
 7. **Build timeout**: default `30m`, at most `2h`.
@@ -688,8 +689,9 @@ installations; an explicit empty list or another network mode is invalid.
 Environment preparation still defaults to `bridge`, and execution defaults to
 `none`. With the restrictive example above, definitions must explicitly request
 `network.setup: none`; denied requests are rejected, never silently rewritten.
-Repository and agent definitions retain their stricter execution rule (`none`),
-even if the installation permits manually configured `bridge` execution.
+Repository and agent definitions can request `none` or explicitly reviewed
+`egress` with hosts approved by the installation; they cannot request unrestricted
+`bridge` execution.
 Node-level overrides, including nodes with their own image, must also satisfy
 `runNetworks`; host, container and custom Docker networks are not accepted.
 Compose helpers retain the reviewed private internal network, unless
@@ -713,8 +715,8 @@ ordinary `default` network). The image format version was advanced so earlier
 images built without that restriction are rebuilt. This is a **command network
 policy**, not a daemon firewall: registry pulls, image resolution (including
 external COPY sources) and builder provisioning still use the daemon's network.
-Base images remain trusted installation inputs. Per-host allowlists, an egress
-proxy and registry restrictions remain planned. Use daemon/network infrastructure
+Base images remain trusted installation inputs. Runtime HTTP/HTTPS host allowlists
+are implemented below; registry restrictions and proxying setup/build remain planned. Use daemon/network infrastructure
 controls when registry or host-level egress must also be restricted.
 
 `make test-environment-policy` validates Docker `RUN`, production reuse setup,
@@ -724,3 +726,98 @@ network override. Unit and storage/API integration tests cover definition
 rejection, cached build checks, approval revalidation and node overrides. The
 real build fixture uses a cached base without forced pulls; production build
 argument wiring and failure handling are covered by the integration suite.
+
+## Runtime egress proxy and per-environment hosts (implemented)
+
+Use `network.run: egress` to give agent commands HTTP/HTTPS access to explicitly
+approved public DNS hosts. It is opt-in: the default installation policy does
+not permit `egress`. Build the trusted proxy image **on the dedicated daemon**:
+
+```sh
+make egress-image
+```
+
+This target sends only the proxy's source packages and module files to the
+Compose sandbox daemon, builds `Dockerfile.egress`, and tags
+`leforge/egress:latest` there. It needs access to the Go builder image/modules.
+For a different dedicated daemon, build the same Dockerfile using that daemon's
+Docker context. Do not mount the host Docker socket into an agent. Configure the
+server (restart it after configuration changes):
+
+```yaml
+isolation:
+  docker:
+    egressImage: leforge/egress:latest
+    environmentPolicy:
+      setupNetworks: [none, bridge]
+      runNetworks: [none, egress]
+      egressHosts: [registry.npmjs.org, pypi.org, files.pythonhosted.org]
+```
+
+Then configure each environment in the editor, graph YAML or supported LeForge
+repository definition, or review an agent proposal containing:
+
+```yaml
+network:
+  setup: bridge
+  run: egress
+  allowedHosts: [pypi.org, files.pythonhosted.org]
+```
+
+Every requested host must occur in the installation's `egressHosts`. A developer
+approval cannot expand that list. Names must be exact lowercase ASCII DNS names
+(up to 64), without URLs, ports, wildcards, trailing dots or IP literals. Include
+redirect/CDN/download hosts separately. Discovered definitions retain provenance
+validation: editing a repository-derived definition still requires updating and
+reviewing its source, rather than silently replacing accepted source fields.
+
+Each replica has an internal network and one managed proxy container. The proxy
+alone has a bridge uplink; agents and Compose helpers have no direct internet
+route. The internal network uses Docker's `isolated` gateway mode, without a host
+bridge address, and the agent's external DNS forwarding is disabled. This needs
+Docker gateway-mode support (validated with the project's Docker 28.5.2 daemon).
+It builds on [Docker's isolated gateway semantics](https://docs.docker.com/engine/network/port-publishing/#gateway-modes).
+No proxy port is published. Tools receive `HTTP_PROXY`, `HTTPS_PROXY` and lowercase
+equivalents; reviewed helper names are in `NO_PROXY`. Tools that ignore explicit
+proxies cannot reach external destinations. The proxy uses HTTP port 80 and HTTPS
+CONNECT port 443 only; SSH, other TCP ports, UDP and private services are unsupported.
+
+The proxy resolves approved names itself, rejects mixed/public-private answers,
+and connects to the validated IP literal, preventing a second DNS lookup from
+changing the destination. Loopback, private, link-local, metadata, CGNAT and
+reserved/transition address ranges are denied. Redirect targets undergo the same
+checks. HTTPS is tunneled without TLS interception: the allowlist constrains the
+CONNECT destination, not encrypted paths, SNI or content served by a shared IP.
+Only approve destinations you trust to receive task traffic; a permitted server
+can itself provide relay functionality.
+
+The proxy has no workspace mounts or Docker socket. It runs as uid 10001 with
+capabilities dropped, a read-only root, finite CPU/memory, a PID limit and bounded
+logs. Its slot, memory and CPU count in the same atomic admission as the agent and
+reviewed helpers. Suspension stops the whole group; resumption uses the same
+reviewed list. If the list/image changes, stop the previous task before replacing
+its group. Prepared images remain reusable because runtime hosts do not affect
+build output. Proxy failures are surfaced and do not fall back to unrestricted
+networking. Switching an egress environment to a node-level `bridge` override is
+rejected; `none` can narrow it for a fresh task.
+
+Denied requests produce JSON container logs containing the destination hostname,
+result and duration, without URL paths, query strings, bodies or credentials.
+Container names and `leforge.capacity-group` labels correlate them with the
+replica. At most 64 requests run concurrently; HTTP requests are bounded to two
+minutes and CONNECT tunnels to five minutes. The Docker daemon remains a trusted
+installation component and must retain its network/firewall isolation.
+
+This first proxy delivery covers **runtime execution**. Setup/build commands
+still use `bridge` or `none`; package installation needing those phases is governed
+by `setupNetworks`. Registry pulls, builder provisioning, private destinations,
+per-path policy and proxying setup/build remain outside this runtime allowlist.
+
+Validation: `make test-egress` cross-compiles the real proxy, builds unique fixture
+images on the dedicated daemon (cached Alpine required), and checks HTTP/HTTPS to
+`example.com`, forbidden hosts, loopback DNS answers from `127.0.0.1.nip.io`,
+direct-egress blocking,
+suspension/resume and fail-closed proxy failure. It requires public internet access
+for the permitted endpoint and removes only its test-owned resources. Unit and
+API/storage/component integration tests also cover DNS pinning, redirects,
+malformed definitions, installation ceilings, approval gates and stale groups.

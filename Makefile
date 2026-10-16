@@ -8,7 +8,7 @@ VERSION   ?= dev
 NAMESPACE ?= leforge
 GRAPH     ?= examples/graphs/software-factory.yaml
 
-.PHONY: test-environment-policy help build test test-compose test-go test-python test-web test-sandbox test-sandbox-capacity test-environment-context lint fmt up down logs images k8s-render clean
+.PHONY: egress-image test-egress test-environment-policy help build test test-compose test-go test-python test-web test-sandbox test-sandbox-capacity test-environment-context lint fmt up down logs images k8s-render clean
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -16,6 +16,13 @@ help: ## Show targets
 build: ## Build forged and forge binaries into server/bin
 	$(GO) build -o bin/forged ./cmd/forged
 	$(GO) build -o bin/forge ./cmd/forge
+	$(GO) build -o bin/forge-egress ./cmd/forge-egress
+
+egress-image: ## Build the managed proxy image inside the dedicated sandbox daemon
+	./scripts/build-egress-image.sh
+
+test-egress: ## Real HTTP/HTTPS allowlist and direct-egress isolation checks on the dedicated daemon
+	./scripts/test-egress.sh
 
 test-environment-policy: ## Installation policy network checks on the dedicated daemon (cached alpine:3.22 required)
 	./scripts/test-environment-policy.sh

@@ -152,13 +152,15 @@ export function EnvironmentSection({
             Network for agents
             <select
               value={env?.network?.run ?? 'none'}
-              onChange={(event) => patch({ network: { ...env?.network, run: event.target.value as 'none' | 'bridge' } })}
+              onChange={(event) => patch({ network: { ...env?.network, run: event.target.value as 'none' | 'bridge' | 'egress', allowedHosts: event.target.value === 'egress' ? env?.network?.allowedHosts : undefined } })}
             >
               <option value="none">none — default</option>
-              <option value="bridge">bridge — internet only</option>
+              <option value="bridge">bridge — unrestricted internet</option>
+<option value="egress">egress — approved HTTP/HTTPS hosts through a proxy</option>
             </select>
           </label>
-          <span className="muted tiny">An agent's own Network setting overrides this.</span>
+          {env?.network?.run === 'egress' && <LinesField label="Allowed hosts (one exact DNS name per line)" values={env.network.allowedHosts} placeholder="registry.npmjs.org" onChange={(allowedHosts) => patch({ network: { ...env.network, allowedHosts } })} />}
+          <span className="muted tiny">Installation policy must permit the network and every host. An egress environment cannot switch to unrestricted bridge.</span>
           <LinesField
             label="Cache directories (one per line)"
             values={env?.caches}

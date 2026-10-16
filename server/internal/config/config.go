@@ -151,6 +151,7 @@ type Isolation struct {
 }
 
 type DockerIsolation struct {
+	EgressImage       string                   `yaml:"egressImage"`
 	EnvironmentPolicy environmentpolicy.Policy `yaml:"environmentPolicy"`
 	IdleTimeout       time.Duration            `yaml:"idleTimeout"` // zero disables suspension between turns
 	Capacity          sandboxcapacity.Policy   `yaml:"capacity"`
@@ -217,7 +218,7 @@ func Default() *Config {
 			PreviousKeysEnv: "LEFORGE_SECRET_KEY_PREVIOUS",
 		},
 		Isolation: Isolation{
-			Docker: DockerIsolation{IdleTimeout: 5 * time.Minute, Capacity: sandboxcapacity.DefaultPolicy(), Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
+			Docker: DockerIsolation{EgressImage: "leforge/egress:latest", IdleTimeout: 5 * time.Minute, Capacity: sandboxcapacity.DefaultPolicy(), Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
 		},
 		Observability: Observability{ServiceName: "leforge", LogLevel: "info", LogFormat: "json", TraceSampleRatio: 1},
 		Engine: Engine{

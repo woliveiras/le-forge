@@ -34,3 +34,27 @@ func TestPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestEgressPolicy(t *testing.T) {
+	p := Policy{RunNetworks: []string{"none", "egress"}, EgressHosts: []string{"example.com"}}
+	e := &domain.EnvironmentSpec{Network: domain.EnvironmentNetwork{Run: "egress", AllowedHosts: []string{"example.com"}}}
+	if err := p.Check(e); err != nil {
+		t.Fatal(err)
+	}
+	if err := (Policy{}).Check(e); err == nil {
+		t.Fatal("default enabled egress")
+	}
+	e.Network.AllowedHosts = []string{"other.example"}
+	if p.Check(e) == nil {
+		t.Fatal("host outside installation list")
+	}
+	e.Network.AllowedHosts = nil
+	if p.Check(e) == nil {
+		t.Fatal("empty allowlist")
+	}
+	e.Network.Run = "none"
+	e.Network.AllowedHosts = []string{"example.com"}
+	if p.Check(e) == nil {
+		t.Fatal("ignored allowlist on non-proxy network")
+	}
+}

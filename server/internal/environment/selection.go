@@ -216,8 +216,8 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 	}
 	// Repository files may not widen execution networking or set resource budgets.
 	// Operators can explicitly configure those separately as a manual environment.
-	if env.Network.Run != "" && env.Network.Run != "none" {
-		return nil, fmt.Errorf("repository execution network must be none")
+	if env.Network.Run != "" && env.Network.Run != "none" && env.Network.Run != "egress" {
+		return nil, fmt.Errorf("repository execution network must be none or reviewed egress")
 	}
 	if env.CPU != "" || env.Memory != "" {
 		return nil, fmt.Errorf("repository resource overrides are not supported; configure a manual environment")

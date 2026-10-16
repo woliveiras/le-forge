@@ -86,7 +86,8 @@
           "type": "object", "additionalProperties": false,
           "properties": {
             "setup": {"enum": ["none", "bridge"], "description": "Network of setup commands. Default bridge."},
-            "run": {"enum": ["none", "bridge"], "description": "Default network of agents using the environment. Default none; a node's isolation.network overrides it."}
+            "allowedHosts": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string"}, "description": "Exact lowercase DNS hosts; requires run egress and installation approval."},
+            "run": {"enum": ["none", "bridge", "egress"], "description": "Default network of agents using the environment. Default none; a node's isolation.network overrides it."}
           }
         },
         "caches": {"type": "array", "items": {"type": "string", "pattern": "^/"}, "description": "Absolute directories kept in named volumes across sandboxes and rebuilds (not /workspace or system directories)."},

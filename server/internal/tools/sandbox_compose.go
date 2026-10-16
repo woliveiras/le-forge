@@ -18,6 +18,7 @@ import (
 // ComposeSandbox runs a reviewed dependency closure, never a repository-supplied
 // compose command. Its entire per-replica group is admitted before any start.
 type ComposeSandbox struct {
+	egress                               bool
 	main                                 *DockerSandbox
 	companions                           []domain.Companion
 	budget                               *sandboxcapacity.Manager
@@ -34,12 +35,38 @@ func NewComposeSandbox(cfg DockerSandboxConfig, companions []domain.Companion) (
 	if err := domain.ValidateCompanions(companions); err != nil {
 		return nil, err
 	}
+	egress := cfg.Egress != nil
+	companions = append([]domain.Companion(nil), companions...)
+	if egress {
+		if cfg.Egress.Image == "" || len(cfg.Egress.Hosts) == 0 {
+			return nil, fmt.Errorf("egress requires installation proxy image and reviewed hosts")
+		}
+		if err := domain.ValidateEgressHosts(cfg.Egress.Hosts); err != nil {
+			return nil, err
+		}
+		aliases := []string{}
+		for _, c := range companions {
+			if c.Name == "leforge-egress" {
+				return nil, fmt.Errorf("reserved proxy service name")
+			}
+			aliases = append(aliases, c.Name)
+		}
+		proxy := domain.Companion{Name: "leforge-egress", Image: cfg.Egress.Image}
+		if err := domain.ValidateCompanions([]domain.Companion{proxy}); err != nil {
+			return nil, err
+		}
+		proxy.Command = []string{"--hosts", strings.Join(cfg.Egress.Hosts, ",")}
+		companions = append(companions, proxy)
+		cfg.ProxyEnv = map[string]string{"HTTP_PROXY": "http://leforge-egress:3128", "HTTPS_PROXY": "http://leforge-egress:3128", "http_proxy": "http://leforge-egress:3128", "https_proxy": "http://leforge-egress:3128", "NO_PROXY": strings.Join(aliases, ","), "no_proxy": strings.Join(aliases, ",")}
+		cfg.DisableExternalDNS = true
+	}
 	if len(companions) == 0 || cfg.Capacity == nil {
 		return nil, fmt.Errorf("Compose runtime requires companions and global capacity")
 	}
 	if cfg.Network != "" && cfg.Network != "none" {
 		return nil, fmt.Errorf("Compose companions require internal-only networking; remove the agent network override")
 	}
+	cfg.Egress = nil
 	main, err := NewDockerSandbox(cfg)
 	if err != nil {
 		return nil, err
@@ -86,7 +113,7 @@ func NewComposeSandbox(cfg DockerSandboxConfig, companions []domain.Companion) (
 	main.cfg.EnforceSwap = true
 	main.cfg.Capacity = nil // group owner alone reserves/releases the aggregate
 	ctx, cancel := context.WithCancel(context.Background())
-	return &ComposeSandbox{main: main, companions: companions, budget: cfg.Capacity, memory: memory, cpu: cpu, helperMemory: hm, helperCPU: hc, fingerprint: fingerprint, network: main.cfg.Network, ctx: ctx, cancel: cancel}, nil
+	return &ComposeSandbox{egress: egress, main: main, companions: companions, budget: cfg.Capacity, memory: memory, cpu: cpu, helperMemory: hm, helperCPU: hc, fingerprint: fingerprint, network: main.cfg.Network, ctx: ctx, cancel: cancel}, nil
 }
 func (s *ComposeSandbox) Kind() string { return "docker" }
 func (s *ComposeSandbox) names() []string {
@@ -154,7 +181,11 @@ func (s *ComposeSandbox) Start(ctx context.Context) error {
 		return err
 	}
 	if !networkExists {
-		if out, e := s.main.docker(ctx, "network", "create", "--internal", "--label", "leforge.compose="+s.fingerprint, s.network); e != nil {
+		args := []string{"network", "create", "--internal", "--label", "leforge.compose=" + s.fingerprint}
+		if s.egress {
+			args = append(args, "--opt", "com.docker.network.bridge.gateway_mode_ipv4=isolated", "--opt", "com.docker.network.bridge.gateway_mode_ipv6=isolated")
+		}
+		if out, e := s.main.docker(ctx, append(args, s.network)...); e != nil {
 			return s.startFailed(ctx, fmt.Errorf("create internal network: %w: %s", e, out))
 		}
 	}
@@ -175,9 +206,25 @@ func (s *ComposeSandbox) Start(ctx context.Context) error {
 			}
 		} else {
 			args := []string{"run", "-d", "--name", name, "--restart", "no", "--network", s.network, "--network-alias", c.Name, "--label", "leforge.sandbox=true", "--label", "leforge.capacity-group=" + s.main.cfg.Name, "--label", "leforge.compose=" + s.fingerprint, "--cpus", sandboxcapacity.FormatCPU(s.helperCPU), "--memory", strconv.FormatInt(s.helperMemory, 10), "--memory-swap", strconv.FormatInt(s.helperMemory, 10), "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "10001:10001", "--workdir", "/tmp", c.Image}
+			if s.egress && c.Name == "leforge-egress" {
+				args[len(args)-2] = "/" // scratch proxy needs no writable working directory
+				args = args[:len(args)-1]
+				args = append(args, "--read-only", "--pids-limit", "128", "--log-opt", "max-size=10m", "--log-opt", "max-file=2", c.Image)
+			}
 			args = append(args, c.Command...)
 			if out, e := s.main.docker(ctx, args...); e != nil {
 				return s.startFailed(ctx, fmt.Errorf("create companion %s: %w: %s", c.Name, e, out))
+			}
+		}
+		if s.egress && c.Name == "leforge-egress" {
+			connected, e := s.main.docker(ctx, "inspect", "--format", `{{if index .NetworkSettings.Networks "bridge"}}true{{else}}false{{end}}`, name)
+			if e != nil {
+				return s.startFailed(ctx, fmt.Errorf("inspect proxy network: %w", e))
+			}
+			if strings.TrimSpace(connected) != "true" {
+				if out, e := s.main.docker(ctx, "network", "connect", "bridge", name); e != nil {
+					return s.startFailed(ctx, fmt.Errorf("connect proxy uplink: %w: %s", e, out))
+				}
 			}
 		}
 		if out, e := s.main.docker(ctx, "inspect", "--format", "{{.State.Running}}", name); e != nil || strings.TrimSpace(out) != "true" {

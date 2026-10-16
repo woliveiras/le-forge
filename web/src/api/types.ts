@@ -62,7 +62,7 @@ export interface EnvironmentSpec {
   context?: string;
   target?: string;
   setup?: string[];
-  network?: { setup?: 'none' | 'bridge'; run?: 'none' | 'bridge' };
+  network?: { setup?: 'none' | 'bridge'; allowedHosts?: string[]; run?: 'none' | 'bridge' | 'egress' };
   caches?: string[];
   timeout?: Duration;
   cpu?: string;

@@ -21,7 +21,7 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 	if err := domain.ValidateCompanions(env.Companions); err != nil {
 		r.errf(p+".companions", "%s", err)
 	}
-	if len(env.Companions) > 0 && env.Network.Run != "" && env.Network.Run != "none" {
+	if len(env.Companions) > 0 && env.Network.Run != "" && env.Network.Run != "none" && env.Network.Run != "egress" {
 		r.errf(p+".network.run", "companions require the isolated internal runtime network")
 	}
 	image, dockerfile := strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile)
@@ -57,9 +57,19 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 		}
 	}
 	for field, v := range map[string]string{"network.setup": env.Network.Setup, "network.run": env.Network.Run} {
-		if v != "" && v != "none" && v != "bridge" {
-			r.errf(p+"."+field, "must be none or bridge")
+		if v != "" && v != "none" && v != "bridge" && !(field == "network.run" && v == "egress") {
+			if field == "network.run" {
+				r.errf(p+"."+field, "must be none, bridge or egress")
+			} else {
+				r.errf(p+"."+field, "must be none or bridge")
+			}
 		}
+	}
+	if err := domain.ValidateEgressHosts(env.Network.AllowedHosts); err != nil {
+		r.errf(p+".network.allowedHosts", "%s", err)
+	}
+	if (env.Network.Run == "egress") != (len(env.Network.AllowedHosts) > 0) {
+		r.errf(p+".network", "egress requires allowedHosts; other modes cannot declare them")
 	}
 	seen := map[string]bool{}
 	for i, dir := range env.Caches {
