@@ -29,6 +29,9 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 	case dockerfile != "" && !hasFromLine(dockerfile):
 		r.errf(p+".dockerfile", "a Dockerfile needs a FROM instruction")
 	}
+	if err := ValidateBuildTarget(env.Dockerfile, env.Target); err != nil {
+		r.errf(p+".target", "%s", err)
+	}
 	if env.Context != "" {
 		if env.Dockerfile == "" || env.Origin == nil {
 			r.errf(p+".context", "requires an accepted repository Dockerfile")

@@ -134,4 +134,56 @@ func TestBuildContextRealSandbox(t *testing.T) {
 		t.Fatalf("missing source reported success: %+v", failed)
 	}
 	t.Log("changed-context rejection, rebuild and missing-source failure verified")
+	// Select a development stage while an unrelated stage contains a failing COPY.
+	writeDiscoveryFile(t, dir, "Dockerfile", `FROM alpine:3.22 AS builder
+COPY copy.txt /artifact
+FROM alpine:3.22 AS broken
+COPY --from=builder /does-not-exist /missing
+FROM alpine:3.22 AS development
+COPY --from=0 /artifact /from-index
+RUN echo development > /stage
+FROM alpine:3.22 AS runtime
+COPY --from=development /from-index /from-name
+RUN echo runtime > /stage
+`)
+	selection = discoverSelection(t, dir, "")
+	previous := ""
+	for _, target := range []string{"development", "runtime", ""} {
+		selection.Target = target
+		env, err = Resolve(context.Background(), dir, selection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g.Spec.Environment = env
+		if _, err := manager.Build(context.Background(), g, false, "test"); err != nil {
+			t.Fatal(err)
+		}
+		built := wait()
+		if built.State != StateReady || built.Image == previous {
+			t.Fatalf("target %q: %+v", target, built)
+		}
+		previous = built.Image
+		expected, file := target, "/from-index"
+		if target != "development" {
+			expected, file = "runtime", "/from-name"
+		}
+		out.Reset()
+		if err := manager.docker(context.Background(), nil, &out, "run", "--rm", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--entrypoint", "sh", built.Image, "-ec", `test "$(id -u)" = 10001; test "$(cat /stage)" = "$1"; test "$(cat "$2")" = changed`, "check", expected, file); err != nil {
+			t.Fatalf("target %q sandbox: %v %s", target, err, out.String())
+		}
+	}
+	selection.Target = "broken"
+	env, err = Resolve(context.Background(), dir, selection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Spec.Environment = env
+	if _, err := manager.Build(context.Background(), g, false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if broken := wait(); broken.State != StateFailed || broken.Error == "" {
+		t.Fatalf("stage dependency failure: %+v", broken)
+	}
+	t.Log("named/numeric COPY --from, explicit/default targets, target-specific images and dependency failure verified in real sandbox")
+
 }

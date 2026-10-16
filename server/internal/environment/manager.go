@@ -350,6 +350,10 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 	} else {
 		fmt.Fprintln(log, "==> Building the environment Dockerfile")
 		args := append([]string{"build", "--pull", "-t", baseTag}, labels...)
+		if env.Target != "" {
+			fmt.Fprintf(log, "==> Selected build stage: %s\n", env.Target)
+			args = append(args, "--target", env.Target)
+		}
 		var input io.Reader = strings.NewReader(env.Dockerfile)
 		if env.Context != "" {
 			dir, err := m.opt.Workspaces.Ensure(ctx, g)

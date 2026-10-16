@@ -12,6 +12,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
   const [result, setResult] = useState<Discovery>();
   const [selected, setSelected] = useState('');
   const [service, setService] = useState('');
+  const [target, setTarget] = useState('');
   const [preview, setPreview] = useState<EnvironmentSpec>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -23,7 +24,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
     setPreview(undefined);
     setResult(undefined);
     setSelected('');
-    setService('');
+    setService(''); setTarget('');
     try {
       const next = await api.discoverEnvironment(graphId);
       setResult(next);
@@ -39,6 +40,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
       setPreview(await api.resolveEnvironment(graphId, {
         source: result.source, path: candidate.path, sha256: candidate.sha256,
         ...(service ? { service } : {}),
+        ...(target ? { target } : {}),
       }));
     } catch (cause) { setError(errorMessage(cause)); }
     finally { setBusy(false); }
@@ -56,7 +58,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
       <p className="muted small">Source: {result.source}</p>
       <label>Repository definition
         <select disabled={busy || disabled} value={selected} onChange={(event) => {
-          setSelected(event.target.value); setService(''); setPreview(undefined); setError(undefined);
+          setSelected(event.target.value); setService(''); setTarget(''); setPreview(undefined); setError(undefined);
         }}>
           <option value="">Select a definition</option>
           {result.candidates.map((item) => <option key={item.path} value={item.path}>{item.path}</option>)}
@@ -69,6 +71,14 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
         }}>
           <option value="">Select a service</option>
           {candidate.services.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </label>}
+      {!!candidate?.targets?.length && <label>Build stage
+        <select disabled={busy || disabled} value={target} onChange={(event) => {
+          setTarget(event.target.value); setPreview(undefined); setError(undefined);
+        }}>
+          <option value="">Final stage (default)</option>
+          {candidate.targets.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
       </label>}
       <Btn small disabled={disabled || busy || !candidate || !!candidate.error || (result.source === 'compose' && !service)} onClick={() => void review()}>Review environment</Btn>

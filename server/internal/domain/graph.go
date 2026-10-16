@@ -56,6 +56,7 @@ type GraphSpec struct {
 // EnvironmentOrigin identifies the repository snapshot accepted by the operator.
 // Build revalidates both the source and the normalized definition.
 type EnvironmentOrigin struct {
+	Target string `json:"target,omitempty" yaml:"target,omitempty"`
 	// DockerfilePath selects a Dockerfile-specific ignore file when present.
 	DockerfilePath string `json:"dockerfilePath,omitempty" yaml:"dockerfilePath,omitempty"`
 	ContextSHA256  string `json:"contextSHA256,omitempty" yaml:"contextSHA256,omitempty"`
@@ -71,6 +72,8 @@ type EnvironmentOrigin struct {
 // Dockerfile), setup commands run once with the workspace mounted, and the
 // network and cache policy of the containers built from it.
 type EnvironmentSpec struct {
+	// Target selects a named Dockerfile stage; empty builds the final stage.
+	Target string             `json:"target,omitempty" yaml:"target,omitempty"`
 	Origin *EnvironmentOrigin `json:"origin,omitempty" yaml:"origin,omitempty"`
 
 	// Image is a base image to pull (e.g. "golang:1.26"). Exactly one of

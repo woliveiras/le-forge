@@ -67,7 +67,19 @@
       "description": "Project environment: the image docker-isolated agents without an image of their own run commands in. Built by LeForge on the sandbox daemon. Exactly one of image or dockerfile.",
       "properties": {
         "image": {"type": "string", "description": "Base image to pull, e.g. golang:1.26."},
-        "dockerfile": {"type": "string", "description": "Inline Dockerfile built without a context (no COPY from the repository); runs as root, so install system packages here."},
+        "dockerfile": {"type": "string", "description": "Inline Dockerfile; accepted repository definitions include a validated build context."},
+        "context": {"type": "string", "description": "Repository-relative context for an accepted environment."},
+        "target": {"type": "string", "description": "Named Dockerfile stage; omitted builds the final stage."},
+        "origin": {
+          "type": "object", "additionalProperties": false,
+          "required": ["source", "path", "sha256", "files"],
+          "properties": {
+            "source": {"type": "string"}, "path": {"type": "string"}, "sha256": {"type": "string"},
+            "service": {"type": "string"}, "target": {"type": "string"},
+            "dockerfilePath": {"type": "string"}, "contextSHA256": {"type": "string"},
+            "files": {"type": "object", "additionalProperties": {"type": "string"}}
+          }
+        },
         "setup": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Commands run once per build, in order, as uid 10001 in /workspace with the graph workspace mounted; their effect outside the workspace is kept in the image."},
         "network": {
           "type": "object", "additionalProperties": false,

@@ -91,3 +91,30 @@ describe('EnvironmentDiscovery', () => {
     expect(screen.queryByRole('button', { name: 'Accept into draft' })).toBeNull();
   });
 });
+
+it('reviews a named build stage and invalidates acceptance when the stage changes', async () => {
+  const user = userEvent.setup();
+  const env = { dockerfile: 'FROM alpine AS build\nFROM alpine AS runtime', target: 'build' };
+  const client = fakeApi({
+    [`GET ${discoveryPath}`]: () => ({ source: 'dockerfile', status: 'review_required', candidates: [{ path: 'Dockerfile', sha256: 'hash', targets: ['build', 'runtime'] }] }),
+    [`POST ${resolvePath}`]: () => env,
+  });
+  const onAccept = vi.fn();
+  render(<EnvironmentDiscovery graphId="g" disabled={false} onAccept={onAccept} />);
+  await user.click(screen.getByRole('button', { name: 'Discover environment' }));
+  await user.selectOptions(await screen.findByLabelText('Repository definition'), 'Dockerfile');
+  await user.selectOptions(screen.getByLabelText('Build stage'), 'build');
+  await user.click(screen.getByRole('button', { name: 'Review environment' }));
+  await screen.findByRole('button', { name: 'Accept into draft' });
+  expect(client.find('POST', resolvePath)[0].body).toEqual({ source: 'dockerfile', path: 'Dockerfile', sha256: 'hash', target: 'build' });
+  expect(screen.getByLabelText('Environment proposal').textContent).toContain('"target": "build"');
+  await user.selectOptions(screen.getByLabelText('Build stage'), 'runtime');
+  expect(screen.queryByRole('button', { name: 'Accept into draft' })).toBeNull();
+  expect(onAccept).not.toHaveBeenCalled();
+  await user.selectOptions(screen.getByLabelText('Build stage'), '');
+  await user.click(screen.getByRole('button', { name: 'Review environment' }));
+  await screen.findByRole('button', { name: 'Accept into draft' });
+  expect(client.find('POST', resolvePath)[1].body).toEqual({ source: 'dockerfile', path: 'Dockerfile', sha256: 'hash' });
+  await user.click(screen.getByRole('button', { name: 'Accept into draft' }));
+  expect(onAccept).toHaveBeenCalledWith(env);
+});

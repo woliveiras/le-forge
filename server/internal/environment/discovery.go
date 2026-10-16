@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/graph"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,6 +29,7 @@ type Discovery struct {
 }
 
 type EnvironmentCandidate struct {
+	Targets  []string `json:"targets,omitempty"`
 	Path     string   `json:"path"`
 	SHA256   string   `json:"sha256"`
 	Services []string `json:"services,omitempty"`
@@ -105,6 +107,15 @@ func Discover(ctx context.Context, dir string) (Discovery, error) {
 				sum := sha256.Sum256(data)
 				candidate.SHA256 = hex.EncodeToString(sum[:])
 				candidate.Services, err = inspectDefinition(result.Source, data)
+				if err == nil && result.Source == "dockerfile" {
+					var stages []string
+					stages, err = graph.DockerfileStages(string(data))
+					for _, stage := range stages {
+						if stage != "" {
+							candidate.Targets = append(candidate.Targets, stage)
+						}
+					}
+				}
 			}
 			if err != nil {
 				candidate.Error = err.Error()

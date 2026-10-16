@@ -306,6 +306,7 @@ paths:
                         path: {type: string}
                         sha256: {type: string, description: Empty when the file could not be read safely}
                         services: {type: array, items: {type: string}}
+                        targets: {type: array, items: {type: string}, description: Named stages for standalone Dockerfiles}
                         error: {type: string}
         "400":
           description: Workspace unavailable or scan failed; no fallback is performed
@@ -334,6 +335,7 @@ paths:
                 path: {type: string}
                 sha256: {type: string, minLength: 64, maxLength: 64}
                 service: {type: string, description: Required for a Compose candidate}
+                target: {type: string, description: Optional named stage for a standalone Dockerfile; omitted selects the final stage}
       responses:
         "200":
           description: Validated environment definition; no save or build performed
@@ -1322,6 +1324,7 @@ components:
       properties:
         image: {type: string}
         dockerfile: {type: string}
+        target: {type: string, description: Named Dockerfile stage; omitted selects the final stage}
         context: {type: string, description: Repository-relative build context for an accepted definition.}
         setup: {type: array, items: {type: string}}
         network:
@@ -1342,6 +1345,7 @@ components:
             sha256: {type: string}
             service: {type: string}
             files: {type: object, additionalProperties: {type: string}}
+            target: {type: string, description: Stage chosen during standalone Dockerfile review}
             dockerfilePath: {type: string}
             contextSHA256: {type: string}
     Environment:

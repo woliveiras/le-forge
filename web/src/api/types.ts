@@ -46,11 +46,12 @@ export interface EnvironmentSelection {
  path: string;
  sha256: string;
  service?: string;
+ target?: string;
 }
 export interface EnvironmentDiscovery {
  source: string;
  status: 'configured' | 'review_required' | 'invalid' | 'proposal_required';
- candidates: { path: string; sha256: string; services?: string[]; error?: string }[];
+ candidates: { path: string; sha256: string; services?: string[]; targets?: string[]; error?: string }[];
 }
 export interface EnvironmentSpec {
  origin?: EnvironmentSelection & { files: Record<string, string>; dockerfilePath?: string; contextSHA256?: string };
@@ -58,6 +59,7 @@ export interface EnvironmentSpec {
   image?: string;
   dockerfile?: string;
   context?: string;
+  target?: string;
   setup?: string[];
   network?: { setup?: 'none' | 'bridge'; run?: 'none' | 'bridge' };
   caches?: string[];

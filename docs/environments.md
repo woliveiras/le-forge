@@ -42,10 +42,10 @@ Supported inputs in this first version:
   JSON comments, trailing commas and other fields produce an explicit error.
 - Dockerfiles: local `COPY` and `ADD` (including local archives), with the repository
   root as the default context. `ONBUILD`, remote ADD, custom parser directives,
-  instruction flags (including `COPY --from`) and heredocs are not supported.
+  instruction flags other than `COPY --from=<stage>` and heredocs are not supported.
   Use JSON array operands for filenames containing spaces.
 - Compose: select one service containing only `image` or `build`. Build accepts
-  a local context path and optional Dockerfile path. Only that context is uploaded.
+  a local context path, optional Dockerfile path and optional named `target`. Only that context is uploaded.
   Other selected-service settings, interpolation,
   overrides and companion-service startup are not supported.
 
@@ -91,6 +91,39 @@ sandbox daemon: `make test-environment-context` (local Go and Docker required).
 It builds temporary fixtures, checks COPY, archive ADD, ignore rules, stale
 acceptance and build errors, and executes the image as UID 10001 without network.
 It removes only its own temporary test images and containers.
+
+### Multi-stage builds
+
+`COPY --from=<stage>` accepts a stage name or zero-based index from the same
+Dockerfile, including forward references without cycles. Paths are resolved
+inside that stage; they are never rewritten as repository context paths.
+Unknown names, external images/named external contexts, invalid indices,
+self-references, cycles, and additional COPY flags fail validation before build.
+Use JSON operands for paths with spaces. `ADD --from` is not supported.
+
+For a standalone Dockerfile, discovery lists its named stages. Choose **Build
+stage** before reviewing and accepting; the default builds the final stage.
+LeForge YAML uses `target: development`; Compose uses `build.target: development`.
+These file-defined targets are reviewed as written. Manual inline definitions
+can also set `spec.environment.target` through graph YAML/API.
+
+For example:
+
+```dockerfile
+FROM alpine:3.22 AS builder
+COPY app.txt /artifact
+FROM alpine:3.22 AS development
+COPY --from=builder /artifact /app.txt
+FROM alpine:3.22 AS runtime
+COPY --from=development /app.txt /app.txt
+```
+
+The selected target must exist, is persisted with acceptance, and contributes to
+the image hash. Changing it requires another review. LeForge passes `--target`
+only to the project build, then adds its sandbox user layer on the resulting
+image. The selected stage must still provide `/bin/sh` for that layer.
+The real sandbox test also covers named/indexed stage copies, explicit/default
+targets, isolated target builds and dependency failures.
 
 ## Usage from the browser
 

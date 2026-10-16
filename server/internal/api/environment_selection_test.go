@@ -170,3 +170,64 @@ func TestRepositoryContextAcceptanceAndStaleBuild(t *testing.T) {
 		t.Fatalf("Docker called before context validation: %s", data)
 	}
 }
+
+func TestBuildTargetReviewPersistenceAndValidation(t *testing.T) {
+	root := t.TempDir()
+	bin, log := fakeDaemonCLI(t)
+	srv, _ := setupApp(t, func(c *config.Config) { c.Workspaces.Root = root; c.Isolation.Docker.Bin = bin })
+	const base = "/api/v1/graphs/targets"
+	doc := "apiVersion: leforge.io/v1\nkind: Graph\nmetadata: {name: targets}\nspec:\n  nodes: [{id: worker, runtime: {kind: echo}}]\n"
+	if code := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", doc, nil); code != 201 {
+		t.Fatalf("create %d", code)
+	}
+	dir := filepath.Join(root, "targets")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	source := "FROM alpine AS build\nRUN echo hi > /artifact\nFROM alpine AS runtime\nCOPY --from=build /artifact /artifact\n"
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(source), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var discovery environment.Discovery
+	if code := call(t, srv, "GET", base+"/environment/discovery", viewerTok, "", "", &discovery); code != 200 || len(discovery.Candidates[0].Targets) != 2 {
+		t.Fatalf("discover %d %+v", code, discovery)
+	}
+	selection := environment.Selection{Source: discovery.Source, Path: discovery.Candidates[0].Path, SHA256: discovery.Candidates[0].SHA256, Target: "missing"}
+	payload, _ := json.Marshal(selection)
+	if code := call(t, srv, "POST", base+"/environment/resolve", viewerTok, "application/json", string(payload), nil); code != 400 {
+		t.Fatalf("unknown stage %d", code)
+	}
+	selection.Target = "build"
+	payload, _ = json.Marshal(selection)
+	var env domain.EnvironmentSpec
+	if code := call(t, srv, "POST", base+"/environment/resolve", viewerTok, "application/json", string(payload), &env); code != 200 || env.Target != "build" || env.Origin.Target != "build" {
+		t.Fatalf("review %d %+v", code, env)
+	}
+	var saved struct {
+		Graph domain.Graph `json:"graph"`
+	}
+	if code := call(t, srv, "GET", base, viewerTok, "", "", &saved); code != 200 {
+		t.Fatalf("get %d", code)
+	}
+	saved.Graph.Spec.Environment = &env
+	env.Target = "runtime"
+	body, _ := json.Marshal(saved.Graph)
+	if code := callIfMatch(t, srv, "PUT", base, adminTok, string(body), 1, nil); code != 400 {
+		t.Fatalf("target tampering %d", code)
+	}
+	env.Target = "build"
+	body, _ = json.Marshal(saved.Graph)
+	if code := callIfMatch(t, srv, "PUT", base, adminTok, string(body), 1, &saved); code != 200 || saved.Graph.Spec.Environment.Target != "build" {
+		t.Fatalf("save %d %+v", code, saved)
+	}
+	// Removing/renaming the selected stage invalidates the accepted source before Docker.
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM alpine AS renamed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, srv, "POST", base+"/environment/build", operatorTok, "application/json", `{}`, nil); code != 400 {
+		t.Fatalf("stale stage build %d", code)
+	}
+	if data, err := os.ReadFile(log); err == nil && strings.TrimSpace(string(data)) != "" {
+		t.Fatalf("Docker called before target validation: %s", data)
+	}
+}

@@ -158,9 +158,9 @@ devcontainer, Dockerfile, Compose precedence. Results contain `source`, `status`
 (`review_required`, `invalid`, or `proposal_required`) and `candidates` with
 `path`, `sha256`, optional `services` and `error`. No source contents are returned.
 Discovery performs bounded structural inspection. `POST …/environment/resolve`
-(viewer) accepts `{source, path, sha256, service?}`, verifies the selected candidate,
+(viewer) accepts `{source, path, sha256, service?, target?}`, verifies the selected candidate,
 normalizes supported fields and returns an environment with
-`origin: {source, path, sha256, service?, files: {path: sha256}, dockerfilePath?, contextSHA256?}` for review.
+`origin: {source, path, sha256, service?, files: {path: sha256}, dockerfilePath?, contextSHA256?, target?}` for review.
 The console requires explicit selection, review and acceptance into the draft.
 Persistence uses the existing **admin-only** graph PUT and optimistic concurrency;
 acceptance never starts a build. Source and referenced-file hashes and normalized
@@ -173,7 +173,11 @@ Repository definitions cannot set origin, CPU/memory overrides or execution
 networking beyond `none`; unhandled Compose settings and unsupported Dockerfile
 features fail explicitly. Local COPY/ADD contexts are confined to the workspace,
 filtered by ignore rules, bounded, hashed on acceptance, and revalidated before
-save and build. The validated tar snapshot is sent to the dedicated daemon. These are conservative input restrictions, not a
+save and build. The validated tar snapshot is sent to the dedicated daemon.
+Named build targets are selectable for standalone Dockerfiles and supported via
+LeForge `target` and Compose `build.target`. The accepted target contributes to
+the image hash. COPY --from supports local stage names/indices with cycle
+validation; external image/context sources and other COPY flags remain unsupported. These are conservative input restrictions, not a
 new installation-wide policy configuration. Missing/unreadable checkouts or scan
 limits return an error, never a fallback. Discovery does not clone a repository.
 

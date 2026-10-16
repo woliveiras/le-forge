@@ -257,18 +257,24 @@ func contextBuildfile(source string) (string, error) {
 		}
 		instruction := strings.ToUpper(fields[0])
 		if instruction == "COPY" || instruction == "ADD" {
-			operands, err := copyOperands(strings.TrimSpace(strings.TrimPrefix(line, fields[0])))
+			from, operands, err := parseCopy(instruction, strings.TrimSpace(strings.TrimPrefix(line, fields[0])))
 			if err != nil {
 				return "", err
 			}
-			for i := 0; i < len(operands)-1; i++ {
-				operands[i] = contextFiles + "/" + operands[i]
+			if from == "" {
+				for i := 0; i < len(operands)-1; i++ {
+					operands[i] = contextFiles + "/" + operands[i]
+				}
 			}
 			encoded, err := json.Marshal(operands)
 			if err != nil {
 				return "", err
 			}
-			line = instruction + " " + string(encoded)
+			line = instruction + " "
+			if from != "" {
+				line += "--from=" + from + " "
+			}
+			line += string(encoded)
 		}
 		out.WriteString(line + "\n")
 	}

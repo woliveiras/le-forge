@@ -22,6 +22,7 @@ var ErrInvalidDefinition = errors.New("environment definition is invalid or chan
 // Selection refers to the exact candidate shown by discovery, never arbitrary
 // caller-supplied source text. Preview is read-only; acceptance uses graph PUT.
 type Selection struct {
+	Target  string `json:"target,omitempty"`
 	Source  string `json:"source"`
 	Path    string `json:"path"`
 	SHA256  string `json:"sha256"`
@@ -58,7 +59,7 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 		return nil, err
 	}
 	defer root.Close()
-	origin := &domain.EnvironmentOrigin{Source: sel.Source, Path: sel.Path, SHA256: sel.SHA256, Service: sel.Service, Files: map[string]string{}}
+	origin := &domain.EnvironmentOrigin{Source: sel.Source, Path: sel.Path, SHA256: sel.SHA256, Service: sel.Service, Target: sel.Target, Files: map[string]string{}}
 	read := func(name string) ([]byte, error) {
 		if !fsLocal(name) {
 			return nil, fmt.Errorf("file path must stay inside the repository")
@@ -155,8 +156,15 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 				contextDir = b
 			case map[string]any:
 				for key := range b {
-					if key != "context" && key != "dockerfile" {
+					if key != "context" && key != "dockerfile" && key != "target" {
 						return nil, fmt.Errorf("unsupported Compose build field %q", key)
+					}
+				}
+				if v, exists := b["target"]; exists {
+					var ok bool
+					env.Target, ok = v.(string)
+					if !ok {
+						return nil, fmt.Errorf("build target must be a string")
 					}
 				}
 				if v, exists := b["context"]; exists {
@@ -192,6 +200,12 @@ func resolve(ctx context.Context, dir string, sel Selection) (*domain.Environmen
 	}
 	if sel.Source != "compose" && sel.Service != "" {
 		return nil, fmt.Errorf("service is only valid for Compose")
+	}
+	if sel.Target != "" {
+		if sel.Source != "dockerfile" {
+			return nil, fmt.Errorf("target selection is only valid for standalone Dockerfiles; use the definition target field")
+		}
+		env.Target = sel.Target
 	}
 	// Repository files may not widen execution networking or set resource budgets.
 	// Operators can explicitly configure those separately as a manual environment.
@@ -249,6 +263,9 @@ func fsLocal(name string) bool {
 // Repository COPY/ADD use local context inputs only. Remote sources, custom
 // frontends and additional privileged build features remain unsupported.
 func validateRepositoryDockerfile(text string) error {
+	if err := validateStageCopies(text); err != nil {
+		return err
+	}
 	pending := ""
 	for _, raw := range strings.Split(text, "\n") {
 		line := strings.TrimSpace(raw)
@@ -275,7 +292,8 @@ func validateRepositoryDockerfile(text string) error {
 		}
 		switch strings.ToUpper(fields[0]) {
 		case "COPY", "ADD":
-			if err := validateCopySources(strings.TrimSpace(strings.TrimPrefix(line, fields[0]))); err != nil {
+			_, _, err := parseCopy(strings.ToUpper(fields[0]), strings.TrimSpace(strings.TrimPrefix(line, fields[0])))
+			if err != nil {
 				return err
 			}
 		case "FROM", "RUN", "ENV", "ARG", "WORKDIR", "USER", "SHELL", "LABEL", "CMD", "ENTRYPOINT", "EXPOSE", "STOPSIGNAL", "HEALTHCHECK":
@@ -302,7 +320,7 @@ func ValidateAccepted(ctx context.Context, dir string, env *domain.EnvironmentSp
 		return nil
 	}
 	o := env.Origin
-	resolved, err := Resolve(ctx, dir, Selection{Source: o.Source, Path: o.Path, SHA256: o.SHA256, Service: o.Service})
+	resolved, err := Resolve(ctx, dir, Selection{Source: o.Source, Path: o.Path, SHA256: o.SHA256, Service: o.Service, Target: o.Target})
 	if err != nil {
 		return err
 	}
@@ -317,12 +335,7 @@ func ValidateAccepted(ctx context.Context, dir string, env *domain.EnvironmentSp
 
 // Docker handles wildcard expansion and local ADD archive extraction inside
 // the daemon. No source may reference a remote URL, variable or parent path.
-func validateCopySources(arguments string) error {
-	_, err := copyOperands(arguments)
-	return err
-}
-
-func copyOperands(arguments string) ([]string, error) {
+func copyOperandsFrom(arguments string, stage bool) ([]string, error) {
 	if strings.HasPrefix(arguments, "--") {
 		return nil, fmt.Errorf("COPY/ADD flags are not supported")
 	}
@@ -341,7 +354,14 @@ func copyOperands(arguments string) ([]string, error) {
 		return nil, fmt.Errorf("COPY/ADD require a local source and destination")
 	}
 	for _, source := range operands[:len(operands)-1] {
-		if !fsLocal(source) {
+		name := source
+		if stage {
+			name = strings.TrimLeft(name, "/")
+			if name == "" {
+				name = "."
+			}
+		}
+		if source == "" || strings.Contains(name, "<<") || !fsLocal(name) {
 			return nil, fmt.Errorf("COPY/ADD sources must be local paths inside the context; remote URLs, variables and traversal are not supported")
 		}
 	}

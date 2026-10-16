@@ -43,9 +43,10 @@ func Hash(env *domain.EnvironmentSpec) string {
 		Setup         []string `json:"setup,omitempty"`
 		Network       string   `json:"network"`
 		Caches        []string `json:"caches,omitempty"`
+		Target        string   `json:"target,omitempty"`
 		Context       string   `json:"context,omitempty"`
 		ContextSHA256 string   `json:"contextSHA256,omitempty"`
-	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Context, contextHash(env)})
+	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Target, env.Context, contextHash(env)})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])[:12]
 }
