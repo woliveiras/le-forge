@@ -211,7 +211,8 @@ func (c *HTTPClient) once(ctx context.Context, method, path string, payload []by
 		return fmt.Errorf("llm %s: read response: %w", c.Provider, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		b := string(data)
+		// Redact before truncation, which could otherwise expose a key prefix.
+		b := redactCredentialHeaders(string(data), req.Header)
 		if len(b) > maxErrBody {
 			b = b[:maxErrBody] + "…"
 		}
@@ -285,4 +286,23 @@ func SchemaOrEmpty(s json.RawMessage) json.RawMessage {
 		return EmptySchema
 	}
 	return s
+}
+
+// redactCredentialHeaders sanitizes provider error bodies at the HTTP boundary,
+// before they can reach runtime callbacks, events, or callers of Models.
+func redactCredentialHeaders(body string, headers http.Header) string {
+	for _, name := range []string{"Authorization", "X-Api-Key", "Api-Key"} {
+		for _, value := range headers.Values(name) {
+			if value == "" {
+				continue
+			}
+			body = strings.ReplaceAll(body, value, "[redacted]")
+			if name == "Authorization" {
+				if _, credential, ok := strings.Cut(value, " "); ok && credential != "" {
+					body = strings.ReplaceAll(body, credential, "[redacted]")
+				}
+			}
+		}
+	}
+	return body
 }
