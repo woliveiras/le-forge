@@ -24,36 +24,30 @@ The deterministic-browser suite additionally scripts Docker and uses the echo
 runtime; it verifies orchestration, not container isolation. Neither suite
 measures external model proposal quality.
 
-## Validation record — 2026-10-16
+## Validation commands
 
-- `make test`: Go unit/integration suites (unchanged packages used Go’s result cache), 8 Python SDK and 14 agent tests,
-  web type-check and 112 tests across 17 files passed. Optional broker/live-daemon
-  tests are environment-gated; dedicated sandbox coverage is run separately below.
-- `make lint`: gofmt and Go vet passed.
-- `make build`: forged, forge and forge-egress built successfully.
-- `make test-e2e`: fixture unit tests, E2E type-check, production console build
-  and 10 Chromium journeys passed.
-- `make test-e2e-real`: fixture unit tests, E2E type-check, production console
-  build and 6 Chromium journeys passed on the dedicated daemon.
-- `make test-environment-context`: all 6 real suites passed (agent proposal,
-  build capacity, shared cleanup, COPY/ADD/stages/external images, initial
-  proposal and reuse); run without test-result cache.
-- `make test-sandbox-capacity`: real capacity and idle lifecycle tests passed.
-- `make test-compose`: reviewed service group isolation, resource caps,
-  suspension/resume and independent teardown passed.
-- `make test-environment-policy`: real build/setup/runtime policy enforcement
-  and cached-image revocation passed.
-- `make test-egress`: runtime and preparation proxy tests passed, including
-  approved/denied/private destinations, direct-egress blocking, diagnostics,
-  persistent history and configured retention.
-- `make test-sandbox`: all checks passed: mutual TLS, image inside the dedicated
-  daemon, network-none isolation, bridge blocking of daemon/gateway/control
-  plane, permitted public internet, and no LeForge sandboxes on the host daemon.
+Run these checks to verify the supported sandbox contracts. Live-daemon and
+browser suites require the services described in the deployment and testing
+guides; `make test` alone does not exercise all sandbox boundaries.
+
+| Command | Coverage |
+|---|---|
+| `make test` | Go unit/integration suites, Python SDK and agent tests, console type-check and tests |
+| `make lint` | Go formatting and vet |
+| `make build` | forged, forge and forge-egress binaries |
+| `make test-e2e` | Deterministic Chromium journeys, fixture tests, E2E type-check and console build |
+| `make test-e2e-real` | Chromium journeys using the dedicated Docker daemon |
+| `make test-environment-context` | Agent proposals, build capacity, shared cleanup, COPY/ADD/stages/external images and reuse |
+| `make test-sandbox-capacity` | Real capacity and idle lifecycle |
+| `make test-compose` | Reviewed service group isolation, resource caps, suspension/resume and independent teardown |
+| `make test-environment-policy` | Build/setup/runtime policy enforcement and cached-image revocation |
+| `make test-egress` | Runtime/preparation proxies, destination restrictions, diagnostics, history and retention |
+| `make test-sandbox` | Mutual TLS, dedicated-daemon placement and network isolation |
 
 The mise example pins its public image and Node version and commits its npm
 lockfile. `.dockerignore` excludes installed dependencies and generated outputs.
-An initial run without those exclusions correctly blocked continuation after
-setup changed the approved context; the corrected example passed end to end.
+Generated outputs must be excluded so setup does not change the approved build
+context and block continuation.
 The second task shares the prepared image and compatible npm cache seed, not
 another task's writable volume, node_modules or installed toolchain. Setup reruns.
 
@@ -77,7 +71,7 @@ another task's writable volume, node_modules or installed toolchain. Setup rerun
   unregistered legacy resources remain untouched.
 - Validation used the existing Docker-in-Docker service on Colima (Linux arm64).
   The optional rootless deployment variant remains unchecked in the checklist;
-  this record does not claim it or other operating systems were validated.
+  other operating systems have not been validated.
 
 See [environment operations](environments.md), [deployment](deployment.md) and
 [getting started](getting-started.md) for supported behavior and troubleshooting.

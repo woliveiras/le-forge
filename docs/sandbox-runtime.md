@@ -526,10 +526,5 @@ suite (`make test-e2e-real`) exercises React, routing, cookies, application auth
 WebSockets and the human gate. Unit/integration suites cover storage, controller,
 policy, stale candidates, concurrent decisions, failure and revocation paths.
 
-Validation recorded on 2026-10-16: `make test` passed (Go suites, 8 SDK tests,
-14 example-agent tests and 115 console tests), `make lint` and `make build`
-passed, `make test-preview` passed against the real dedicated daemon, and
-`make test-e2e-real` passed all eight Chromium scenarios. Targeted review/engine
-race-detector tests and OpenAPI YAML validation also passed. Postman GUI and a
-public DNS/TLS deployment were not executed; use the recipes above for those
-installation-specific checks.
+Public DNS/TLS deployments require installation-specific validation using the
+recipes above.
