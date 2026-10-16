@@ -320,11 +320,15 @@ Running means process state, not connectivity health; direct network-layer block
 and still-open CONNECT tunnels are outside the completed-request sample.
 Older containers require recreation for monitoring labels; reason codes require
 an updated trusted proxy image. Collected denials persist independently of Docker
-for seven days, up to 1,000 per graph, and survive resets/controller restarts.
+for seven days, up to 1,000 per graph by default, and survive resets/controller restarts.
 Background collection and final lifecycle capture use concurrent-safe shared
 storage. The separate history endpoint and panel disclose retention and last
-successful collection. Sampling gaps remain possible; guaranteed audit delivery,
-configurable retention and streaming monitoring remain planned/outside this subset.
+successful collection. Sampling gaps remain possible; guaranteed audit delivery
+and streaming monitoring remain planned/outside this subset. Installation retention
+is now editable in Integrations by administrators with review, confirmation and
+revision checks: 1–90 days and 1–10,000 blocks per graph. Saved changes apply on
+subsequent reads/collections across controllers; reductions remove older/excess
+records and increases do not restore discarded history.
 
 #### Delivered reuse subset
 

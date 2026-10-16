@@ -605,3 +605,6 @@ export interface ProxyStatus {
  name: string; phase: string; state: string; requests: ProxyRequest[]; warning?: string; capturedAt: string;
 }
 export interface ProxyView { proxies: ProxyStatus[]; lastPreparation?: ProxyStatus; truncated: boolean }
+
+export interface HistoryRetentionPolicy { days: number; maxEvents: number }
+export interface HistoryRetentionView { policy: HistoryRetentionPolicy; revision: number; updatedAt?: string; updatedBy?: string }

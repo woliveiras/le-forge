@@ -139,6 +139,8 @@ func (s *Server) routes() {
 		{"GET /api/v1/events/stream", R, s.stream},
 		{"GET /api/v1/approvals", R, s.listApprovals},
 		{"POST /api/v1/approvals/{aid}/{decision}", O, s.decide},
+		{"GET /api/v1/blocked-history-retention", R, s.historyRetention},
+		{"PUT /api/v1/blocked-history-retention", A, s.saveHistoryRetention},
 		{"GET /api/v1/network-policy", R, s.networkPolicy},
 		{"POST /api/v1/network-policy/preview", A, s.previewNetworkPolicy},
 		{"PUT /api/v1/network-policy", A, s.saveNetworkPolicy},

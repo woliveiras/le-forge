@@ -28,11 +28,11 @@ type BlockedHistory struct {
 	CollectedAt   *time.Time       `json:"collectedAt,omitempty"`
 }
 
-func retainBlocked(rows []BlockedRequest, now time.Time) []BlockedRequest {
+func retainBlocked(rows []BlockedRequest, now time.Time, policy RetentionPolicy) []BlockedRequest {
 	result := make([]BlockedRequest, 0)
 	seen := map[BlockedRequest]bool{}
 	for _, row := range rows {
-		if row.Outcome != "denied" || !row.Time.After(now.Add(-blockedHistoryAge)) || row.Time.After(now) {
+		if row.Outcome != "denied" || !row.Time.After(now.Add(-time.Duration(policy.Days)*24*time.Hour)) || row.Time.After(now) {
 			continue
 		}
 		key := row
@@ -44,8 +44,8 @@ func retainBlocked(rows []BlockedRequest, now time.Time) []BlockedRequest {
 		result = append(result, row)
 	}
 	sort.SliceStable(result, func(i, j int) bool { return result[i].Time.After(result[j].Time) })
-	if len(result) > blockedHistoryLimit {
-		result = result[:blockedHistoryLimit]
+	if len(result) > policy.MaxEvents {
+		result = result[:policy.MaxEvents]
 	}
 	return result
 }
@@ -53,7 +53,12 @@ func retainBlocked(rows []BlockedRequest, now time.Time) []BlockedRequest {
 // CAS preserves concurrent collectors' updates; storage remains bounded per graph.
 func (m *Manager) updateBlocked(ctx context.Context, graph string, rows []BlockedRequest, collected bool) (BlockedHistory, error) {
 	for attempt := 0; attempt < 8; attempt++ {
-		v := BlockedHistory{RetentionDays: 7, Limit: blockedHistoryLimit}
+		settings, err := m.Retention(ctx)
+		if err != nil {
+			return BlockedHistory{}, err
+		}
+		policy := settings.Policy
+		v := BlockedHistory{}
 		var revision int64
 		saved, err := m.opt.Store.GetSetting(ctx, blockedHistoryPrefix+graph)
 		if err != nil && !errors.Is(err, storage.ErrNotFound) {
@@ -65,13 +70,13 @@ func (m *Manager) updateBlocked(ctx context.Context, graph string, rows []Blocke
 				return v, fmt.Errorf("blocked access history is invalid")
 			}
 		}
-		v.RetentionDays, v.Limit = 7, blockedHistoryLimit
+		v.RetentionDays, v.Limit = policy.Days, policy.MaxEvents
 		now := time.Now().UTC()
-		v.Requests = retainBlocked(append(v.Requests, rows...), now)
+		v.Requests = retainBlocked(append(v.Requests, rows...), now, policy)
 		if collected {
 			v.CollectedAt = &now
 		}
-		if revision != 0 && !collected && len(v.Requests) == 0 && (v.CollectedAt == nil || v.CollectedAt.Before(now.Add(-blockedHistoryAge))) {
+		if revision != 0 && !collected && len(v.Requests) == 0 && (v.CollectedAt == nil || v.CollectedAt.Before(now.Add(-time.Duration(policy.Days)*24*time.Hour))) {
 			err := m.opt.Store.DeleteSetting(ctx, blockedHistoryPrefix+graph, revision)
 			if errors.Is(err, storage.ErrConflict) {
 				continue

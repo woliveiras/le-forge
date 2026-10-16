@@ -27,7 +27,7 @@ func TestRetainBlocked(t *testing.T) {
 	r := row
 	r.Outcome = "allowed"
 	rows = append(rows, r)
-	if got := retainBlocked(rows, now); len(got) != 1 {
+	if got := retainBlocked(rows, now, RetentionPolicy{7, 1000}); len(got) != 1 {
 		t.Fatal(got)
 	}
 	for i := 0; i < 1200; i++ {
@@ -36,7 +36,7 @@ func TestRetainBlocked(t *testing.T) {
 		r.EventID = fmt.Sprint(i)
 		rows = append(rows, r)
 	}
-	got := retainBlocked(rows, now)
+	got := retainBlocked(rows, now, RetentionPolicy{7, 1000})
 	if len(got) != 1000 || got[0].Time.Before(got[999].Time) {
 		t.Fatal(len(got))
 	}

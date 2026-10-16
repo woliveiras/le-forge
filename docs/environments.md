@@ -967,9 +967,11 @@ ownership, bounded samples, failures, roles, refresh and stale-data handling.
 ### Persistent blocked-access history (implemented)
 
 The environment and agent diagnostics include an independently refreshed history
-of collected `denied` requests, newest first. Each graph retains at most **1,000
-blocks for seven days**, shared across its runtime and preparation proxies. These
-are fixed bounds in this version, not editable installation settings. Successful
+of collected `denied` requests, newest first. By default each graph retains at most **1,000
+blocks for seven days**, shared across its runtime and preparation proxies.
+Administrators can change the installation-wide limits in **Integrations →
+Blocked access history retention**: 1–90 days and 1–10,000 blocks per environment.
+Viewers and operators can read the limits. Successful
 and failed upstream requests are not retained here. Safe fields include event ID,
 time, hostname, reason, duration, proxy name and phase; no raw logs or request URLs.
 
@@ -995,3 +997,21 @@ proxy image to emit stable event IDs.
 
 `make test-egress` verifies retained runtime and preparation denials after real
 container cleanup, controller recreation, and rejection of expired records.
+
+Retention edits require review and explicit confirmation. Revision checks reject
+concurrent administrator edits with 409 rather than overwriting them. Values are
+persisted in shared installation storage with revision, actor and update time;
+all controllers read them on subsequent history reads/collections without a
+restart. Reductions discard expired or excess records, keeping the newest first,
+including retained histories of deleted graphs. An in-flight collection may
+finish with its previous limits; subsequent reads/sweeps enforce the new policy.
+Increasing limits does not restore discarded history (recent Docker samples can
+still be collected again). Offline controllers defer physical expiration until
+restart. Invalid or unavailable stored policies produce errors rather than silently
+falling back to defaults. The 24-hour/100-line Docker collection window is unchanged.
+The default remains seven days/1,000 blocks until the first configuration is saved.
+
+The `installation.history_retention.updated` event records the administrator,
+revision, days and event cap; as with other installation settings, event publication
+is best effort and is not a guaranteed audit trail. Real sandbox tests verify that
+saved retention changes apply to both runtime and preparation history.

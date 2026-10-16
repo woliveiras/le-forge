@@ -104,6 +104,13 @@ func TestPreparationEgressRealSandbox(t *testing.T) {
 	if historyErr != nil || len(history.Requests) == 0 {
 		t.Fatal("preparation history lost after cleanup", history, historyErr)
 	}
+	if _, err := m.SaveRetention(ctx, RetentionPolicy{Days: 1, MaxEvents: 1}, 0, "live-test-admin"); err != nil {
+		t.Fatal(err)
+	}
+	history, historyErr = (&Manager{opt: m.opt}).BlockedHistory(ctx, id)
+	if historyErr != nil || len(history.Requests) != 1 || history.RetentionDays != 1 || history.Limit != 1 {
+		t.Fatal("preparation ignored configured retention", history, historyErr)
+	}
 	expired := history.Requests[0]
 	expired.Time = time.Now().Add(-8 * 24 * time.Hour)
 	retained, historyErr := m.updateBlocked(ctx, id, []BlockedRequest{expired}, false)

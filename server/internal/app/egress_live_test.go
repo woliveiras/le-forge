@@ -162,5 +162,16 @@ func TestEgressRealSandbox(t *testing.T) {
 		t.Fatal("runtime history lost after container removal/controller recreation", history, err)
 	}
 	t.Logf("Retained %d denied requests after real proxy removal", len(history.Requests))
+	if _, err := restored.SaveRetention(ctx, environment.RetentionPolicy{Days: 1, MaxEvents: 1}, 0, "live-test-admin"); err != nil {
+		t.Fatal(err)
+	}
+	limited, err := manager.BlockedHistory(ctx, id)
+	if err != nil || len(limited.Requests) != 1 || limited.RetentionDays != 1 || limited.Limit != 1 {
+		t.Fatal("live history ignored changed retention", limited, err)
+	}
+	if !limited.Requests[0].Time.Equal(history.Requests[0].Time) {
+		t.Fatal("did not retain newest denial")
+	}
+	t.Log("Installation retention update applied across managers to real proxy history")
 	t.Log("HTTP/HTTPS allowed, unlisted hosts/private IPs/direct egress blocked, suspension/resume, persisted policy revocation/restoration and proxy failure verified")
 }

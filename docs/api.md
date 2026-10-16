@@ -254,7 +254,19 @@ The `forge` CLI wraps these calls (`forge help`).
 
 `GET /api/v1/graphs/{id}/environment/blocked-history` (viewer+) returns
 `requests` (newest first; safe proxy request fields plus `proxy` and `phase`),
-`retentionDays: 7`, `limit: 1000`, and optional `collectedAt` (last successful
+`retentionDays` and `limit` (effective installation limits, default 7/1000), and optional `collectedAt` (last successful
 collection). It reads shared storage independently of Docker and applies retention.
 Unknown graphs return 404; storage/corruption failures return an error, not an
 empty successful history. This sampled diagnostic history is not a complete audit.
+
+`GET /api/v1/blocked-history-retention` (viewer+) returns `{policy: {days,
+maxEvents}, revision, updatedAt?, updatedBy?}`. Revision 0 means defaults (7 days,
+1,000 blocks). `PUT /api/v1/blocked-history-retention` (admin only) accepts exactly
+`{policy: {days, maxEvents}, revision, confirm: true}`. Days must be an integer
+1–90 and maxEvents an integer 1–10,000. Missing confirmation/revision, invalid
+values, unknown fields or trailing JSON return 400; stale revisions return 409.
+A successful save returns the acknowledged revision and policy. New limits apply
+to subsequent reads/collection/retention sweeps, including histories of deleted
+graphs; saving is not a synchronous purge of every history. Storage failures return
+an error. Lower limits can permanently discard history; higher limits do not
+restore discarded records. Publication: `installation.history_retention.updated`.

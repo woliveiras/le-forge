@@ -1,5 +1,7 @@
 import type {
   Approval,
+  HistoryRetentionPolicy,
+  HistoryRetentionView,
   ProxyView,
   InstallationNetwork,
   NetworkPolicyView,
@@ -157,6 +159,8 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 export const api = {
   environmentBlockedHistory: (id: string) => request<{ requests: (import("./types").ProxyRequest & { proxy: string; phase: string })[]; retentionDays: number; limit: number; collectedAt?: string }>(`${V1}/graphs/${encodeURIComponent(id)}/environment/blocked-history`),
   environmentProxies: (id: string) => request<ProxyView>(`${V1}/graphs/${encodeURIComponent(id)}/environment/proxies`),
+  historyRetention: () => request<HistoryRetentionView>(`${V1}/blocked-history-retention`),
+  saveHistoryRetention: (policy: HistoryRetentionPolicy, revision: number) => request<HistoryRetentionView>(`${V1}/blocked-history-retention`, { method: 'PUT', body: { policy, revision, confirm: true } }),
   networkPolicy: () => request<NetworkPolicyView>(`${V1}/network-policy`),
   previewNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy/preview`, { method: 'POST', body: { network, revision } }),
   saveNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy`, { method: 'PUT', body: { network, revision } }),
