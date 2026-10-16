@@ -74,16 +74,17 @@ type SandboxFactory func(ctx context.Context, s SandboxSpec) (tools.Sandbox, err
 
 // Options wires the engine to its adapters.
 type Options struct {
-	Instance   string
-	Store      storage.Store
-	Broker     queue.Broker
-	Bus        *events.Bus
-	Approvals  *hitl.Service
-	Models     Models
-	Tools      ToolGateway
-	Runtimes   map[domain.RuntimeKind]runtime.Runtime
-	Workspaces *workspace.Manager
-	Sandboxes  SandboxFactory
+	SandboxIdleTimeout time.Duration
+	Instance           string
+	Store              storage.Store
+	Broker             queue.Broker
+	Bus                *events.Bus
+	Approvals          *hitl.Service
+	Models             Models
+	Tools              ToolGateway
+	Runtimes           map[domain.RuntimeKind]runtime.Runtime
+	Workspaces         *workspace.Manager
+	Sandboxes          SandboxFactory
 	// Environments, when set, is consulted before starting nodes that run
 	// commands in the graph's environment (see UsesEnvironment).
 	Environments         EnvironmentChecker

@@ -226,18 +226,19 @@ controller sharing a store. The platform always passes `--memory` and an equal
 Existing containers must have a finite cap before new work can be admitted.
 
 Admission counts reserved memory, not fluctuating RSS. A 1 GiB sandbox consumes
-1 GiB of the budget even while idle. Both the container count and sum of memory
+1 GiB of the budget while running, including idle time before suspension. Both the container count and sum of memory
 limits must fit before creation/start. Excess work remains in replica startup,
 with `sandbox.capacity` events and structured logs (`waiting`, `admitted`,
 `cancelled`, `failed`, `released`). Waiting is cancellable by stopping the graph;
-there is no FIFO guarantee. Idle suspension remains planned, so stop unneeded
-nodes/graphs to free capacity.
+there is no FIFO guarantee. Idle execution containers are stopped automatically
+after the configured timeout, releasing their reservation.
 
 Reservations are durable and admission is serialized with a storage lease.
 The controller also inspects running containers carrying `leforge.sandbox=true`
 on the dedicated daemon; containers surviving a restart still count. A container
 name reuses its existing reservation rather than counting twice. Reservations
-are released only after Docker confirms removal. Failed removal/storage writes
+are released only after Docker confirms removal or a stopped container during
+suspension. Failed stop/removal/storage writes
 retain the reservation and report errors instead of admitting excess work.
 Sandbox teardown errors are logged. Ordinary failed starts attempt cleanup.
 
@@ -255,8 +256,7 @@ Buildx `docker-container` driver; the worker is removed before setup starts.
 waiting, timeout, cleanup and recovery. It does not cap Docker daemon overhead
 (including image pulls/loads/commits), external agent runtimes,
 process/Kubernetes isolation or the operating system. Leave headroom in the
-Colima/Docker VM. Global CPU accounting and automatic idle suspension remain
-planned.
+Colima/Docker VM. Global CPU accounting remains planned.
 
 Metrics use bounded state labels:
 
@@ -265,5 +265,60 @@ Metrics use bounded state labels:
 
 Run `make test-sandbox-capacity` against the already running dedicated daemon to
 verify real cgroup memory/swap caps, waiting, release, controller recreation and
-network/user isolation. It creates and removes only its temporary containers and
+network/user isolation, and stop/resume preservation of workspace, caches and
+container files. It creates and removes only its temporary containers and
 workspace volumes. Unit and storage/CLI integration tests run under `make test`.
+
+
+## Idle suspension and task resume
+
+`isolation.docker.idleTimeout` defaults to `5m`; `0s` disables automatic
+suspension. Negative values are invalid. This setting applies to execution
+sandboxes, not environment builds or external runtime containers.
+
+The replica loop checks inactivity **between turns**: waiting for queue/operator
+input, waiting for a schedule, pacing between turns, retry backoff, or a paused
+graph/node. Active runtime turns and approval/tool waits within a turn are never
+suspended by this timeout. Queue polling may delay suspension by its polling
+interval. Long scheduled and paused waits wake at the idle deadline without
+advancing the schedule or unpausing the task.
+
+Suspension uses `docker stop` and confirms the stopped state before releasing
+the global memory/slot reservation. It preserves the container's writable
+filesystem, mounted workspace/worktree and cache volumes. Background processes
+inside the container stop; this is not a checkpoint of process memory. Projects
+that need background services to remain running between turns can disable this
+timeout.
+
+A new turn restarts the same container after reacquiring global capacity. Inputs
+remain leased during admission, and admission is cancelled by graph Stop/Kill or
+the turn timeout. Failed resume does not invoke the runtime: queue inputs are
+nacked and consumed operator messages are restored for retry. A paused task
+keeps incoming work queued until explicitly resumed.
+
+Failed stop/inspection/storage release retains capacity and reports an error.
+The idle loop retries suspension after 30 seconds. A failed resume preserves
+the existing container and attempts to confirm a stopped state before releasing
+capacity; ambiguous failures keep the reservation. Restore daemon connectivity
+and retry the task.
+
+After a controller crash, the existing container is discovered by its stable
+replica name and reused, with capacity checked again. Startup currently starts
+that container and begins a fresh idle timer. Normal completion, explicit Stop,
+and graceful controller shutdown retain their existing teardown behavior:
+remove the container, preserve mounted workspace/cache data. In those cases,
+container-only files and process state are not retained for a later task start.
+
+Replica status detail reports suspension and capacity waiting; the logical task
+remains idle/paused rather than completed. `sandbox.lifecycle` events and
+structured logs carry graph/node/replica, action and outcome. Metrics use only
+bounded labels:
+
+- `leforge_sandbox_lifecycle_total{action,outcome}` (`suspend|resume`, `ok|error`).
+- `leforge_sandbox_lifecycle_duration_seconds{action}`, including resume admission.
+- Traces: `sandbox.suspend` and `sandbox.resume`.
+
+Unit and engine/storage/queue integration tests cover idle eligibility, schedules,
+pause, active turns, input retry, failures and resume. `make test-sandbox-capacity`
+also verifies real stop/start, unchanged container identity and files, released
+capacity, queued resume and controller recreation.

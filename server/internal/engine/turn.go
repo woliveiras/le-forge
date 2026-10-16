@@ -160,6 +160,28 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		r.setState(domain.ReplicaRunning, "")
 	}
 
+	// Admission on resume is cancellable by Stop as well as the turn timeout.
+	resumeCtx, resumeCancel := context.WithCancel(turnCtx)
+	unregister := context.AfterFunc(loopCtx, resumeCancel)
+	if loopCtx.Err() != nil {
+		resumeCancel()
+	}
+	resumeErr := r.resumeSandbox(resumeCtx)
+	unregister()
+	resumeCancel()
+	if resumeErr != nil {
+		nackAll(dels, e.opt.RetryBackoff)
+		for _, op := range ops {
+			copy := *op
+			copy.Consumed = nil
+			if err := e.store.PutOperatorMessage(context.WithoutCancel(turnCtx), &copy); err != nil {
+				resumeErr = errors.Join(resumeErr, fmt.Errorf("restore operator message: %w", err))
+			}
+		}
+		finish(domain.ExecFailed, "resume sandbox: "+resumeErr.Error())
+		return turnOutcome{err: resumeErr}
+	}
+
 	env := newTurnEnv(r, gr, n, x)
 	env.span = trace.SpanContextFromContext(turnCtx)
 	token := e.execs.register(x.ID, env)

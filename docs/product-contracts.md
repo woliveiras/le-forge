@@ -260,15 +260,23 @@ for limits and semantics.
 Execution sandboxes and environment pipelines now share installation-wide count
 and reserved-memory budgets,
 with finite Docker memory/swap limits, persistent reservations, cancellation,
-daemon inventory checks and confirmed-removal release. Defaults are four active
+daemon inventory checks and confirmed-stop/removal release. Defaults are four active
 slots, 4 GiB total and 1 GiB per sandbox/pipeline. BuildKit workers, setup and
 cache-copy helpers run sequentially with the reserved memory cap and no extra
 swap; the complete pipeline holds one slot. Build timeout includes admission
 waiting. Logs/events and bounded-label metrics
 report admission. See [capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 The budget excludes daemon overhead and external runtimes.
-Explicit shared-resource reclamation, global CPU accounting and idle-container
-suspension remain planned. The target lifecycle below includes those extensions.
+Idle execution sandboxes stop between turns after `isolation.docker.idleTimeout`
+(default `5m`, `0s` disables), preserving container files, workspaces and caches.
+New work resumes the same container after capacity admission. Active turns and
+approval waits inside a turn are excluded. Suspension stops processes; it does
+not checkpoint process memory. Failed stop retains capacity; failed resume
+preserves inputs for retry. Explicit task teardown still removes its container
+while keeping mounted workspace data.
+See [idle lifecycle](sandbox-runtime.md#idle-suspension-and-task-resume).
+Explicit shared-resource reclamation and global CPU accounting remain planned.
+The target lifecycle below includes those extensions.
 
 #### Planned reuse and resource lifecycle
 

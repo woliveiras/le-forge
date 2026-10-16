@@ -40,7 +40,7 @@ type rig struct {
 	ctx    context.Context
 }
 
-func newRig(t *testing.T, store storage.Store, broker queue.Broker, dir, instance string) *rig {
+func newRig(t *testing.T, store storage.Store, broker queue.Broker, dir, instance string, configure ...func(*engine.Options)) *rig {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -57,12 +57,16 @@ func newRig(t *testing.T, store storage.Store, broker queue.Broker, dir, instanc
 	if err != nil {
 		t.Fatal(err)
 	}
-	eng, err := engine.New(engine.Options{
+	opt := engine.Options{
 		Instance: instance, Store: store, Broker: broker, Bus: bus, Approvals: apr, Models: models,
 		Tools: gwAdapter{reg, gw}, Workspaces: ws,
 		Runtimes: map[domain.RuntimeKind]runtime.Runtime{domain.RuntimeEcho: echo.New(), domain.RuntimeNative: native.New()},
 		Log:      log, LeaseTTL: 3 * time.Second, ReconcileInterval: 150 * time.Millisecond, RetryBackoff: 50 * time.Millisecond,
-	})
+	}
+	for _, fn := range configure {
+		fn(&opt)
+	}
+	eng, err := engine.New(opt)
 	if err != nil {
 		t.Fatal(err)
 	}

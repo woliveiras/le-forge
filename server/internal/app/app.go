@@ -159,7 +159,8 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		Sandboxes: sandboxFactory(cfg, a.Environments, a.Store, a.Bus), Environments: a.Environments, EnvironmentProposals: a.Proposals,
 		CallbackURL: cfg.Server.InternalURL, Log: log,
 		LeaseTTL: cfg.Engine.LeaseTTL, ReconcileInterval: cfg.Engine.ReconcileInterval,
-		RetryBackoff: cfg.Engine.RetryBackoff, MaxConcurrentTurns: cfg.Engine.MaxConcurrentTurns,
+		SandboxIdleTimeout: cfg.Isolation.Docker.IdleTimeout,
+		RetryBackoff:       cfg.Engine.RetryBackoff, MaxConcurrentTurns: cfg.Engine.MaxConcurrentTurns,
 	})
 	if err != nil {
 		return nil, err
@@ -334,7 +335,7 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				return nil, err
 			}
 			if err := sb.Start(ctx); err != nil {
-				return nil, errors.Join(err, sb.Close())
+				return nil, err // Start reconciles failures without deleting a resumable container.
 			}
 			return sb, nil
 		case domain.IsolationKubernetes:

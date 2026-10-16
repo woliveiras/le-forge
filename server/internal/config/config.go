@@ -150,10 +150,11 @@ type Isolation struct {
 }
 
 type DockerIsolation struct {
-	Capacity sandboxcapacity.Policy `yaml:"capacity"`
-	Bin      string                 `yaml:"bin"`
-	Image    string                 `yaml:"image"`
-	Network  string                 `yaml:"network"`
+	IdleTimeout time.Duration          `yaml:"idleTimeout"` // zero disables suspension between turns
+	Capacity    sandboxcapacity.Policy `yaml:"capacity"`
+	Bin         string                 `yaml:"bin"`
+	Image       string                 `yaml:"image"`
+	Network     string                 `yaml:"network"`
 	// Host is the Docker daemon sandboxes run on (DOCKER_HOST syntax, e.g.
 	// tcp://sandbox-daemon:2376). Setting it enables the "sandbox"
 	// readiness check. Empty = the docker CLI default (DOCKER_HOST from the
@@ -214,7 +215,7 @@ func Default() *Config {
 			PreviousKeysEnv: "LEFORGE_SECRET_KEY_PREVIOUS",
 		},
 		Isolation: Isolation{
-			Docker: DockerIsolation{Capacity: sandboxcapacity.DefaultPolicy(), Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
+			Docker: DockerIsolation{IdleTimeout: 5 * time.Minute, Capacity: sandboxcapacity.DefaultPolicy(), Bin: "docker", Image: "leforge/sandbox:latest", Network: "none"},
 		},
 		Observability: Observability{ServiceName: "leforge", LogLevel: "info", LogFormat: "json", TraceSampleRatio: 1},
 		Engine: Engine{
@@ -354,6 +355,9 @@ func splitList(s string) []string {
 }
 
 func (c *Config) Validate() error {
+	if c.Isolation.Docker.IdleTimeout < 0 {
+		return fmt.Errorf("isolation.docker.idleTimeout must be nonnegative")
+	}
 	if err := c.Isolation.Docker.Capacity.Validate(); err != nil {
 		return fmt.Errorf("isolation.docker.capacity: %w", err)
 	}

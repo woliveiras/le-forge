@@ -60,7 +60,7 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-global CPU accounting, idle suspension and shared-resource reclamation remain planned.
+global CPU accounting and shared-resource reclamation remain planned.
 Shared build/execution concurrency and memory budgets are available in
 [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 Prepared-image and cache-snapshot reuse is available as described below. See the
@@ -320,8 +320,9 @@ conservative retention protects other tasks and supports reuse after all graphs
 have stopped. Explicit reclamation of unused shared generations is still
 planned; Reset is not a shared-storage garbage collector. Reuse reduces build
 work and downloads; execution sandboxes and environment pipelines now share
-the memory/concurrency budget in `isolation.docker.capacity`. Idle suspension
-remains planned; this budget does not cap the whole Docker VM.
+the memory/concurrency budget in `isolation.docker.capacity`. Execution sandboxes
+[idle and resume](sandbox-runtime.md#idle-suspension-and-task-resume) without
+deleting workspaces; this budget does not cap the whole Docker VM.
 
 ### Build and setup capacity
 
@@ -349,7 +350,7 @@ removed after preparation.
 
 The budget covers worker containers, not daemon image pull/load/commit overhead,
 external runtimes or the entire Colima/Docker VM. Leave VM headroom. Global CPU
-accounting, idle suspension and a dedicated queue display remain planned.
+accounting and a dedicated queue display remain planned.
 Run `make test-environment-context` for real bounded builds, setup, context
 validation, stage selection, failures, reuse and isolation checks.
 

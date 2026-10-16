@@ -66,6 +66,8 @@ type DockerSandboxConfig struct {
 type DockerSandbox struct {
 	cfg      DockerSandboxConfig
 	mu       sync.Mutex
+	activity sync.RWMutex
+	retained bool
 	started  bool
 	lifetime context.Context
 	stop     context.CancelFunc
@@ -144,6 +146,9 @@ func (s *DockerSandbox) Start(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.lifetime.Err() != nil {
+		return s.lifetime.Err()
+	}
 	if s.started {
 		return nil
 	}
@@ -155,6 +160,13 @@ func (s *DockerSandbox) Start(ctx context.Context) error {
 		if err := s.startContainer(ctx); err != nil {
 			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 			defer cancel()
+			if s.retained {
+				stopErr := s.stopContainer(cleanup)
+				if stopErr != nil {
+					return errors.Join(err, stopErr)
+				}
+				return errors.Join(err, s.cfg.Capacity.Release(cleanup, s.cfg.Name))
+			}
 			out, removeErr := s.docker(cleanup, "rm", "-f", s.cfg.Name)
 			if removeErr == nil || strings.Contains(out, "No such container") {
 				return errors.Join(err, s.cfg.Capacity.Release(cleanup, s.cfg.Name))
@@ -169,6 +181,12 @@ func (s *DockerSandbox) Start(ctx context.Context) error {
 
 func (s *DockerSandbox) startContainer(ctx context.Context) error {
 	out, err := s.docker(ctx, "inspect", "-f", "{{.State.Running}}", s.cfg.Name)
+	if err == nil {
+		s.retained = true
+	} else if !strings.Contains(out, "No such object") && !strings.Contains(out, "No such container") {
+		s.retained = true // ambiguous inspection must never trigger destructive cleanup
+		return fmt.Errorf("inspect sandbox: %w: %s", err, out)
+	}
 	if err == nil && s.cfg.Capacity != nil {
 		if out, e := s.docker(ctx, "update", "--memory", s.cfg.Memory, "--memory-swap", s.cfg.Memory, s.cfg.Name); e != nil {
 			return fmt.Errorf("apply sandbox memory cap: %v: %s", e, out)
@@ -222,6 +240,8 @@ func (s *DockerSandbox) ExecArgs(req ExecRequest) ([]string, error) {
 }
 
 func (s *DockerSandbox) Exec(ctx context.Context, req ExecRequest) (*ExecResult, error) {
+	s.activity.RLock()
+	defer s.activity.RUnlock()
 	if err := s.Start(ctx); err != nil {
 		return nil, err
 	}
@@ -262,6 +282,43 @@ func (s *DockerSandbox) Exec(ctx context.Context, req ExecRequest) (*ExecResult,
 		res.ExitCode = -1
 	}
 	return res, nil
+}
+
+// Suspend stops processes but preserves the container filesystem and all mounts.
+// Active Exec calls finish first. Only a confirmed stop releases capacity.
+func (s *DockerSandbox) Suspend(ctx context.Context) error {
+	s.activity.Lock()
+	defer s.activity.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := s.lifetime.Err(); err != nil {
+		return err
+	}
+	if err := s.stopContainer(ctx); err != nil {
+		return err
+	}
+	s.retained = true
+	if s.cfg.Capacity != nil {
+		return s.cfg.Capacity.Release(ctx, s.cfg.Name)
+	}
+	return nil
+}
+
+func (s *DockerSandbox) stopContainer(ctx context.Context) error {
+	s.started = false // a failed CLI call may still have stopped the container
+	s.retained = true
+	if out, err := s.docker(ctx, "stop", "--time", "10", s.cfg.Name); err != nil {
+		return fmt.Errorf("stop sandbox (capacity retained): %w: %s", err, out)
+	}
+	out, err := s.docker(ctx, "inspect", "-f", "{{.State.Running}}", s.cfg.Name)
+	if err != nil || strings.TrimSpace(out) != "false" {
+		return fmt.Errorf("sandbox stop not confirmed; capacity retained: %v: %s", err, out)
+	}
+	s.started = false
+	return nil
 }
 
 // Close removes the sandbox container.
@@ -337,7 +394,7 @@ func (s *DockerSandbox) inventory(ctx context.Context) ([]sandboxcapacity.Contai
 func DockerCapacityInventory(ctx context.Context, docker func(context.Context, ...string) (string, error)) ([]sandboxcapacity.Container, error) {
 	out, err := docker(ctx, "ps", "-q", "--filter", "label=leforge.sandbox=true")
 	if err != nil {
-		return nil, fmt.Errorf("list active sandboxes: %v: %s", err, out)
+		return nil, fmt.Errorf("list active sandboxes: %w: %s", err, out)
 	}
 	ids := strings.Fields(out)
 	if len(ids) == 0 {
@@ -346,7 +403,7 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}}"}, ids...)
 	out, err = docker(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("inspect active sandboxes: %v: %s", err, out)
+		return nil, fmt.Errorf("inspect active sandboxes: %w: %s", err, out)
 	}
 	var result []sandboxcapacity.Container
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {

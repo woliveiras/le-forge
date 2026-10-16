@@ -240,7 +240,7 @@ func (m *Manager) Reserve(ctx context.Context, name string, memory int64, invent
 	}
 }
 
-// Release is called only after Docker confirms removal. Never expire a reservation
+// Release is called only after Docker confirms removal or idle suspension. Never expire a reservation
 // just because its control plane stopped: the container may still consume memory.
 func (m *Manager) Release(ctx context.Context, name string) error {
 	err := m.locked(ctx, func(ctx context.Context) error {

@@ -11,6 +11,9 @@ import (
 const ns = "leforge"
 
 var (
+	SandboxLifecycle        = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "sandbox_lifecycle_total", Help: "Sandbox suspend/resume operations by bounded outcome."}, []string{"action", "outcome"})
+	SandboxLifecycleSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{Namespace: ns, Name: "sandbox_lifecycle_duration_seconds", Help: "Sandbox suspend/resume latency including capacity admission."}, []string{"action"})
+
 	SandboxAdmissions       = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "sandbox_capacity_transitions_total", Help: "Sandbox admission transitions by bounded state."}, []string{"state"})
 	SandboxAdmissionSeconds = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "sandbox_admission_duration_seconds", Help: "Time spent waiting for sandbox capacity, including inventory and reservation."})
 

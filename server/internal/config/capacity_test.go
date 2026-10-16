@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,23 @@ func TestSandboxCapacityConfiguration(t *testing.T) {
 		}
 		if e := c.Validate(); e == nil {
 			t.Fatal(value)
+		}
+	}
+}
+
+func TestSandboxIdleConfiguration(t *testing.T) {
+	if Default().Isolation.Docker.IdleTimeout != 5*time.Minute {
+		t.Fatal("idle default")
+	}
+	for _, value := range []string{"0s", "2m", "-1s"} {
+		c := Default()
+		c.Auth.Disabled = true
+		if err := yaml.Unmarshal([]byte("isolation:\n  docker:\n    idleTimeout: "+value), c); err != nil {
+			t.Fatal(err)
+		}
+		err := c.Validate()
+		if (err != nil) != (value == "-1s") {
+			t.Fatalf("%s: %v", value, err)
 		}
 	}
 }

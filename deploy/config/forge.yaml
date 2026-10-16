@@ -51,6 +51,7 @@ isolation:
     bin: docker
     image: "leforge/sandbox:latest"
     network: none
+    idleTimeout: 5m # stop idle execution containers; 0s disables
     capacity: {maxActive: 4, totalMemory: 4g, defaultMemory: 1g}
 
 observability:

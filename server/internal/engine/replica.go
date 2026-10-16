@@ -28,19 +28,21 @@ type replica struct {
 	nodeID string
 	index  int
 
-	mu         sync.Mutex
-	run_       *graphRun
-	state      domain.ReplicaState
-	nodePaused bool
-	iteration  int
-	runIter    int
-	runStart   time.Time
-	idleSince  time.Time
-	pendStop   bool // auto-stop declaration pending confirmation
-	execID     string
-	workdir    string
-	branch     string
-	exited     bool
+	mu               sync.Mutex
+	run_             *graphRun
+	state            domain.ReplicaState
+	nodePaused       bool
+	iteration        int
+	runIter          int
+	runStart         time.Time
+	idleSince        time.Time
+	sandboxSuspended bool
+	suspendRetry     time.Time
+	pendStop         bool // auto-stop declaration pending confirmation
+	execID           string
+	workdir          string
+	branch           string
+	exited           bool
 
 	stopping   bool
 	loopCtx    context.Context
@@ -164,6 +166,9 @@ func (r *replica) setState(st domain.ReplicaState, detail string) {
 	} else {
 		r.idleSince = time.Time{}
 	}
+	if r.sandboxSuspended && (st == domain.ReplicaIdle || st == domain.ReplicaPaused) {
+		detail = "sandbox suspended; workspace preserved"
+	}
 	status := r.statusLocked(detail)
 	gr := r.run_
 	r.mu.Unlock()
@@ -247,6 +252,8 @@ func (r *replica) run() {
 		if n == nil {
 			return // node removed from the graph
 		}
+
+		r.suspendIdle(ctx)
 
 		// --- should another turn start? -----------------------------------
 		if done, why := r.stopPolicyMet(n); done {
@@ -401,12 +408,27 @@ func (r *replica) wait(ctx context.Context, d time.Duration) {
 	if d <= 0 {
 		return
 	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-	case <-t.C:
-	case <-r.pokeCh:
+	deadline := time.Now().Add(d)
+	for {
+		delay := time.Until(deadline)
+		idle := r.sandboxIdleDelay()
+		if idle >= 0 && idle < delay {
+			delay = idle
+		}
+		t := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-r.pokeCh:
+			t.Stop()
+			return
+		case <-t.C:
+			r.suspendIdle(ctx)
+			if !time.Now().Before(deadline) {
+				return
+			}
+		}
 	}
 }
 
