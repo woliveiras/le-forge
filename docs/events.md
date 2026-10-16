@@ -159,3 +159,13 @@ contents or hashes are stored. Query using the existing graph events API with
 `types=workspace.observed`; pagination uses the existing sequence cursor.
 See [workspace write access and observations](tool-permissions.md#workspace-write-access-and-observations)
 for capture limits, concurrent writers and the distinction from proven authorship.
+
+The continuous monitor uses the same `workspace.observed` type with
+`source: "monitor"`, `attribution: "unknown"`, `observedAt`, and `since` when a
+previous scan exists. It never supplies an execution ID. Node/replica, when
+present, identifies a worktree scope, not the writer. `status: "baseline"` marks
+initialization; `gap: true` marks baseline/restart or incomplete coverage.
+Discovery failure emits `status: "partial"`, `gap: true` and
+`reason: "discovery_failed"` for known scopes. Existing events survive restart,
+but snapshot baselines are in memory and offline changes are not reconstructed.
+Tool and monitor observations may overlap; neither proves exclusive authorship.

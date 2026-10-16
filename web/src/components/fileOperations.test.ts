@@ -18,3 +18,11 @@ it('shows observed shell changes and partial captures without inventing attribut
  expect(fileOperations([{...observation,data:{tool:'shell.exec',status:'partial',changes:[]}}], 'missing')[0].outcome).toContain('partial');
  expect(fileOperations([{...observation,data:{tool:'shell.exec',changes:[null,{}, {path:3}]}}], '')[0].paths).toEqual([]);
 });
+it('keeps external observations without inventing an execution or author', () => {
+ const monitored = {...event, executionId:undefined, type:'workspace.observed',data:{source:'monitor',status:'complete',gap:true,changes:[{path:'external.txt',operation:'modified'}]}};
+ const operation=fileOperations([monitored],'external.txt')[0];
+ expect(operation.executionId).toBeUndefined();
+ expect(operation.tool).toBe('workspace monitor');
+ expect(operation.outcome).toContain('author unknown');
+ expect(operation.outcome).toContain('coverage gap');
+});

@@ -41,7 +41,7 @@ func gitInspectionResponse(r *llm.ChatRequest) *llm.ChatResponse {
 		}
 	}
 	if toolResults == 1 {
-		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "shell-result", Name: "shell.exec", Arguments: json.RawMessage(`{"command":"printf 'shell change\n' > shell.txt"}`)}}}, StopReason: "tool_calls"}
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "shell-result", Name: "shell.exec", Arguments: json.RawMessage(`{"command":"printf 'shell change\n' > shell.txt; (sleep 2; printf delayed > background-one.txt; printf one > concurrent.txt) >/dev/null 2>&1 & (sleep 2; printf delayed > background-two.txt; printf two > concurrent.txt) >/dev/null 2>&1 &"}`)}}}, StopReason: "tool_calls"}
 	}
 	for _, message := range r.Messages {
 		if message.Role == llm.RoleTool {

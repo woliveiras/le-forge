@@ -251,3 +251,35 @@ such a scan never proves a file was created or deleted. A complete scan describe
 only the observed scope, not a universal filesystem journal. Event persistence
 failures use the existing event-bus error reporting and do not roll back tool
 side effects.
+
+### Changes outside tool calls
+
+While the controller runs, a workspace monitor scans authorized graph workspaces
+and known replica worktrees independently of active turns. Stopped graphs remain
+monitored; no workspace is created by discovery. Worktree paths are derived from
+the graph/node/replica, never trusted from runtime-reported paths. The monitor
+uses the same confined, bounded snapshot comparison as tool observations and
+waits one second after each full scan before rediscovering targets.
+
+External runtimes, background children and concurrent writers can therefore
+produce persisted `workspace.observed` events even after a task finishes.
+These events use `source: monitor`, `attribution: unknown`, and no execution ID.
+For worktrees, node/replica identifies the directory's scope, not its author.
+Shared-workspace observations have no node identity. Files displays these events
+alongside tool observations, explicitly labeling unknown authorship/execution.
+A tool and the monitor may both observe the same change; they describe different
+observation windows and must not be counted as distinct writes.
+
+The initial scan establishes a baseline and reports `gap: true`; a restart does
+the same, while prior events remain in storage. Discovery failures are logged
+and mark known scopes as partial, and recovery reports the gap. Inaccessible
+roots and bounded/incomplete scans never imply that missing files were deleted.
+Healthy unchanged scans emit no events. Monitoring ends with the controller and
+stops tracking scopes removed from graph/replica inventory.
+
+This is periodic net-change detection, not kernel-level process auditing. A file
+created and removed between scans, writes reverted to their previous contents,
+changes while the controller is offline, and exact attribution among concurrent
+writers cannot be reconstructed. Scan limits still apply. Multiple controller
+instances can emit overlapping observations; there is no exactly-once write
+journal. These limits remain separate from workspace write authorization.

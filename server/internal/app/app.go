@@ -48,17 +48,18 @@ import (
 
 // App is a running control plane.
 type App struct {
-	Config    *config.Config
-	Log       *slog.Logger
-	Store     storage.Store
-	Broker    queue.Broker
-	Bus       *events.Bus
-	Approvals *hitl.Service
-	Models    *llm.Registry
-	Providers *llmconfig.Manager
-	Tools     *tools.Registry
-	Gateway   *tools.Gateway
-	Engine    *engine.Engine
+	Config           *config.Config
+	Log              *slog.Logger
+	Store            storage.Store
+	Broker           queue.Broker
+	Bus              *events.Bus
+	Approvals        *hitl.Service
+	Models           *llm.Registry
+	Providers        *llmconfig.Manager
+	Tools            *tools.Registry
+	Gateway          *tools.Gateway
+	WorkspaceMonitor *tools.WorkspaceMonitor
+	Engine           *engine.Engine
 	// Environments builds project environments on the sandbox daemon.
 	Environments   *environment.Manager
 	Proposals      *environment.Proposals
@@ -133,6 +134,8 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	a.WorkspaceMonitor = &tools.WorkspaceMonitor{Auditor: a.Bus, Targets: func(ctx context.Context) ([]tools.WorkspaceTarget, error) { return workspaceTargets(ctx, a.Store, ws) }}
 
 	secret := ""
 	if cfg.Runtimes.SharedSecretEnv != "" {
@@ -535,6 +538,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.Bootstrap(ctx); err != nil {
 		return err
 	}
+	monitorCtx, stopMonitor := context.WithCancel(ctx)
+	monitorDone := make(chan struct{})
+	go func() { defer close(monitorDone); a.WorkspaceMonitor.Run(monitorCtx, a.Log) }()
+	defer func() { stopMonitor(); <-monitorDone }()
 	historyCtx, stopHistory := context.WithCancel(ctx)
 	historyDone := make(chan struct{})
 	go func() { defer close(historyDone); a.Environments.RunProxyHistory(historyCtx) }()

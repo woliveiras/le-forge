@@ -45,3 +45,14 @@ it('renders shell observations and incomplete scans with execution identity', as
  expect(screen.getByText(/observed · partial/)).toBeTruthy();
  expect(screen.getByText('exec-shell')).toBeTruthy();
 });
+it('includes shared monitor events in a selected agent view without assigning authorship', async () => {
+ fakeApi({
+  'GET /api/v1/graphs/g/events': () => [{id:'external',type:'workspace.observed',data:{source:'monitor',status:'complete',changes:[{path:'result.txt',operation:'modified'}]}}],
+  'GET /api/v1/graphs/g/git/status': () => result,
+  'GET /api/v1/graphs/g/executions': () => [],
+ });
+ render(<GitView graphId="g" node="worker" replica={0} path="result.txt" />);
+ expect(await screen.findByText(/workspace monitor/)).toBeTruthy();
+ expect(screen.getByText(/author unknown/)).toBeTruthy();
+ expect(screen.getByText(/execution unknown/)).toBeTruthy();
+});

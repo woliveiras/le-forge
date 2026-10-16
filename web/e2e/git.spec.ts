@@ -8,12 +8,22 @@ test('runs a task then inspects its files, diff, history and execution context',
   const response = await page.request.get('/api/v1/graphs/git-inspect/executions', { headers: { Authorization: 'Bearer e2e-admin-token' } });
   return (await response.json()).some((run: {status:string}) => run.status === 'succeeded');
  }).toBe(true);
+ await expect.poll(async () => {
+  const response = await page.request.get('/api/v1/graphs/git-inspect/events?types=workspace.observed', {headers:{Authorization:'Bearer e2e-admin-token'}});
+  const events = await response.json();
+  const monitored = events.filter((event:{executionId?:string; data:{source?:string}}) => !event.executionId && event.data.source === 'monitor');
+  const paths = monitored.flatMap((event:{data:{changes:{path:string}[]}}) => event.data.changes.map(change => change.path));
+  return ['background-one.txt','background-two.txt','concurrent.txt'].every(path => paths.includes(path));
+ }).toBe(true);
  await page.getByRole('tab', { name: 'Files', exact: true }).click();
  const git = page.getByRole('region', {name:'Git inspection'});
  await expect(git).toContainText('M result.txt');
  await expect(git).toContainText('Inspection task finished');
  await expect(git).toContainText('filesystem.write');
  await expect(git).toContainText('shell.exec');
+ await expect(git).toContainText('background-one.txt (created)');
+ await expect(git).toContainText('author unknown');
+ await expect(git).toContainText('execution unknown');
  await expect(git).toContainText('shell.txt (created)');
  await expect(git).toContainText('Change attribution is inconclusive');
  await page.getByRole('button', {name:/result.txt/}).click();

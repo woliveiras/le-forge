@@ -19,9 +19,9 @@ export function GitView({ graphId, node, replica, path }: { graphId: string; nod
     Promise.all([
       api.gitInspection(graphId, view, { path, ...(node ? { node, replica } : {}) }),
       api.executions(graphId, { ...(node ? { node } : {}), limit: 20 }),
-      api.events(graphId, { ...(node ? { node } : {}), types: 'tool.completed,workspace.observed', limit: 100 }),
+      api.events(graphId, { types: 'tool.completed,workspace.observed', limit: 100 }),
     ]).then(([inspection, runs, operations]) => {
-      if (!cancelled) { setEvents(node ? operations.filter(event => event.replica === replica) : operations); setResult(inspection); setExecutions(node ? runs.filter(run => run.replica === replica) : runs); }
+      if (!cancelled) { setEvents(node ? operations.filter(event => !event.nodeId || (event.nodeId === node && event.replica === replica)) : operations); setResult(inspection); setExecutions(node ? runs.filter(run => run.replica === replica) : runs); }
     }).catch(cause => { if (!cancelled) setError(errorMessage(cause)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -43,7 +43,7 @@ export function GitView({ graphId, node, replica, path }: { graphId: string; nod
       </>}
       <p className="muted small">Change attribution is inconclusive outside the tool observation window. Observations include shell changes, but concurrent external writers and background processes can affect attribution. Partial scans do not prove absence of changes.</p>
       <p className="small">Recorded operations and workspace observations (latest 100 events; current contents may have changed since):</p>
-      <ul>{fileOperations(events, path).map(operation => <li key={operation.id}>{operation.paths.join(' → ')} · {operation.tool} · {operation.outcome} · {operation.node} / {operation.replica} · execution <span className="mono">{operation.executionId}</span></li>)}</ul>
+      <ul>{fileOperations(events, path).map(operation => <li key={operation.id}>{operation.paths.join(' → ')} · {operation.tool} · {operation.outcome} · {operation.node ? `${operation.node} / ${operation.replica}` : 'shared workspace'} · {operation.executionId ? <>execution <span className="mono">{operation.executionId}</span></> : 'execution unknown'}</li>)}</ul>
       <ul>{executions.map(run => <li key={run.id}><span className="mono">{run.id}</span> · {run.nodeId} · replica {run.replica} · {run.status}{run.summary ? ` · ${run.summary}` : ''}{run.error ? ` · ${run.error}` : ''}</li>)}</ul>
       <a href={`#/g/${encodeURIComponent(graphId)}/messages`}>Inspect task messages</a>{' · '}
       <a href={`#/g/${encodeURIComponent(graphId)}/events`}>Inspect execution events</a>
