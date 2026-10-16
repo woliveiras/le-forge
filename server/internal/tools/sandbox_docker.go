@@ -92,6 +92,11 @@ func NewDockerSandbox(cfg DockerSandboxConfig) (*DockerSandbox, error) {
 			return nil, err
 		}
 		cfg.Memory = strconv.FormatInt(n, 10)
+		cpu, err := cfg.Capacity.CPU(cfg.CPU)
+		if err != nil {
+			return nil, err
+		}
+		cfg.CPU = sandboxcapacity.FormatCPU(cpu)
 	}
 	lifetime, stop := context.WithCancel(context.Background())
 	return &DockerSandbox{cfg: cfg, lifetime: lifetime, stop: stop}, nil
@@ -154,7 +159,8 @@ func (s *DockerSandbox) Start(ctx context.Context) error {
 	}
 	if s.cfg.Capacity != nil {
 		n, _ := strconv.ParseInt(s.cfg.Memory, 10, 64)
-		if err := s.cfg.Capacity.Reserve(ctx, s.cfg.Name, n, s.inventory); err != nil {
+		cpu, _ := sandboxcapacity.CPU(s.cfg.CPU)
+		if err := s.cfg.Capacity.ReserveCPU(ctx, s.cfg.Name, n, cpu, s.inventory); err != nil {
 			return err
 		}
 		if err := s.startContainer(ctx); err != nil {
@@ -188,8 +194,8 @@ func (s *DockerSandbox) startContainer(ctx context.Context) error {
 		return fmt.Errorf("inspect sandbox: %w: %s", err, out)
 	}
 	if err == nil && s.cfg.Capacity != nil {
-		if out, e := s.docker(ctx, "update", "--memory", s.cfg.Memory, "--memory-swap", s.cfg.Memory, s.cfg.Name); e != nil {
-			return fmt.Errorf("apply sandbox memory cap: %v: %s", e, out)
+		if out, e := s.docker(ctx, "update", "--cpus", s.cfg.CPU, "--memory", s.cfg.Memory, "--memory-swap", s.cfg.Memory, s.cfg.Name); e != nil {
+			return fmt.Errorf("apply sandbox memory/CPU caps: %v: %s", e, out)
 		}
 	}
 	switch {
@@ -400,7 +406,7 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}}"}, ids...)
+	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}"}, ids...)
 	out, err = docker(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("inspect active sandboxes: %w: %s", err, out)
@@ -408,7 +414,7 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 	var result []sandboxcapacity.Container
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) != 3 {
+		if len(fields) != 4 {
 			return nil, fmt.Errorf("invalid sandbox inventory response")
 		}
 		if fields[1] == "false" {
@@ -421,7 +427,15 @@ func DockerCapacityInventory(ctx context.Context, docker func(context.Context, .
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, sandboxcapacity.Container{Name: strings.TrimPrefix(fields[0], "/"), Memory: memory})
+		nano, err := strconv.ParseInt(fields[3], 10, 64)
+		if err != nil || nano < 0 {
+			return nil, fmt.Errorf("invalid sandbox CPU inventory")
+		}
+		cpu := nano / 1000000
+		if nano%1000000 != 0 {
+			cpu++
+		}
+		result = append(result, sandboxcapacity.Container{MilliCPU: cpu, Name: strings.TrimPrefix(fields[0], "/"), Memory: memory})
 	}
 	return result, nil
 }

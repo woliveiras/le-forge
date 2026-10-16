@@ -17,7 +17,7 @@ export function AgentCapacity({ graphId, nodeId }: { graphId: string; nodeId: st
   const transitions = capacityTransitions(events.data ?? [], nodeId);
   return <section aria-label="Sandbox admission">
     <h3>Sandbox admission</h3>
-    <p className="muted small">Latest recorded transition per replica in the recent history. Waiting means the installation memory or concurrency budget is full; admission does not mean the task has completed.</p>
+    <p className="muted small">Latest recorded transition per replica in the recent history. Waiting means the installation CPU, memory or concurrency budget is full; admission does not mean the task has completed.</p>
     <ErrorBox error={events.error} />
     {!events.error && <ul>{transitions.map(event => <li key={event.replica}>Replica {event.replica}: {event.label} · {fmtTime(event.time)}</li>)}</ul>}
     {!events.error && !transitions.length && <p>{events.loading ? 'Checking admission history…' : 'No recent admission transitions recorded for this agent.'}</p>}

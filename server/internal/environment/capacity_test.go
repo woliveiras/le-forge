@@ -47,9 +47,9 @@ func TestCombinedBuildfile(t *testing.T) {
 }
 
 func TestBoundedRunArgs(t *testing.T) {
-	ctx := context.WithValue(context.Background(), buildBudgetKey{}, buildBudget{"test", 64 << 20})
-	got := strings.Join(boundedRunArgs(ctx, []string{"run", "--rm", "--memory", "1g", "alpine", "true"}), " ")
-	if !strings.Contains(got, "--name leforge-envbuild-test-copy") || !strings.Contains(got, "--memory 67108864 --memory-swap 67108864") || strings.Contains(got, "1g") {
+	ctx := context.WithValue(context.Background(), buildBudgetKey{}, buildBudget{"test", 64 << 20, 1000})
+	got := strings.Join(boundedRunArgs(ctx, []string{"run", "--rm", "--memory", "1g", "--cpus", "9", "alpine", "true"}), " ")
+	if !strings.Contains(got, "--name leforge-envbuild-test-copy") || !strings.Contains(got, "--memory 67108864 --memory-swap 67108864") || strings.Contains(got, "1g") || !strings.Contains(got, "--cpus 1.000") || strings.Contains(got, "--cpus 9") {
 		t.Fatal(got)
 	}
 	got = strings.Join(boundedRunArgs(ctx, []string{"run", "--name", "setup", "alpine"}), " ")
@@ -170,7 +170,7 @@ func TestBoundedBuildPipelineIntegration(t *testing.T) {
 				t.Fatalf("%+v", v)
 			}
 			calls := strings.Join(h.docker.calls(t), "\n")
-			for _, want := range []string{"buildx create", "memory=67108864,memory-swap=67108864,restart-policy=no", "buildx build", "--load", "run --memory 67108864 --memory-swap 67108864", "buildx rm --force"} {
+			for _, want := range []string{"cpu-period=100000,cpu-quota=100000", "--cpus 1.000", "buildx create", "memory=67108864,memory-swap=67108864,restart-policy=no", "buildx build", "--load", "run --memory 67108864 --memory-swap 67108864", "buildx rm --force"} {
 				if !strings.Contains(calls, want) {
 					t.Fatalf("missing %s in %s", want, calls)
 				}
@@ -260,5 +260,42 @@ func TestBuildCapacityRemovalFailureIntegration(t *testing.T) {
 	defer cancel()
 	if err := h.m.opt.Capacity.Reserve(wait, "another", 64<<20, inventory); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("released live worker reservation: %v", err)
+	}
+}
+
+func TestBuildWaitsForExecutionCPUBudget(t *testing.T) {
+	h := capacityHarness(t)
+	h.m.opt.Capacity.Policy.MaxActive = 4
+	h.m.opt.Capacity.Policy.TotalCPU = "1"
+	ctx := context.Background()
+	inventory := func(context.Context) ([]sandboxcapacity.Container, error) { return nil, nil }
+	if err := h.m.opt.Capacity.ReserveCPU(ctx, "execution", 32<<20, 750, inventory); err != nil {
+		t.Fatal(err)
+	}
+	g := graphWith(&domain.EnvironmentSpec{Image: "alpine", CPU: "0.5"})
+	wait, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	ran := false
+	run := func(ctx context.Context) (string, []CacheMount, error) {
+		ran = true
+		b := ctx.Value(buildBudgetKey{}).(buildBudget)
+		if b.cpu != 500 {
+			t.Fatal(b)
+		}
+		return "image", nil, nil
+	}
+	if _, _, err := h.m.withBuildCapacity(wait, g, io.Discard, run); !errors.Is(err, context.DeadlineExceeded) || ran {
+		t.Fatal(err, ran)
+	}
+	if err := h.m.opt.Capacity.Release(ctx, "execution"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.m.withBuildCapacity(ctx, g, io.Discard, run); err != nil || !ran {
+		t.Fatal(err, ran)
+	}
+	g.Spec.Environment.CPU = "2"
+	ran = false
+	if _, _, err := h.m.withBuildCapacity(ctx, g, io.Discard, run); err == nil || ran {
+		t.Fatal("oversized CPU reached Docker")
 	}
 }

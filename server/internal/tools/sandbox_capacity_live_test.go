@@ -50,12 +50,15 @@ func TestSandboxCapacityRealDaemon(t *testing.T) {
 	}
 	// Include existing bounded sandboxes without modifying or stopping user work.
 	total := int64(64 << 20)
+	totalCPU := int64(1000)
 	for _, c := range active {
-		if c.Memory <= 0 {
+		if c.Memory <= 0 || c.MilliCPU <= 0 {
 			t.Fatal("existing unbounded sandbox prevents capacity validation; stop it explicitly before this test")
 		}
 		total += c.Memory
+		totalCPU += c.MilliCPU
 	}
+	budget.Policy.TotalCPU = sandboxcapacity.FormatCPU(totalCPU + 1000)
 	budget.Policy.MaxActive = len(active) + 1
 	budget.Policy.TotalMemory = strconv.FormatInt(total+(64<<20), 10)
 	a = newSandbox("-a")
@@ -73,11 +76,11 @@ func TestSandboxCapacityRealDaemon(t *testing.T) {
 	if e := a.Start(ctx); e != nil {
 		t.Fatal(e)
 	}
-	out, e := a.docker(ctx, "inspect", "--format", "{{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}", a.cfg.Name)
-	if e != nil || strings.TrimSpace(out) != "67108864 67108864" {
+	out, e := a.docker(ctx, "inspect", "--format", "{{.HostConfig.Memory}} {{.HostConfig.MemorySwap}} {{.HostConfig.NanoCpus}}", a.cfg.Name)
+	if e != nil || strings.TrimSpace(out) != "67108864 67108864 1000000000" {
 		t.Fatalf("kernel limits: %q %v", out, e)
 	}
-	result, e := a.Exec(ctx, ExecRequest{Shell: `test "$(id -u)" = 10001; test "$(wc -l < /proc/net/route)" -eq 1; if test -f /sys/fs/cgroup/memory.max; then test "$(cat /sys/fs/cgroup/memory.max)" = 67108864; else test "$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)" = 67108864; fi`})
+	result, e := a.Exec(ctx, ExecRequest{Shell: `test "$(cat /sys/fs/cgroup/cpu.max)" = "100000 100000"; test "$(id -u)" = 10001; test "$(wc -l < /proc/net/route)" -eq 1; if test -f /sys/fs/cgroup/memory.max; then test "$(cat /sys/fs/cgroup/memory.max)" = 67108864; else test "$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)" = 67108864; fi`})
 	if e != nil || result.ExitCode != 0 {
 		t.Fatalf("cgroup check %+v %v", result, e)
 	}
@@ -123,10 +126,26 @@ func TestSandboxCapacityRealDaemon(t *testing.T) {
 	if e := <-done; !errors.Is(e, context.Canceled) {
 		t.Fatalf("queued memory request cancellation: %v", e)
 	}
+	// CPU alone must queue while memory and container slots are available.
+	budget.Policy.TotalMemory = strconv.FormatInt(total+(64<<20), 10)
+	budget.Policy.TotalCPU = sandboxcapacity.FormatCPU(totalCPU)
+	d := newSandbox("-cpu-wait")
+	go func() { done <- d.Start(ctx) }()
+	select {
+	case <-waited:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
 	// A restarted controller reuses the same reservation and container.
 	restored := newSandbox("-b")
 	if e := restored.Start(ctx); e != nil {
 		t.Fatal(e)
 	}
-	t.Log("real daemon: one available slot; count-limited sandbox waits then starts after removal; memory-only queue cancels without starting; 64 MiB cgroup limit and no extra swap; restart reuses reservation; uid 10001/network none")
+	t.Log("real daemon: CPU-only wait/cancellation and 1-core cpu.max verified; one available slot; count-limited sandbox waits then starts after removal; memory-only queue cancels without starting; 64 MiB cgroup limit and no extra swap; restart reuses reservation; uid 10001/network none")
 }

@@ -4,7 +4,7 @@ import { environmentPhase, reasonLabel } from './environmentPresentation';
 export function EnvironmentProgress({ view, showPhase = true }: { view: EnvironmentView; showPhase?: boolean }) {
   return <div aria-label="Environment progress" aria-live="polite">
     {showPhase && <p><strong>{environmentPhase(view)}</strong></p>}
-    {view.state === 'building' && view.phase === 'waiting_capacity' && <p>The build is queued for the installation memory or concurrency budget. It will continue when capacity is available.</p>}
+    {view.state === 'building' && view.phase === 'waiting_capacity' && <p>The build is queued for the installation CPU, memory or concurrency budget. It will continue when capacity is available.</p>}
     {view.state === 'building' && view.phase === 'waiting_reuse' && <p>Another build holds the compatible image lease. This build will check for reuse when it finishes.</p>}
     {!!view.changeReasons?.length && <p>Rebuild needed: {view.changeReasons.map(reasonLabel).join('; ')}.</p>}
     {!!view.buildReasons?.length && <p>Last build requested: {view.buildReasons.map(reasonLabel).join('; ')}.</p>}

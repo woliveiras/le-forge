@@ -23,6 +23,7 @@ type buildBudgetKey struct{}
 type buildBudget struct {
 	id     string
 	memory int64
+	cpu    int64
 }
 
 func builderName(id string) string      { return "leforge-builder-" + id }
@@ -49,6 +50,10 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 	if err != nil {
 		return "", nil, err
 	}
+	cpu, err := budget.CPU(g.Spec.Environment.CPU)
+	if err != nil {
+		return "", nil, err
+	}
 	// The graph build lease excludes concurrent recovery of the same pipeline.
 	if err := m.cleanBuildResources(ctx, g.Metadata.ID); err != nil {
 		return "", nil, err
@@ -63,7 +68,7 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 			return out.String(), err
 		})
 	}
-	if err := budget.Reserve(ctx, buildContainer(g.Metadata.ID), memory, inventory); err != nil {
+	if err := budget.ReserveCPU(ctx, buildContainer(g.Metadata.ID), memory, cpu, inventory); err != nil {
 		return "", nil, err
 	}
 	defer func() {
@@ -78,7 +83,7 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 			err = errors.Join(err, fmt.Errorf("environment cleanup (retry build or reset): %w", e))
 		}
 	}()
-	return run(context.WithValue(ctx, buildBudgetKey{}, buildBudget{g.Metadata.ID, memory}))
+	return run(context.WithValue(ctx, buildBudgetKey{}, buildBudget{g.Metadata.ID, memory, cpu}))
 }
 
 // Names are deterministic so a new control-plane process can recover workers.
@@ -102,11 +107,11 @@ func boundedRunArgs(ctx context.Context, args []string) []string {
 	if !ok || len(args) == 0 || args[0] != "run" {
 		return args
 	}
-	result := []string{"run", "--memory", strconv.FormatInt(b.memory, 10), "--memory-swap", strconv.FormatInt(b.memory, 10)}
+	result := []string{"run", "--memory", strconv.FormatInt(b.memory, 10), "--memory-swap", strconv.FormatInt(b.memory, 10), "--cpus", sandboxcapacity.FormatCPU(b.cpu)}
 	named := false
 	// All arguments originate in this package, with separate flag/value tokens.
 	for i := 1; i < len(args); i++ {
-		if args[i] == "--memory" || args[i] == "--memory-swap" {
+		if args[i] == "--memory" || args[i] == "--memory-swap" || args[i] == "--cpus" {
 			i++
 			continue
 		}
@@ -226,7 +231,7 @@ func (m *Manager) prepareBoundedImage(ctx context.Context, g *domain.Graph, fina
 		}
 	}
 	memory := strconv.FormatInt(b.memory, 10)
-	create := []string{"buildx", "create", "--name", builderName(b.id), "--driver", "docker-container", "--driver-opt", "memory=" + memory + ",memory-swap=" + memory + ",restart-policy=no"}
+	create := []string{"buildx", "create", "--name", builderName(b.id), "--driver", "docker-container", "--driver-opt", "memory=" + memory + ",memory-swap=" + memory + ",restart-policy=no,cpu-period=100000,cpu-quota=" + strconv.FormatInt(b.cpu*100, 10)}
 	if err = m.docker(ctx, nil, log, create...); err != nil {
 		return "", fmt.Errorf("create bounded builder: %w", err)
 	}

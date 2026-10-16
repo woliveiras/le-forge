@@ -38,7 +38,7 @@ func TestMemoryPolicy(t *testing.T) {
 	if n, e := m.Memory(""); e != nil || n != 64<<20 {
 		t.Fatalf("%d %v", n, e)
 	}
-	for _, p := range []Policy{{0, "1g", "64m"}, {1, "0", "64m"}, {1, "64m", "65m"}} {
+	for _, p := range []Policy{{MaxActive: 0, TotalMemory: "1g", DefaultMemory: "64m"}, {MaxActive: 1, TotalMemory: "0", DefaultMemory: "64m"}, {MaxActive: 1, TotalMemory: "64m", DefaultMemory: "65m"}} {
 		if p.Validate() == nil {
 			t.Fatal(p)
 		}

@@ -32,7 +32,7 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 	}
 	id := fmt.Sprintf("build-capacity-test-%d", time.Now().UnixNano())
 	ws := reuseWorkspaces{root: t.TempDir(), prefix: id + "-workspace-"}
-	budget := &sandboxcapacity.Manager{Store: store, Scope: id, Policy: sandboxcapacity.Policy{MaxActive: 1, TotalMemory: "256m", DefaultMemory: "256m"}}
+	budget := &sandboxcapacity.Manager{Store: store, Scope: id, Policy: sandboxcapacity.Policy{DefaultCPU: "0.5", MaxActive: 1, TotalMemory: "256m", DefaultMemory: "256m"}}
 	m, err := New(Options{Store: store, Workspaces: ws, DockerBin: bin, Capacity: budget, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 	}
 	writeDiscoveryFile(t, dir, "payload.txt", "bounded-context")
 	writeDiscoveryFile(t, dir, "Dockerfile", "FROM alpine:3.22 AS selected\nCOPY payload.txt /payload.txt\nRUN sleep 5\nFROM alpine:3.22 AS unused\nRUN exit 19\n")
-	setup := []string{"test \"$(id -u)\" = 10001", "test \"$(cat /payload.txt)\" = bounded-context", "echo setup-memory=$(cat /sys/fs/cgroup/memory.max)", "sleep 3"}
+	setup := []string{"test \"$(id -u)\" = 10001", "test \"$(cat /payload.txt)\" = bounded-context", "echo setup-memory=$(cat /sys/fs/cgroup/memory.max)", "test \"$(cat /sys/fs/cgroup/cpu.max)\" = \"50000 100000\"", "sleep 3"}
 	definition, err := json.Marshal(map[string]any{"dockerfile": "Dockerfile", "context": ".", "target": "selected", "setup": setup, "network": map[string]string{"setup": "none"}})
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +113,12 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 		for _, worker := range []string{builderContainer(id), buildContainer(id)} {
 			var out bytes.Buffer
 			// A missing worker is expected between sequential phases.
-			if e := m.docker(ctx, nil, &out, "inspect", "--format", "{{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}}", worker); e == nil && strings.HasPrefix(out.String(), "true ") {
-				if strings.TrimSpace(out.String()) != "true 268435456 268435456" {
+			if e := m.docker(ctx, nil, &out, "inspect", "--format", "{{.State.Running}} {{.HostConfig.Memory}} {{.HostConfig.MemorySwap}} {{.HostConfig.NanoCpus}} {{.HostConfig.CpuQuota}} {{.HostConfig.CpuPeriod}}", worker); e == nil && strings.HasPrefix(out.String(), "true ") {
+				expected := "true 268435456 268435456 500000000 0 0"
+				if worker == builderContainer(id) {
+					expected = "true 268435456 268435456 0 50000 100000"
+				}
+				if strings.TrimSpace(out.String()) != expected {
 					t.Fatalf("worker cap: %s", out.String())
 				}
 				if worker == builderContainer(id) {
@@ -148,7 +152,7 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 	if err := budget.Release(ctx, id+"-execution"); err != nil {
 		t.Fatal(err)
 	}
-	t.Log("real BuildKit worker and setup capped at 256 MiB with no extra swap; COPY context/selected stage and uid 10001 preserved; execution admission blocked until build cleanup")
+	t.Log("real BuildKit worker and setup capped at 0.5 CPU and 256 MiB with no extra swap; COPY context/selected stage and uid 10001 preserved; execution admission blocked until build cleanup")
 
 	// Dependency failures must also free the budget and leave no running builder.
 	g.Spec.Environment = &domain.EnvironmentSpec{Dockerfile: "FROM alpine:3.22\nRUN exit 17\n"}

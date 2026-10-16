@@ -39,12 +39,15 @@ func TestSandboxIdleRealDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	total := int64(64 << 20)
+	totalCPU := int64(1000)
 	for _, c := range active {
-		if c.Memory <= 0 {
+		if c.Memory <= 0 || c.MilliCPU <= 0 {
 			t.Fatal("existing unbounded sandbox prevents this test")
 		}
 		total += c.Memory
+		totalCPU += c.MilliCPU
 	}
+	budget.Policy.TotalCPU = sandboxcapacity.FormatCPU(totalCPU)
 	budget.Policy.MaxActive = len(active) + 1
 	budget.Policy.TotalMemory = strconv.FormatInt(total, 10)
 	t.Cleanup(func() {
@@ -96,7 +99,7 @@ func TestSandboxIdleRealDaemon(t *testing.T) {
 	if err := budget.Release(ctx, id+"-build"); err != nil {
 		t.Fatal(err)
 	}
-	run(recreated, `test "$(cat /workspace/marker)" = workspace; test "$(cat /cache/marker)" = cache; test "$(cat /tmp/marker)" = layer; test "$(cat /sys/fs/cgroup/memory.max)" = 67108864; test "$(wc -l < /proc/net/route)" -eq 1`)
+	run(recreated, `test "$(cat /sys/fs/cgroup/cpu.max)" = "100000 100000"; test "$(cat /workspace/marker)" = workspace; test "$(cat /cache/marker)" = cache; test "$(cat /tmp/marker)" = layer; test "$(cat /sys/fs/cgroup/memory.max)" = 67108864; test "$(wc -l < /proc/net/route)" -eq 1`)
 	after, err := recreated.docker(ctx, "inspect", "-f", "{{.Id}}", id)
 	if err != nil || before != after {
 		t.Fatalf("container recreated: %s / %s %v", before, after, err)

@@ -213,6 +213,8 @@ isolation:
       maxActive: 4
       totalMemory: 4g
       defaultMemory: 1g
+      totalCPU: "4"
+      defaultCPU: "1"
 ```
 
 A node's `isolation.memory` or an environment's `spec.environment.memory`
@@ -256,7 +258,7 @@ Buildx `docker-container` driver; the worker is removed before setup starts.
 waiting, timeout, cleanup and recovery. It does not cap Docker daemon overhead
 (including image pulls/loads/commits), external agent runtimes,
 process/Kubernetes isolation or the operating system. Leave headroom in the
-Colima/Docker VM. Global CPU accounting remains planned.
+Colima/Docker VM. Global CPU accounting uses the same durable admission budget.
 
 Metrics use bounded state labels:
 
@@ -322,3 +324,31 @@ Unit and engine/storage/queue integration tests cover idle eligibility, schedule
 pause, active turns, input retry, failures and resume. `make test-sandbox-capacity`
 also verifies real stop/start, unchanged container identity and files, released
 capacity, queued resume and controller recreation.
+
+### Global CPU admission and upgrade
+
+`totalCPU` caps the sum of reserved CPU cores across execution and environment
+build/setup/cache-copy pipelines. `defaultCPU` supplies the per-request cap when
+CPU is omitted. Defaults are 4 total cores and 1 core per request, including
+configurations predating these fields. Values are decimal cores with up to three
+decimal places (minimum 0.01), not percentages or millicore suffixes. Explicit
+node `isolation.cpu` and manually configured environment `cpu` requests must fit
+the global total; repository definitions still cannot override resource policy.
+A default exceeding the total is invalid. This is configured quota accounting,
+not a measurement of current utilization or an automatic VM CPU detector.
+
+CPU, memory and count admission are atomic under the same storage lease. All
+controllers must use the same policy/version and sandbox daemon. Reservations
+remain after ambiguous failures, disappear only after confirmed cleanup or idle
+suspension, and are reacquired on resume. Inventory includes running sandbox CPU
+caps; unbounded CPU or invalid inventory blocks admission. CPU caps are applied
+with `--cpus` on execution/setup/cache-copy containers. BuildKit's dedicated
+worker uses a 100000µs CFS period and a quota matching the reserved cores (see
+[Docker container driver options](https://docs.docker.com/build/builders/drivers/docker-container/)).
+
+Existing memory-only reservation records remain readable for release but block
+new admissions until their owners are stopped/reset normally. Do not delete
+reservation records to bypass this check. Stop existing workloads before
+upgrading all controllers, and restart them under the new policy; running legacy
+containers without CPU caps also block admission. No automatic deletion of
+workspaces or user resources is performed by the upgrade.

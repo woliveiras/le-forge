@@ -285,7 +285,7 @@ failure invalidates reuse and keeps ownership records for retry; cleanup never
 forces Docker removal or deletes workspaces/private caches. Historical resources
 without registered ownership remain untouched. See
 [shared cleanup](environments.md#cleanup-of-unused-shared-generations).
-Global CPU accounting remains planned.
+Global CPU accounting is implemented for execution, builds, setup and cache copies, with finite defaults, atomic durable reservations, kernel caps, cancellation and readmission on resume. Legacy memory-only reservations block new admission until normal stop/reset releases them.
 The target lifecycle below includes those extensions.
 
 #### Planned reuse and resource lifecycle

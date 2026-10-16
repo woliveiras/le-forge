@@ -40,7 +40,7 @@ func TestSandboxCapacityIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	args := strings.Join(a.RunArgs(), " ")
-	if !strings.Contains(args, "--memory 67108864 --memory-swap 67108864") {
+	if !strings.Contains(args, "--cpus 1.000") || !strings.Contains(args, "--memory 67108864 --memory-swap 67108864") {
 		t.Fatal(args)
 	}
 	result := make(chan error, 1)
@@ -155,5 +155,31 @@ func TestRemovalFailureRetainsCapacity(t *testing.T) {
 	defer cancel2()
 	if e := budget.Reserve(ctx2, "next", 64<<20, func(context.Context) ([]sandboxcapacity.Container, error) { return nil, nil }); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestCPUInventoryParsing(t *testing.T) {
+	for _, tc := range []struct {
+		row  string
+		want int64
+		bad  bool
+	}{
+		{"/running true 67108864 1250000000", 1250, false},
+		{"/running true 67108864 1250000001", 1251, false},
+		{"/running true 67108864 bad", 0, true},
+		{"/running true 67108864", 0, true},
+	} {
+		result, err := DockerCapacityInventory(context.Background(), func(_ context.Context, args ...string) (string, error) {
+			if args[0] == "ps" {
+				return "id", nil
+			}
+			return tc.row, nil
+		})
+		if (err != nil) != tc.bad {
+			t.Fatalf("%s: %v", tc.row, err)
+		}
+		if !tc.bad && (len(result) != 1 || result[0].MilliCPU != tc.want) {
+			t.Fatal(result)
+		}
 	}
 }

@@ -60,7 +60,7 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-global CPU accounting remains planned. Explicit shared-resource cleanup is available
+global CPU accounting is enforced across execution, build and setup. Explicit shared-resource cleanup is available
 through the admin API described below.
 Shared build/execution concurrency and memory budgets are available in
 [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
@@ -321,7 +321,7 @@ conservative retention protects other tasks and supports reuse after all graphs
 have stopped. The admin cleanup API reclaims unreferenced registered generations;
 Reset itself is not a shared-storage garbage collector. Reuse reduces build
 work and downloads; execution sandboxes and environment pipelines now share
-the memory/concurrency budget in `isolation.docker.capacity`. Execution sandboxes
+the CPU/memory/concurrency budget in `isolation.docker.capacity`. Execution sandboxes
 [idle and resume](sandbox-runtime.md#idle-suspension-and-task-resume) without
 deleting workspaces; this budget does not cap the whole Docker VM.
 
@@ -411,7 +411,7 @@ intact.
 ### Build and setup capacity
 
 An environment pipeline reserves one slot and `spec.environment.memory` (or
-`defaultMemory`) before building, copying caches or running setup. Both the
+`defaultMemory`, `totalCPU`, `defaultCPU`) before building, copying caches or running setup. Both the
 active count and reserved-memory total must fit alongside execution sandboxes.
 Waiting appears in the build log and `sandbox.capacity` events; it counts toward
 the environment timeout and can be cancelled through Reset.
@@ -602,3 +602,10 @@ claim about current execution. It distinguishes waiting, granted, released,
 failed and cancelled admission; no queue position or ETA is inferred. Full
 browser E2E coverage remains pending; component/client integration and real
 daemon tests validate the presentation contract and persisted build progress.
+
+CPU admission shares the same durable reservation as memory/count throughout
+sequential build, setup and cache copies. The default per-pipeline CPU request is
+`isolation.docker.capacity.defaultCPU`; an explicit manual environment `cpu`
+overrides it within `totalCPU`. Dedicated BuildKit workers and all setup/cache
+helpers have kernel CPU caps. See [global CPU admission and upgrade](sandbox-runtime.md#global-cpu-admission-and-upgrade)
+for values, defaults, and migration of memory-only reservations.

@@ -13,10 +13,10 @@ func TestSandboxCapacityConfiguration(t *testing.T) {
 	if e := c.Validate(); e != nil {
 		t.Fatal(e)
 	}
-	if c.Isolation.Docker.Capacity.MaxActive != 4 || c.Isolation.Docker.Capacity.DefaultMemory != "1g" {
+	if c.Isolation.Docker.Capacity.TotalCPU != "4" || c.Isolation.Docker.Capacity.DefaultCPU != "1" || c.Isolation.Docker.Capacity.MaxActive != 4 || c.Isolation.Docker.Capacity.DefaultMemory != "1g" {
 		t.Fatal(c.Isolation.Docker.Capacity)
 	}
-	for _, value := range []string{"{maxActive: 0}", "{totalMemory: -1g}", "{totalMemory: 64m, defaultMemory: 128m}"} {
+	for _, value := range []string{"{totalCPU: 0}", "{defaultCPU: -1}", "{totalCPU: 0.5, defaultCPU: 1}", "{maxActive: 0}", "{totalMemory: -1g}", "{totalMemory: 64m, defaultMemory: 128m}"} {
 		c := Default()
 		c.Auth.Disabled = true
 		if e := yaml.Unmarshal([]byte("isolation:\n  docker:\n    capacity: "+value), c); e != nil {
