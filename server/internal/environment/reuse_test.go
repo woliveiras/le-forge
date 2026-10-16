@@ -38,12 +38,17 @@ func TestReuseLeaseWaitCancellationAndFailure(t *testing.T) {
 	if ok, err := h.store.AcquireLease(ctx, "environment-reuse/busy", "other", leaseTTL); err != nil || !ok {
 		t.Fatal(err)
 	}
-	bounded, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+	bounded, cancel := context.WithTimeout(progressContext(ctx), 30*time.Millisecond)
 	defer cancel()
 	called := false
 	err := h.m.withReuseLease(bounded, "busy", io.Discard, func(context.Context) error { called = true; return nil })
 	if !errors.Is(err, context.DeadlineExceeded) || called {
 		t.Fatalf("%v called=%v", err, called)
+	}
+	var progress Status
+	snapshotProgress(bounded, &progress)
+	if progress.Phase != "waiting_reuse" {
+		t.Fatalf("missing reuse wait: %+v", progress)
 	}
 	failure := errors.New("build failed")
 	if err := h.m.withReuseLease(ctx, "free", io.Discard, func(context.Context) error { return failure }); !errors.Is(err, failure) {
@@ -125,10 +130,16 @@ func TestCompatibleBuildsReuseAndResetPreservesSharedResources(t *testing.T) {
 	if err != nil || v.UpToDate {
 		t.Fatalf("stale: %+v %v", v, err)
 	}
+	if len(v.ChangeReasons) != 1 || v.ChangeReasons[0] != "repository_inputs_changed" {
+		t.Fatalf("input change reason: %+v", v)
+	}
 	if _, err := h.m.Build(ctx, &second, false, "test"); err != nil {
 		t.Fatal(err)
 	}
 	next := h.wait(t, &second)
+	if len(next.BuildReasons) != 1 || next.BuildReasons[0] != "repository_inputs_changed" {
+		t.Fatalf("build reason: %+v", next)
+	}
 	if next.State != StateReady || next.Reused || next.ReuseKey == b.ReuseKey || next.Caches[0].Volume == b.Caches[0].Volume {
 		t.Fatalf("invalidated %+v", next)
 	}

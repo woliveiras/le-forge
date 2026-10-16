@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api, errorMessage } from '../api/client';
-import type { EnvironmentSpec, EnvironmentView, Graph } from '../api/types';
+import type { EnvironmentSpec, Graph } from '../api/types';
 import { useAsync, useThrottled } from '../hooks/useData';
 import { useEventStream } from '../hooks/useEventStream';
 import type { ElementIssue } from './canvas/edit';
 import { Badge, Btn, ErrorBox, fmtDateTime } from './common';
 import { FieldIssues } from './GraphIssues';
+import { environmentPhase } from './environmentPresentation';
+import { EnvironmentProgress } from './EnvironmentProgress';
 import { EnvironmentDiscovery } from './EnvironmentDiscovery';
 
 type Source = 'none' | 'image' | 'dockerfile';
@@ -221,13 +223,6 @@ function LinesField({
   );
 }
 
-const STATE_LABEL: Record<EnvironmentView['state'], string> = {
-  absent: 'Not built',
-  building: 'Building…',
-  ready: 'Ready',
-  failed: 'Build failed',
-};
-
 function EnvironmentStatus({
   graph,
   savedGraph,
@@ -246,7 +241,7 @@ function EnvironmentStatus({
   const gid = savedGraph.metadata.id;
   const status = useAsync(() => api.environment(gid), [gid, savedGraph.metadata.version]);
   const reload = useThrottled(() => void status.reload(), 300);
-  useEventStream({ graph: gid, prefixes: ['environment.'] }, reload);
+  useEventStream({ graph: gid, prefixes: ['environment.', 'sandbox.capacity'] }, reload);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const view = status.data;
@@ -284,7 +279,7 @@ function EnvironmentStatus({
       <div className="section-head">
         <h4>Build</h4>
         {view && (
-          <Badge tone={tone}>{view.state === 'ready' && !view.upToDate ? 'Outdated' : STATE_LABEL[view.state]}</Badge>
+          <Badge tone={tone}>{environmentPhase(view)}</Badge>
         )}
       </div>
       <ErrorBox error={status.error ?? error} />
@@ -293,7 +288,8 @@ function EnvironmentStatus({
       {view?.state === 'ready' && !view.upToDate && (
         <p className="field-warning">The saved definition or repository inputs changed since this image was built. Build it again before starting agents.</p>
       )}
-      {view?.reuseKey && <p className="muted small">{view.reused ? 'Reused compatible prepared image and cache snapshots.' : 'Prepared a new shared image and cache snapshots.'} Workspaces and writable caches remain isolated. Reset preserves shared snapshots.</p>}
+      {view && <EnvironmentProgress view={view} showPhase={false} />}
+      {view?.reuseKey && <p className="muted small">Workspaces and writable caches remain isolated. Reset preserves shared snapshots.</p>}
       {view?.image && (
         <p className="muted small">
           Image <code>{view.image}</code>

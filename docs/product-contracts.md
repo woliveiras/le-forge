@@ -526,3 +526,12 @@ authorized workspace and returns content plus a provenance manifest.
   cancellation.
 - No planned behavior is described in product UI or setup documentation as
   available until the corresponding implementation and tests pass.
+
+### Environment progress in the console
+
+Implemented: graph environment settings and the agent panel explain reuse,
+build-reason categories, active build phases and capacity waits. The agent panel
+respects inherited isolation and image overrides, shows environment readiness
+and errors, and presents recent per-replica admission history. Structured status
+is persisted independently of build logs. Exact changed-file diffs, durable
+execution queue positions/ETAs and browser E2E remain planned.

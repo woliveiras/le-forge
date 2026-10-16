@@ -569,3 +569,36 @@ documented in [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-cap
 | Agents still use the old image after a rebuild | Their sandbox was created before | Stop and start the agents |
 | `If you are running pnpm in CI, set the CI environment variable to "true"` | An older LeForge ran setup without `CI=true` and pnpm asked to confirm recreating `node_modules` | Build again (setup now runs with `CI=true`) |
 | `COPY failed` in a Dockerfile | Source missing, ignored, or outside the selected context | Check the accepted context and ignore rules; manual inline Dockerfiles have no context |
+
+### Following builds and agent readiness
+
+Graph settings → Environment and the agent panel show structured progress:
+preparing, waiting for capacity, waiting for a compatible build, building the
+image, and private cache/setup preparation. The server persists progress with
+the build log approximately every two seconds; short phases may not appear.
+Terminal or interrupted builds clear the active phase. Progress never comes from
+parsing repository-controlled log output.
+
+The environment response adds optional `phase`, `reuseDecision`, `buildReasons`
+and `changeReasons` fields. Build reasons distinguish first build, failed retry,
+explicit rebuild, changed definition/accepted context, changed bounded
+manifest/lockfile fingerprint, and changed repository/workspace/daemon scope.
+These are categories, not a file-by-file diff: when the definition differs,
+repository inputs are not additionally inspected by the status check. Decisions
+report compatible generation selection, no compatible registered generation,
+forced rebuild, or private non-repository builds. Selection alone is not a
+successful build; setup still has to finish. Existing build events include these
+reasons/decisions without adding unbounded metric labels.
+
+The agent panel respects inherited isolation and explicit image overrides. Only
+agents using the graph environment show its readiness/start blocker. The server
+remains authoritative for start validation. Status fetch errors show readiness
+as unknown. Active environment panels refresh every two seconds.
+
+Docker agents also show the latest recorded admission transition per replica
+from the latest 200 graph capacity events, refreshed through SSE and five-second
+polling. This is explicitly recent history, not a durable queue position or a
+claim about current execution. It distinguishes waiting, granted, released,
+failed and cancelled admission; no queue position or ETA is inferred. Full
+browser E2E coverage remains pending; component/client integration and real
+daemon tests validate the presentation contract and persisted build progress.

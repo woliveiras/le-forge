@@ -132,6 +132,9 @@ func TestReuseRealSandbox(t *testing.T) {
 	a, av := build("a")
 	run(a, `test "$(id -u)" = 10001; test "$(cat /workspace/installed)" = installed; echo task-a > /workspace/private; echo mutated-by-a > /home/sandbox/.cache/pip/dependency`)
 	b, bv := build("b")
+	if av.ReuseDecision != "no_compatible_generation" || bv.ReuseDecision != "compatible" || av.Phase != "" || bv.Phase != "" {
+		t.Fatalf("reuse presentation a=%+v b=%+v", av, bv)
+	}
 	if av.Reused || !bv.Reused || av.ReuseKey != bv.ReuseKey || av.Caches[0].Volume == bv.Caches[0].Volume {
 		t.Fatalf("unexpected reuse a=%+v b=%+v", av, bv)
 	}

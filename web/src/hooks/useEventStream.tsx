@@ -22,6 +22,7 @@ const EVENT_TYPES = [
   'environment.ready',
   'environment.failed',
   'environment.reset',
+  'sandbox.capacity',
   'node.scaled',
   'replica.state_changed',
   'execution.started',

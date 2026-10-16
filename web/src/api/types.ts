@@ -72,6 +72,10 @@ export type EnvironmentState = 'absent' | 'building' | 'ready' | 'failed';
 
 /** GET /graphs/{id}/environment: build state compared with the saved definition. */
 export interface EnvironmentView {
+  phase?: string;
+  reuseDecision?: string;
+  buildReasons?: string[];
+  changeReasons?: string[];
   graph: string;
   state: EnvironmentState;
   defined: boolean;

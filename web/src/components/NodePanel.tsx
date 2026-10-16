@@ -17,6 +17,7 @@ import { describeEvent, eventTone } from './describe';
 import type { ElementIssue } from './canvas/edit';
 import { effectiveLoopMode } from './canvas/model';
 import { ElementIssues, FieldIssues } from './GraphIssues';
+import { AgentEnvironment } from './AgentEnvironment';
 import { ModelFields } from './ModelFields';
 
 const LOG_TYPES = [
@@ -104,6 +105,7 @@ export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdate
         {node.disabled && <Badge tone="muted">disabled</Badge>}
       </div>
       {node.description && <p className="muted">{node.description}</p>}
+      <AgentEnvironment graph={graph} node={node} />
       <ElementIssues issues={issues} label="Agent validation" />
 
       <div className="btn-row">

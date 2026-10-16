@@ -47,9 +47,11 @@ func (m *Manager) withReuseLease(ctx context.Context, key string, log io.Writer,
 			return e
 		}
 		if ok {
+			setProgress(ctx, "preparing", "")
 			break
 		}
 		if !waiting {
+			setProgress(ctx, "waiting_reuse", "")
 			fmt.Fprintln(log, "==> Waiting for compatible environment build")
 			waiting = true
 		}
@@ -145,6 +147,7 @@ func (m *Manager) sharedSteps(ctx context.Context, g *domain.Graph, st *Status, 
 			buildErr = errors.Join(buildErr, m.docker(cleanup, nil, io.Discard, "rmi", shared.Image))
 		}()
 		if hit {
+			setProgress(ctx, "preparing", "compatible")
 			if e = json.Unmarshal(data, &shared); e != nil {
 				return fmt.Errorf("read shared environment: %w", e)
 			}
@@ -161,6 +164,11 @@ func (m *Manager) sharedSteps(ctx context.Context, g *domain.Graph, st *Status, 
 			}
 			fmt.Fprintln(log, "==> Reusing compatible prepared image and immutable cache snapshots")
 		} else {
+			decision := "no_compatible_generation"
+			if force {
+				decision = "forced"
+			}
+			setProgress(ctx, "building_image", decision)
 			fmt.Fprintln(log, "==> Preparing shared image (new inputs or explicit rebuild)")
 			// Unique names prevent force rebuilds replacing images or caches in use.
 			generation := domain.NewID("shared")
@@ -194,6 +202,7 @@ func (m *Manager) sharedSteps(ctx context.Context, g *domain.Graph, st *Status, 
 		}
 		st.SharedImage = shared.Image
 		st.Reused = hit
+		setProgress(ctx, "setup", "")
 		// Each graph gets private writable volumes. Published seeds are only read.
 		mounts := shared.Caches
 		if hit {

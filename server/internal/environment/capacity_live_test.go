@@ -72,8 +72,29 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 			}
 		}
 	})
+	if err := budget.Reserve(ctx, id+"-waiting-fixture", 256<<20, func(context.Context) ([]sandboxcapacity.Container, error) { return nil, nil }); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := m.Build(ctx, g, false, "test"); err != nil {
 		t.Fatal(err)
+	}
+	waitingSeen := false
+	for until := time.Now().Add(15 * time.Second); time.Now().Before(until); {
+		view, err := m.Get(ctx, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if view.Phase == "waiting_capacity" {
+			waitingSeen = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err := budget.Release(ctx, id+"-waiting-fixture"); err != nil {
+		t.Fatal(err)
+	}
+	if !waitingSeen {
+		t.Fatal("real build did not expose persisted capacity wait")
 	}
 	deadline := time.Now().Add(4 * time.Minute)
 	builderSeen, setupSeen := false, false
@@ -115,7 +136,7 @@ func TestBuildCapacityRealSandbox(t *testing.T) {
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	if v == nil || v.State != StateReady || !builderSeen || !setupSeen {
+	if v == nil || v.Phase != "" || v.State != StateReady || !builderSeen || !setupSeen {
 		t.Fatalf("incomplete validation builder=%v setup=%v status=%+v", builderSeen, setupSeen, v)
 	}
 	if !strings.Contains(v.Log, "setup-memory=268435456") {

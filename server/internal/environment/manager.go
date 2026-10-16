@@ -57,26 +57,30 @@ type CacheMount struct {
 
 // Status is the persisted state of a graph's environment.
 type Status struct {
-	SharedImage string       `json:"sharedImage,omitempty"`
-	Scope       string       `json:"scope,omitempty"`
-	ReuseKey    string       `json:"reuseKey,omitempty"`
-	Reused      bool         `json:"reused,omitempty"`
-	Inputs      string       `json:"inputs,omitempty"`
-	Graph       string       `json:"graph"`
-	State       State        `json:"state"`
-	Hash        string       `json:"hash,omitempty"`  // definition hash of the last build
-	Image       string       `json:"image,omitempty"` // set when ready
-	Caches      []CacheMount `json:"caches,omitempty"`
-	StartedAt   *time.Time   `json:"startedAt,omitempty"`
-	FinishedAt  *time.Time   `json:"finishedAt,omitempty"`
-	Error       string       `json:"error,omitempty"`
-	Log         string       `json:"log,omitempty"` // tail of the build output
-	Actor       string       `json:"actor,omitempty"`
-	Instance    string       `json:"instance,omitempty"`
+	Phase         string       `json:"phase,omitempty"`
+	ReuseDecision string       `json:"reuseDecision,omitempty"`
+	BuildReasons  []string     `json:"buildReasons,omitempty"`
+	SharedImage   string       `json:"sharedImage,omitempty"`
+	Scope         string       `json:"scope,omitempty"`
+	ReuseKey      string       `json:"reuseKey,omitempty"`
+	Reused        bool         `json:"reused,omitempty"`
+	Inputs        string       `json:"inputs,omitempty"`
+	Graph         string       `json:"graph"`
+	State         State        `json:"state"`
+	Hash          string       `json:"hash,omitempty"`  // definition hash of the last build
+	Image         string       `json:"image,omitempty"` // set when ready
+	Caches        []CacheMount `json:"caches,omitempty"`
+	StartedAt     *time.Time   `json:"startedAt,omitempty"`
+	FinishedAt    *time.Time   `json:"finishedAt,omitempty"`
+	Error         string       `json:"error,omitempty"`
+	Log           string       `json:"log,omitempty"` // tail of the build output
+	Actor         string       `json:"actor,omitempty"`
+	Instance      string       `json:"instance,omitempty"`
 }
 
 // View is a Status compared with the graph's current definition.
 type View struct {
+	ChangeReasons []string `json:"changeReasons,omitempty"`
 	Status
 	// Defined is false when the graph has no spec.environment.
 	Defined bool `json:"defined"`
@@ -155,6 +159,7 @@ func (m *Manager) Get(ctx context.Context, g *domain.Graph) (*View, error) {
 	}
 	if st.State == StateBuilding && !m.leaseAlive(ctx, g.Metadata.ID) {
 		now := time.Now().UTC()
+		st.Phase = ""
 		st.State, st.Error, st.FinishedAt = StateFailed, "build interrupted: the LeForge instance running it stopped; build again", &now
 		if err := m.save(ctx, st); err != nil {
 			return nil, err
@@ -170,6 +175,12 @@ func (m *Manager) Get(ctx context.Context, g *domain.Graph) (*View, error) {
 		if err != nil {
 			return nil, err
 		}
+		if st.Inputs != e.SHA256 {
+			v.ChangeReasons = append(v.ChangeReasons, "repository_inputs_changed")
+		}
+		if st.Scope != reuseScope(g.Spec.Workspace.Repo, m.opt.DockerHost) || g.Spec.Workspace.Path != "" {
+			v.ChangeReasons = append(v.ChangeReasons, "repository_scope_changed")
+		}
 		v.UpToDate = st.Inputs == e.SHA256 && st.Scope == reuseScope(g.Spec.Workspace.Repo, m.opt.DockerHost) && g.Spec.Workspace.Path == ""
 	}
 	return v, nil
@@ -179,9 +190,13 @@ func (m *Manager) view(g *domain.Graph, st *Status) *View {
 	v := &View{Status: *st, Defined: g.Spec.Environment != nil}
 	if v.Defined {
 		v.CurrentHash = Hash(g.Spec.Environment)
+		if st.Hash != "" && st.Hash != v.CurrentHash {
+			v.ChangeReasons = append(v.ChangeReasons, "definition_changed")
+		}
 		v.UpToDate = st.State == StateReady && st.Hash == v.CurrentHash
 		if st.ReuseKey != "" && g.Spec.Workspace.Repo == "" {
 			v.UpToDate = false
+			v.ChangeReasons = append(v.ChangeReasons, "repository_scope_changed")
 		}
 	}
 	return v
@@ -249,13 +264,13 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 	m.mu.Unlock()
 
 	now := time.Now().UTC()
-	st := &Status{Graph: id, State: StateBuilding, Hash: Hash(env), StartedAt: &now, Actor: actor, Instance: m.opt.Instance}
+	st := &Status{Phase: "preparing", BuildReasons: buildReasons(cur, force), Graph: id, State: StateBuilding, Hash: Hash(env), StartedAt: &now, Actor: actor, Instance: m.opt.Instance}
 	if err := m.save(ctx, st); err != nil {
 		m.finish(id, b)
 		_ = m.opt.Store.ReleaseLease(context.Background(), leasePrefix+id, m.opt.Instance)
 		return nil, err
 	}
-	m.publish(ctx, domain.EvEnvBuildStarted, id, actor, map[string]any{"hash": st.Hash, "force": force})
+	m.publish(ctx, domain.EvEnvBuildStarted, id, actor, map[string]any{"hash": st.Hash, "force": force, "buildReasons": st.BuildReasons})
 	snapshot := *g // the definition being built, independent of later saves
 	view := m.view(g, st)
 	go m.run(bctx, b, &snapshot, st)
@@ -280,6 +295,7 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 
 	ctx, span := observability.Start(ctx, "environment.build",
 		attribute.String("leforge.graph", id), attribute.String("leforge.environment.hash", st.Hash))
+	ctx = progressContext(ctx)
 	logBuf := &tailBuffer{limit: m.opt.LogLimit}
 	stopFlush := m.flushWhileRunning(ctx, st, logBuf)
 
@@ -296,6 +312,8 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 	})
 
 	stopFlush()
+	snapshotProgress(ctx, st)
+	st.Phase = ""
 	st.ReuseKey, st.Reused, st.Inputs, st.Scope = result.ReuseKey, result.Reused, result.Inputs, result.Scope
 	st.SharedImage = result.SharedImage
 
@@ -326,7 +344,7 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 	if serr := m.save(context.Background(), st); serr != nil {
 		m.opt.Log.Error("environment status not saved", "graph", id, "err", serr)
 	}
-	data := map[string]any{"hash": st.Hash, "durationMs": time.Since(start).Milliseconds()}
+	data := map[string]any{"hash": st.Hash, "durationMs": time.Since(start).Milliseconds(), "buildReasons": st.BuildReasons, "reuseDecision": st.ReuseDecision}
 	if err != nil {
 		data["error"] = st.Error
 		m.opt.Log.Warn("environment build failed", "graph", id, "hash", st.Hash, "err", err)
@@ -360,7 +378,10 @@ func (m *Manager) flushWhileRunning(ctx context.Context, st *Status, logBuf *tai
 			case <-t.C:
 				snap := *st
 				snap.Log = logBuf.String()
-				_ = m.save(context.Background(), &snap)
+				snapshotProgress(ctx, &snap)
+				if err := m.save(context.Background(), &snap); err != nil {
+					m.opt.Log.Error("environment progress not saved", "graph", st.Graph, "err", err)
+				}
 				if time.Since(renew) > leaseTTL/3 {
 					_, _ = m.opt.Store.AcquireLease(context.Background(), leasePrefix+st.Graph, m.opt.Instance, leaseTTL)
 					renew = time.Now()
@@ -377,12 +398,14 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 	env := g.Spec.Environment
 	id := g.Metadata.ID
 	final := ImageRef(id, hash)
+	setProgress(ctx, "building_image", "private")
 	userTag, err := m.prepareImage(ctx, g, final, log)
 	if err != nil {
 		return "", nil, err
 	}
 	defer m.docker(context.Background(), nil, io.Discard, "rmi", userTag) //nolint:errcheck
 
+	setProgress(ctx, "setup", "")
 	if len(env.Setup) == 0 {
 		if err := m.docker(ctx, nil, log, "tag", userTag, final); err != nil {
 			return "", nil, err

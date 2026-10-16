@@ -124,8 +124,8 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Show the environment of a graph: source, effective definition, state, last build, logs, and cache usage. (Cache paths and volumes are listed; volume sizes are not shown yet.)
 - [x] Add Rebuild and Reset actions with confirmation, restricted to operators/admins according to the role matrix.
 - [x] Show discovery candidates, selected source and definition acceptance; show pending agent proposals in Approvals with rationale and full definition. Expose waiting, rejected, cancelled and build-failed states without implying execution succeeded. Proposals currently require no existing environment; diff/replacement workflows remain pending.
-- [ ] Show whether an environment is reused or rebuilding, which inputs changed, and when a task is queued for capacity; explain shared-resource effects before Reset.
-- [ ] Explain on the agent panel when commands will run (environment name and state) and when the environment blocks a start. — The start refusal names the environment and the agents that need it, and Graph settings lists the agents using it. Pending: showing the environment state on the agent panel itself.
+- [x] Show reuse decisions, build reason categories and structured build phases/capacity waits in settings and the agent panel; show recent execution admission history and shared-resource effects before Reset. Exact file diffs and durable queue positions/ETAs remain pending.
+- [x] Show the graph environment name, image, readiness, failure and start blocker on the agent panel, respecting inherited isolation and explicit image overrides; report unknown readiness on fetch errors. Unit, component/client and storage/API integration tests plus real daemon progress/reuse validation cover this flow.
 
 #### Tests and Documentation
 

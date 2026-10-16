@@ -41,12 +41,16 @@ spec:
 `
 
 type envView struct {
-	State       string
-	Defined     bool
-	UpToDate    bool
-	Image       string
-	CurrentHash string
-	Error       string
+	Phase         string
+	ReuseDecision string
+	BuildReasons  []string
+	ChangeReasons []string
+	State         string
+	Defined       bool
+	UpToDate      bool
+	Image         string
+	CurrentHash   string
+	Error         string
 }
 
 func TestEnvironmentLifecycleThroughTheAPI(t *testing.T) {
@@ -97,6 +101,9 @@ func TestEnvironmentLifecycleThroughTheAPI(t *testing.T) {
 	}
 	if c := call(t, srv, "POST", "/api/v1/graphs/env-demo/environment/build", operatorTok, "application/json", "{}", &v); c != 202 || v.State != "building" {
 		t.Fatalf("build: %d %+v", c, v)
+	}
+	if v.Phase != "preparing" || len(v.BuildReasons) != 1 || v.BuildReasons[0] != "not_built" {
+		t.Fatalf("build progress API: %+v", v)
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for v.State == "building" && time.Now().Before(deadline) {

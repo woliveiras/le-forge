@@ -36,6 +36,11 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 	}
 	budget := *m.opt.Capacity
 	budget.Notify = func(name, state string) {
+		if state == "waiting" {
+			setProgress(ctx, "waiting_capacity", "")
+		} else {
+			setProgress(ctx, "preparing", "")
+		}
 		fmt.Fprintf(log, "==> Environment capacity: %s\n", state)
 		m.opt.Log.Info("environment capacity", "graph", g.Metadata.ID, "state", state)
 		m.publish(context.WithoutCancel(ctx), domain.EventType("sandbox.capacity"), g.Metadata.ID, "", map[string]any{"phase": "environment", "state": state})
