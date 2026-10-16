@@ -50,24 +50,29 @@ Evolve the existing `GraphCanvas.tsx` view to allow users to:
 
 ### 4. Provide Containerized Project Environments
 
-Agents need the project's real toolchain (for example Go, Node, and pnpm) to install dependencies, build, and run tests. Today the docker sandbox uses one fixed image chosen by the operator and requires mounting the host's Docker socket, which is root-equivalent on the operator's machine.
+Agents need the project's real toolchain (for example Go, Node, and pnpm) to install dependencies, build, and run tests. The dedicated sandbox daemon and interface-configured environments already provide the foundation. Extend them with repository discovery, approved agent proposals, and reuse across tasks; repositories must not require LeForge-specific files.
 
 Give each graph a managed **environment**:
 
 - run every environment build and sandbox container on a Docker daemon dedicated to LeForge (a Docker-in-Docker service in the Compose stack, rootless where the host supports it) instead of the host daemon; images, containers, and caches live in that service's volumes, so removing them resets everything and nothing is installed on the host;
 - keep sandboxes on a network separate from platform services (database, broker, control plane); only the control plane talks to both;
-- define the environment from, in order of precedence:
-  1. a definition configured by the operator in the interface (an image, or a Dockerfile plus setup commands);
-  2. a definition versioned in the repository (`.leforge/environment.yaml`, or `.devcontainer/devcontainer.json` when present);
-  3. a definition proposed by an agent that reads the repository (`mise.toml`, `go.mod`, `package.json`, Dockerfiles), which a human must approve before anything is built;
+- preserve an explicit environment configured by the operator in the interface; otherwise discover repository definitions in this order:
+  1. `.leforge/environment.yaml` (highest repository priority, optional);
+  2. `.devcontainer/devcontainer.json`;
+  3. Dockerfiles;
+  4. Docker Compose files (`compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml`, and explicitly selected variants);
+- show the discovered source and effective definition for operator acceptance. When multiple Dockerfiles, build targets, or Compose services are candidates, ask the operator to select the development environment; do not start every service automatically. Report invalid or unsupported definitions rather than silently falling through to a lower-priority source;
+- when no supported definition file is found, use an agent with bounded, read-only repository access to analyze manifests, lockfiles and toolchain declarations such as `mise.toml`, `go.mod`, and `package.json`. This analysis must work before a project environment exists. Propose the image, tools, setup commands, caches, network needs and rationale; a developer approval gate blocks building and task execution until the proposal is accepted. Rejection keeps the task blocked; approval permits building, and execution continues only once the environment is ready;
 - build images and run setup steps in LeForge, never through agent access to Docker; agents get `environment.propose` and `environment.status`, and keep running commands only through `shell.exec` inside the ready environment;
 - apply a network policy per phase: setup may reach the internet to download dependencies; execution defaults to no network, with an optional host allowlist enforced by an egress proxy;
-- keep dependency caches in per-environment volumes so runs do not download everything again;
-- expose environment state (`pending`, `building`, `ready`, `failed`), build logs, **Rebuild**, and **Reset** in the console; Reset removes the environment's containers, image, and caches.
+- reuse prepared images and compatible dependency caches across tasks for the same authorized repository and effective environment. Identify compatibility from the definition, relevant setup inputs (including lockfiles), platform and policy; reuse unchanged environments and rebuild when those inputs change or the operator requests it;
+- keep task workspaces/worktrees and active execution containers isolated. Share only caches that support concurrent use, otherwise serialize access or isolate them. Never share task outputs, credentials or private repository data across unauthorized scopes;
+- bound memory and CPU per sandbox and enforce a global concurrency/resource budget, queueing tasks when capacity is exhausted. Stop idle containers while preserving task state; continuing the same task may reuse its container. Image/cache reuse saves build time and disk, while active-container limits control memory consumption;
+- expose environment state (`pending`, `building`, `ready`, `failed`), approval and capacity waiting states, reuse decisions, build logs, **Rebuild**, and **Reset** in the console. Reset and graph deletion must respect shared-resource ownership and active references: never remove images or caches another task still needs; reclaim unreferenced resources through an explicit cleanup lifecycle.
 
 Environment definitions coming from repositories or agents are untrusted content: they cannot change grants, credentials, limits, or network policy beyond what the installation allows.
 
-**Acceptance criterion:** An operator connects a repository, gets a working environment built from the interface, the repository, or an approved agent proposal, runs agents whose commands execute only inside it, and can reset it — all without installing anything on the host or giving agents access to Docker.
+**Acceptance criterion:** An operator connects a repository without requiring a LeForge-specific file, accepts a discovered definition or approves an agent proposal, and runs tasks only after the environment is ready. Later tasks reuse compatible images and caches while keeping workspaces isolated, with bounded active resource consumption. Rebuild and reset preserve resources referenced by other tasks. Nothing is installed on the host and agents never receive Docker access.
 
 ### 5. Create the File and Interaction Panel
 

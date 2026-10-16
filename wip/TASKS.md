@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments, MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, and reuse across tasks remain pending. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -56,7 +56,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 ### 3. Provide Containerized Project Environments
 
-Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docker-in-Docker, rootless where supported) replaces access to the host daemon; environment definitions come from the interface, the repository, or an approved agent proposal (the agent proposal is delivered last); execution runs without network by default, with an optional host allowlist through an egress proxy.
+Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docker-in-Docker, rootless where supported) replaces access to the host daemon; explicit interface configuration takes precedence, otherwise repository discovery follows `.leforge/environment.yaml` → `.devcontainer/devcontainer.json` → Dockerfiles → Docker Compose → agent analysis with developer approval. No LeForge-specific file is required. Compatible images and caches are reused across tasks for the same authorized repository, while workspaces and active containers remain isolated; execution runs without network by default, with an optional host allowlist through an egress proxy.
 
 #### Isolated Container Runtime
 
@@ -81,11 +81,27 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 #### Definition Sources
 
 - [x] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands. (**Graph settings → Environment**.)
-- [ ] Read a repository definition from `.leforge/environment.yaml`; support the image and post-create command subset of `.devcontainer/devcontainer.json` when no LeForge file exists. Report unsupported fields instead of ignoring them.
-- [ ] Apply deterministic precedence (interface, then repository, then approved agent proposal) and show which source is in effect.
+- [ ] Extend the environment API/data contracts to record discovery candidates, selected source, repository revision, accepted definition, approval state and reuse identity; reconcile the existing per-graph lifecycle with shared images/caches before implementation.
+- [ ] Discover definitions in order: `.leforge/environment.yaml`, `.devcontainer/devcontainer.json`, Dockerfiles, then Docker Compose. Preserve explicit interface overrides and show the effective source. A LeForge-specific file is never required.
+- [ ] Parse the LeForge definition and the supported image/post-create subset of devcontainer configuration. Report malformed and unsupported fields; an invalid higher-priority file must not silently trigger a fallback or agent proposal.
+- [ ] Discover Dockerfiles and build targets within bounded repository paths; support validated build contexts confined to the authorized workspace, respecting ignore rules. Present ambiguous candidates for operator selection.
+- [ ] Discover `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` and explicitly selected variants; define supported fields and override handling. Let operators select the development service and explicitly review required companion services rather than starting the whole stack. Reject unsupported or unsafe mounts, privileges, interpolation and network settings with actionable errors.
+- [ ] Present the normalized definition and source for operator acceptance before building, retaining revision/hash evidence and detecting changes before acceptance/build.
+- [ ] When no definition file is found, invoke a bounded analysis agent with read-only repository access that works without the project environment. Analyze manifests, lockfiles and toolchain declarations; propose tools, image, setup, caches, network needs and rationale without installing dependencies or running repository commands.
 - [ ] Treat repository and agent definitions as untrusted: they cannot raise resource limits, mount host paths, request privileges, or widen network policy beyond installation settings.
-- [ ] Add the `environment.status` tool and the `environment.propose` tool: a proposal (Dockerfile, setup commands, network needs, rationale) opens an approval showing the full definition; nothing is built until a human approves it.
+- [ ] Add the `environment.status` tool and the `environment.propose` tool: the complete proposal opens a developer approval gate. Keep the task waiting until acceptance; rejection/cancellation must not build or run anything. Revalidate the approved revision, build after acceptance, and resume execution only when ready; expose build failures and retries.
 - [ ] Provide an example proposal flow for a repository using `mise.toml` (base image with mise, `mise install`, dependency download).
+
+#### Reuse Across Tasks and Resource Budgets
+
+- [ ] Define a reuse key scoped to the authorized repository, effective definition, relevant setup inputs/lockfiles, platform and policy; exclude task-specific workspace contents and secrets from shared image layers.
+- [ ] Reuse ready images for compatible subsequent tasks and coordinate concurrent builds with leases/deduplication. Rebuild on relevant input changes or explicit request; explain cache hits and invalidations.
+- [ ] Share compatible dependency download caches with explicit concurrency rules; lock or isolate caches that cannot safely support concurrent writers. Keep credentials and private artifacts within authorized scopes.
+- [ ] Create isolated task workspaces/worktrees and active containers; allow continuation of the same task to reuse its container without sharing mutable task state with other tasks.
+- [ ] Enforce per-sandbox CPU/memory limits and a global budget for active builds and executions; queue work when capacity is exhausted and handle cancellation, failures and capacity release.
+- [ ] Stop idle containers while preserving resumable task state; define idle timeout and restart behavior without deleting workspace data.
+- [ ] Track references to shared images/caches across tasks and graphs; adapt Reset, graph deletion and cleanup so active or retained references are protected. Define explicit reclamation for unused resources.
+- [ ] Record reuse, rebuild reasons, queue waits and resource-limit failures through existing events/metrics, using bounded labels and no sensitive payloads.
 
 #### Network Policy
 
@@ -97,7 +113,8 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 - [x] Show the environment of a graph: source, effective definition, state, last build, logs, and cache usage. (Cache paths and volumes are listed; volume sizes are not shown yet.)
 - [x] Add Rebuild and Reset actions with confirmation, restricted to operators/admins according to the role matrix.
-- [ ] Show pending environment proposals in Approvals with the full definition and a diff against the current one.
+- [ ] Show discovery candidates, selected source and definition acceptance; show pending agent proposals in Approvals with rationale, full definition and a diff against the current one. Expose waiting, rejected, cancelled and build-failed states without implying execution succeeded.
+- [ ] Show whether an environment is reused or rebuilding, which inputs changed, and when a task is queued for capacity; explain shared-resource effects before Reset.
 - [ ] Explain on the agent panel when commands will run (environment name and state) and when the environment blocks a start. — The start refusal names the environment and the agents that need it, and Graph settings lists the agents using it. Pending: showing the environment state on the agent panel itself.
 
 #### Tests and Documentation
@@ -105,9 +122,14 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [ ] Unit tests for definition parsing, precedence, hashing, policy enforcement on untrusted definitions, and lifecycle transitions, including build failures and cancellations. — Done for validation, hashing, the user layer, lifecycle, failures, cancellation, concurrency, interrupted builds and reset. Pending: precedence (arrives with repository and agent sources).
 - [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon. — API integration tests run with a scripted Docker CLI; a manual run against the real `sandbox-daemon` verified Dockerfile build, setup, commit, cache population, uid 10001 workspace writes, `network none`, reset (refused while running) and cleanup on graph deletion. Pending: automating that run and the repository/agent sources.
 - [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset. — Done except proposal approval (not implemented yet).
-- [ ] Document setup, resource requirements of the dedicated daemon, reset, and troubleshooting in the deployment and getting-started guides.
+- [ ] Add unit tests for discovery priority, ambiguous candidates, malformed definitions, supported Compose/devcontainer fields, context containment and absent-definition fallback; include approval rejection, stale approval, timeout and analysis failure.
+- [ ] Add unit tests for reuse keys/invalidation, cache locking, ownership, resource budgets, queue cancellation and idle/resume lifecycle.
+- [ ] Add integration tests with repository fixtures and the real dedicated daemon for each source and the approved-proposal flow; prove no build/task starts before approval and failures remain visible.
+- [ ] Add integration tests proving compatible tasks reuse an image/cache, changed lockfiles invalidate reuse, concurrent builds are deduplicated, task workspaces and unauthorized repositories remain isolated, and reset cannot remove referenced resources. Verify queue admission, resource release and idle-container resume.
+- [ ] Add interface tests for candidate selection, developer approval/rejection, reuse/invalidation explanations and capacity waiting; add browser E2E for a repository without LeForge files through discovery or proposal, approval, build, execution and a subsequent reused environment.
+- [ ] Document discovery priority, supported file formats, ambiguity/error handling, approval, reuse/invalidation, resource budgets, shared-resource reset and troubleshooting in the environment, deployment and getting-started guides.
 
-**Done when:** An operator connects a repository, gets a ready environment from the interface, the repository, or an approved agent proposal, and runs agents whose commands execute only inside it; the environment can be rebuilt or reset from the browser, nothing is installed on the host, and agents never access Docker.
+**Done when:** A repository needs no LeForge-specific file: discovery follows the agreed precedence, and absence of definitions leads to agent analysis with developer approval before building or executing. Compatible subsequent tasks reuse images/caches with isolated workspaces and bounded active resources. Rebuild, reset and cleanup respect shared references; all project commands stay inside LeForge containers, nothing is installed on the host, and agents never access Docker.
 
 ### 4. Create the File and Interaction Panel
 
