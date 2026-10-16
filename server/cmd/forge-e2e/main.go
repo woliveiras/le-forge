@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -56,7 +57,11 @@ func run() error {
 	cfg := config.Default()
 	cfg.Instance = "browser-e2e"
 	cfg.LLM = config.LLM{}
-	cfg.Server.Addr = "127.0.0.1:18089"
+	addr, err := browserAddress(os.Getenv("LEFORGE_E2E_PORT"))
+	if err != nil {
+		return err
+	}
+	cfg.Server.Addr = addr
 	cfg.Server.InternalAddr = ""
 	cfg.Server.WebDir = "../web/dist"
 	cfg.Storage = config.Storage{Type: "sqlite", Dir: filepath.Join(root, "store")}
@@ -140,4 +145,16 @@ func run() error {
 		}
 	}
 	return a.Run(ctx)
+}
+
+// browserAddress keeps disposable controllers on loopback, including parallel runs.
+func browserAddress(port string) (string, error) {
+	if port == "" {
+		port = "18089"
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("invalid LEFORGE_E2E_PORT")
+	}
+	return fmt.Sprintf("127.0.0.1:%d", n), nil
 }

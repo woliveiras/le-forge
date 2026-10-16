@@ -33,3 +33,17 @@ func TestAnalysisFixture(t *testing.T) {
 		t.Fatalf("failure fixture: %v %v", response, err)
 	}
 }
+
+func TestBrowserAddress(t *testing.T) {
+	for _, tc := range []struct{ port, want string }{{"", "127.0.0.1:18089"}, {"18101", "127.0.0.1:18101"}, {"1", "127.0.0.1:1"}, {"65535", "127.0.0.1:65535"}} {
+		got, err := browserAddress(tc.port)
+		if err != nil || got != tc.want {
+			t.Fatalf("browserAddress(%q) = %q, %v", tc.port, got, err)
+		}
+	}
+	for _, port := range []string{"0", "-1", "65536", "host:18101", "abc"} {
+		if _, err := browserAddress(port); err == nil {
+			t.Fatalf("accepted invalid port %q", port)
+		}
+	}
+}
