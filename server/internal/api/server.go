@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -155,6 +157,7 @@ func (s *Server) routes() {
 		{"GET /api/v1/provider-settings", R, s.providerSettings},
 		{"PUT /api/v1/provider-settings", A, s.updateProviderSettings},
 		{"GET /api/v1/tools", R, s.toolsList},
+		{"GET /api/v1/graphs/{id}/git/{view}", R, s.inspectGit},
 		{"GET /api/v1/graphs/{id}/files", R, s.listFiles},
 		{"GET /api/v1/graphs/{id}/files/content", R, s.fileContent},
 	}
@@ -912,13 +915,37 @@ func (s *Server) browseRoot(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// A worktree replica's files live in its own checkout.
 	if node := r.URL.Query().Get("node"); node != "" {
-		if n := g.Node(node); n != nil && n.Workspace.Mode == domain.WorkspaceWorktree {
-			rep := qint(r, "replica", 0)
-			root = filepath.Join(s.Workspaces.Root, ".worktrees", g.Metadata.ID, fmt.Sprintf("%s-%d", node, rep))
+		n := g.Node(node)
+		if n == nil || n.Workspace.Mode != domain.WorkspaceWorktree {
+			return "", badRequest("unknown worktree node")
 		}
+		rep := 0
+		if value := r.URL.Query().Get("replica"); value != "" {
+			var parseErr error
+			rep, parseErr = strconv.Atoi(value)
+			if parseErr != nil || rep < 0 {
+				return "", badRequest("invalid replica")
+			}
+		}
+		root = filepath.Join(s.Workspaces.Root, ".worktrees", g.Metadata.ID, fmt.Sprintf("%s-%d", node, rep))
+	} else if r.URL.Query().Get("replica") != "" {
+		return "", badRequest("replica requires node")
 	}
+	rel, relativeErr := filepath.Rel(s.Workspaces.Root, root)
+	if relativeErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		current := s.Workspaces.Root
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			current = filepath.Join(current, part)
+			info, err := os.Lstat(current)
+			if err == nil && info.Mode()&os.ModeSymlink != 0 {
+				return "", badRequest("workspace symlinks are not supported")
+			}
+		}
+	} else if info, err := os.Lstat(root); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", badRequest("workspace symlinks are not supported")
+	}
+
 	return root, nil
 }
 
@@ -927,11 +954,32 @@ func (s *Server) listFiles(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	abs, rel, err := tools.ResolvePath(root, r.URL.Query().Get("path"))
+	_, rel, err := browsePath(root, r.URL.Query().Get("path"))
 	if err != nil {
 		return badRequest("%v", err)
 	}
-	entries, err := os.ReadDir(abs)
+	jail, err := os.OpenRoot(root)
+	if errors.Is(err, os.ErrNotExist) {
+		writeJSON(w, 200, []any{})
+		return nil
+	}
+	if err != nil {
+		return badRequest("workspace unavailable")
+	}
+	defer jail.Close()
+	directory, err := jail.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		writeJSON(w, 200, []any{})
+		return nil
+	}
+	if err != nil {
+		return badRequest("directory unavailable")
+	}
+	defer directory.Close()
+	entries, err := directory.ReadDir(2000)
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		writeJSON(w, 200, []any{})
 		return nil
@@ -946,9 +994,10 @@ func (s *Server) listFiles(w http.ResponseWriter, r *http.Request) error {
 		Size    int64     `json:"size"`
 		ModTime time.Time `json:"modTime"`
 	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	out := []file{}
 	for _, e := range entries {
-		if e.Name() == ".git" {
+		if strings.EqualFold(e.Name(), ".git") {
 			continue
 		}
 		info, err := e.Info()
@@ -969,15 +1018,34 @@ func (s *Server) fileContent(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	abs, _, err := tools.ResolvePath(root, r.URL.Query().Get("path"))
+	_, rel, err := browsePath(root, r.URL.Query().Get("path"))
 	if err != nil {
 		return badRequest("%v", err)
 	}
-	f, err := os.Open(abs)
+	jail, err := os.OpenRoot(root)
 	if err != nil {
-		return fmt.Errorf("%w: %v", engine.ErrNotFound, err)
+		return fmt.Errorf("%w: workspace unavailable", engine.ErrNotFound)
+	}
+	defer jail.Close()
+	info, err := jail.Stat(rel)
+	if err != nil {
+		return fmt.Errorf("%w: file unavailable", engine.ErrNotFound)
+	}
+	if !info.Mode().IsRegular() {
+		return badRequest("only regular files can be read")
+	}
+	f, err := jail.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return badRequest("file unavailable")
 	}
 	defer f.Close()
+	openedInfo, err := f.Stat()
+	if err != nil {
+		return badRequest("file unavailable")
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return badRequest("only regular files can be read")
+	}
 	// Served as plain text with nosniff so agent-written HTML can never
 	// execute in the console's origin.
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

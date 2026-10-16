@@ -270,3 +270,65 @@ to subsequent reads/collection/retention sweeps, including histories of deleted
 graphs; saving is not a synchronous purge of every history. Storage failures return
 an error. Lower limits can permanently discard history; higher limits do not
 restore discarded records. Publication: `installation.history_retention.updated`.
+
+### Read-only workspace Git inspection
+
+`GET /api/v1/graphs/{id}/git/{view}` accepts `view=status|diff|history`.
+It uses the same viewer/read authorization as Files. Optional `node` selects
+an existing worktree-mode agent and `replica` selects its nonnegative replica
+(default 0). Unknown/non-worktree agents and malformed replicas return 400;
+replica without node also returns 400. It never creates a workspace/worktree.
+`path` is an optional literal workspace-relative file or directory; absolute
+paths, traversal, NUL, `.git` segments and escaping symlinks return 400.
+
+The JSON response contains `repository` (boolean), `directory` (resolved
+workspace path), `branch` (or `(detached)`), `content` (plain text), and
+`attribution: "inconclusive"`, `graphId`, and (for worktree selection)
+`nodeId`/`replica`. These identify the selected workspace, not change authors. Non-repositories return `repository:false`.
+Status includes untracked names; diff compares tracked working files with HEAD
+(including staged changes); history contains at most 50 commit IDs, author
+timestamps and subjects. No untracked content is synthesized into patches;
+use Files to read it. Unborn repositories explicitly report no commits.
+Submodule contents are excluded. Inspection is a live observation, not an
+immutable snapshot or evidence of authorship.
+
+Git output is capped at 4 MiB per command, with an explicit failure instead of
+a truncated patch. The overall inspection has a 10-second deadline. Metadata
+validation reads directory entries in batches, allows at most 100,000 entries,
+caps gitdir/commondir pointer files at 4 KiB, and copies at most 64 MiB of
+metadata into a private temporary directory. Copies use rooted reads and regular
+files, with no symlinks or hardlinks. Git runs against that validated private
+copy, which is removed after the request. This is an inspection implementation
+detail, not a persisted review/preview snapshot. Symlinked metadata, alternate
+object stores, redirected common directories, and unsupported Git configuration
+fail closed. Only inert init/clone/branch/identity configuration keys are
+supported; filters, includes, worktree configuration and executable extensions
+are rejected. Hooks, fsmonitor, pagers, external diff and textconv are disabled;
+Git environment overrides and global/system configuration are not inherited.
+Git/configuration/storage failures use the existing 500 error contract and
+request failure logging; no repository stderr is returned. Concurrent changes
+to the live `.git/config`, object-store pointers or refs
+after copying cannot replace the private metadata used by Git. Concurrent
+writes during copying may produce inconsistent metadata and a visible failure.
+Working file contents remain live; this is not an atomic snapshot of workspace
+contents. Existing native/process isolation still does not sandbox hostile
+processes with unrestricted access to the controller's host or temporary files.
+
+Files remains read-only and capped at 4 MiB/2,000 directory entries. Reads use
+an OS-rooted filesystem handle; `.git` and aliases into it are refused, and only
+regular files can be displayed. Existing absolute paths within the workspace
+remain supported by Files. No user upload, edit or delete routes are added.
+
+The Files panel displays Git views for the selected file/directory and queries
+existing execution and `tool.completed` event APIs for task context (graph-wide
+for the shared workspace, filtered by node/replica for a worktree). Recorded
+filesystem operations link paths with execution/node/replica/outcome when audit
+arguments are structured. Truncated arguments and arbitrary shell effects are
+not inferred. Recent execution results and message/event links remain context,
+not proof that an execution authored a current diff. No new attribution records,
+persisted snapshots, human review or preview contracts are introduced.
+
+Browser regression: `cd web && LEFORGE_E2E_PORT=18103 npx playwright test e2e/git.spec.ts`.
+The optional port overrides the normal 18089 disposable server. This journey
+uses real SQLite, the native tool gateway, temporary Git repositories and an
+artificial model response; no shared Docker daemon or external provider is used.

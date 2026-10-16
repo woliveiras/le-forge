@@ -29,6 +29,9 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "git-inspect-fixture") {
+		return gitInspectionResponse(r), nil
+	}
 	for _, m := range r.Messages {
 		if strings.Contains(m.Content, "analysis-failure") {
 			return nil, fmt.Errorf("E2E analysis provider unavailable")
@@ -85,7 +88,7 @@ func run() error {
 		return err
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
-	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter"} {
+	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
@@ -117,6 +120,11 @@ func run() error {
 		g := &domain.Graph{Metadata: domain.GraphMetadata{Name: id}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Loop: domain.LoopSpec{Mode: domain.LoopOnce}, Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}, Isolation: domain.IsolationSpec{Mode: domain.IsolationDocker}}}}}
 
 		node := &g.Spec.Nodes[0]
+		if id == "git-inspect" {
+			if err := prepareGitInspectionFixture(ctx, dir, node); err != nil {
+				return err
+			}
+		}
 		switch id {
 		case "cpu-holder", "memory-holder", "preparation-holder":
 			node.Loop = domain.LoopSpec{Mode: domain.LoopContinuous, Interval: domain.Duration(100 * time.Millisecond)}

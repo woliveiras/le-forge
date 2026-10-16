@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GitView } from './GitView';
 import { api, errorMessage } from '../api/client';
 import type { FileEntry, GraphStatus, GraphSummary } from '../api/types';
 import { Btn, ErrorBox, fmtDateTime } from './common';
@@ -146,6 +147,7 @@ export function FilesView({ summary, status }: { summary: GraphSummary; status?:
         <p className="muted tiny file-readonly">Read-only view. Workspace files can only be changed by agents.</p>
       </aside>
       <section className="file-content" aria-label="File contents">
+        <GitView graphId={graphId} node={nodeId} replica={replica} path={selected?.path ?? path} />
         {selected ? (
           <>
             <div className="file-content-head">
