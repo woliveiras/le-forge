@@ -18,6 +18,7 @@ build: ## Build forged and forge binaries into server/bin
 	$(GO) build -o bin/forge ./cmd/forge
 	$(GO) build -o bin/forge-egress ./cmd/forge-egress
 	GOOS=linux CGO_ENABLED=0 $(GO) build -o bin/forge-preview-linux ./cmd/forge-preview
+	GOOS=linux CGO_ENABLED=0 $(GO) build -o bin/forge-workspace-journal-linux ./cmd/forge-workspace-journal
 
 egress-image: ## Build the managed proxy image inside the dedicated sandbox daemon
 	./scripts/build-egress-image.sh
@@ -103,3 +104,7 @@ test-e2e-providers: ## Real LangGraph + browser provider journey, no Docker (set
 .PHONY: test-preview
 test-preview: ## Real sandbox preview gateway, HTTP client and lifecycle checks
 	./scripts/test-preview.sh
+
+.PHONY: test-workspace-journal
+test-workspace-journal: ## Kernel process/transient/offline journal tests in the dedicated Linux daemon
+	./scripts/test-workspace-journal.sh

@@ -92,7 +92,7 @@ func run() error {
 		return err
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
-	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly"} {
+	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err

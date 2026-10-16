@@ -50,7 +50,7 @@ flowchart LR
 
 | Component | What it does | Where |
 |---|---|---|
-| `sandbox-daemon` service | A Docker daemon (`docker:28.5.2-dind`) used only by LeForge. Stores its images, containers and build cache in the `sandbox-daemon-data` volume. Generates its TLS certificates on start. | `docker-compose.yml`, `deploy/sandbox-daemon/` |
+| `sandbox-daemon` service | A LeForge image based on `docker:28.5.2-dind`, with a supervised workspace journal collector, used only by LeForge. Stores its images, containers and build cache in the `sandbox-daemon-data` volume. Generates its TLS certificates on start. | `docker-compose.yml`, `deploy/sandbox-daemon/` |
 | Firewall rules | Installed by `deploy/sandbox-daemon/entrypoint.sh` right after the daemon starts. Sandbox containers cannot reach private address ranges (the Compose networks with PostgreSQL, NATS and `forged`; your LAN; cloud metadata) nor the daemon itself. Sandboxes on the same bridge, and the internet, stay reachable for containers that have a network. If the rules cannot be installed the daemon stops, and the healthcheck only passes while they are present. | `deploy/sandbox-daemon/entrypoint.sh`, `healthcheck.sh` |
 | `sandbox-image` service | Runs on every `docker compose up`: builds `Dockerfile.sandbox` as `leforge/sandbox:latest` **inside** `sandbox-daemon`. Layers are cached, so later runs finish in seconds. | `docker-compose.yml`, `Dockerfile.sandbox` |
 | `forged` | Talks to the daemon with the Docker CLI: `LEFORGE_SANDBOX_DOCKER_HOST=tcp://sandbox-daemon:2376` plus `DOCKER_TLS_VERIFY`/`DOCKER_CERT_PATH` (client certificate, read-only volume). Creates one long-lived container per replica that needs docker isolation and runs each command with `docker exec`. | `internal/tools/sandbox_docker.go`, `internal/app/app.go` |
@@ -528,3 +528,12 @@ policy, stale candidates, concurrent decisions, failure and revocation paths.
 
 Public DNS/TLS deployments require installation-specific validation using the
 recipes above.
+
+
+Workspace process/transient history uses a private `workspace-journal` volume,
+read-only in forged and absent from agent sandboxes. The collector continues
+while forged is offline, and journal imports resume from durable cursors.
+See [kernel journal](tool-permissions.md#kernel-journal-in-the-dedicated-linux-daemon)
+for process identity, coverage gaps, size limits, recovery and activation on an
+existing installation. The collector must remain active to record offline events;
+this is not reconstruction of unobserved history.

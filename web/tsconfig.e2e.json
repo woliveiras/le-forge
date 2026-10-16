@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "include": [
     "e2e",
+    "e2e-journal",
+    "playwright.journal.config.ts",
     "playwright.config.ts",
     "playwright.instructions.config.ts",
     "e2e-real",

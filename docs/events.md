@@ -169,3 +169,15 @@ Discovery failure emits `status: "partial"`, `gap: true` and
 `reason: "discovery_failed"` for known scopes. Existing events survive restart,
 but snapshot baselines are in memory and offline changes are not reconstructed.
 Tool and monitor observations may overlap; neither proves exclusive authorship.
+
+Kernel journal imports use `source: "kernel-journal"`, `journalId`, and
+`process: {pid, start, namespace, bootId}`. `attribution: "kernel_pid"` indicates
+a positive kernel-reported PID, not an inferred agent/execution; missing process
+start time means its lifetime could not be verified. PID 0 uses `unknown`.
+Operations also include `moved_from` and `moved_to`. `collector_started`,
+`kernel_queue_overflow` and `unresolved_kernel_path` produce partial gap events.
+Stable event IDs and durable per-journal cursors prevent duplicate history on
+replay; events retain the collector's observation time. Journal metadata contains
+no command lines or file contents. See the
+[kernel journal contract](tool-permissions.md#kernel-journal-in-the-dedicated-linux-daemon)
+for supported namespaces, limits and the meaning of controller-offline recovery.

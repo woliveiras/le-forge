@@ -56,3 +56,14 @@ it('includes shared monitor events in a selected agent view without assigning au
  expect(screen.getByText(/author unknown/)).toBeTruthy();
  expect(screen.getByText(/execution unknown/)).toBeTruthy();
 });
+it('renders kernel process evidence and transient deletion from the API', async () => {
+ fakeApi({
+  'GET /api/v1/graphs/g/events': () => [{id:'kernel',type:'workspace.observed',data:{source:'kernel-journal',status:'complete',process:{pid:23,start:'100'},changes:[{path:'transient',operation:'deleted'}]}}],
+  'GET /api/v1/graphs/g/git/status': () => result,
+  'GET /api/v1/graphs/g/executions': () => [],
+ });
+ render(<GitView graphId="g" node="" replica={0} path="" />);
+ expect(await screen.findByText(/kernel PID 23/)).toBeTruthy();
+ expect(screen.getByText(/transient \(deleted\)/)).toBeTruthy();
+ expect(screen.getByText(/execution unknown/)).toBeTruthy();
+});

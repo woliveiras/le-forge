@@ -5,13 +5,16 @@ export function fileOperations(events: LeForgeEvent[], path: string) {
     if (!['tool.completed', 'workspace.observed'].includes(event.type) || !event.data || typeof event.data !== 'object') return [];
     const data = event.data as Record<string, unknown>;
     const monitored = event.type === 'workspace.observed' && data.source === 'monitor';
-    if (!event.executionId && !monitored) return [];
+    const journalled = event.type === 'workspace.observed' && data.source === 'kernel-journal';
+    if (!event.executionId && !monitored && !journalled) return [];
+    const process = data.process && typeof data.process === 'object' ? data.process as Record<string, unknown> : {};
+    const author = journalled && typeof process.pid === 'number' && process.pid > 0 ? ` · kernel PID ${process.pid}${process.start ? ` · start ${String(process.start)}` : ' · process lifetime unavailable'}` : journalled ? ' · author unknown' : '';
     if (event.type === 'workspace.observed') {
       const changes = Array.isArray(data.changes) ? data.changes.filter((value): value is { path: string; operation: string } =>
-        !!value && typeof value === 'object' && typeof value.path === 'string' && ['created', 'modified', 'deleted'].includes(value.operation)) : [];
+        !!value && typeof value === 'object' && typeof value.path === 'string' && ['created', 'modified', 'deleted', 'moved_from', 'moved_to'].includes(value.operation)) : [];
       const matching = changes.filter(change => !path || change.path === path || change.path.startsWith(`${path}/`));
       if (path && matching.length === 0 && data.status !== 'partial' && data.gap !== true) return [];
-      return [{ id: event.id, executionId: event.executionId, node: event.nodeId, replica: event.replica, tool: monitored ? 'workspace monitor' : String(data.tool), outcome: `observed · ${data.status === 'complete' ? 'complete' : data.status === 'baseline' ? 'baseline' : 'partial'}${monitored ? ' · author unknown' : ''}${data.gap === true ? ' · coverage gap' : ''}`, paths: matching.map(change => `${change.path} (${change.operation})`) }];
+      return [{ id: event.id, executionId: event.executionId, node: event.nodeId, replica: event.replica, tool: journalled ? 'kernel journal' : monitored ? 'workspace monitor' : String(data.tool), outcome: `observed · ${data.status === 'complete' ? 'complete' : data.status === 'baseline' ? 'baseline' : 'partial'}${monitored ? ' · author unknown' : author}${data.gap === true ? ' · coverage gap' : ''}`, paths: matching.map(change => `${change.path} (${change.operation})`) }];
     }
     if (!['filesystem.write', 'filesystem.edit', 'filesystem.move', 'filesystem.delete', 'filesystem.mkdir'].includes(String(data.tool))) return [];
     if (!data.args || typeof data.args !== 'object') return [];

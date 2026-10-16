@@ -26,3 +26,11 @@ it('keeps external observations without inventing an execution or author', () =>
  expect(operation.outcome).toContain('author unknown');
  expect(operation.outcome).toContain('coverage gap');
 });
+it('shows kernel PID evidence without guessing execution or process lifetime', () => {
+ const record={...event,executionId:undefined,type:'workspace.observed',data:{source:'kernel-journal',status:'complete',process:{pid:12},changes:[{path:'transient',operation:'deleted'}]}};
+ const operation=fileOperations([record],'')[0];
+ expect(operation.tool).toBe('kernel journal');
+ expect(operation.outcome).toContain('kernel PID 12');
+ expect(operation.outcome).toContain('process lifetime unavailable');
+ expect(operation.executionId).toBeUndefined();
+});

@@ -44,6 +44,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/storage/stores"
 	"github.com/woliveiras/le-forge/server/internal/tools"
 	"github.com/woliveiras/le-forge/server/internal/workspace"
+	"github.com/woliveiras/le-forge/server/internal/workspacejournal"
 )
 
 // App is a running control plane.
@@ -59,6 +60,7 @@ type App struct {
 	Tools            *tools.Registry
 	Gateway          *tools.Gateway
 	WorkspaceMonitor *tools.WorkspaceMonitor
+	WorkspaceJournal *workspacejournal.Importer
 	Engine           *engine.Engine
 	// Environments builds project environments on the sandbox daemon.
 	Environments   *environment.Manager
@@ -136,6 +138,27 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	a.WorkspaceMonitor = &tools.WorkspaceMonitor{Auditor: a.Bus, Targets: func(ctx context.Context) ([]tools.WorkspaceTarget, error) { return workspaceTargets(ctx, a.Store, ws) }}
+	if path := os.Getenv("LEFORGE_WORKSPACE_JOURNAL"); path != "" {
+		a.WorkspaceJournal = &workspacejournal.Importer{Store: a.Store, Path: path, Scopes: func(ctx context.Context) ([]workspacejournal.Scope, error) {
+			targets, err := workspaceTargets(ctx, a.Store, ws)
+			if err != nil {
+				return nil, err
+			}
+			root, err := filepath.EvalSymlinks(ws.Root)
+			if err != nil {
+				return nil, err
+			}
+			scopes := []workspacejournal.Scope{}
+			for _, t := range targets {
+				rel, err := filepath.Rel(root, t.Dir)
+				if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					continue
+				}
+				scopes = append(scopes, workspacejournal.Scope{GraphID: t.GraphID, NodeID: t.NodeID, Replica: t.Replica, RelativeRoot: filepath.ToSlash(rel)})
+			}
+			return scopes, nil
+		}}
+	}
 
 	secret := ""
 	if cfg.Runtimes.SharedSecretEnv != "" {
@@ -541,6 +564,24 @@ func (a *App) Run(ctx context.Context) error {
 	monitorCtx, stopMonitor := context.WithCancel(ctx)
 	monitorDone := make(chan struct{})
 	go func() { defer close(monitorDone); a.WorkspaceMonitor.Run(monitorCtx, a.Log) }()
+	journalDone := make(chan struct{})
+	go func() {
+		defer close(journalDone)
+		if a.WorkspaceJournal == nil {
+			return
+		}
+		for {
+			if err := a.WorkspaceJournal.Import(monitorCtx); err != nil && monitorCtx.Err() == nil {
+				a.Log.Warn("workspace journal import failed", "error", err)
+			}
+			select {
+			case <-monitorCtx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
+	}()
+	defer func() { stopMonitor(); <-journalDone }()
 	defer func() { stopMonitor(); <-monitorDone }()
 	historyCtx, stopHistory := context.WithCancel(ctx)
 	historyDone := make(chan struct{})

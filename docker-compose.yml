@@ -43,6 +43,7 @@ x-forged-env: &forged-env
   # Tool sandboxes run on the dedicated sandbox-daemon over mutual TLS. The
   # workspaces volume is mounted at the same path there, so no host path
   # translation (LEFORGE_WORKSPACES_HOST) is needed.
+  LEFORGE_WORKSPACE_JOURNAL: ${LEFORGE_WORKSPACE_JOURNAL:-/var/lib/leforge/journal/events.jsonl}
   LEFORGE_SANDBOX_DOCKER_HOST: tcp://sandbox-daemon:2376
   DOCKER_TLS_VERIFY: "1"
   DOCKER_CERT_PATH: /certs/client
@@ -79,6 +80,7 @@ services:
     volumes:
       - workspaces:/var/lib/leforge/workspaces
       - forged-data:/var/lib/leforge/data
+      - workspace-journal:/var/lib/leforge/journal:ro
       - sandbox-certs-client:/certs/client:ro
     networks: [default, sandbox]
     depends_on:
@@ -196,16 +198,19 @@ services:
   # (postgres, nats, forged, your LAN). privileged is required by
   # Docker-in-Docker; see docs/sandbox-runtime.md for what that means.
   sandbox-daemon:
-    image: docker:28.5.2-dind
+    build: {context: ., dockerfile: deploy/sandbox-daemon/Dockerfile}
+    image: leforge/sandbox-daemon:dev
     hostname: sandbox-daemon
     privileged: true
     entrypoint: ["/leforge/entrypoint.sh"]
     environment:
       DOCKER_TLS_CERTDIR: /certs
       DOCKER_TLS_SAN: DNS:sandbox-daemon
+      LEFORGE_WORKSPACE_JOURNAL: ${LEFORGE_WORKSPACE_JOURNAL:-/var/lib/leforge/journal/events.jsonl}
     volumes:
       - ./deploy/sandbox-daemon/entrypoint.sh:/leforge/entrypoint.sh:ro
       - ./deploy/sandbox-daemon/healthcheck.sh:/leforge/healthcheck.sh:ro
+      - workspace-journal:/var/lib/leforge/journal
       - sandbox-daemon-data:/var/lib/docker
       - sandbox-certs-ca:/certs/ca
       - sandbox-certs-server:/certs/server
@@ -254,6 +259,7 @@ volumes:
   loki-data:
   ollama-models:
   hf-models:
+  workspace-journal:
   sandbox-daemon-data:
   sandbox-certs-ca:
   sandbox-certs-server:

@@ -283,3 +283,59 @@ changes while the controller is offline, and exact attribution among concurrent
 writers cannot be reconstructed. Scan limits still apply. Multiple controller
 instances can emit overlapping observations; there is no exactly-once write
 journal. These limits remain separate from workspace write authorization.
+
+### Kernel journal in the dedicated Linux daemon
+
+The Compose daemon image includes `forge-workspace-journal`. The collector runs
+inside the existing privileged sandbox-daemon, uses Linux fanotify filesystem
+notifications and writes `/var/lib/leforge/journal/events.jsonl`. No agent gains
+capabilities, host PID access, a journal mount or access to the Docker API. The
+journal volume is private to the collector and mounted read-only in forged.
+The existing firewall and sandbox authorization rules remain in force.
+
+Kernel records include creation, close-after-write, deletion and move-from/to
+notifications, even when a file disappears before the next snapshot. They carry
+the kernel-reported PID, collector PID namespace and boot identity. Process start
+time is included only when pidfd liveness checks validate the `/proc` lookup;
+short-lived processes may already be gone. PID 0 means the writer is invisible
+from this namespace. Command lines, environment variables, file contents and
+symlink targets are not collected. A PID does not prove which LeForge execution
+or agent caused an operation. The Files panel displays kernel evidence without
+inventing an execution ID.
+
+The collector fsyncs each record independently of forged. With
+`LEFORGE_WORKSPACE_JOURNAL` pointing to this read-only journal, forged imports
+up to 1,000 records per pass, maps paths only to authorized workspace scopes and
+persists events before advancing a durable cursor. Stable event IDs make replay
+safe after a crash between event persistence and cursor advancement. The cursor
+also checks journal identity and refuses truncation/replacement. Original record
+times survive replay. This recovers events collected while **forged was offline**;
+it cannot recover events never captured while the collector itself was offline.
+
+Startup emits a coverage gap. Kernel queue overflow and unresolved file handles
+also emit gaps; deleted parent directories can prevent path resolution. Kernel
+notifications can coalesce operations and are not a complete syscall trace.
+Files outside the mounted workspace root and `.git` metadata are excluded. The
+collector does not inspect other PID namespaces or claim support for native
+macOS/Windows, rootless or arbitrary external hosts. Snapshot monitoring remains
+available for those configurations, with its existing limits.
+
+A journal is capped at 64 MiB and records at 60 KiB. Disk/write failures and the
+size limit stop capture; daemon supervision stops dockerd rather than silently
+continuing without its collector. No history is automatically deleted. An
+incomplete trailing record prevents collector restart and must be preserved for
+recovery. Preserve/archive an exhausted or damaged journal and choose a **new
+filename** under `/var/lib/leforge/journal` through `LEFORGE_WORKSPACE_JOURNAL`
+for both services; do not truncate or replace a file behind an existing cursor.
+Previously imported history remains in the event store. Automatic retention and
+repair are not implemented.
+
+Existing installations require rebuilding/restarting the sandbox-daemon image
+and adding the journal volume to forged. Changing source files alone does not
+activate the collector in an old image. `make test-workspace-journal` runs real
+kernel tests inside the existing dedicated daemon and then a Chromium journey
+that imports their journal into a disposable controller; it does not restart the
+installation. The collector requires filesystem file-handle support and the
+fanotify capabilities of the privileged daemon; unsupported kernels/filesystems
+fail explicitly. See [fanotify](https://man7.org/linux/man-pages/man7/fanotify.7.html)
+for kernel semantics.

@@ -18,10 +18,20 @@ set -eu
 rm -f /run/leforge-iptables
 PRIVATE_RANGES="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16"
 
+# The journal survives controller restarts and is never mounted in agents.
+mkdir -p /var/lib/leforge/journal
+chown 0:10001 /var/lib/leforge/journal
+chmod 2750 /var/lib/leforge/journal
+forge-workspace-journal -journal "${LEFORGE_WORKSPACE_JOURNAL:-/var/lib/leforge/journal/events.jsonl}" &
+journal=$!
+echo "$journal" > /run/leforge-workspace-journal.pid
+
 dockerd-entrypoint.sh "$@" &
 daemon=$!
 
 stop() {
+	kill -TERM "$journal" 2>/dev/null || true
+	wait "$journal" 2>/dev/null || true
 	kill -TERM "$daemon" 2>/dev/null || true
 	wait "$daemon" 2>/dev/null || true
 }
@@ -69,4 +79,13 @@ fi
 echo "$IPT" > /run/leforge-iptables
 echo "sandbox-daemon: firewall rules installed ($IPT); sandboxes cannot reach private networks or this daemon"
 
+# A dead collector must not silently leave sandboxes running unobserved.
+while kill -0 "$daemon" 2>/dev/null; do
+    if ! kill -0 "$journal" 2>/dev/null; then
+        echo "sandbox-daemon: workspace journal stopped; stopping sandbox daemon" >&2
+        stop
+        exit 1
+    fi
+    sleep 1
+done
 wait "$daemon"
