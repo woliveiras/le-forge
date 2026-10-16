@@ -101,3 +101,28 @@ test('idle suspension and message-driven resume preserve workspace contents', as
   await expect(page.locator('.file-content')).toContainText('workspace survives suspension');
   await stop(page, id);
 });
+
+test('environment build and setup wait for execution capacity, then become ready', async ({ page }) => {
+  const holder = 'preparation-holder', id = 'preparation-waiter';
+  try {
+    await start(page, holder);
+    await executed(page, holder);
+    await open(page, id);
+    await page.getByRole('button', { name: 'Graph settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Build', exact: true }).click();
+    await expect(page.getByText('Waiting for sandbox capacity', { exact: true })).toBeVisible();
+    expect((await read(page, id, 'environment')).phase).toBe('waiting_capacity');
+    expect(await read(page, id, 'executions')).toHaveLength(0);
+    await stop(page, holder);
+    await expect.poll(async () => (await read(page, id, 'environment')).state).toBe('ready');
+    await open(page, id);
+    await page.getByRole('button', { name: 'Graph settings', exact: true }).click();
+    await expect(page.getByText('Ready', { exact: true })).toBeVisible();
+    expect((await read(page, id, 'environment')).log).toContain('Running 1 setup command');
+    await page.getByRole('button', { name: 'Run all', exact: true }).click();
+    await executed(page, id);
+    await stop(page, id);
+  } finally {
+    if ((await read(page, holder, 'status')).state !== 'stopped') await stop(page, holder);
+  }
+});

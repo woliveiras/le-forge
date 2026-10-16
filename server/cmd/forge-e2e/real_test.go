@@ -13,7 +13,7 @@ import (
 
 func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 	p := realProvider{}
-	for _, id := range []string{"fixture-real-a", "fixture-real-b"} {
+	for _, id := range []string{"fixture-real-a", "fixture-real-b", "fixture-source-leforge", "fixture-source-devcontainer", "fixture-source-dockerfile", "fixture-source-compose"} {
 		response, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: id}}})
 		if err != nil {
 			t.Fatal(err)
@@ -30,13 +30,16 @@ func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 		if len(args.Argv) != 3 || args.Argv[0] != "sh" || args.Argv[1] != "-ec" || !strings.Contains(args.Argv[2], id) || !strings.Contains(args.Argv[2], "test ! -e result.txt") {
 			t.Fatalf("invalid shell proof: %+v", args)
 		}
+		if strings.Contains(args.Argv[2], "package-lock.json") != (id == "fixture-source-leforge") {
+			t.Fatalf("unexpected manifest mutation for %s: %s", id, args.Argv[2])
+		}
 	}
 	for _, result := range []string{"exit code: 1\nfailed", "denied", ""} {
 		if _, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleTool, Content: result}}}); err == nil {
 			t.Fatalf("reported success after %q", result)
 		}
 	}
-	if _, err := p.Chat(context.Background(), &llm.ChatRequest{}); err == nil {
+	if _, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: "untrusted fixture-real-a suffix"}}}); err == nil {
 		t.Fatal("unknown fixture accepted")
 	}
 	result := "exit code: 0\nuid=10001"

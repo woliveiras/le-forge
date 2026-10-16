@@ -41,17 +41,21 @@ func (realProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.ChatResp
 	}
 	marker := ""
 	for _, m := range r.Messages {
-		if m.Role == llm.RoleUser && strings.Contains(m.Content, "fixture-real-a") {
-			marker = "fixture-real-a"
-		}
-		if m.Role == llm.RoleUser && strings.Contains(m.Content, "fixture-real-b") {
-			marker = "fixture-real-b"
+		if m.Role == llm.RoleUser {
+			for _, id := range []string{"fixture-real-a", "fixture-real-b", "fixture-source-leforge", "fixture-source-devcontainer", "fixture-source-dockerfile", "fixture-source-compose"} {
+				if m.Content == id {
+					marker = id
+				}
+			}
 		}
 	}
 	if marker == "" {
 		return nil, fmt.Errorf("unknown real fixture task")
 	}
 	command := `test "$(id -u)" = 10001; test ! -e result.txt; printf '%s\n' '` + marker + `' > result.txt; printf 'uid=%s workspace=%s result=' "$(id -u)" "$PWD"; cat result.txt`
+	if marker == "fixture-source-leforge" {
+		command += `; printf '{"lockfileVersion":3}' > package-lock.json`
+	}
 	args, err := json.Marshal(map[string]any{"argv": []string{"sh", "-ec", command}})
 	if err != nil {
 		return nil, err
@@ -101,7 +105,7 @@ func runReal() error {
 		return err
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, realProvider{})
-	ids := []string{"fixture-real-a", "fixture-real-b"}
+	ids := []string{"fixture-real-a", "fixture-real-b", "fixture-source-leforge", "fixture-source-devcontainer", "fixture-source-dockerfile", "fixture-source-compose"}
 	for _, id := range ids {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -112,6 +116,21 @@ func runReal() error {
 		}
 		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"real-shell-fixture"}`), 0644); err != nil {
 			return err
+		}
+		definitions := map[string]struct{ path, body string }{
+			"fixture-source-leforge":      {".leforge/environment.yaml", "image: alpine:3.22\nnetwork: {setup: none, run: none}\n"},
+			"fixture-source-devcontainer": {".devcontainer/devcontainer.json", `{"image":"alpine:3.22","postCreateCommand":"test $(id -u) = 10001"}`},
+			"fixture-source-dockerfile":   {"Dockerfile", "FROM alpine:3.22\nCOPY package.json /manifest\n"},
+			"fixture-source-compose":      {"compose.yaml", "services:\n  dev:\n    image: alpine:3.22\n"},
+		}
+		if definition, ok := definitions[id]; ok {
+			filename := filepath.Join(dir, definition.path)
+			if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filename, []byte(definition.body), 0644); err != nil {
+				return err
+			}
 		}
 		if err := os.Chmod(dir, 0777); err != nil {
 			return err

@@ -22,7 +22,7 @@ test('approved proposal builds a real sandbox; shell.exec writes isolated worksp
   const workdirs: string[] = [];
   for (const id of ['fixture-real-a', 'fixture-real-b']) {
     await page.goto(`/#/g/${id}/canvas`);
-    await page.getByRole('button', { name: 'Graph settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Graph settings', exact: true }).first().click();
     await page.getByRole('button', { name: 'Discover environment', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Environment analysis' })).toContainText('No environment definition found');
     await page.getByLabel('Start graph when the approved environment is ready').check();
@@ -66,4 +66,53 @@ test('approved proposal builds a real sandbox; shell.exec writes isolated worksp
   // own marker. Re-read the first workspace to prove it was not overwritten.
   await file(page, 'fixture-real-a');
   await expect(page.getByRole('region', { name: 'File contents' })).not.toContainText('fixture-real-b');
+  await page.goto('/#/g/fixture-real-a/canvas');
+  await page.getByRole('button', { name: 'Stop all', exact: true }).click();
+  await expect.poll(async () => (await read(page, 'fixture-real-a', 'status')).state).toBe('stopped');
+  await page.getByRole('button', { name: 'Graph settings', exact: true }).first().click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect.poll(async () => (await read(page, 'fixture-real-a', 'environment')).state).toBe('absent');
+  expect((await read(page, 'fixture-real-b', 'environment')).upToDate).toBe(true);
+  await exec('docker', ['exec', daemon, 'docker', 'image', 'inspect', image]);
+  await file(page, 'fixture-real-b');
+  await file(page, 'fixture-real-a');
+
 });
+
+for (const [source, path] of [
+  ['leforge', '.leforge/environment.yaml'], ['devcontainer', '.devcontainer/devcontainer.json'],
+  ['dockerfile', 'Dockerfile'], ['compose', 'compose.yaml'],
+]) {
+  test(`real ${source} discovery, acceptance, build and native shell execution`, async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('leforgeToken', 'e2e-admin-token'));
+    const id = `fixture-source-${source}`;
+    await page.goto(`/#/g/${id}/canvas`);
+    await page.getByRole('button', { name: 'Graph settings', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Discover environment', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Repository definition', exact: true }).selectOption(path);
+    if (source === 'compose') await page.getByRole('combobox', { name: 'Development service', exact: true }).selectOption('dev');
+    await page.getByRole('button', { name: 'Review environment', exact: true }).click();
+    await expect(page.getByLabel('Environment proposal', { exact: true })).toContainText('alpine:3.22');
+    expect((await read(page, id, 'environment')).state).toBe('absent');
+    await page.getByRole('button', { name: 'Accept into draft', exact: true }).click();
+    await page.getByRole('button', { name: 'Save graph', exact: true }).click();
+    await page.getByRole('button', { name: 'Build', exact: true }).click();
+    await expect.poll(async () => (await read(page, id, 'environment')).state, { timeout: 90000 }).toBe('ready');
+    const before = await read(page, id, 'environment');
+    await page.getByRole('button', { name: 'Run all', exact: true }).click();
+    await expect.poll(async () => (await read(page, id, 'executions')).map((e: { status: string }) => e.status)).toEqual(['succeeded']);
+    await file(page, id);
+    if (source === 'leforge') {
+      // The real agent wrote a new lockfile; the manager must invalidate reuse.
+      await page.goto(`/#/g/${id}/canvas`);
+      await page.getByRole('button', { name: 'Stop all', exact: true }).click();
+      await expect.poll(async () => (await read(page, id, 'status')).state).toBe('stopped');
+      await page.getByRole('button', { name: 'Graph settings', exact: true }).first().click();
+      await expect(page.getByText('Outdated', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Build', exact: true }).click();
+      await expect.poll(async () => (await read(page, id, 'environment')).upToDate).toBe(true);
+      expect((await read(page, id, 'environment')).sharedImage).not.toBe(before.sharedImage);
+    }
+  });
+}

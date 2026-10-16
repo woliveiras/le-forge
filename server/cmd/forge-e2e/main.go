@@ -80,7 +80,7 @@ func run() error {
 		return err
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
-	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume"} {
+	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
@@ -113,13 +113,15 @@ func run() error {
 
 		node := &g.Spec.Nodes[0]
 		switch id {
-		case "cpu-holder", "memory-holder":
+		case "cpu-holder", "memory-holder", "preparation-holder":
 			node.Loop = domain.LoopSpec{Mode: domain.LoopContinuous, Interval: domain.Duration(100 * time.Millisecond)}
-			if id == "cpu-holder" {
+			if id == "cpu-holder" || id == "preparation-holder" {
 				node.Isolation.CPU = "0.8"
 			} else {
 				node.Isolation.Memory = "224m"
 			}
+		case "preparation-waiter":
+			g.Spec.Environment = &domain.EnvironmentSpec{Image: "alpine:3.22", CPU: "0.4", Network: domain.EnvironmentNetwork{Setup: "none", Run: "none"}, Setup: []string{"echo preparation-completed"}}
 		case "cpu-waiter":
 			node.Isolation.CPU = "0.4"
 		case "memory-waiter":

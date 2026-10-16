@@ -10,11 +10,11 @@ legacy-resource deletion are not required for this release.
 
 | Contract | Existing evidence | Closure work |
 |---|---|---|
-| Priority, malformed input, containment | environment discovery/selection/context/stages unit tests; API discovery tests | Run final suites; real browser source matrix |
+| Priority, malformed input, containment | environment discovery/selection/context/stages unit tests; API discovery tests | Real browser matrix passed for all four sources; final suites pending |
 | Initial proposal gate, stale/rejected/cancelled/failed work | proposal analysis/proposals/agent_tools tests; browser proposal/recovery journeys | Run final suites |
-| Real shell, isolated workspaces and shared image | `make test-e2e-real`, reuse live tests | Extend real browser reset/rebuild coverage |
+| Real shell, isolated workspaces and shared image | `make test-e2e-real`, reuse live tests | Real browser Reset preservation and lockfile rebuild passed |
 | Cache seeds, lockfile invalidation, concurrent builders, failure cleanup | reuse unit/integration/live tests; cleanup unit/live tests | Run final suites |
-| CPU/memory/count, build/setup admission, cancellation | capacity and progress integration/live tests; browser recovery tests | Add browser preparation wait |
+| CPU/memory/count, build/setup admission, cancellation | capacity and progress integration/live tests; browser recovery tests | Browser preparation wait and subsequent setup passed |
 | Idle resume | engine sandbox_idle tests; `make test-sandbox-capacity`; browser recovery | Run final suites |
 | Network restrictions and diagnostics | policy/egress/history/retention tests; dedicated-daemon scripts | Run final network suites |
 | Representative mise repository | No completed example yet | Add runnable example and real validation |
@@ -22,3 +22,11 @@ legacy-resource deletion are not required for this release.
 Do not interpret unchecked legacy checklist rows as proof of missing code. This
 map separates existing evidence from the outstanding closure checks. Final
 commands and outcomes will be recorded here after execution.
+
+## Closure validation so far
+
+- `go test -tags e2e ./cmd/forge-e2e`: passed.
+- `make test-e2e`: 10 browser tests passed.
+- `make test-e2e-real`: 5 browser tests passed against the dedicated daemon.
+  Inference is scripted; approval, builds, native `shell.exec`, workspace writes,
+  invalidation and Reset use real components. No external model quality claim.
