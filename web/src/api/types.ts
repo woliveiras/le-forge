@@ -561,3 +561,19 @@ export interface EnvironmentProposal {
  resume: boolean;
  analysis?: { environment: EnvironmentSpec; rationale: string; tools: string[] };
 }
+
+export interface EnvironmentCleanupItem {
+  id: string;
+  image: string;
+  caches?: { path: string; volume: string }[];
+  usedBy?: string[];
+  eligible: boolean;
+  removed: boolean;
+  missing?: boolean;
+  error?: string;
+}
+
+export interface EnvironmentCleanupResult {
+  dryRun: boolean;
+  generations: EnvironmentCleanupItem[];
+}

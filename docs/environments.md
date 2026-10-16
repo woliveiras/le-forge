@@ -327,6 +327,23 @@ deleting workspaces; this budget does not cap the whole Docker VM.
 
 ### Cleanup of unused shared generations
 
+The console exposes this flow in **Integrations → Shared images and caches**
+for administrators. **Refresh preview** lists registered generations, their exact
+image and cache volumes, eligibility, inspection failures and reference reasons
+(`graph`, `definition`, `build`, `container`). Select up to 100 unused generations,
+then **Review cleanup** to inspect the exact resources before **Confirm cleanup**.
+Cancel sends no deletion request. Used or failed-to-inspect generations cannot be
+selected. Stopped/suspended tasks may still retain resources; reset or replace an
+environment only when it is no longer needed.
+
+Confirmation does not reserve resources: the server revalidates usage. The console
+reports each removed, retained, already absent or failed generation separately and
+refreshes the preview after every attempt. If the request fails, the outcome may
+be partial; selection is cleared and a fresh preview is required before retrying.
+This interface does not remove workspaces/private caches, discover unregistered
+historical resources, report disk sizes, or schedule automatic cleanup.
+
+
 Cleanup is an explicit admin operation, separate from Reset. It deletes only
 registered LeForge prepared images and immutable dependency-cache seeds. It
 does not delete workspaces, task-private caches, containers, arbitrary Docker

@@ -1,6 +1,7 @@
 import type {
   Approval,
   EnvironmentView,
+  EnvironmentCleanupResult,
   EnvironmentProposal,
   EnvironmentDiscovery,
   EnvironmentSelection,
@@ -176,6 +177,8 @@ export const api = {
   graphAction: (id: string, action: GraphAction) =>
     request<GraphStatus>(`${V1}/graphs/${enc(id)}/${action}`, { method: 'POST' }),
   status: (id: string) => request<GraphStatus>(`${V1}/graphs/${enc(id)}/status`),
+  previewEnvironmentCleanup: () => request<EnvironmentCleanupResult>(`${V1}/environments/cleanup`, { method: 'POST', body: { dryRun: true } }),
+  cleanupEnvironments: (generations: string[]) => request<EnvironmentCleanupResult>(`${V1}/environments/cleanup`, { method: 'POST', body: { dryRun: false, generations } }),
   environmentProposal: (id: string) => request<EnvironmentProposal | null>(`${V1}/graphs/${enc(id)}/environment/proposal`),
   proposeEnvironment: (id: string, resume: boolean) => request<EnvironmentProposal>(`${V1}/graphs/${enc(id)}/environment/proposal`, { method: 'POST', body: { resume } }),
   cancelEnvironmentProposal: (id: string) => request<EnvironmentProposal>(`${V1}/graphs/${enc(id)}/environment/proposal/cancel`, { method: 'POST' }),

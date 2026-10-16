@@ -275,6 +275,9 @@ not checkpoint process memory. Failed stop retains capacity; failed resume
 preserves inputs for retry. Explicit task teardown still removes its container
 while keeping mounted workspace data.
 See [idle lifecycle](sandbox-runtime.md#idle-suspension-and-task-resume).
+The admin console in Integrations now previews shared resources, explains retention,
+and requires selection plus confirmation of the exact images/cache volumes before
+cleanup. It reports partial failures and refreshes after each attempt.
 Explicit admin cleanup now reclaims unused registered shared generations after
 revalidating environment/build/container references under the reuse lease.
 Stopped containers and ready stopped tasks retain their references. Partial

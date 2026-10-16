@@ -1706,3 +1706,6 @@ section {
 .environment-blocker p {
   margin: 0;
 }
+
+.shared-resource { overflow-wrap: anywhere; }
+.shared-resource input[type='checkbox'] { margin-right: 6px; }

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { Info, ToolInfo } from '../api/types';
 import { useAsync } from '../hooks/useData';
 import { Badge, Btn, ErrorBox } from './common';
+import { SharedEnvironmentsSection } from './SharedEnvironmentsSection';
 import { ProvidersSection, type ProvidersHandle } from './ProvidersSection';
 
 type ProbeState = 'checking' | 'ok' | 'warning' | 'error';
@@ -136,6 +137,8 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
           </p>
         )}
       </section>
+
+      <SharedEnvironmentsSection canManage={role === 'admin'} />
 
       <ProvidersSection ref={providersRef} canEdit={role === 'admin'} canTest={role === 'admin' || role === 'operator'} />
 
