@@ -231,3 +231,63 @@ func TestBuildTargetReviewPersistenceAndValidation(t *testing.T) {
 		t.Fatalf("Docker called before target validation: %s", data)
 	}
 }
+
+func TestExternalCopyReviewSaveAndRevalidation(t *testing.T) {
+	root := t.TempDir()
+	bin, log := fakeDaemonCLI(t)
+	srv, _ := setupApp(t, func(c *config.Config) { c.Workspaces.Root = root; c.Isolation.Docker.Bin = bin })
+	const base = "/api/v1/graphs/externalcopy"
+	doc := "apiVersion: leforge.io/v1\nkind: Graph\nmetadata: {name: externalcopy}\nspec:\n  nodes: [{id: worker, runtime: {kind: echo}}]\n"
+	if code := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", doc, nil); code != 201 {
+		t.Fatalf("create %d", code)
+	}
+	dir := filepath.Join(root, "externalcopy")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(ref string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM alpine\nCOPY --from="+ref+" /etc/alpine-release /release\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resolve := func(env *domain.EnvironmentSpec) int {
+		t.Helper()
+		var discovery environment.Discovery
+		if code := call(t, srv, "GET", base+"/environment/discovery", viewerTok, "", "", &discovery); code != 200 {
+			t.Fatalf("discover %d", code)
+		}
+		selection, _ := json.Marshal(environment.Selection{Source: discovery.Source, Path: discovery.Candidates[0].Path, SHA256: discovery.Candidates[0].SHA256})
+		return call(t, srv, "POST", base+"/environment/resolve", viewerTok, "application/json", string(selection), env)
+	}
+	write("https://invalid.example/image")
+	var env domain.EnvironmentSpec
+	if code := resolve(&env); code != 400 {
+		t.Fatalf("invalid reference %d", code)
+	}
+	write("registry.example:5000/team/tools:v1")
+	if code := resolve(&env); code != 200 || !strings.Contains(env.Dockerfile, "--from=registry.example:5000/team/tools:v1") {
+		t.Fatalf("review %d %+v", code, env)
+	}
+	var saved struct {
+		Graph domain.Graph `json:"graph"`
+	}
+	if code := call(t, srv, "GET", base, viewerTok, "", "", &saved); code != 200 {
+		t.Fatalf("get %d", code)
+	}
+	saved.Graph.Spec.Environment = &env
+	body, _ := json.Marshal(saved.Graph)
+	if code := callIfMatch(t, srv, "PUT", base, adminTok, string(body), 1, &saved); code != 200 {
+		t.Fatalf("save %d", code)
+	}
+	if saved.Graph.Spec.Environment.Dockerfile != env.Dockerfile {
+		t.Fatal("external image reference not persisted")
+	}
+	write("registry.example:5000/team/tools:v2")
+	if code := call(t, srv, "POST", base+"/environment/build", operatorTok, "application/json", `{}`, nil); code != 400 {
+		t.Fatalf("changed image bypassed review %d", code)
+	}
+	if data, err := os.ReadFile(log); err == nil && strings.TrimSpace(string(data)) != "" {
+		t.Fatalf("review/save/stale validation invoked Docker: %s", data)
+	}
+}

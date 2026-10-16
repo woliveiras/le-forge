@@ -180,7 +180,7 @@ func TestCopyAndAddLocalOperands(t *testing.T) {
 			t.Fatalf("%s: %v", command, err)
 		}
 	}
-	for _, command := range []string{"COPY ../outside /app", "ADD https://example.com/file /app", "ADD git@github.com:org/repo /app", "COPY $SOURCE /app", "COPY /etc/passwd /app", "COPY --from=other /file /app", `COPY ["app"]`, "COPY app"} {
+	for _, command := range []string{"COPY ../outside /app", "ADD https://example.com/file /app", "ADD git@github.com:org/repo /app", "COPY $SOURCE /app", "COPY /etc/passwd /app", "COPY --from=other@ /file /app", `COPY ["app"]`, "COPY app"} {
 		if err := validateRepositoryDockerfile("FROM alpine\n" + command); err == nil {
 			t.Fatalf("accepted %s", command)
 		}

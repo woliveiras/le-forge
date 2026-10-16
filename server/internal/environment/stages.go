@@ -6,11 +6,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/distribution/reference"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 )
 
-// parseCopy keeps stage paths distinct from repository paths. Only local stages
-// are accepted: an unknown name must never silently become a registry pull.
+// parseCopy keeps stage/image filesystem paths distinct from repository paths.
 func parseCopy(instruction, arguments string) (string, []string, error) {
 	from := ""
 	if strings.HasPrefix(arguments, "--from=") && instruction == "COPY" {
@@ -69,9 +69,19 @@ func validateStageCopies(source string) error {
 		}
 		parent, ok := names[strings.ToLower(from)]
 		if !ok {
-			parent, err = strconv.Atoi(from)
-			if err != nil || parent < 0 || parent >= len(stages) || strconv.Itoa(parent) != from {
-				return fmt.Errorf("COPY --from %q must reference a stage name or zero-based index; external images are not supported", from)
+			// Numeric references always denote stages, never registry names.
+			numeric := strings.TrimLeft(from, "+-")
+			if numeric != "" && strings.Trim(numeric, "0123456789") == "" {
+				parent, err = strconv.Atoi(from)
+				if err != nil || parent < 0 || parent >= len(stages) || strconv.Itoa(parent) != from {
+					return fmt.Errorf("COPY --from stage index is invalid")
+				}
+			} else {
+				if _, err := reference.ParseNormalizedNamed(from); err != nil || from == "scratch" {
+					// Do not echo malformed input: it could contain embedded credentials.
+					return fmt.Errorf("COPY --from requires a valid container image reference or Dockerfile stage")
+				}
+				continue // External image: no local dependency edge.
 			}
 		}
 		edges[current] = append(edges[current], parent)

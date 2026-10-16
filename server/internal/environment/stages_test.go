@@ -31,8 +31,8 @@ func TestStageCopyValidationAndRewriting(t *testing.T) {
 		"FROM alpine AS build\nCOPY --from=build /out /app",
 		"FROM alpine AS a\nCOPY --from=b /out /app\nFROM a AS b",
 		"FROM alpine\nCOPY --from=9 /out /app",
-		"FROM alpine\nCOPY --from=alpine:3.22 /out /app",
-		"FROM alpine AS build\nFROM alpine\nCOPY --from=missing /out /app",
+		"FROM alpine\nCOPY --from=https://registry.example/image /out /app",
+		"FROM alpine AS build\nFROM alpine\nCOPY --from=missing@ /out /app",
 		"FROM alpine AS build\nFROM alpine\nADD --from=build /out /app",
 		"FROM alpine AS build\nFROM alpine\nCOPY --from=build --chown=0 /out /app",
 		"FROM alpine AS build\nFROM alpine\nCOPY --from=build ../outside /app",
@@ -92,5 +92,30 @@ func TestResolveBuildTargets(t *testing.T) {
 				t.Fatal("accepted invalid target selection")
 			}
 		})
+	}
+}
+
+func TestExternalImageCopies(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	for _, image := range []string{"alpine", "alpine:3.22", "docker.io/library/alpine:3.22", "registry.example:5000/team/tools:v1", "alpine@" + digest, "alpine:3.22@" + digest} {
+		source := "FROM alpine AS runtime\nCOPY --from=" + image + " [\"/file with spaces\",\"/app/\"]\n"
+		if err := validateRepositoryDockerfile(source); err != nil {
+			t.Fatalf("%s: %v", image, err)
+		}
+		rewritten, err := contextBuildfile(source)
+		if err != nil || !strings.Contains(rewritten, "COPY --from="+image+" [\"/file with spaces\",\"/app/\"]") {
+			t.Fatalf("image copy changed: %s %v", rewritten, err)
+		}
+	}
+	for _, image := range []string{"$IMAGE", "https://example.com/image", "user:password@example.com/image", "alpine@sha256:bad", "alpine:", "UPPERCASE", "scratch", "999999999999999999999999", "-1", "+0", "00"} {
+		source := "FROM alpine\nCOPY --from=" + image + " /out /app\n"
+		if err := validateRepositoryDockerfile(source); err == nil {
+			t.Fatalf("accepted %s", image)
+		}
+	}
+	// Existing names take precedence over shorthand external images, including
+	// self/cyclic references. They must not silently switch to registry pulls.
+	if err := validateRepositoryDockerfile("FROM alpine AS alpine\nCOPY --from=alpine /file /file"); err == nil {
+		t.Fatal("stage/image collision bypassed cycle detection")
 	}
 }

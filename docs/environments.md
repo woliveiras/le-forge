@@ -42,7 +42,7 @@ Supported inputs in this first version:
   JSON comments, trailing commas and other fields produce an explicit error.
 - Dockerfiles: local `COPY` and `ADD` (including local archives), with the repository
   root as the default context. `ONBUILD`, remote ADD, custom parser directives,
-  instruction flags other than `COPY --from=<stage>` and heredocs are not supported.
+  instruction flags other than `COPY --from=<stage-or-image>` and heredocs are not supported.
   Use JSON array operands for filenames containing spaces.
 - Compose: select one service containing only `image` or `build`. Build accepts
   a local context path, optional Dockerfile path and optional named `target`. Only that context is uploaded.
@@ -94,12 +94,35 @@ It removes only its own temporary test images and containers.
 
 ### Multi-stage builds
 
-`COPY --from=<stage>` accepts a stage name or zero-based index from the same
-Dockerfile, including forward references without cycles. Paths are resolved
-inside that stage; they are never rewritten as repository context paths.
-Unknown names, external images/named external contexts, invalid indices,
-self-references, cycles, and additional COPY flags fail validation before build.
+`COPY --from=<stage-or-image>` accepts a local stage name, a zero-based stage
+index, or a container image reference. Local stages take precedence over image
+names; forward stage references are supported when they do not form a cycle.
+Paths are resolved inside the stage or image, never rewritten as repository
+context paths. Invalid image references, invalid indices, self-references, cycles,
+and additional COPY flags fail validation before build. Named external build
+contexts are not configured by LeForge.
 Use JSON operands for paths with spaces. `ADD --from` is not supported.
+
+External images support familiar names (`alpine`), tags (`alpine:3.22`), registry
+hosts/ports, and digests (`alpine@sha256:…`). A name that does not match a local
+stage is interpreted as an image, so review the reference shown in the Dockerfile.
+URLs, embedded credentials, variable substitution and malformed digests are
+rejected. For example:
+
+```dockerfile
+FROM alpine:3.22
+COPY --from=alpine:3.22 /etc/alpine-release /copied-release
+```
+
+Discovery, review and save validate syntax locally; they do not access a registry.
+Docker resolves the external image on the dedicated daemon during build. Registry,
+authorization and missing-file failures are reported as failed builds. This feature
+does not install credentials or change registry authentication.
+
+Acceptance and cache identity track the written image reference, not the current
+registry content behind a mutable tag. Use a digest for immutable inputs. A ready
+cached environment does not check whether tags moved; force a rebuild to resolve
+them again. Changing the written reference requires review and acceptance again.
 
 For a standalone Dockerfile, discovery lists its named stages. Choose **Build
 stage** before reviewing and accepting; the default builds the final stage.
@@ -123,7 +146,8 @@ the image hash. Changing it requires another review. LeForge passes `--target`
 only to the project build, then adds its sandbox user layer on the resulting
 image. The selected stage must still provide `/bin/sh` for that layer.
 The real sandbox test also covers named/indexed stage copies, explicit/default
-targets, isolated target builds and dependency failures.
+targets, isolated target builds and dependency failures. It also checks external
+image copies by tag and digest, and an unavailable registry.
 
 ## Usage from the browser
 

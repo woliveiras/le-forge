@@ -177,7 +177,10 @@ save and build. The validated tar snapshot is sent to the dedicated daemon.
 Named build targets are selectable for standalone Dockerfiles and supported via
 LeForge `target` and Compose `build.target`. The accepted target contributes to
 the image hash. COPY --from supports local stage names/indices with cycle
-validation; external image/context sources and other COPY flags remain unsupported. These are conservative input restrictions, not a
+validation and syntactically validated external image names, tags and digests.
+Local stages take precedence; unmatched names resolve as images during build.
+Acceptance tracks literal references, not mutable registry tag contents. External
+named build contexts and other COPY flags remain unsupported. These are conservative input restrictions, not a
 new installation-wide policy configuration. Missing/unreadable checkouts or scan
 limits return an error, never a fallback. Discovery does not clone a repository.
 

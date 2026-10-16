@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -185,5 +186,53 @@ RUN echo runtime > /stage
 		t.Fatalf("stage dependency failure: %+v", broken)
 	}
 	t.Log("named/numeric COPY --from, explicit/default targets, target-specific images and dependency failure verified in real sandbox")
+
+	// Obtain the public image digest through the sandbox Docker CLI, then exercise
+	// tag and immutable digest sources in the same real build.
+	out.Reset()
+	if err := manager.docker(context.Background(), nil, &out, "buildx", "imagetools", "inspect", "alpine:3.22", "--format", "{{json .Manifest}}"); err != nil {
+		t.Fatalf("image digest: %v %s", err, out.String())
+	}
+	var descriptor struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &descriptor); err != nil {
+		t.Fatalf("decode registry descriptor: %v", err)
+	}
+	imageDigest := "alpine@" + descriptor.Digest
+	if !strings.Contains(imageDigest, "@sha256:") {
+		t.Fatalf("unexpected image digest %q", imageDigest)
+	}
+	writeDiscoveryFile(t, dir, "Dockerfile", "FROM alpine:3.22 AS runtime\nCOPY --from=alpine:3.22 /etc/alpine-release /release-tag\nCOPY --from="+imageDigest+" /etc/alpine-release /release-digest\n")
+	env, err = Resolve(context.Background(), dir, discoverSelection(t, dir, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Spec.Environment = env
+	if _, err := manager.Build(context.Background(), g, false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	external := wait()
+	if external.State != StateReady {
+		t.Fatalf("external image build: %s\n%s", external.Error, external.Log)
+	}
+	out.Reset()
+	if err := manager.docker(context.Background(), nil, &out, "run", "--rm", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--entrypoint", "sh", external.Image, "-ec", `test "$(id -u)" = 10001; test "$(wc -l < /proc/net/route)" -eq 1; cmp /etc/alpine-release /release-tag; cmp /release-tag /release-digest`); err != nil {
+		t.Fatalf("external copy sandbox: %v %s", err, out.String())
+	}
+	// A deterministic registry connection failure must be a failed build, not ready.
+	writeDiscoveryFile(t, dir, "Dockerfile", "FROM alpine:3.22\nCOPY --from=127.0.0.1:1/leforge/unavailable:v1 /file /file\n")
+	env, err = Resolve(context.Background(), dir, discoverSelection(t, dir, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Spec.Environment = env
+	if _, err := manager.Build(context.Background(), g, false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if unavailable := wait(); unavailable.State != StateFailed || unavailable.Error == "" {
+		t.Fatalf("registry failure: %+v", unavailable)
+	}
+	t.Log("external image copies by tag and digest verified as uid 10001 without network; registry failure reported correctly")
 
 }

@@ -3,6 +3,7 @@ module github.com/woliveiras/le-forge/server
 go 1.26.0
 
 require (
+	github.com/distribution/reference v0.6.0
 	github.com/expr-lang/expr v1.17.8
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/moby/patternmatcher v0.6.1
@@ -43,6 +44,7 @@ require (
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.30 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
