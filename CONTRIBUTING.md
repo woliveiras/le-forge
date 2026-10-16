@@ -102,7 +102,11 @@ make up           # full stack via docker compose
 ```
 
 `make build`, `make test-go` and `make lint` still use Docker even when Go is
-installed locally. For native Go development, run `go test ./...`, `go vet ./...`
+installed locally. Go tests build a cached toolchain image from
+`scripts/Dockerfile.go-test`, adding Git for real repository/worktree integration
+tests. The first build needs access to Alpine packages; `GO_IMAGE` overrides
+must remain Alpine-based. Git is installed inside that development image, not
+on the host or in a project sandbox. For native Go development, run `go test ./...`, `go vet ./...`
 and `go build ./...` from `server/`; see
 [running without Docker](docs/getting-started.md#5-run-without-docker) for native
 binaries and startup instructions. `make test-python` and `make test-web` run
