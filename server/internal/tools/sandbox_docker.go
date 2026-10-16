@@ -26,6 +26,7 @@ type EgressConfig struct {
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
 	// ValidateAdmission rechecks installation policy on start/resume, including after capacity waits.
+	BeforeRemove       func(context.Context) error
 	ValidateAdmission  func(context.Context) error
 	Egress             *EgressConfig
 	RequireStandalone  bool

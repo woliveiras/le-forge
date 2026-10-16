@@ -316,6 +316,11 @@ func (s *ComposeSandbox) Close() error {
 	defer s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	if s.main.cfg.BeforeRemove != nil {
+		if err := s.main.cfg.BeforeRemove(ctx); err != nil {
+			return fmt.Errorf("capture proxy history before removal: %w", err)
+		}
+	}
 	for _, name := range s.names() {
 		exists, err := s.owned(ctx, "container", name)
 		if err != nil {

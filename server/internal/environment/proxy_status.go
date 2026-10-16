@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,7 +17,10 @@ import (
 const proxyHistoryNamespace = "environment-proxy"
 const proxySampleLimit = 100
 
+var proxyEventID = regexp.MustCompile(`^egress_[a-z0-9]{1,60}$`)
+
 type ProxyRequest struct {
+	EventID    string    `json:"eventId,omitempty"`
 	Time       time.Time `json:"time"`
 	Host       string    `json:"host"`
 	Outcome    string    `json:"outcome"`
@@ -48,6 +52,9 @@ func parseProxyRequests(data []byte) []ProxyRequest {
 		}
 		if json.Unmarshal(line, &raw) != nil || raw.Message != "egress request" || raw.Time.IsZero() || raw.DurationMS < 0 || raw.DurationMS > 24*60*60*1000 {
 			continue
+		}
+		if !proxyEventID.MatchString(raw.EventID) {
+			raw.EventID = ""
 		}
 		switch raw.Outcome {
 		case "allowed", "denied", "failed":
@@ -148,6 +155,9 @@ func (m *Manager) ProxyStatus(ctx context.Context, graph string) (ProxyView, err
 func (m *Manager) capturePreparationProxy(ctx context.Context, graph string) error {
 	v, err := m.readProxyStatus(ctx, preparationProxy(graph), graph)
 	if err != nil {
+		return err
+	}
+	if err := m.saveBlocked(ctx, graph, []ProxyStatus{v}); err != nil {
 		return err
 	}
 	data, err := json.Marshal(v)

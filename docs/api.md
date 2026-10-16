@@ -251,3 +251,10 @@ The `forge` CLI wraps these calls (`forge help`).
 | `/info.identity` | not specified | `{"name","role"}` of the caller |
 | Event `replica` | number | Always present; `-1` means the node as a whole |
 | Error codes | listed | Also `rate_limited`, `llm_error`, `no_answer` (callbacks) |
+
+`GET /api/v1/graphs/{id}/environment/blocked-history` (viewer+) returns
+`requests` (newest first; safe proxy request fields plus `proxy` and `phase`),
+`retentionDays: 7`, `limit: 1000`, and optional `collectedAt` (last successful
+collection). It reads shared storage independently of Docker and applies retention.
+Unknown graphs return 404; storage/corruption failures return an error, not an
+empty successful history. This sampled diagnostic history is not a complete audit.

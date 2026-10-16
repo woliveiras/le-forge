@@ -110,7 +110,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	outcome, host, reason := "denied", "", "invalid_destination"
 	defer func() {
-		p.log.Info("egress request", "host", host, "outcome", outcome, "reason", reason, "durationMs", time.Since(start).Milliseconds())
+		p.log.Info("egress request", "eventId", domain.NewID("egress"), "host", host, "outcome", outcome, "reason", reason, "durationMs", time.Since(start).Milliseconds())
 	}()
 	select {
 	case p.slots <- struct{}{}:

@@ -949,9 +949,9 @@ Before removing the preparation proxy, the controller stores one bounded snapsho
 in shared storage. The last captured preparation remains visible after cleanup,
 including its capture time and state at capture, until replaced by another snapshot
 or removed by environment reset. Snapshot failures produce a build-log warning and
-do not make a successful build fail. Runtime history follows Docker log retention
-and disappears when the corresponding proxy container is removed. This is not a
-persistent audit trail or a streaming monitoring system.
+do not make a successful build fail. Current runtime samples follow Docker log retention. Collected denials also persist
+in the bounded history described below. This is not a complete audit trail or a
+streaming monitoring system.
 
 On upgrade, rebuild the trusted proxy image with `make egress-image` to emit the
 new reason codes, and stop/start older tasks to create proxy containers with the
@@ -963,3 +963,35 @@ installation resources remains an explicit operator action.
 suspended state and preparation snapshots after cleanup on the dedicated daemon.
 Unit, storage/API and UI integration tests cover data projection, malformed logs,
 ownership, bounded samples, failures, roles, refresh and stale-data handling.
+
+### Persistent blocked-access history (implemented)
+
+The environment and agent diagnostics include an independently refreshed history
+of collected `denied` requests, newest first. Each graph retains at most **1,000
+blocks for seven days**, shared across its runtime and preparation proxies. These
+are fixed bounds in this version, not editable installation settings. Successful
+and failed upstream requests are not retained here. Safe fields include event ID,
+time, hostname, reason, duration, proxy name and phase; no raw logs or request URLs.
+
+A controller collects every ten seconds (a slow collection can delay the next
+cycle), even with the UI closed, and captures before managed proxy removal.
+Storage compare-and-set prevents concurrent collectors from overwriting each
+other. Updated proxy images emit event IDs; older identical records use their
+projected fields for deduplication and may collapse indistinguishable events.
+History survives controller restarts, container removal and environment resets.
+Age and count bounds apply on collection and reads; background sweeps expire data
+for deleted graphs too. While controllers are offline, physical expiration waits
+until restart. Empty expired histories are removed.
+
+The history API works without Docker. The panel shows the last successful
+collection time; collection/storage failures are logged, and failed refreshes do
+not display stale history as current. Runtime removal returns an error if its
+final capture fails, preserving containers for retry; preparation capture failures
+remain explicit build warnings. Samples are still limited to 100 log lines per
+proxy, 24 hours and 32 proxies per graph: bursts, log rotation, daemon outages,
+external container deletion and open CONNECT tunnels can cause gaps. This is a
+bounded diagnostic history, not a guaranteed security audit. Rebuild the trusted
+proxy image to emit stable event IDs.
+
+`make test-egress` verifies retained runtime and preparation denials after real
+container cleanup, controller recreation, and rejection of expired records.

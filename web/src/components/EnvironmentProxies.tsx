@@ -14,7 +14,7 @@ export function EnvironmentProxies({ graphId }: { graphId: string }) {
   const [open, setOpen] = useState(false);
   return <section aria-label="Environment proxy diagnostics">
     <Btn small aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? 'Hide proxy diagnostics' : 'Show proxy diagnostics'}</Btn>
-    {open && <ProxyDiagnostics key={graphId} graphId={graphId} />}
+    {open && <div key={graphId}><ProxyDiagnostics graphId={graphId} /><BlockedHistory graphId={graphId} /></div>}
   </section>;
 }
 function ProxyCard({ proxy, historical = false }: { proxy: ProxyStatus; historical?: boolean }) {
@@ -51,6 +51,23 @@ function ProxyDiagnostics({ graphId }: { graphId: string }) {
       {status.data.proxies.map(proxy => <ProxyCard key={proxy.name} proxy={proxy} />)}
       {status.data.lastPreparation && <ProxyCard proxy={status.data.lastPreparation} historical />}
     </>}
-    <p>The last preparation snapshot survives container cleanup until the next captured preparation or environment reset. Runtime samples disappear when their containers are removed. Direct connections blocked by network isolation do not produce proxy logs.</p>
+    <p>The last preparation snapshot survives container cleanup until the next captured preparation or environment reset. Current runtime samples disappear when their containers are removed; collected blocks remain in the persistent history below. Direct connections blocked by network isolation do not produce proxy logs.</p>
   </>;
+}
+
+function BlockedHistory({ graphId }: { graphId: string }) {
+  const history = useAsync(() => api.environmentBlockedHistory(graphId), [graphId]);
+  return <article className="integration-card">
+    <h4>Persistent blocked access history</h4>
+    <p>Collected every 10 seconds and before proxy removal. Bursts, unavailable Docker or abrupt removal can leave gaps. This is not a complete audit log.</p>
+    <Btn small disabled={history.loading} onClick={() => void history.reload()}>Refresh blocked history</Btn>
+    <ErrorBox error={history.error} />
+    {history.loading ? <p>Reading blocked history…</p> : !history.error && history.data && <>
+      <p>Retention: {history.data.retentionDays} days · up to {history.data.limit} blocks per environment.</p>
+      <p>{history.data.collectedAt ? `Last successful collection: ${fmtDateTime(history.data.collectedAt)}` : 'No successful collection recorded yet.'}</p>
+      {history.data.requests.length === 0 ? <p>No retained blocks.</p> : <ul>{history.data.requests.map((request, index) => <li key={`${request.time}-${index}`}>
+        {fmtDateTime(request.time)} · {request.phase} · {request.proxy} · {request.host || 'Destination not recorded'} · {reasons[request.reason] ?? 'Reason not recorded'}
+      </li>)}</ul>}
+    </>}
+  </article>;
 }

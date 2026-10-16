@@ -278,3 +278,34 @@ func TestStandaloneCannotAdoptProxyGroup(t *testing.T) {
 		t.Fatal("adopted group container", string(data))
 	}
 }
+
+func TestComposeFinalCaptureFailurePreservesContainers(t *testing.T) {
+	cfg, dir := composeFixture(t)
+	failed := true
+	cfg.BeforeRemove = func(context.Context) error {
+		if failed {
+			return errors.New("history storage unavailable")
+		}
+		return nil
+	}
+	s, err := NewComposeSandbox(cfg, fixtureCompanions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err == nil {
+		t.Fatal("capture failure hidden")
+	}
+	if _, err := os.Stat(filepath.Join(dir, cfg.Name+".hash")); err != nil {
+		t.Fatal("container removed before capture", err)
+	}
+	failed = false
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, cfg.Name+".hash")); !os.IsNotExist(err) {
+		t.Fatal("retry did not remove container", err)
+	}
+}

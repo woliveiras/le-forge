@@ -335,6 +335,12 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				bus.Publish(context.Background(), domain.NewEvent("sandbox.capacity", s.Graph.Metadata.ID, map[string]any{"node": s.Node.ID, "replica": s.Replica, "state": state}))
 			}
 			sandboxConfig := tools.DockerSandboxConfig{
+				BeforeRemove: func(ctx context.Context) error {
+					if net != "egress" || envs == nil {
+						return nil
+					}
+					return envs.CollectBlockedHistory(ctx, s.Graph.Metadata.ID)
+				},
 				ValidateAdmission: func(admissionCtx context.Context) error {
 					current, err := (environmentpolicy.Settings{Store: store, Base: cfg.Isolation.Docker.EnvironmentPolicy}).Effective(admissionCtx)
 					if err != nil {
@@ -471,6 +477,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.Bootstrap(ctx); err != nil {
 		return err
 	}
+	historyCtx, stopHistory := context.WithCancel(ctx)
+	historyDone := make(chan struct{})
+	go func() { defer close(historyDone); a.Environments.RunProxyHistory(historyCtx) }()
+	defer func() { stopHistory(); <-historyDone }()
 	go a.refreshProviders(ctx)
 	go a.Proposals.Run(ctx)
 	srv := &http.Server{
@@ -510,6 +520,8 @@ func (a *App) Run(ctx context.Context) error {
 	if internal != nil {
 		_ = internal.Shutdown(sctx)
 	}
+	stopHistory()
+	<-historyDone
 	return a.Close(sctx)
 }
 

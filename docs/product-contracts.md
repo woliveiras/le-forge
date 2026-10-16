@@ -319,8 +319,12 @@ at most 32 proxies and 100 recent log lines per proxy, not lifetime counters.
 Running means process state, not connectivity health; direct network-layer blocks
 and still-open CONNECT tunnels are outside the completed-request sample.
 Older containers require recreation for monitoring labels; reason codes require
-an updated trusted proxy image. Long-term audit history and streaming monitoring
-remain outside this delivered subset.
+an updated trusted proxy image. Collected denials persist independently of Docker
+for seven days, up to 1,000 per graph, and survive resets/controller restarts.
+Background collection and final lifecycle capture use concurrent-safe shared
+storage. The separate history endpoint and panel disclose retention and last
+successful collection. Sampling gaps remain possible; guaranteed audit delivery,
+configurable retention and streaming monitoring remain planned/outside this subset.
 
 #### Delivered reuse subset
 

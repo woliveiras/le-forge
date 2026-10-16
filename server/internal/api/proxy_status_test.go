@@ -30,6 +30,18 @@ esac
 		t.Fatal(code)
 	}
 	for _, token := range []string{viewerTok, operatorTok, adminTok} {
+		var history environment.BlockedHistory
+		if code := call(t, srv, "GET", "/api/v1/graphs/proxy-project/environment/blocked-history", token, "", "", &history); code != 200 || history.Limit != 1000 || history.RetentionDays != 7 {
+			t.Fatal(code, history)
+		}
+	}
+	if code := call(t, srv, "GET", "/api/v1/graphs/missing/environment/blocked-history", viewerTok, "", "", nil); code != 404 {
+		t.Fatal(code)
+	}
+	if code := call(t, srv, "GET", "/api/v1/graphs/proxy-project/environment/blocked-history", "", "", "", nil); code != 401 {
+		t.Fatal(code)
+	}
+	for _, token := range []string{viewerTok, operatorTok, adminTok} {
 		var view environment.ProxyView
 		if code := call(t, srv, "GET", "/api/v1/graphs/proxy-project/environment/proxies", token, "", "", &view); code != 200 || len(view.Proxies) != 1 || view.Proxies[0].State != "exited" || len(view.Proxies[0].Requests) != 1 {
 			t.Fatal(code, view)
@@ -43,6 +55,9 @@ esac
 	}
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
 		t.Fatal(err)
+	}
+	if code := call(t, srv, "GET", "/api/v1/graphs/proxy-project/environment/blocked-history", viewerTok, "", "", nil); code != 200 {
+		t.Fatal(code)
 	}
 	if code := call(t, srv, "GET", "/api/v1/graphs/proxy-project/environment/proxies", viewerTok, "", "", nil); code != 500 {
 		t.Fatal(code)

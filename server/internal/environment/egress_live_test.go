@@ -100,6 +100,16 @@ func TestPreparationEgressRealSandbox(t *testing.T) {
 	if statusErr != nil || len(status.Proxies) != 0 || status.LastPreparation == nil || len(status.LastPreparation.Requests) == 0 {
 		t.Fatal("preparation diagnostics did not survive cleanup", status, statusErr)
 	}
+	history, historyErr := (&Manager{opt: m.opt}).BlockedHistory(ctx, id)
+	if historyErr != nil || len(history.Requests) == 0 {
+		t.Fatal("preparation history lost after cleanup", history, historyErr)
+	}
+	expired := history.Requests[0]
+	expired.Time = time.Now().Add(-8 * 24 * time.Hour)
+	retained, historyErr := m.updateBlocked(ctx, id, []BlockedRequest{expired}, false)
+	if historyErr != nil || len(retained.Requests) != len(history.Requests) {
+		t.Fatal("retention failed", retained, historyErr)
+	}
 	var out bytes.Buffer
 	if err := m.docker(ctx, nil, &out, "run", "--rm", "--network", "none", "--entrypoint", "sh", image, "-c", `test "$(cat /tmp/setup-proof)" = setup-ok && test -z "$HTTP_PROXY$HTTPS_PROXY$http_proxy$https_proxy"`); err != nil {
 		t.Fatalf("committed image: %s %v", out.String(), err)

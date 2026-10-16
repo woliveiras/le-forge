@@ -289,3 +289,18 @@ func (s *Server) environmentProxies(w http.ResponseWriter, r *http.Request) erro
 	writeJSON(w, http.StatusOK, result)
 	return nil
 }
+
+func (s *Server) environmentBlockedHistory(w http.ResponseWriter, r *http.Request) error {
+	if _, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), 0); err != nil {
+		return err
+	}
+	if s.Environments == nil {
+		return engine.ErrNotFound
+	}
+	result, err := s.Environments.BlockedHistory(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, result)
+	return nil
+}

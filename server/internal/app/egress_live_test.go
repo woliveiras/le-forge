@@ -150,5 +150,17 @@ func TestEgressRealSandbox(t *testing.T) {
 	if _, err := sandbox.Exec(ctx, tools.ExecRequest{Shell: "/probe http://example.com"}); err == nil {
 		t.Fatal("proxy failure not propagated")
 	}
+	if err := sandbox.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := environment.New(environment.Options{Store: store, Workspaces: egressWorkspace(id + "-workspace"), DockerBin: bin, Policy: cfg.Isolation.Docker.EnvironmentPolicy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := restored.BlockedHistory(ctx, id)
+	if err != nil || len(history.Requests) == 0 || history.Limit != 1000 {
+		t.Fatal("runtime history lost after container removal/controller recreation", history, err)
+	}
+	t.Logf("Retained %d denied requests after real proxy removal", len(history.Requests))
 	t.Log("HTTP/HTTPS allowed, unlisted hosts/private IPs/direct egress blocked, suspension/resume, persisted policy revocation/restoration and proxy failure verified")
 }
