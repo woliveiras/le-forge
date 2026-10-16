@@ -16,3 +16,5 @@ web/dist/
 server/bin
 web/playwright-report/
 web/test-results/
+web/playwright-report-real/
+web/test-results-real/

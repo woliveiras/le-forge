@@ -85,3 +85,8 @@ clean: ## Remove build outputs
 test-e2e: ## Chromium browser journey against a disposable backend (Go, Node, Git, Playwright Chromium required)
 	cd server && go test -tags e2e ./cmd/forge-e2e
 	cd web && npm run test:e2e
+
+.PHONY: test-e2e-real
+test-e2e-real: ## Browser journey with shell.exec on the running dedicated sandbox daemon
+	cd server && go test -tags e2e ./cmd/forge-e2e
+	cd web && npm run test:e2e:real

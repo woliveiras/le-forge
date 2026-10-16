@@ -614,6 +614,10 @@ and real container behavior. Browser recovery tests cover CPU-only/memory-only
 execution waits, cancellation and retry, and idle suspension/resume with workspace
 contents preserved. The fixture models Docker lifecycle; `make test-sandbox-capacity`
 verifies the corresponding real daemon resource limits and preservation.
+`make test-e2e-real` additionally runs Chromium through proposal, administrator
+approval, build and native `shell.exec` on the dedicated daemon, then repeats the
+journey with compatible image reuse and distinct workspace files. Only model
+inference is scripted; see the [real-browser setup](../web/README.md#browser-journey-with-the-real-sandbox).
 
 CPU admission shares the same durable reservation as memory/count throughout
 sequential build, setup and cache copies. The default per-pipeline CPU request is

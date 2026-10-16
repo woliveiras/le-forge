@@ -1,0 +1,51 @@
+//go:build e2e
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/woliveiras/le-forge/server/internal/llm"
+)
+
+func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
+	p := realProvider{}
+	for _, id := range []string{"fixture-real-a", "fixture-real-b"} {
+		response, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: id}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(response.Message.ToolCalls) != 1 || response.Message.ToolCalls[0].Name != "shell.exec" {
+			t.Fatalf("missing real tool call: %+v", response)
+		}
+		var args struct {
+			Argv []string `json:"argv"`
+		}
+		if err := json.Unmarshal(response.Message.ToolCalls[0].Arguments, &args); err != nil {
+			t.Fatal(err)
+		}
+		if len(args.Argv) != 3 || args.Argv[0] != "sh" || args.Argv[1] != "-ec" || !strings.Contains(args.Argv[2], id) || !strings.Contains(args.Argv[2], "test ! -e result.txt") {
+			t.Fatalf("invalid shell proof: %+v", args)
+		}
+	}
+	for _, result := range []string{"exit code: 1\nfailed", "denied", ""} {
+		if _, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleTool, Content: result}}}); err == nil {
+			t.Fatalf("reported success after %q", result)
+		}
+	}
+	if _, err := p.Chat(context.Background(), &llm.ChatRequest{}); err == nil {
+		t.Fatal("unknown fixture accepted")
+	}
+	result := "exit code: 0\nuid=10001"
+	response, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleTool, Content: result}}})
+	if err != nil || !strings.Contains(response.Message.Content, result) {
+		t.Fatalf("lost real output: %+v %v", response, err)
+	}
+	response, err = p.Chat(context.Background(), &llm.ChatRequest{Metadata: map[string]string{"purpose": "environment.proposal"}})
+	if err != nil || !strings.Contains(response.Message.Content, "alpine:3.22") {
+		t.Fatalf("analysis: %+v %v", response, err)
+	}
+}

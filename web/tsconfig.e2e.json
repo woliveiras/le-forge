@@ -1,4 +1,15 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["e2e", "playwright.config.ts"]
+  "include": [
+    "e2e",
+    "playwright.config.ts",
+    "e2e-real",
+    "playwright.real.config.ts"
+  ],
+  "compilerOptions": {
+    "types": [
+      "node",
+      "vite/client"
+    ]
+  }
 }

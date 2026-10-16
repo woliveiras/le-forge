@@ -140,3 +140,32 @@ workspace and cache preservation on the dedicated daemon.
 Failed tests retain screenshots and traces in `web/test-results/`;
 `cd web && npx playwright show-report` opens the HTML report. There are no automatic
 retries, intercepted browser API responses or fixed sleeps.
+
+### Browser journey with the real sandbox
+
+With the existing dedicated `sandbox-daemon` running and `alpine:3.22` already
+available inside it, run `make test-e2e-real` from the repository root. This also
+requires local Go, Git, Node, Docker CLI and Playwright Chromium. Override the
+Compose container name with `LEFORGE_TEST_SANDBOX_CONTAINER` if necessary.
+
+The launcher verifies the `sandbox-daemon` service label, cross-compiles a
+test-only controller and transfers it with the built console into a unique
+temporary directory inside that container. It forwards HTTP on local loopback
+port 18090 using `docker exec`/`nc`; it does not expose Docker, read TLS keys,
+change firewall rules or start the regular LeForge installation. Both the
+controller and sandbox daemon see the same temporary workspace paths.
+
+Chromium requests analysis of two repositories without environment definitions,
+approves each proposal, waits for build/resume, and observes the native runtime
+calling the real `shell.exec` gateway. Commands check uid 10001, require an absent
+output file, and write a different marker in each workspace. The Files screen
+checks both markers, including re-reading the first after the second execution.
+Persisted tool/execution events, distinct workdirs and a shared prepared-image
+identity prove execution, workspace separation and compatible reuse. Only model
+inference is deterministic; no paid provider credentials are required.
+
+The controller stops its tasks, resets their environments and cleans only shared
+generations registered in its temporary database on shutdown. It never prunes the
+daemon or removes unrelated resources. Reports/traces are separate:
+`web/playwright-report-real/` and `web/test-results-real/`. A forced process kill
+can interrupt cleanup; inspect the reported temporary paths if shutdown fails.

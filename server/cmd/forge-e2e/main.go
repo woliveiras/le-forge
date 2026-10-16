@@ -41,6 +41,9 @@ func main() {
 	}
 }
 func run() error {
+	if os.Getenv("LEFORGE_E2E_REAL") == "1" {
+		return runReal()
+	}
 	root, err := os.MkdirTemp("", "leforge-browser-")
 	if err != nil {
 		return err
