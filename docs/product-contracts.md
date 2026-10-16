@@ -150,15 +150,87 @@ cause the gateway to select a different connection.
   `leforge_environment_build_duration_seconds{outcome}`; span
   `environment.build`.
 
-**Planned** (`wip/TASKS.md`, section 3): other sources produce a definition the
-operator accepts, and accepting writes it into `spec.environment` (so the
-precedence interface → repository → agent proposal is decided when accepting,
-and the graph keeps one effective definition):
+**Planned — not implemented yet** (tracked in
+[TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
+repository discovery, approved agent proposals, reuse across tasks and global
+resource scheduling extend the delivered per-graph environment above. These
+are target contracts, not currently available API or console features.
 
-| Source | Contract |
-|---|---|
-| Repository | `.leforge/environment.yaml` (same fields as `spec.environment`, Dockerfile paths relative to the repository and built with the repository as context) or the image/post-create subset of `.devcontainer/devcontainer.json`; unsupported fields are reported. Shown as "found in the repository"; nothing is used until accepted. |
-| Agent proposal | Tool `environment.propose {image or dockerfile, setup, network, caches, rationale}` opens an approval with the full definition and a diff against the current one; approving it saves the graph with the new definition (new version, actor = approver). `environment.status` returns the build state. Proposals cannot widen network policy or limits beyond installation settings. |
+#### Planned discovery and acceptance
+
+Repositories do not need LeForge-specific files. Preserve an explicit
+operator-configured environment; otherwise discover definitions in the order
+below. Acceptance saves the effective definition into `spec.environment`,
+creating a graph version attributed to the accepting operator. Keep the source,
+repository revision and definition hash as provenance so changes can be detected
+before acceptance and build.
+
+| Priority | Source | Planned contract |
+|---|---|---|
+| 1 | `.leforge/environment.yaml` | Highest repository priority; same environment fields, with validated repository-relative Dockerfile paths and build contexts confined to the authorized workspace. |
+| 2 | `.devcontainer/devcontainer.json` | Support the image/post-create command subset initially; report unsupported fields explicitly. |
+| 3 | Dockerfiles | Discover candidates and build targets within bounded repository paths; ask the operator to choose when ambiguous. Validate build context containment and respect ignore rules. |
+| 4 | Docker Compose | Discover `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` and explicitly selected variants. Select a development service and review required companion services; do not start the entire stack automatically. Supported fields and override handling must be specified before implementation. |
+| 5 | Agent analysis | Only when no definition file is found: analyze manifests, lockfiles and toolchain declarations such as `mise.toml`, `go.mod` and `package.json`, then propose an environment for developer approval. |
+
+Show discovered definitions for operator acceptance before building. An invalid
+or unsupported higher-priority definition produces an actionable error, not a
+silent fallback to another source or agent analysis. Repository content cannot
+request host mounts, privileges, credentials, limits or network access beyond
+installation policy; acceptance does not bypass those controls. Compose
+interpolation and build contexts require the same validation and trust boundary.
+
+The analysis agent must work before a project environment exists, using bounded,
+read-only access to the authorized repository without installing dependencies
+or executing repository commands. The planned tools are:
+
+- `environment.propose {image or dockerfile, setup, network, caches, rationale}`:
+  propose the tools/image, preparation steps and resource needs; open an approval
+  showing the complete definition, rationale and diff against the current one.
+- `environment.status`: report environment/build state and why work is waiting.
+
+The developer approval gate blocks both building and task execution. Rejection
+or cancellation must not start either. Approval saves the accepted definition
+as a new graph version with the approver as actor; revalidate its revision and
+installation policy before building. Execution resumes only after the environment
+is ready. Stale approvals, analysis failures, timeouts and build failures remain
+visible with an explicit recovery path. Exact new endpoints and state schemas
+remain to be specified; the delivered build states above are unchanged today.
+
+#### Planned reuse and resource lifecycle
+
+Reuse prepared images and compatible dependency caches across tasks for the
+same authorized repository and effective environment. The reuse identity must
+include the definition, relevant preparation inputs (including lockfiles),
+platform and policy. Reuse unchanged environments; rebuild on relevant input
+changes or explicit request. Coordinate concurrent builds with leases so the
+same compatible environment is not built repeatedly.
+
+Task workspaces/worktrees and active execution containers remain isolated.
+Continuing the same task may reuse its container, but simultaneous tasks must
+not share mutable task state. Share dependency caches only where concurrent
+access is supported; otherwise lock or isolate them. Shared image layers must
+exclude task-specific workspace contents and secrets, and reuse must not expose
+private artifacts across unauthorized scopes.
+
+Image/cache reuse saves build time and disk; memory consumption is controlled
+by per-sandbox CPU/memory limits and a global budget for active builds and
+executions. Queue tasks when capacity is exhausted and release capacity on
+completion, failure or cancellation. Stop idle containers while preserving
+resumable task state and workspace data.
+
+Track references and ownership for shared images/caches. Reset, graph deletion
+and cleanup must not remove resources another task still needs; reclaim unused
+resources through an explicit lifecycle. The existing per-graph reset contract
+must be extended and tested before enabling shared resources.
+
+The console should explain source selection, approval waits, reuse versus
+rebuild (and why), capacity waits and reset effects. Extend existing audit and
+telemetry mechanisms for these outcomes without sensitive payloads or unbounded
+metric labels. Unit, integration and browser tests must cover discovery order,
+approval gating, reuse/invalidation, concurrent access, workspace isolation,
+resource admission and safe reset; the implementation checklist records these
+as pending work.
 
 ## 4. User Tasks and Child Executions
 

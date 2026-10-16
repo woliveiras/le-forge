@@ -14,10 +14,15 @@ is installed on your machine, and agents never get access to Docker.
 | Understand what happens on Build | [How a build works](#how-a-build-works) |
 | Fix a failed build | [Troubleshooting](#troubleshooting) |
 
-What is not available yet (planned in `wip/TASKS.md`, section 3): accepting a
-Dockerfile or devcontainer that already exists in the cloned repository, and
-an agent that reads the repository and **proposes** an environment for you to
-approve.
+**Planned, not available yet:** discover environments in this order:
+`.leforge/environment.yaml` → `.devcontainer/devcontainer.json` → Dockerfiles
+→ Docker Compose. When none exists, an agent will analyze the repository and
+propose an environment, requiring developer approval before building or running
+the task. No LeForge-specific file will be required. Compatible images and
+caches will be reusable across tasks, with isolated workspaces and limits on
+active resources. See the [planned contracts](product-contracts.md#planned-discovery-and-acceptance)
+and [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
+The instructions below describe the currently delivered, per-graph workflow.
 
 ## Usage from the browser
 
