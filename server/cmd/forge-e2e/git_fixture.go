@@ -29,11 +29,20 @@ func prepareGitInspectionFixture(ctx context.Context, dir string, node *domain.N
 	node.Isolation = domain.IsolationSpec{Mode: domain.IsolationProcess}
 	node.Model = domain.ModelRef{Provider: "e2e", Name: "fixture"}
 	node.Prompt = "git-inspect-fixture"
-	node.Tools = []domain.ToolGrant{{Name: "filesystem.write", Paths: []string{"result.txt"}}}
+	node.Tools = []domain.ToolGrant{{Name: "filesystem.write", Paths: []string{"result.txt"}}, {Name: "shell.exec"}}
 	return nil
 }
 
 func gitInspectionResponse(r *llm.ChatRequest) *llm.ChatResponse {
+	toolResults := 0
+	for _, message := range r.Messages {
+		if message.Role == llm.RoleTool {
+			toolResults++
+		}
+	}
+	if toolResults == 1 {
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "shell-result", Name: "shell.exec", Arguments: json.RawMessage(`{"command":"printf 'shell change\n' > shell.txt"}`)}}}, StopReason: "tool_calls"}
+	}
 	for _, message := range r.Messages {
 		if message.Role == llm.RoleTool {
 			return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Inspection task finished: " + message.Content}, StopReason: "stop"}

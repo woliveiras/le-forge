@@ -215,7 +215,8 @@
           "type": "object", "additionalProperties": false,
           "properties": {
             "mode": {"enum": ["shared", "worktree"], "description": "worktree = git worktree + branch per replica."},
-            "subdir": {"type": "string"}
+            "subdir": {"type": "string"},
+            "readOnly": {"type": "boolean", "description": "Native runtime only. Denies filesystem mutations, agent Git tools, shell execution, environment proposals and review requests regardless of tool grants."}
           }
         },
         "approval": {

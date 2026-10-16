@@ -88,6 +88,12 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 		g.audit(ctx, p, domain.EvToolDenied, name, args, outcome, 0, aerr)
 		return nil, aerr
 	}
+	if p.WorkspaceReadOnly && (workspaceMutation(t) || t.Capability() == "git.read") {
+		outcome = "denied"
+		err = fmt.Errorf("%w: workspace is read-only", ErrDenied)
+		g.audit(ctx, p, domain.EvToolDenied, name, nil, outcome, 0, err)
+		return nil, err
+	}
 	if len(args) == 0 {
 		args = json.RawMessage(`{}`)
 	}
@@ -127,6 +133,13 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 	inv := &Invocation{Principal: p, Args: args, Grant: grant, Workdir: p.Workdir, Sandbox: p.Sandbox, Approver: g.Approver}
 	if inv.Sandbox == nil {
 		inv.Sandbox = &ProcessSandbox{Root: p.Workdir}
+	}
+	// Observe changes during this invocation; concurrent writers are not excluded.
+	if observesWorkspace(t) && p.Workdir != "" && g.Auditor != nil {
+		before := snapshotWorkspace(ctx, p.Workdir)
+		defer func() {
+			g.auditWorkspace(context.WithoutCancel(ctx), p, name, before, snapshotWorkspace(context.WithoutCancel(ctx), p.Workdir))
+		}()
 	}
 	res, terr := g.safeInvoke(ctx, t, inv)
 	if terr != nil {

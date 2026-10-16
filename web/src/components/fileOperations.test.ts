@@ -11,3 +11,10 @@ it('ignores malformed or truncated audit arguments and preserves failed outcomes
  expect(fileOperations([{...event, data:null}, {...event, executionId:undefined}, {...event, data:{tool:'filesystem.write',args:'truncated…'}}], '')).toHaveLength(0);
  expect(fileOperations([{...event, data:{...event.data,outcome:'error'}}], '')[0].outcome).toBe('error');
 });
+it('shows observed shell changes and partial captures without inventing attribution', () => {
+ const observation = {...event, type:'workspace.observed', data:{tool:'shell.exec',status:'complete',changes:[{path:'src/a',operation:'modified'},{path:'new',operation:'created'}]}};
+ expect(fileOperations([observation], 'src')[0].paths).toEqual(['src/a (modified)']);
+ expect(fileOperations([observation], 'missing')).toEqual([]);
+ expect(fileOperations([{...observation,data:{tool:'shell.exec',status:'partial',changes:[]}}], 'missing')[0].outcome).toContain('partial');
+ expect(fileOperations([{...observation,data:{tool:'shell.exec',changes:[null,{}, {path:3}]}}], '')[0].paths).toEqual([]);
+});

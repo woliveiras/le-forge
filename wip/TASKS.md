@@ -156,9 +156,9 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Define file listing, reading, diff, and history endpoints limited to the graph's authorized workspace.
 - [x] Apply path containment, symlink validation, size limits, and traversal protection to every operation.
 - [x] Expose read operations to users; do not implement user-invocable write, delete, or upload endpoints.
-- [ ] Enforce through backend authorization that only authorized agents can modify the workspace.
+- [x] Enforce through backend authorization that only authorized agents can modify the workspace. — Tool grants remain default-deny; native `workspace.readOnly` overrides mutation/shell grants, Docker mounts read-only and rejects writable-container reuse. External runtimes cannot claim this policy; arbitrary process execution remains trusted code. Unit, integration and browser tests cover denied writes and unchanged files.
 - [x] Provide Git, branch, worktree, agent/replica, and execution metadata associated with changes when available.
-- [ ] Record file changes and operations in a queryable form associated with the execution that produced them. — Partial: Files projects existing structured filesystem tool events onto paths/execution IDs (latest 100 tool completions), with explicit inconclusive attribution. Arbitrary shell changes and universal change provenance are not captured.
+- [ ] Record file changes and operations in a queryable form associated with the execution that produced them. — Partial: durable `workspace.observed` events capture bounded before/after changes for filesystem, Git-write and shell calls, including failures, linked to execution/node/replica and shown in Files (latest 100 operation/observation events). Unit/integration tests cover changes, limits, read failures and persistence across restart; browser tests cover shell-created files. Universal provenance for concurrent/external/background writers and transient changes remains pending.
 
 #### Operational Interface
 

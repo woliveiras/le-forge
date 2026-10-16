@@ -366,6 +366,9 @@ func Validate(g *domain.Graph, knownRuntimes map[domain.RuntimeKind]bool) *Repor
 		default:
 			r.errf(path+".isolation.mode", "unknown isolation %q", n.Isolation.Mode)
 		}
+		if n.Workspace.ReadOnly && n.Runtime.Kind != domain.RuntimeNative {
+			r.errf(path+".workspace.readOnly", "read-only workspaces require the native runtime; external runtimes may write outside the tool gateway")
+		}
 		if n.Workspace.Mode != domain.WorkspaceShared && n.Workspace.Mode != domain.WorkspaceWorktree {
 			r.errf(path+".workspace.mode", "unknown workspace mode %q", n.Workspace.Mode)
 		}

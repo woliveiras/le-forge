@@ -45,7 +45,8 @@ type Principal struct {
 	Grants      []domain.ToolGrant
 	// Workdir is the replica's workspace root (host path). Filesystem tools
 	// are jailed to it.
-	Workdir string
+	Workdir           string
+	WorkspaceReadOnly bool
 	// Sandbox executes commands for this replica (process or container).
 	Sandbox Sandbox
 	// PrepareTool validates/prepares the execution environment after authorization.

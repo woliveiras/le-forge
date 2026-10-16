@@ -136,3 +136,26 @@ Metrics: `leforge_review_transitions_total{action}`,
 `leforge_preview_request_duration_seconds`; labels use bounded outcomes/actions,
 not review IDs. Reconciliation creates a `review.reconcile` trace span. Cleanup
 failures are logged with the review ID and retried while accounting is retained.
+
+### Workspace observations
+
+`workspace.observed` is emitted by the tool gateway after filesystem mutations,
+Git writes and shell calls, including failures/cancellation. Its envelope carries
+`graphId`, `nodeId`, `replica`, `executionId`, actor and trace identity. Data:
+
+```json
+{
+  "tool": "shell.exec",
+  "status": "complete",
+  "attribution": "observed_during_tool",
+  "scope": "workspace_except_git_metadata",
+  "changes": [{"path": "src/result.txt", "operation": "modified"}]
+}
+```
+
+Operations are `created`, `modified` or `deleted`; capture status is `complete`
+or `partial`. Empty observations are retained. Paths are relative and no file
+contents or hashes are stored. Query using the existing graph events API with
+`types=workspace.observed`; pagination uses the existing sequence cursor.
+See [workspace write access and observations](tool-permissions.md#workspace-write-access-and-observations)
+for capture limits, concurrent writers and the distinction from proven authorship.

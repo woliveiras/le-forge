@@ -375,7 +375,9 @@ const (
 )
 
 type NodeWorkspace struct {
-	Mode WorkspaceMode `json:"mode,omitempty" yaml:"mode,omitempty"`
+	// ReadOnly denies mutation tools and shell execution, even with broader grants.
+	ReadOnly bool          `json:"readOnly,omitempty" yaml:"readOnly,omitempty"`
+	Mode     WorkspaceMode `json:"mode,omitempty" yaml:"mode,omitempty"`
 	// Subdir narrows the node's view of the graph workspace.
 	Subdir string `json:"subdir,omitempty" yaml:"subdir,omitempty"`
 }

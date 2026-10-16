@@ -209,3 +209,45 @@ outputs and releases its input lease; subsequent runtime/model/tool calls cannot
 bypass the gate. Approve/request-changes delivers a durable review result in a
 later turn. Completion is refused for rejected, unapproved or changed candidates.
 Existing per-tool approval does not itself approve the final candidate.
+
+## Workspace write access and observations
+
+For native agents, set `spec.nodes[].workspace.readOnly: true` to deny
+`filesystem.write`/`filesystem.delete` capabilities, `git.read`/`git.write`, `shell.exec`,
+`environment.propose` and `review.request`, even when broader tool grants exist.
+Filesystem read tools remain subject to their normal grants. Agent Git tools
+are also denied because even inspection can execute repository-configured
+filters; operators can still use the separate protected Files/Git API. Docker mounts the workspace
+read-only and refuses to resume an existing container whose mount is writable
+or cannot be verified. Shell is denied entirely for this policy: command
+allowlists cannot establish that an interpreter or test runner will not write.
+
+The default is `false` for compatibility: write access still requires the
+appropriate tool grant. A `shell.exec` grant authorizes the command's filesystem
+side effects; filesystem path grants do not constrain arbitrary shell code.
+Use Docker isolation for commands that must not access the host. Native process
+execution retains the platform user's OS privileges. External runtimes are
+trusted code outside this gateway boundary, so graph validation rejects combining
+an external runtime with `workspace.readOnly`. Installation-managed environment
+preparation is separate from agent write access.
+
+The gateway emits `workspace.observed` after filesystem mutations, Git writes
+and `shell.exec`, including failed or cancelled calls. It compares bounded
+snapshots and records workspace-relative paths with `created`, `modified` or
+`deleted`, graph/node/replica/execution identity, tool, trace and capture status.
+No file contents, content hashes or symlink targets are emitted. The event log
+persists these observations and the Files panel displays the latest 100 operation
+and observation events. Query older observations with the events API and its
+sequence cursor, filtering by graph, node and `types=workspace.observed`.
+
+This is an observation window, not proof of exclusive authorship. Concurrent
+writers, external runtimes and processes continuing after a tool returns can
+change files outside it; temporary changes reverted before the final snapshot
+are not recorded. Renames appear as delete/create. Git metadata (`.git`) is
+excluded. Each scan is bounded to 10,000 entries, 64 MiB and a two-second
+cooperative deadline; at most 200 changed paths are emitted. Unreadable files,
+special files, unstable reads or limits produce `status: partial`; absence from
+such a scan never proves a file was created or deleted. A complete scan describes
+only the observed scope, not a universal filesystem journal. Event persistence
+failures use the existing event-bus error reporting and do not roll back tool
+side effects.

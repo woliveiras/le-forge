@@ -506,7 +506,7 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 	r.mu.Unlock()
 	env := &turnEnv{r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
 		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
-		Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
+		WorkspaceReadOnly: n.Workspace.ReadOnly, Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
 	}}
 	env.principal.PrepareTool = func(ctx context.Context, name string) error {
 		if name == "environment.status" || name == "environment.propose" {

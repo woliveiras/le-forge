@@ -38,6 +38,7 @@ const EVENT_TYPES = [
   'message.injected',
   'tool.invoked',
   'tool.completed',
+  'workspace.observed',
   'tool.denied',
   'approval.requested',
   'approval.decided',

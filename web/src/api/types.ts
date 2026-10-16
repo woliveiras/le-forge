@@ -176,7 +176,7 @@ export interface GraphNode {
   loop?: LoopSpec;
   cluster?: ClusterSpec;
   isolation?: IsolationSpec;
-  workspace?: { mode?: 'shared' | 'worktree'; subdir?: string };
+  workspace?: { mode?: 'shared' | 'worktree'; subdir?: string; readOnly?: boolean };
   approval?: { beforeTurn?: boolean; beforeEmit?: boolean; timeout?: Duration; onTimeout?: string };
   subscribe?: string[];
   limits?: { turnTimeout?: Duration; maxToolCalls?: number; maxTokens?: number };

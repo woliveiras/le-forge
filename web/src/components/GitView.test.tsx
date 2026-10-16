@@ -34,3 +34,14 @@ it('shows Git failures and allows refresh; distinguishes non-repositories', asyn
  await userEvent.click(screen.getByRole('button', {name:'Refresh Git'}));
  expect(await screen.findByText(/Workspace has no Git repository/)).toBeTruthy();
 });
+it('renders shell observations and incomplete scans with execution identity', async () => {
+ fakeApi({
+  'GET /api/v1/graphs/g/events': () => [{id:'observation',type:'workspace.observed',executionId:'exec-shell',nodeId:'worker',replica:0,data:{tool:'shell.exec',status:'partial',changes:[{path:'result.txt',operation:'modified'}]}}],
+  'GET /api/v1/graphs/g/git/status': () => result,
+  'GET /api/v1/graphs/g/executions': () => [],
+ });
+ render(<GitView graphId="g" node="worker" replica={0} path="result.txt" />);
+ expect(await screen.findByText(/result.txt \(modified\)/)).toBeTruthy();
+ expect(screen.getByText(/observed · partial/)).toBeTruthy();
+ expect(screen.getByText('exec-shell')).toBeTruthy();
+});

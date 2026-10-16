@@ -43,7 +43,8 @@ type DockerSandboxConfig struct {
 	// HostDir is the workspace path as the Docker daemon sees it. When the
 	// platform itself runs in a container this is the host path of the
 	// workspace volume, not the path inside the platform container.
-	HostDir string
+	HostDir           string
+	WorkspaceReadOnly bool
 	// Network: "none" (default) or a docker network name ("bridge").
 	Network string
 	CPU     string // e.g. "1.5"
@@ -167,7 +168,11 @@ func (s *DockerSandbox) RunArgs() []string {
 	for _, v := range c.Volumes {
 		args = append(args, "-v", v)
 	}
-	args = append(args, "-v", c.HostDir+":"+c.MountPoint, "-w", c.MountPoint)
+	mount := c.HostDir + ":" + c.MountPoint
+	if c.WorkspaceReadOnly {
+		mount += ":ro"
+	}
+	args = append(args, "-v", mount, "-w", c.MountPoint)
 	if len(c.Command) > 0 {
 		args = append(args, "--pids-limit", "512", "--log-opt", "max-size=1m", "--log-opt", "max-file=1", "--entrypoint", c.Command[0], c.Image)
 		return append(args, c.Command[1:]...)
@@ -238,6 +243,13 @@ func (s *DockerSandbox) startContainer(ctx context.Context) error {
 	} else if !strings.Contains(out, "No such object") && !strings.Contains(out, "No such container") {
 		s.retained = true // ambiguous inspection must never trigger destructive cleanup
 		return fmt.Errorf("inspect sandbox: %w: %s", err, out)
+	}
+	if err == nil && s.cfg.WorkspaceReadOnly {
+		format := fmt.Sprintf(`{{range .Mounts}}{{if eq .Destination %q}}{{.RW}}{{end}}{{end}}`, s.cfg.MountPoint)
+		rw, inspectErr := s.docker(ctx, "inspect", "--format", format, s.cfg.Name)
+		if inspectErr != nil || strings.TrimSpace(rw) != "false" {
+			return fmt.Errorf("cannot resume sandbox: workspace mount is not verified read-only")
+		}
 	}
 	if err == nil && s.cfg.RequireStandalone {
 		group, e := s.docker(ctx, "inspect", "--format", `{{index .Config.Labels "leforge.compose"}}`, s.cfg.Name)

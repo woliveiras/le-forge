@@ -34,7 +34,7 @@
         "graph.resumed", "graph.failed", "node.scaled", "replica.state_changed", "execution.started",
         "execution.completed", "execution.failed", "message.published", "message.delivered", "message.acked",
         "message.nacked", "message.dead_lettered", "message.dropped", "message.held", "message.injected",
-        "tool.invoked", "tool.completed", "tool.denied", "approval.requested", "approval.decided",
+        "tool.invoked", "tool.completed", "tool.denied", "workspace.observed", "approval.requested", "approval.decided",
         "operator.message", "agent.output", "agent.broadcast", "log"
       ]
     },
