@@ -199,7 +199,7 @@ See [proposal limits and behavior](environments.md#agent-proposal-and-developer-
 **Planned — not implemented yet** (tracked in
 [TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
 Additional format support, agent-callable environment tools,
-reuse across tasks and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
+broader reuse lifecycle and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
 only the capabilities explicitly described as delivered above are available.
 
 #### Planned discovery and acceptance
@@ -242,6 +242,23 @@ installation policy before building. Execution resumes only after the environmen
 is ready. Stale approvals, analysis failures, timeouts and build failures remain
 visible with an explicit recovery path. Exact new endpoints and state schemas
 remain to be specified; the delivered build states above are unchanged today.
+
+#### Delivered reuse subset
+
+Repository graphs with default isolated workspace paths reuse prepared images
+and immutable dependency-cache seeds within the installation and exact repository
+identity. Compatibility includes the effective definition/context, bounded
+manifest and lockfile inputs, daemon platform/address and versioned policy.
+Renewable leases deduplicate preparation. Each graph reruns setup and gets
+private writable cache copies; setup container state is never shared as an image.
+Reset and graph deletion retain shared generations and remove only graph-owned
+resources. Status, logs and ready events expose reuse. Unit, API integration,
+concurrency and dedicated-daemon tests cover invalidation, failure, cancellation,
+isolation and reset. See [environment reuse](environments.md#reuse-across-tasks)
+for limits and semantics.
+
+Explicit shared-resource reclamation, global capacity budgets and idle-container
+suspension remain planned. The target lifecycle below includes those extensions.
 
 #### Planned reuse and resource lifecycle
 

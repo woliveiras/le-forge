@@ -56,6 +56,10 @@ type CacheMount struct {
 
 // Status is the persisted state of a graph's environment.
 type Status struct {
+	Scope      string       `json:"scope,omitempty"`
+	ReuseKey   string       `json:"reuseKey,omitempty"`
+	Reused     bool         `json:"reused,omitempty"`
+	Inputs     string       `json:"inputs,omitempty"`
 	Graph      string       `json:"graph"`
 	State      State        `json:"state"`
 	Hash       string       `json:"hash,omitempty"`  // definition hash of the last build
@@ -113,6 +117,7 @@ type Manager struct {
 type build struct {
 	cancel context.CancelFunc
 	done   chan struct{}
+	force  bool
 }
 
 func New(opt Options) (*Manager, error) {
@@ -152,7 +157,19 @@ func (m *Manager) Get(ctx context.Context, g *domain.Graph) (*View, error) {
 			return nil, err
 		}
 	}
-	return m.view(g, st), nil
+	v := m.view(g, st)
+	if v.UpToDate && g.Spec.Workspace.Repo != "" {
+		dir, err := m.opt.Workspaces.Ensure(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+		e, err := readManifests(ctx, dir)
+		if err != nil {
+			return nil, err
+		}
+		v.UpToDate = st.Inputs == e.SHA256 && st.Scope == reuseScope(g.Spec.Workspace.Repo, m.opt.DockerHost) && g.Spec.Workspace.Path == ""
+	}
+	return v, nil
 }
 
 func (m *Manager) view(g *domain.Graph, st *Status) *View {
@@ -160,6 +177,9 @@ func (m *Manager) view(g *domain.Graph, st *Status) *View {
 	if v.Defined {
 		v.CurrentHash = Hash(g.Spec.Environment)
 		v.UpToDate = st.State == StateReady && st.Hash == v.CurrentHash
+		if st.ReuseKey != "" && g.Spec.Workspace.Repo == "" {
+			v.UpToDate = false
+		}
 	}
 	return v
 }
@@ -173,7 +193,7 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 	}
 	// Validate before returning a cached image or starting any Docker operation.
 	dir := ""
-	if env.Origin != nil || env.Context != "" {
+	if env.Origin != nil || env.Context != "" || g.Spec.Workspace.Repo != "" {
 		var err error
 		dir, err = m.opt.Workspaces.Ensure(ctx, g)
 		if err != nil {
@@ -221,7 +241,7 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 		timeout = m.opt.DefaultTimeout
 	}
 	bctx, cancel := context.WithTimeout(context.Background(), timeout)
-	b := &build{cancel: cancel, done: make(chan struct{})}
+	b := &build{cancel: cancel, done: make(chan struct{}), force: force}
 	m.running[id] = b
 	m.mu.Unlock()
 
@@ -234,8 +254,9 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 	}
 	m.publish(ctx, domain.EvEnvBuildStarted, id, actor, map[string]any{"hash": st.Hash, "force": force})
 	snapshot := *g // the definition being built, independent of later saves
+	view := m.view(g, st)
 	go m.run(bctx, b, &snapshot, st)
-	return m.view(g, st), nil
+	return view, nil
 }
 
 func (m *Manager) finish(id string, b *build) {
@@ -260,8 +281,17 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 	stopFlush := m.flushWhileRunning(ctx, st, logBuf)
 
 	start := time.Now()
-	image, caches, err := m.steps(ctx, g, st.Hash, logBuf)
+	result := *st
+	var image string
+	var caches []CacheMount
+	var err error
+	if g.Spec.Workspace.Repo != "" {
+		image, caches, err = m.sharedSteps(ctx, g, &result, b.force, logBuf)
+	} else {
+		image, caches, err = m.steps(ctx, g, st.Hash, logBuf)
+	}
 	stopFlush()
+	st.ReuseKey, st.Reused, st.Inputs, st.Scope = result.ReuseKey, result.Reused, result.Inputs, result.Scope
 
 	now := time.Now().UTC()
 	st.FinishedAt, st.Log = &now, logBuf.String()
@@ -298,6 +328,8 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 		return
 	}
 	data["image"] = image
+	data["reused"] = st.Reused
+	data["reuseKey"] = st.ReuseKey
 	m.opt.Log.Info("environment ready", "graph", id, "image", image, "duration", time.Since(start).Round(time.Millisecond))
 	m.publish(context.Background(), domain.EvEnvReady, id, st.Actor, data)
 }
@@ -339,51 +371,9 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 	env := g.Spec.Environment
 	id := g.Metadata.ID
 	final := ImageRef(id, hash)
-	baseTag, userTag := final+"-base", final+"-user"
-	labels := []string{"--label", "leforge.graph=" + id, "--label", "leforge.environment=" + hash}
-
-	base := strings.TrimSpace(env.Image)
-	if base != "" {
-		fmt.Fprintf(log, "==> Pulling base image %s\n", base)
-		if err := m.docker(ctx, nil, log, "pull", base); err != nil {
-			return "", nil, fmt.Errorf("pull %s: %w", base, err)
-		}
-	} else {
-		fmt.Fprintln(log, "==> Building the environment Dockerfile")
-		args := append([]string{"build", "--pull", "-t", baseTag}, labels...)
-		if env.Target != "" {
-			fmt.Fprintf(log, "==> Selected build stage: %s\n", env.Target)
-			args = append(args, "--target", env.Target)
-		}
-		var input io.Reader = strings.NewReader(env.Dockerfile)
-		if env.Context != "" {
-			dir, err := m.opt.Workspaces.Ensure(ctx, g)
-			if err != nil {
-				return "", nil, fmt.Errorf("prepare build context: %w", err)
-			}
-			snapshot, err := SnapshotContext(ctx, dir, env)
-			if err != nil {
-				return "", nil, fmt.Errorf("capture build context: %w", err)
-			}
-			defer snapshot.Close()
-			if env.Origin == nil || snapshot.SHA256 != env.Origin.ContextSHA256 {
-				return "", nil, fmt.Errorf("%w: build context changed after review", ErrInvalidDefinition)
-			}
-			fmt.Fprintln(log, "==> Sending validated repository build context")
-			input = snapshot.File
-			args = append(args, "--file", contextDockerfile)
-		}
-		if err := m.docker(ctx, input, log, append(args, "-")...); err != nil {
-			return "", nil, fmt.Errorf("build Dockerfile: %w", err)
-		}
-		base = baseTag
-		defer m.docker(context.Background(), nil, io.Discard, "rmi", baseTag) //nolint:errcheck
-	}
-
-	fmt.Fprintf(log, "==> Adding the sandbox user (uid %d)\n", SandboxUID)
-	args := append([]string{"build", "-t", userTag}, labels...)
-	if err := m.docker(ctx, strings.NewReader(UserLayer(base, env.Caches)), log, append(args, "-")...); err != nil {
-		return "", nil, fmt.Errorf("add sandbox user (the base image needs /bin/sh): %w", err)
+	userTag, err := m.prepareImage(ctx, g, final, log)
+	if err != nil {
+		return "", nil, err
 	}
 	defer m.docker(context.Background(), nil, io.Discard, "rmi", userTag) //nolint:errcheck
 
@@ -434,6 +424,60 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 	m.removeOldImages(id, hash)
 	fmt.Fprintf(log, "==> Environment ready: %s\n", final)
 	return final, caches, nil
+}
+
+// prepareImage never mounts the mutable workspace or runs setup.
+func (m *Manager) prepareImage(ctx context.Context, g *domain.Graph, final string, log io.Writer) (string, error) {
+	env, id := g.Spec.Environment, g.Metadata.ID
+	hash := Hash(env)
+	baseTag, userTag := final+"-base", final+"-user"
+	labels := []string{"--label", "leforge.graph=" + id, "--label", "leforge.environment=" + hash}
+
+	base := strings.TrimSpace(env.Image)
+	if base != "" {
+		fmt.Fprintf(log, "==> Pulling base image %s\n", base)
+		if err := m.docker(ctx, nil, log, "pull", base); err != nil {
+			return "", fmt.Errorf("pull %s: %w", base, err)
+		}
+	} else {
+		fmt.Fprintln(log, "==> Building the environment Dockerfile")
+		args := append([]string{"build", "--pull", "-t", baseTag}, labels...)
+		if env.Target != "" {
+			fmt.Fprintf(log, "==> Selected build stage: %s\n", env.Target)
+			args = append(args, "--target", env.Target)
+		}
+		var input io.Reader = strings.NewReader(env.Dockerfile)
+		if env.Context != "" {
+			dir, err := m.opt.Workspaces.Ensure(ctx, g)
+			if err != nil {
+				return "", fmt.Errorf("prepare build context: %w", err)
+			}
+			snapshot, err := SnapshotContext(ctx, dir, env)
+			if err != nil {
+				return "", fmt.Errorf("capture build context: %w", err)
+			}
+			defer snapshot.Close()
+			if env.Origin == nil || snapshot.SHA256 != env.Origin.ContextSHA256 {
+				return "", fmt.Errorf("%w: build context changed after review", ErrInvalidDefinition)
+			}
+			fmt.Fprintln(log, "==> Sending validated repository build context")
+			input = snapshot.File
+			args = append(args, "--file", contextDockerfile)
+		}
+		if err := m.docker(ctx, input, log, append(args, "-")...); err != nil {
+			return "", fmt.Errorf("build Dockerfile: %w", err)
+		}
+		base = baseTag
+		defer m.docker(context.Background(), nil, io.Discard, "rmi", baseTag) //nolint:errcheck
+	}
+
+	fmt.Fprintf(log, "==> Adding the sandbox user (uid %d)\n", SandboxUID)
+	args := append([]string{"build", "-t", userTag}, labels...)
+	if err := m.docker(ctx, strings.NewReader(UserLayer(base, env.Caches)), log, append(args, "-")...); err != nil {
+		return "", fmt.Errorf("add sandbox user (the base image needs /bin/sh): %w", err)
+	}
+
+	return userTag, nil
 }
 
 // removeOldImages drops images of earlier definitions of the graph.
@@ -549,6 +593,8 @@ func notReady(v *View) error {
 		return fmt.Errorf("%w: it is being built; agents can start when the build finishes", ErrNotReady)
 	case v.State == StateFailed && v.Hash == v.CurrentHash:
 		return fmt.Errorf("%w: the last build failed (%s); fix the definition or build again in Graph settings → Environment", ErrNotReady, v.Error)
+	case v.State == StateReady && !v.UpToDate:
+		return fmt.Errorf("%w: the definition changed or repository inputs/scope changed; rebuild before starting agents", ErrNotReady)
 	case v.Hash != "" && v.Hash != v.CurrentHash:
 		return fmt.Errorf("%w: the definition changed since the last build; build it in Graph settings → Environment", ErrNotReady)
 	default:

@@ -30,7 +30,9 @@ const wrapperVersion = 1
 // Hash identifies the image a definition produces. Settings that do not
 // change the image (run network, timeout, setup limits) are excluded, so
 // editing them never forces a rebuild.
-func Hash(env *domain.EnvironmentSpec) string {
+func Hash(env *domain.EnvironmentSpec) string { return definitionDigest(env)[:12] }
+
+func definitionDigest(env *domain.EnvironmentSpec) string {
 	caches := append([]string(nil), env.Caches...)
 	for i := range caches {
 		caches[i] = path.Clean(caches[i])
@@ -48,7 +50,7 @@ func Hash(env *domain.EnvironmentSpec) string {
 		ContextSHA256 string   `json:"contextSHA256,omitempty"`
 	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Target, env.Context, contextHash(env)})
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])[:12]
+	return hex.EncodeToString(sum[:])
 }
 
 // SetupNetwork is the network of setup commands (default bridge).

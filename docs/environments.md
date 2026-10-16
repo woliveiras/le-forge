@@ -60,7 +60,8 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-reuse across tasks and global resource budgets remain planned. See the
+global resource budgets and shared-resource reclamation remain planned.
+Prepared-image and cache-snapshot reuse is available as described below. See the
 [contracts](product-contracts.md#planned-discovery-and-acceptance) and
 [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
 
@@ -262,9 +263,61 @@ created when they start).
 
 ### 4. Reset it
 
-**Reset** (admins) deletes the environment's images and cache volumes; the next
-build starts from scratch. The graph must be stopped: running agents use that
+**Reset** (admins) deletes the graph-owned images and writable cache volumes.
+For repository environments, shared prepared images and immutable cache seeds
+are retained; the next build may reuse them. Other environments rebuild from scratch. The graph must be stopped: running agents use that
 image and those caches. Deleting a graph resets its environment too.
+
+## Reuse across tasks
+
+Graphs with the same exact `spec.workspace.repo` URL and the default graph
+workspace path automatically reuse compatible prepared images. Each graph has
+its own workspace and active containers. Custom `workspace.path` is rejected
+for this flow to avoid accidental aliasing. Graphs without a repository URL
+retain the existing per-graph build lifecycle; a local path alone does not
+establish a shared repository identity. A graph is the task boundary here;
+nodes within a graph retain their existing shared/worktree configuration.
+
+Compatibility includes the installation's store, exact repository URL, daemon
+address, daemon OS/architecture, full effective image-definition digest,
+accepted context digest, bounded manifest/lockfile fingerprint and versioned
+reuse policy. The manifest scan uses the same allowlist and bounds as analysis
+(32 files, 128 KiB total, 10,000 scanned entries). Unknown inputs are not assumed
+to be setup outputs: setup always runs separately in each graph workspace.
+Changing a lockfile invalidates readiness. **Rebuild** creates a new shared
+generation; mutable image tags are resolved again only on a new build.
+
+The shared image contains the Dockerfile/base-image and sandbox-user layers.
+Setup may create `node_modules` in the workspace or write other mutable state,
+so its resulting container image remains private to that graph. Setup is never
+skipped merely because another task has completed it. Declared caches must
+contain disposable dependency downloads, not credentials or task outputs.
+Known download/build cache paths (`/home/sandbox/.npm/_cacache`,
+`/home/sandbox/.cache/pip`, `/home/sandbox/go/pkg/mod`,
+`/home/sandbox/.cache/go-build`, `/home/sandbox/.local/share/pnpm/store` and
+`/home/sandbox/.pnpm-store`) become immutable seeds after successful setup.
+Unknown or broad directories such as HOME and `.cache` remain entirely private. Subsequent tasks mount those seeds read-only while copying them into
+private writable volumes before running setup. Runtime writes are never
+published back. This supports package managers without a concurrent-writer
+contract; it saves downloads but still uses disk for each task's cache copy.
+
+A renewable storage lease deduplicates compatible image preparation and
+serializes cache publication. Waiting is bounded by the build timeout and can
+be cancelled by Reset. A missing shared image/cache reports an error with a
+force-rebuild instruction. Failed setup does not publish a reusable seed.
+The API exposes `reused`, `reuseKey`, `scope` and `inputs`; the console summarizes
+reuse and Reset retention. Build logs
+explain reuse, preparation and lease waiting. Ready events include the reuse
+identity and outcome without repository URLs or file contents.
+
+**Reset** and graph deletion remove graph-owned images and writable cache
+volumes, but retain shared images and immutable seeds, including old generations.
+Existing graph status records retain their image/cache references. This
+conservative retention protects other tasks and supports reuse after all graphs
+have stopped. Explicit reclamation of unused shared generations is still
+planned; Reset is not a shared-storage garbage collector. Reuse reduces build
+work and downloads; global active-container limits and idle suspension, needed
+to bound total RAM, are still planned.
 
 ## Recipes
 

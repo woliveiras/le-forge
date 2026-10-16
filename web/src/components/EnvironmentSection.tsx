@@ -264,7 +264,7 @@ function EnvironmentStatus({
   const users = environmentUsers(graph);
 
   const act = async (kind: 'build' | 'rebuild' | 'reset') => {
-    if (kind === 'reset' && !confirm('Reset the environment? Its image and cache volumes are deleted; the next build starts from scratch.')) return;
+    if (kind === 'reset' && !confirm('Reset the environment? Graph-owned images and writable caches are deleted. Shared prepared images and cache snapshots are retained.')) return;
     setBusy(true);
     try {
       const next =
@@ -291,8 +291,9 @@ function EnvironmentStatus({
       {unsavedEnv && <p className="field-warning">Unsaved environment changes: save the graph, then build.</p>}
       {!savedDefined && !unsavedEnv && <p className="muted small">Save the graph to build this environment.</p>}
       {view?.state === 'ready' && !view.upToDate && (
-        <p className="field-warning">The saved definition changed since this image was built. Build it again before starting agents.</p>
+        <p className="field-warning">The saved definition or repository inputs changed since this image was built. Build it again before starting agents.</p>
       )}
+      {view?.reuseKey && <p className="muted small">{view.reused ? 'Reused compatible prepared image and cache snapshots.' : 'Prepared a new shared image and cache snapshots.'} Workspaces and writable caches remain isolated. Reset preserves shared snapshots.</p>}
       {view?.image && (
         <p className="muted small">
           Image <code>{view.image}</code>

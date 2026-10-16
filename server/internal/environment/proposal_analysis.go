@@ -37,6 +37,10 @@ func ReadEvidence(ctx context.Context, dir string) (*Evidence, error) {
 	if discovery.Status != "proposal_required" {
 		return nil, fmt.Errorf("repository definitions exist; discover and review them instead")
 	}
+	return readManifests(ctx, dir)
+}
+
+func readManifests(ctx context.Context, dir string) (*Evidence, error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err

@@ -1410,6 +1410,10 @@ components:
         graph: {type: string}
         state: {enum: [absent, building, ready, failed]}
         defined: {type: boolean, description: The saved graph has spec.environment.}
+        scope: {type: string, description: Hashed repository and daemon scope.}
+        reuseKey: {type: string, description: Installation-scoped compatibility identity for prepared image and immutable cache snapshots.}
+        reused: {type: boolean, description: This build reused a compatible prepared image and cache snapshots.}
+        inputs: {type: string, description: Fingerprint of bounded repository manifests and lockfiles.}
         currentHash: {type: string, description: Hash of the saved definition.}
         hash: {type: string, description: Hash of the definition last built.}
         upToDate: {type: boolean, description: Ready and built from the current definition.}

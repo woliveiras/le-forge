@@ -16,4 +16,4 @@ chmod 700 "$task_tmp/docker-sandbox"
 export LEFORGE_TEST_SANDBOX_CONTAINER="$container"
 export LEFORGE_TEST_ENV_DOCKER_BIN="$task_tmp/docker-sandbox"
 cd "$(dirname "$0")/../server"
-go test ./internal/environment -run '^(TestBuildContextRealSandbox|TestProposalRealSandbox)$' -count=1 -v -timeout 10m
+go test ./internal/environment -run '^(TestBuildContextRealSandbox|TestProposalRealSandbox|TestReuseRealSandbox)$' -count=1 -v -timeout 10m

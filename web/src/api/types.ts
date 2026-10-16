@@ -75,6 +75,10 @@ export interface EnvironmentView {
   graph: string;
   state: EnvironmentState;
   defined: boolean;
+  scope?: string;
+  reuseKey?: string;
+  reused?: boolean;
+  inputs?: string;
   currentHash?: string;
   hash?: string;
   upToDate: boolean;

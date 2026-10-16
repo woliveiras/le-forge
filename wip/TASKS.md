@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, and reuse across tasks remain pending. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, prepared-image and immutable cache-seed reuse are implemented; global budgets, idle suspension and shared-resource reclamation remain pending. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -100,13 +100,14 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 #### Reuse Across Tasks and Resource Budgets
 
-- [ ] Define a reuse key scoped to the authorized repository, effective definition, relevant setup inputs/lockfiles, platform and policy; exclude task-specific workspace contents and secrets from shared image layers.
-- [ ] Reuse ready images for compatible subsequent tasks and coordinate concurrent builds with leases/deduplication. Rebuild on relevant input changes or explicit request; explain cache hits and invalidations.
-- [ ] Share compatible dependency download caches with explicit concurrency rules; lock or isolate caches that cannot safely support concurrent writers. Keep credentials and private artifacts within authorized scopes.
+- [x] Define a repository/installation-scoped reuse key from the full image-definition digest, accepted context, bounded manifests/lockfiles, daemon platform/address and versioned policy. Setup output stays private; arbitrary setup reruns in each task. The fingerprint is bounded and is not a full Git revision.
+- [x] Reuse compatible prepared images across repository graphs with renewable leases, force rebuilds and input invalidation. Setup runs per isolated workspace; shared images exclude setup container state. API/UI status and logs explain reuse. Unit, API integration and real sandbox tests cover the flow.
+- [x] Reuse immutable dependency-cache seeds within the exact repository/installation scope. Copy seeds read-only into task-private writable volumes before setup; never publish runtime mutations. Cache declarations must exclude credentials and task outputs. Concurrent writers never share a volume across graphs.
 - [ ] Create isolated task workspaces/worktrees and active containers; allow continuation of the same task to reuse its container without sharing mutable task state with other tasks.
 - [ ] Enforce per-sandbox CPU/memory limits and a global budget for active builds and executions; queue work when capacity is exhausted and handle cancellation, failures and capacity release.
 - [ ] Stop idle containers while preserving resumable task state; define idle timeout and restart behavior without deleting workspace data.
-- [ ] Track references to shared images/caches across tasks and graphs; adapt Reset, graph deletion and cleanup so active or retained references are protected. Define explicit reclamation for unused resources.
+- [x] Preserve shared images/cache seeds on Reset and graph deletion; graph status retains resource references, and shared generations are conservatively retained.
+- [ ] Implement explicit reclamation of unused shared generations and crash leftovers with reference tracking.
 - [ ] Record reuse, rebuild reasons, queue waits and resource-limit failures through existing events/metrics, using bounded labels and no sensitive payloads.
 
 #### Network Policy
@@ -129,7 +130,8 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon. — API integration tests run with a scripted Docker CLI; a manual run against the real `sandbox-daemon` verified Dockerfile build, setup, commit, cache population, uid 10001 workspace writes, `network none`, reset (refused while running) and cleanup on graph deletion. Pending: automating that run and the repository/agent sources.
 - [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset. — Done except proposal approval (not implemented yet).
 - [ ] Add unit tests for discovery priority, ambiguous candidates, malformed definitions, supported Compose/devcontainer fields, context containment and absent-definition fallback; include approval rejection, stale approval, timeout and analysis failure.
-- [ ] Add unit tests for reuse keys/invalidation, cache locking, ownership, resource budgets, queue cancellation and idle/resume lifecycle.
+- [x] Add unit, storage/API integration and real sandbox tests for reuse keys, input invalidation, build deduplication across manager instances, lease-wait cancellation, private cache copies, failed setup/copy, workspace isolation and Reset retention.
+- [ ] Add tests for global resource budgets, capacity-queue cancellation and idle/resume lifecycle.
 - [ ] Add integration tests with repository fixtures and the real dedicated daemon for each source and the approved-proposal flow; prove no build/task starts before approval and failures remain visible.
 - [ ] Add integration tests proving compatible tasks reuse an image/cache, changed lockfiles invalidate reuse, concurrent builds are deduplicated, task workspaces and unauthorized repositories remain isolated, and reset cannot remove referenced resources. Verify queue admission, resource release and idle-container resume.
 - [ ] Add interface tests for candidate selection, developer approval/rejection, reuse/invalidation explanations and capacity waiting; add browser E2E for a repository without LeForge files through discovery or proposal, approval, build, execution and a subsequent reused environment.

@@ -155,3 +155,12 @@ describe('EnvironmentSection', () => {
   });
 
 });
+
+
+it('explains reuse, writable cache isolation and shared reset retention', async () => {
+ fakeApi({ 'GET /api/v1/graphs/g/environment': () => view({ state: 'ready', upToDate: true, reuseKey: 'compatible', reused: true }) });
+ const { status } = renderSection();
+ expect(await within(status()).findByText(/Reused compatible prepared image/)).toBeTruthy();
+ expect(within(status()).getByText(/Workspaces and writable caches remain isolated/)).toBeTruthy();
+ expect(within(status()).getByText(/Reset preserves shared snapshots/)).toBeTruthy();
+});
