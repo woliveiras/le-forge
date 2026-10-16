@@ -184,3 +184,25 @@ any version can be exported with `forge get <id>` / `?version=N`.
 4. The platform makes no outbound calls by default: the mock provider needs
    no network, Grafana analytics are disabled in compose, and `http.fetch`
    reaches only hosts that graphs explicitly grant.
+
+## Project environment operations
+
+Run builds and execution on the dedicated daemon, with workspace paths visible
+to both it and the controller. Budget CPU, memory and active slots for execution,
+BuildKit, setup and cache copying, leaving VM headroom for the daemon and control
+plane. These budgets do not cap the entire Docker/Colima VM. Idle suspension
+preserves container files between turns; it does not checkpoint process memory.
+
+Repository discovery and approved initial proposals follow the
+[environment guide](environments.md); unsupported fields fail validation before
+build. Installation policy remains authoritative over repository and agent input.
+Registry pulls require daemon-level network controls; environment HTTP/HTTPS
+allowlists cover supported build/setup/runtime traffic, not registry access.
+
+Use **Integrations → Shared images and caches** to preview and confirm cleanup of unused
+registered generations. Referenced or unregistered legacy resources are retained;
+never use a global Docker prune to implement per-task Reset. For capacity waits,
+failed builds, stale definitions and network denials, inspect the environment
+status/logs and agent diagnostics before retrying. See the
+[release evidence and limits](sandbox-acceptance.md) and
+[tested mise proposal](../examples/projects/mise-node/README.md).

@@ -46,6 +46,26 @@ Docker. `sandbox-image` builds the default sandbox image inside it on every
 state under **Integrations → Sandbox runtime**. See
 [sandbox runtime](sandbox-runtime.md).
 
+### Prepare a project environment
+
+In **Graph settings → Environment**, choose **Discover environment**. LeForge
+checks its optional YAML definition, devcontainer, Dockerfiles and Compose in
+that order. Select and review the source (and Compose development service),
+accept it into the draft, save and build. Invalid higher-priority definitions
+must be corrected or explicitly replaced; they do not silently fall through.
+When nothing is found, **Analyze repository** creates an initial proposal for
+administrator review in **Approvals**. Approval permits build; commands only run
+when ready. No `.leforge/environment.yaml` is required.
+
+Compatible tasks reuse prepared images and cache seeds while retaining separate
+workspaces and writable caches. Setup runs per task. The agent panel explains
+readiness, reuse, build failures and capacity waiting. Use **Integrations** for
+network policy, resource cleanup preview and confirmation. Reset affects a stopped
+graph's environment and preserves its workspace and shared resources needed by
+other tasks. See [environments and troubleshooting](environments.md), the
+[mise example](../examples/projects/mise-node/README.md), and the
+[validated scope](sandbox-acceptance.md).
+
 ## 2. Watch work move
 
 ```bash
