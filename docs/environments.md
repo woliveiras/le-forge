@@ -60,8 +60,8 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-global build admission, idle suspension and shared-resource reclamation remain planned.
-Execution-sandbox concurrency and memory budgets are available in
+global CPU accounting, idle suspension and shared-resource reclamation remain planned.
+Shared build/execution concurrency and memory budgets are available in
 [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 Prepared-image and cache-snapshot reuse is available as described below. See the
 [contracts](product-contracts.md#planned-discovery-and-acceptance) and
@@ -193,9 +193,10 @@ COPY --from=development /app.txt /app.txt
 ```
 
 The selected target must exist, is persisted with acceptance, and contributes to
-the image hash. Changing it requires another review. LeForge passes `--target`
-only to the project build, then adds its sandbox user layer on the resulting
-image. The selected stage must still provide `/bin/sh` for that layer.
+the image hash. Changing it requires another review. LeForge extends the
+generated Dockerfile with a sandbox-user stage inheriting the selected target,
+so both are built in the bounded worker. The selected stage must still provide
+`/bin/sh` for that layer.
 The real sandbox test also covers named/indexed stage copies, explicit/default
 targets, isolated target builds and dependency failures. It also checks external
 image copies by tag and digest, and an unavailable registry.
@@ -318,9 +319,39 @@ Existing graph status records retain their image/cache references. This
 conservative retention protects other tasks and supports reuse after all graphs
 have stopped. Explicit reclamation of unused shared generations is still
 planned; Reset is not a shared-storage garbage collector. Reuse reduces build
-work and downloads; execution-sandbox memory/concurrency limits are now available through
-`isolation.docker.capacity`. Build admission and idle suspension remain planned;
-the execution budget alone does not cap the whole Docker VM.
+work and downloads; execution sandboxes and environment pipelines now share
+the memory/concurrency budget in `isolation.docker.capacity`. Idle suspension
+remains planned; this budget does not cap the whole Docker VM.
+
+### Build and setup capacity
+
+An environment pipeline reserves one slot and `spec.environment.memory` (or
+`defaultMemory`) before building, copying caches or running setup. Both the
+active count and reserved-memory total must fit alongside execution sandboxes.
+Waiting appears in the build log and `sandbox.capacity` events; it counts toward
+the environment timeout and can be cancelled through Reset.
+
+Dockerfile instructions and the sandbox-user layer run in a temporary Buildx
+`docker-container` worker with a finite memory cap and no additional swap.
+The accepted build target is preserved, and a repository context is revalidated
+before its generated Dockerfile is extended. The resulting image is loaded
+into the dedicated daemon. The worker is removed before cache copies and setup,
+which receive the same memory/swap cap and run sequentially under the reservation.
+The control-plane image includes `docker-cli-buildx`; local control-plane
+installations also need the Docker Buildx plugin. The first build may download
+the BuildKit worker image.
+
+Reservations survive controller restarts. Build again or Reset the same graph
+to reconcile interrupted workers. A cleanup failure is reported and retains
+capacity until removal is confirmed. Prepared-image and dependency-seed reuse
+remain available; temporary BuildKit workers and their layer-cache state are
+removed after preparation.
+
+The budget covers worker containers, not daemon image pull/load/commit overhead,
+external runtimes or the entire Colima/Docker VM. Leave VM headroom. Global CPU
+accounting, idle suspension and a dedicated queue display remain planned.
+Run `make test-environment-context` for real bounded builds, setup, context
+validation, stage selection, failures, reuse and isolation checks.
 
 ## Recipes
 
@@ -377,11 +408,13 @@ sequenceDiagram
   UI->>F: POST /graphs/{id}/environment/build
   F->>S: acquire lease environment/{id}, status building
   F-->>UI: 202 building
-  F->>D: pull image, or build the Dockerfile (validated context for repository definitions)
-  F->>D: build the sandbox-user layer (uid 10001, HOME, cache dirs)
+  F->>S: wait for and reserve global capacity
+  F->>D: bounded BuildKit worker builds source and sandbox-user layer
+  F->>D: load prepared image and remove worker
   F->>D: run setup in leforge-envbuild-{id} (workspace mounted, setup network)
   F->>D: commit → leforge-env/{id}:{hash}
   F->>D: create cache volumes, remove older images of the graph
+  F->>S: release capacity after worker cleanup
   F->>S: status ready (image, caches, log tail), release lease
   F-->>UI: environment.ready event
   Note over F,D: Agent start: sandbox from the image,<br/>caches mounted, run network
@@ -419,7 +452,11 @@ sequenceDiagram
 | Events | `environment.build_started`, `environment.ready`, `environment.failed`, `environment.reset` ([events](events.md)) |
 | Metrics | `leforge_environment_builds_total{outcome}`, `leforge_environment_build_duration_seconds{outcome}` |
 | Traces | span `environment.build` with `leforge.graph` and `leforge.environment.hash` |
-| Logs | `environment ready` (info), `environment build failed` (warn) |
+| Logs | `environment ready` (info), `environment build failed` (warn), `environment capacity` (info) |
+
+Admission also emits `sandbox.capacity` with `phase=environment`, uses the
+`sandbox.admit` span, and updates the shared capacity transition/latency metrics
+documented in [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 
 ### API
 

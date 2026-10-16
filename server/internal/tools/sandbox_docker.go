@@ -329,7 +329,13 @@ func firstLine(s string) string {
 }
 
 func (s *DockerSandbox) inventory(ctx context.Context) ([]sandboxcapacity.Container, error) {
-	out, err := s.docker(ctx, "ps", "-q", "--filter", "label=leforge.sandbox=true")
+	return DockerCapacityInventory(ctx, s.docker)
+}
+
+// DockerCapacityInventory accounts for running execution sandboxes. Environment
+// pipelines use durable reservations for their sequential temporary containers.
+func DockerCapacityInventory(ctx context.Context, docker func(context.Context, ...string) (string, error)) ([]sandboxcapacity.Container, error) {
+	out, err := docker(ctx, "ps", "-q", "--filter", "label=leforge.sandbox=true")
 	if err != nil {
 		return nil, fmt.Errorf("list active sandboxes: %v: %s", err, out)
 	}
@@ -338,7 +344,7 @@ func (s *DockerSandbox) inventory(ctx context.Context) ([]sandboxcapacity.Contai
 		return nil, nil
 	}
 	args := append([]string{"inspect", "--format", "{{.Name}} {{.State.Running}} {{.HostConfig.Memory}}"}, ids...)
-	out, err = s.docker(ctx, args...)
+	out, err = docker(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("inspect active sandboxes: %v: %s", err, out)
 	}

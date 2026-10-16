@@ -257,12 +257,17 @@ concurrency and dedicated-daemon tests cover invalidation, failure, cancellation
 isolation and reset. See [environment reuse](environments.md#reuse-across-tasks)
 for limits and semantics.
 
-Execution sandboxes now have installation-wide count and reserved-memory budgets,
+Execution sandboxes and environment pipelines now share installation-wide count
+and reserved-memory budgets,
 with finite Docker memory/swap limits, persistent reservations, cancellation,
 daemon inventory checks and confirmed-removal release. Defaults are four active
-sandboxes, 4 GiB total and 1 GiB per sandbox. Logs/events and bounded-label metrics
+slots, 4 GiB total and 1 GiB per sandbox/pipeline. BuildKit workers, setup and
+cache-copy helpers run sequentially with the reserved memory cap and no extra
+swap; the complete pipeline holds one slot. Build timeout includes admission
+waiting. Logs/events and bounded-label metrics
 report admission. See [capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
-Explicit shared-resource reclamation, build capacity budgets and idle-container
+The budget excludes daemon overhead and external runtimes.
+Explicit shared-resource reclamation, global CPU accounting and idle-container
 suspension remain planned. The target lifecycle below includes those extensions.
 
 #### Planned reuse and resource lifecycle

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 	"github.com/woliveiras/le-forge/server/internal/storage/fsstore"
 )
 
@@ -39,7 +40,7 @@ func TestReuseRealSandbox(t *testing.T) {
 	}
 	prefix := fmt.Sprintf("reuse-test-%d-", time.Now().UnixNano())
 	ws := reuseWorkspaces{root: t.TempDir(), prefix: prefix}
-	m, err := New(Options{Store: store, Workspaces: ws, DockerBin: bin, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	m, err := New(Options{Store: store, Workspaces: ws, DockerBin: bin, Capacity: &sandboxcapacity.Manager{Store: store, Scope: prefix, Policy: sandboxcapacity.Policy{MaxActive: 1, TotalMemory: "256m", DefaultMemory: "256m"}}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestReuseRealSandbox(t *testing.T) {
 	})
 	build := func(id string) (*domain.Graph, *View) {
 		t.Helper()
-		g := &domain.Graph{Metadata: domain.GraphMetadata{ID: prefix + id}, Spec: domain.GraphSpec{Workspace: domain.WorkspaceSpec{Repo: "https://example.test/" + prefix}, Environment: &domain.EnvironmentSpec{Image: "alpine:3.22", Caches: []string{"/home/sandbox/.cache/pip"}, Network: domain.EnvironmentNetwork{Setup: "none"}, Setup: []string{"test ! -e /home/sandbox/private-marker", "touch /home/sandbox/private-marker", "if test -f /home/sandbox/.cache/pip/dependency; then echo cache-seed-hit; else echo fixture-dependency > /home/sandbox/.cache/pip/dependency; fi", "echo installed > /workspace/installed"}}}}
+		g := &domain.Graph{Metadata: domain.GraphMetadata{ID: prefix + id}, Spec: domain.GraphSpec{Workspace: domain.WorkspaceSpec{Repo: "https://example.test/" + prefix}, Environment: &domain.EnvironmentSpec{Image: "alpine:3.22", Caches: []string{"/home/sandbox/.cache/pip"}, Network: domain.EnvironmentNetwork{Setup: "none"}, Setup: []string{"test \"$(cat /sys/fs/cgroup/memory.max)\" = 268435456", "test ! -e /home/sandbox/private-marker", "touch /home/sandbox/private-marker", "if test -f /home/sandbox/.cache/pip/dependency; then echo cache-seed-hit; else echo fixture-dependency > /home/sandbox/.cache/pip/dependency; fi", "echo installed > /workspace/installed"}}}}
 		graphs = append(graphs, g)
 		dir, e := ws.Ensure(ctx, g)
 		if e != nil {

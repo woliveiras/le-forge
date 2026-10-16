@@ -17,6 +17,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/observability"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 	"github.com/woliveiras/le-forge/server/internal/tools"
 )
@@ -86,6 +87,7 @@ type View struct {
 
 // Options wire a Manager.
 type Options struct {
+	Capacity          *sandboxcapacity.Manager
 	ProposalValidator func(context.Context, *domain.Graph) error
 	Store             storage.Store
 	Bus               *events.Bus // optional
@@ -285,11 +287,13 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 	var image string
 	var caches []CacheMount
 	var err error
-	if g.Spec.Workspace.Repo != "" {
-		image, caches, err = m.sharedSteps(ctx, g, &result, b.force, logBuf)
-	} else {
-		image, caches, err = m.steps(ctx, g, st.Hash, logBuf)
-	}
+	image, caches, err = m.withBuildCapacity(ctx, g, logBuf, func(ctx context.Context) (string, []CacheMount, error) {
+		if g.Spec.Workspace.Repo != "" {
+			return m.sharedSteps(ctx, g, &result, b.force, logBuf)
+		}
+		return m.steps(ctx, g, st.Hash, logBuf)
+	})
+
 	stopFlush()
 	st.ReuseKey, st.Reused, st.Inputs, st.Scope = result.ReuseKey, result.Reused, result.Inputs, result.Scope
 
@@ -428,6 +432,9 @@ func (m *Manager) steps(ctx context.Context, g *domain.Graph, hash string, log i
 
 // prepareImage never mounts the mutable workspace or runs setup.
 func (m *Manager) prepareImage(ctx context.Context, g *domain.Graph, final string, log io.Writer) (string, error) {
+	if m.opt.Capacity != nil {
+		return m.prepareBoundedImage(ctx, g, final, log)
+	}
 	env, id := g.Spec.Environment, g.Metadata.ID
 	hash := Hash(env)
 	baseTag, userTag := final+"-base", final+"-user"
@@ -506,6 +513,14 @@ func (m *Manager) Reset(ctx context.Context, graphID, actor string) error {
 		<-b.done
 	} else if m.leaseAlive(ctx, graphID) {
 		return fmt.Errorf("%w for graph %s on another instance; reset it after the build ends", ErrBuildRunning, graphID)
+	}
+	if m.opt.Capacity != nil {
+		if err := m.cleanBuildResources(ctx, graphID); err != nil {
+			return err
+		}
+		if err := m.opt.Capacity.Release(ctx, buildContainer(graphID)); err != nil {
+			return err
+		}
 	}
 	// Mark absent first so an interrupted build does not record a result.
 	if err := m.save(ctx, &Status{Graph: graphID, State: StateAbsent}); err != nil {
@@ -652,6 +667,7 @@ func (m *Manager) publish(ctx context.Context, t domain.EventType, graphID, acto
 
 // docker runs one CLI call against the sandbox daemon, streaming output.
 func (m *Manager) docker(ctx context.Context, stdin io.Reader, out io.Writer, args ...string) error {
+	args = boundedRunArgs(ctx, args)
 	cmd := tools.DockerCommand(ctx, m.opt.DockerBin, m.opt.DockerHost, args...)
 	cmd.Stdin = stdin
 	var tail tailBuffer

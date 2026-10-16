@@ -203,7 +203,8 @@ your services.
 ## Global execution-sandbox capacity
 
 `isolation.docker.capacity` applies across graphs and replicas using the same
-installation store and dedicated Docker daemon. Defaults are:
+installation store and dedicated Docker daemon. Environment builds, setup and
+cache-copy helpers share this pool with execution sandboxes. Defaults are:
 
 ```yaml
 isolation:
@@ -214,7 +215,9 @@ isolation:
       defaultMemory: 1g
 ```
 
-A node's `isolation.memory` overrides `defaultMemory`. Requests must fit the
+A node's `isolation.memory` or an environment's `spec.environment.memory`
+overrides `defaultMemory`. Each environment pipeline reserves one slot for its
+sequential build/setup/cache-copy phases. Requests must fit the
 whole budget and Docker's 6 MiB minimum. Values accept integer bytes or `k`, `m`,
 `g` suffixes. Zero/negative limits and a default larger than the total are
 configuration errors. Configure the same policy and daemon address on every
@@ -245,11 +248,15 @@ before retrying failed cleanup. Stop existing sandboxes before lowering limits
 or changing their reserved memory. All controllers must share the same store;
 independent installations must not use the same daemon for concurrent admission.
 
-The budget covers Docker **execution sandboxes**, including idle ones. It does
-not cap the Docker daemon, image builds, environment setup/cache-copy helpers,
-external agent runtimes, process/Kubernetes isolation, or the operating system.
-Leave headroom in the Colima/Docker VM. Global build admission and automatic idle
-suspension remain separate planned work.
+The budget covers Docker execution sandboxes (including idle ones), temporary
+BuildKit workers, environment setup and cache-copy containers. Builds use the
+Buildx `docker-container` driver; the worker is removed before setup starts.
+[Environment capacity](environments.md#build-and-setup-capacity) describes
+waiting, timeout, cleanup and recovery. It does not cap Docker daemon overhead
+(including image pulls/loads/commits), external agent runtimes,
+process/Kubernetes isolation or the operating system. Leave headroom in the
+Colima/Docker VM. Global CPU accounting and automatic idle suspension remain
+planned.
 
 Metrics use bounded state labels:
 

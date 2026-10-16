@@ -146,6 +146,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.Environments, err = environment.New(environment.Options{
 		Store: a.Store, Bus: a.Bus, Workspaces: ws, Instance: cfg.Instance, Log: log,
 		DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
+		Capacity: capacityManager(cfg, a.Store),
 	})
 	if err != nil {
 		return nil, err
@@ -274,20 +275,24 @@ func openBroker(ctx context.Context, cfg *config.Config) (queue.Broker, error) {
 	return nil, last
 }
 
+func capacityManager(cfg *config.Config, store storage.Store) *sandboxcapacity.Manager {
+	host := cfg.Isolation.Docker.Host
+	if host == "" {
+		host = os.Getenv("DOCKER_HOST")
+	}
+	scope := fmt.Sprintf("%x", sha256.Sum256([]byte(host)))
+	return &sandboxcapacity.Manager{Store: store, Policy: cfg.Isolation.Docker.Capacity, Scope: scope, Notify: func(name, state string) {
+		slog.Info("sandbox capacity", "sandbox", name, "state", state)
+	}}
+}
+
 // sandboxFactory picks the command sandbox per node isolation mode.
 //
 // Docker-isolated nodes without an image of their own use the graph's
 // environment when it defines one (its image, caches and run network);
 // otherwise the installation's default sandbox image.
 func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage.Store, bus *events.Bus) engine.SandboxFactory {
-	host := cfg.Isolation.Docker.Host
-	if host == "" {
-		host = os.Getenv("DOCKER_HOST")
-	}
-	scope := fmt.Sprintf("%x", sha256.Sum256([]byte(host)))
-	capacity := &sandboxcapacity.Manager{Store: store, Policy: cfg.Isolation.Docker.Capacity, Scope: scope, Notify: func(name, state string) {
-		slog.Info("sandbox capacity", "sandbox", name, "state", state)
-	}}
+	capacity := capacityManager(cfg, store)
 
 	return func(ctx context.Context, s engine.SandboxSpec) (tools.Sandbox, error) {
 		switch s.Node.Isolation.Mode {

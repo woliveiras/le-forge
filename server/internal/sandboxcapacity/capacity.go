@@ -1,4 +1,4 @@
-// Package sandboxcapacity admits execution containers against an installation-wide
+// Package sandboxcapacity admits execution containers and environment pipelines against an installation-wide
 // budget. Durable reservations fail closed across ambiguous Docker failures/restarts.
 package sandboxcapacity
 

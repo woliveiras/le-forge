@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 	"github.com/woliveiras/le-forge/server/internal/storage/fsstore"
 )
 
@@ -33,7 +34,7 @@ func TestBuildContextRealSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, err := New(Options{Store: store, Workspaces: fakeWorkspaces{dir}, DockerBin: bin, Instance: "context-test", Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	manager, err := New(Options{Store: store, Workspaces: fakeWorkspaces{dir}, DockerBin: bin, Capacity: &sandboxcapacity.Manager{Store: store, Scope: "context-live", Policy: sandboxcapacity.Policy{MaxActive: 1, TotalMemory: "256m", DefaultMemory: "256m"}}, Instance: "context-test", Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -26,7 +26,7 @@ FROM alpine:3.22
 # shell.exec in the process sandbox; docker-cli: docker isolation, talking to
 # the dedicated sandbox daemon (LEFORGE_SANDBOX_DOCKER_HOST); tini: signal
 # handling for children.
-RUN apk add --no-cache ca-certificates git python3 tini docker-cli tzdata \
+RUN apk add --no-cache ca-certificates git python3 tini docker-cli docker-cli-buildx tzdata \
  && addgroup -S -g 10001 leforge && adduser -S -u 10001 -G leforge -h /var/lib/leforge leforge \
  && mkdir -p /var/lib/leforge/data /var/lib/leforge/workspaces /app \
  && chown -R leforge:leforge /var/lib/leforge

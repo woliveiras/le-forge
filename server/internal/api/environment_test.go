@@ -18,7 +18,7 @@ func fakeDaemonCLI(t *testing.T) (bin, log string) {
 	t.Helper()
 	dir := t.TempDir()
 	bin, log = filepath.Join(dir, "docker"), filepath.Join(dir, "calls.log")
-	script := "#!/bin/sh\necho \"$*\" >> " + log + "\ncase \"$1\" in build) cat >/dev/null ;; version) echo 28.5.2 ;; esac\nexit 0\n"
+	script := "#!/bin/sh\necho \"$*\" >> " + log + "\ncase \"$1\" in build) cat >/dev/null ;; buildx) [ \"$2\" != build ] || cat >/dev/null ;; version) echo 28.5.2 ;; esac\nexit 0\n"
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
