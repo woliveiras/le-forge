@@ -32,6 +32,7 @@ tags:
   - name: approvals
   - name: catalog
   - name: workspace
+  - name: mcp
   - name: providers
     description: Model providers - configured on the server or managed through the API with encrypted credentials.
   - name: runtime-callback
@@ -1310,6 +1311,151 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
 
+  /api/v1/mcp/connections:
+    get:
+      tags: [mcp]
+      operationId: listMCPConnections
+      summary: List safe MCP connection metadata
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/MCPConnection"}}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+    post:
+      tags: [mcp]
+      operationId: createMCPConnection
+      summary: Register a remote MCP connection
+      x-leforge-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/MCPConnectionInput"}
+      responses:
+        "201":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPConnection"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+  /api/v1/mcp/connections/{connection}:
+    get:
+      tags: [mcp]
+      operationId: getMCPConnection
+      summary: Read a safe MCP connection
+      x-leforge-role: viewer
+      parameters:
+        - in: path
+          name: connection
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPConnection"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+    put:
+      tags: [mcp]
+      operationId: updateMCPConnection
+      summary: Update a connection with a required current revision
+      x-leforge-role: admin
+      parameters:
+        - in: path
+          name: connection
+          required: true
+          schema: {type: string}
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: integer, minimum: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/MCPConnectionInput"}
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPConnection"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+  /api/v1/mcp/connections/{connection}/test:
+    post:
+      tags: [mcp]
+      operationId: testMCPConnection
+      summary: Test and refresh the discovered catalogue
+      x-leforge-role: operator
+      parameters:
+        - in: path
+          name: connection
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPConnection"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+  /api/v1/mcp/connections/{connection}/tools/refresh:
+    post:
+      tags: [mcp]
+      operationId: refreshMCPTools
+      summary: Discover and persist the MCP tool catalogue
+      x-leforge-role: operator
+      parameters:
+        - in: path
+          name: connection
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPConnection"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+  /api/v1/mcp/tools:
+    get:
+      tags: [mcp]
+      operationId: listMCPPermissionTools
+      summary: List selectable MCP permissions; not runnable tools
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Safe metadata; discovery attempts may report unavailable. No invocation is performed.
+          content:
+            application/json:
+              schema: {type: array, items: {type: object}}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Invalid connection or MCP grant
+
 components:
   securitySchemes:
     bearer:
@@ -1399,6 +1545,48 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    MCPConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [id, name, service, endpoint, enabled]
+      properties:
+        id: {type: string, pattern: "^[a-z][a-z0-9_-]{0,63}$"}
+        name: {type: string, minLength: 1, maxLength: 120}
+        service: {type: string, enum: [generic, github, bitbucket, jira, confluence]}
+        endpoint: {type: string, format: uri, description: "HTTPS; no user info, query or fragment. Discovery denies private networks."}
+        enabled: {type: boolean}
+        credential:
+          type: object
+          writeOnly: true
+          additionalProperties: false
+          properties:
+            value: {type: string, writeOnly: true, maxLength: 16384}
+            clear: {type: boolean}
+    MCPConnection:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        service: {type: string}
+        endpoint: {type: string}
+        enabled: {type: boolean}
+        credentialConfigured: {type: boolean}
+        revision: {type: integer}
+        status: {type: string, enum: [untested, ready, disabled, unavailable]}
+        toolsRevision: {type: integer}
+        tools:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              description: {type: string}
+              inputSchema: {type: object}
+        lastTest: {type: string, format: date-time}
+        error: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        updatedBy: {type: string}
     Provider:
       type: object
       description: A model provider. Never contains a credential or its ciphertext.

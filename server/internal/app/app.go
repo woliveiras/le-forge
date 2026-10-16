@@ -30,6 +30,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	_ "github.com/woliveiras/le-forge/server/internal/llm/providers"
 	"github.com/woliveiras/le-forge/server/internal/llmconfig"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
 	"github.com/woliveiras/le-forge/server/internal/queue/brokers"
@@ -57,6 +58,7 @@ type App struct {
 	Approvals        *hitl.Service
 	Models           *llm.Registry
 	Providers        *llmconfig.Manager
+	MCP              *mcpconfig.Manager
 	Tools            *tools.Registry
 	Gateway          *tools.Gateway
 	WorkspaceMonitor *tools.WorkspaceMonitor
@@ -129,6 +131,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if err := a.Providers.Load(ctx); err != nil {
 		return nil, fmt.Errorf("llm providers: %w", err)
 	}
+	a.MCP = mcpconfig.New(a.Store, box, a.Bus)
 	a.Tools = tools.Builtin(tools.BuiltinConfig{AllowPrivateNetworks: cfg.Tools.AllowPrivateNetworks})
 	a.Gateway = tools.NewGateway(a.Tools, a.Approvals, a.Bus)
 
@@ -222,8 +225,9 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		}
 	}
 	a.Engine, err = engine.New(engine.Options{
-		Reviews:  a.Reviews,
-		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
+		ValidateToolGrants: a.MCP.ValidateGrants,
+		Reviews:            a.Reviews,
+		Instance:           cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
 		Sandboxes: sandboxFactory(cfg, a.Environments, a.Store, a.Bus), Environments: a.Environments, EnvironmentProposals: a.Proposals,
 		CallbackURL: cfg.Server.InternalURL, Log: log,
@@ -249,7 +253,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		log.Warn("API authentication is DISABLED; never expose this instance beyond localhost")
 	}
 	a.API = api.New(api.Deps{
-		Reviews: a.Reviews, PreviewGateway: a.PreviewGateway,
+		Reviews: a.Reviews, PreviewGateway: a.PreviewGateway, MCP: a.MCP,
 		Config: cfg, Engine: a.Engine, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Providers: a.Providers, Tools: a.Tools, Workspaces: ws, Auth: auth, Log: log,
 		Environments: a.Environments, Proposals: a.Proposals,

@@ -1,3 +1,4 @@
+import { MCPSection } from './MCPSection';
 import { useRef, useState } from 'react';
 import { api } from '../api/client';
 import type { Info, ToolInfo } from '../api/types';
@@ -145,6 +146,7 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
 
       <SharedEnvironmentsSection canManage={role === 'admin'} />
 
+      <MCPSection role={role} />
       <ProvidersSection ref={providersRef} canEdit={role === 'admin'} canTest={role === 'admin' || role === 'operator'} />
 
       <section className="integration-section">
@@ -172,7 +174,7 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
               ))}
             </div>
             <p className="muted small integration-footnote">
-              A registered tool is not necessarily an external service connection. MCP server management is not available in this version.
+              A registered tool is not necessarily an external service connection. MCP registration and discovery are available above; MCP tool invocation remains pending.
             </p>
           </>
         )}

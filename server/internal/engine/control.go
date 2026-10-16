@@ -126,6 +126,11 @@ func (e *Engine) SaveGraph(ctx context.Context, g *domain.Graph, expectedVersion
 	if !rep.Valid {
 		return nil, nil, &ValidationError{Report: rep}
 	}
+	if e.opt.ValidateToolGrants != nil {
+		if err := e.opt.ValidateToolGrants(ctx, g); err != nil {
+			return nil, nil, err
+		}
+	}
 	keepIdentity(authored, g)
 	effective := g
 	g = authored

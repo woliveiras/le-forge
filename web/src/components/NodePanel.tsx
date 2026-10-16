@@ -1,3 +1,4 @@
+import { MCPGrants } from './MCPGrants';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import {
@@ -455,7 +456,7 @@ function NodeSettings({
   const inputs = (summary.graph.spec.channels ?? []).filter((c) => c.to?.includes(nodeId));
   const outputs = (summary.graph.spec.channels ?? []).filter((c) => c.from === nodeId);
   const knownTools = new Set((toolCatalog.data ?? []).map((tool) => tool.name));
-  const extraGrants = tools.filter((grant) => !knownTools.has(grantName(grant)));
+  const extraGrants = tools.filter((grant) => !knownTools.has(grantName(grant)) && !grantName(grant).startsWith('mcp.'));
   const visibleTools = (toolCatalog.data ?? []).filter((tool) => {
     const query = toolSearch.trim().toLowerCase();
     return !query || `${tool.name} ${tool.capability} ${tool.description}`.toLowerCase().includes(query);
@@ -486,6 +487,7 @@ function NodeSettings({
   };
   return (
     <section>
+      {onUpdateNode && <MCPGrants grants={tools} onChange={grants=>onUpdateNode(nodeId,{tools:grants})} />}
       <div className="section-head">
         <h3>Tools {usesGraphDefaults ? <span className="muted small">(graph defaults)</span> : null}</h3>
         <FieldIssues issues={issues} field="tools" />

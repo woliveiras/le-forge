@@ -35,6 +35,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/hitl"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/llmconfig"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
 	"github.com/woliveiras/le-forge/server/internal/review"
@@ -48,6 +49,7 @@ import (
 var Version = "dev"
 
 type Deps struct {
+	MCP            *mcpconfig.Manager
 	Reviews        *review.Manager
 	PreviewGateway *review.Gateway
 	Config         *config.Config
@@ -106,6 +108,13 @@ func (s *Server) routes() {
 	O := config.RoleOperator
 	A := config.RoleAdmin
 	routes := []route{
+		{"GET /api/v1/mcp/connections", R, s.mcpList},
+		{"GET /api/v1/mcp/tools", R, s.mcpTools},
+		{"POST /api/v1/mcp/connections", A, s.mcpPut},
+		{"GET /api/v1/mcp/connections/{connection}", R, s.mcpGet},
+		{"PUT /api/v1/mcp/connections/{connection}", A, s.mcpPut},
+		{"POST /api/v1/mcp/connections/{connection}/test", O, s.mcpRefresh},
+		{"POST /api/v1/mcp/connections/{connection}/tools/refresh", O, s.mcpRefresh},
 		{"GET /api/v1/reviews", O, s.listReviews},
 		{"POST /api/v1/reviews/{review}/{action}", O, s.reviewAction},
 		{"GET /healthz", "", s.healthz},
@@ -220,6 +229,8 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), ve.Report)
 	case errors.As(err, &pve):
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), map[string]any{"valid": false, "errors": pve.Errors})
+	case errors.Is(err, mcpconfig.ErrInvalid):
+		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), nil)
 	case errors.Is(err, secrets.ErrNoKey):
 		writeErr(w, http.StatusConflict, "secret_key_missing", err.Error(), nil)
 	case errors.Is(err, engine.ErrNotFound), errors.Is(err, storage.ErrNotFound):
@@ -485,6 +496,15 @@ func (s *Server) validateGraph(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	rep := s.Engine.Validate(g)
+	if s.MCP != nil {
+		if err := s.MCP.ValidateGrants(r.Context(), g); err != nil {
+			if !errors.Is(err, mcpconfig.ErrInvalid) {
+				return err
+			}
+			rep.Valid = false
+			rep.Errors = append(rep.Errors, graph.Issue{Path: "spec.nodes", Message: err.Error()})
+		}
+	}
 	if len(unknown) > 0 {
 		rep.Errors = append(unknown, rep.Errors...)
 		rep.Valid = false

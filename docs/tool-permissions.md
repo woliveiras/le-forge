@@ -24,7 +24,7 @@ share a capability, so granting `filesystem.read` grants all four read tools.
 | `git.write` | `git.add` `{paths}`, `git.commit` `{message, all?, author?}`, `git.branch` `{name, from?, checkout?}`, `git.checkout` `{ref}`, `git.merge` `{branch, noFF?, message?}` | `paths` | Fallback identity `LeForge Agent <agent@leforge.local>` |
 | `http.fetch` | `http.fetch` `{url, method?, headers?, body?, maxBytes? (≤5 MiB)}` | `hosts` | http/https only, ≤ 5 redirects (each re-checked), HTML → text, SSRF guard |
 | `human.ask` | `human.ask` `{question}` | — | Opens a `question` approval and blocks until a human answers |
-| `mcp.<server>.*` | *(extension point)* | — | Requires registering an MCP tool provider |
+| `mcp.<connectionId>.<toolName>` | permission preparation only | — | Exact discovered grants; runtime invocation pending (see [MCP](mcp.md)) |
 
 `GET /api/v1/tools` lists the registry with JSON Schemas.
 

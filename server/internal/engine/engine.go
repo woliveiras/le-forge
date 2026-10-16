@@ -78,7 +78,8 @@ type SandboxFactory func(ctx context.Context, s SandboxSpec) (tools.Sandbox, err
 
 // Options wires the engine to its adapters.
 type Options struct {
-	Reviews interface {
+	ValidateToolGrants func(context.Context, *domain.Graph) error
+	Reviews            interface {
 		Pending(context.Context, string, string, int) (bool, error)
 		AssertApproved(context.Context, string, string, int) error
 		Terminal(context.Context, string, string, int) (string, error)

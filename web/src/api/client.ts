@@ -1,3 +1,4 @@
+import type { MCPConnection, MCPConnectionInput } from './types';
 import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
 import type {
   Approval,
@@ -159,6 +160,10 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  mcpConnections: () => request<MCPConnection[]>(`${V1}/mcp/connections`),
+  mcpTools: () => request<ToolInfo[]>(`${V1}/mcp/tools`),
+  saveMCP: (input: MCPConnectionInput, revision?: number) => request<MCPConnection>(`${V1}/mcp/connections${revision ? '/'+enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', headers: revision ? {'If-Match': String(revision)} : undefined, body:input}),
+  refreshMCP: (id: string, action: 'test' | 'tools/refresh') => request<MCPConnection>(`${V1}/mcp/connections/${enc(id)}/${action}`, {method:'POST'}),
   skills: () => request<Skill[]>(`${V1}/skills`),
   saveSkill: (input: SkillInput, revision?: number) => request<Skill>(`${V1}/skills${revision ? '/' + enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', body: input, headers: revision ? {'If-Match': String(revision)} : undefined}),
   deleteSkill: (id: string, revision: number) => request<Skill>(`${V1}/skills/${enc(id)}`, {method: 'DELETE', headers: {'If-Match': String(revision)}}),

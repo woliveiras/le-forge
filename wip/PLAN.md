@@ -265,6 +265,15 @@ available according to policy, without requiring a managed preview or a PR.
 
 ### 6. Add MCP Configuration
 
+**Delivered first increment:** The console registers revisioned remote HTTPS MCP
+connections, protects bearer credentials, discovers bounded JSON/SSE tool catalogues,
+and prepares exact per-agent grants in the graph editor. Discovery uses the
+2025-06-18 Streamable HTTP protocol and public network destinations only. Unit,
+SQLite/real TLS integration and Chromium tests cover the supported flow.
+Invocation through the gateway, runtime revocation/approvals, OAuth, private-network
+policy and live vendor-specific acceptance remain pending; service names are
+metadata. See [MCP scope and limits](../docs/mcp.md).
+
 Implement MCP connection management in the interface, starting with the integrations used by the team:
 
 - Bitbucket;

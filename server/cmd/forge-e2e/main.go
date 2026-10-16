@@ -21,6 +21,8 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/llm"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig/mcptest"
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
@@ -90,6 +92,14 @@ func run() error {
 	a, err := app.New(ctx, cfg)
 	if err != nil {
 		return err
+	}
+	fixtureMCP := mcptest.New()
+	defer fixtureMCP.Close()
+	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if endpoint != "https://mcp.fixture.invalid/mcp" {
+			return nil, fmt.Errorf("unknown fixture endpoint")
+		}
+		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
 	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture", "activity-approve", "activity-reject"} {

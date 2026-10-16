@@ -641,3 +641,14 @@ export interface HumanReview {
  error?: string;
  decidedBy?: string;
 }
+
+export interface MCPConnection {
+  id: string; name: string; service: string; endpoint: string; enabled: boolean;
+  revision: number; status: string; credentialConfigured: boolean; error?: string;
+  toolsRevision: number; tools: {name: string; description?: string; inputSchema: unknown}[];
+  lastTest?: string; updatedAt: string; updatedBy: string;
+}
+export interface MCPConnectionInput {
+  id: string; name: string; service: string; endpoint: string; enabled: boolean;
+  credential?: {value?: string; clear?: boolean};
+}
