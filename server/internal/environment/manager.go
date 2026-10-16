@@ -175,7 +175,7 @@ func (m *Manager) Get(ctx context.Context, g *domain.Graph) (*View, error) {
 		}
 	}
 	v := m.view(g, st)
-	if v.UpToDate && m.ValidatePolicy(g.Spec.Environment) != nil {
+	if v.UpToDate && m.ValidatePolicy(ctx, g.Spec.Environment) != nil {
 		v.UpToDate = false
 		v.ChangeReasons = append(v.ChangeReasons, "installation_policy")
 	}
@@ -780,7 +780,7 @@ func (t *tailBuffer) String() string {
 
 // ValidateDefinition checks both filesystem provenance and durable approval.
 func (m *Manager) ValidateDefinition(ctx context.Context, g *domain.Graph, dir string) error {
-	if err := m.ValidatePolicy(g.Spec.Environment); err != nil {
+	if err := m.ValidatePolicy(ctx, g.Spec.Environment); err != nil {
 		m.opt.Log.Warn("environment definition denied by installation policy", "graph", g.Metadata.ID)
 		return err
 	}
@@ -799,8 +799,12 @@ func (m *Manager) SetProposalValidator(fn func(context.Context, *domain.Graph) e
 }
 
 // ValidatePolicy checks installation restrictions before review, build and reuse.
-func (m *Manager) ValidatePolicy(env *domain.EnvironmentSpec) error {
-	if err := m.opt.Policy.Check(env); err != nil {
+func (m *Manager) ValidatePolicy(ctx context.Context, env *domain.EnvironmentSpec) error {
+	policy, err := m.CurrentPolicy(ctx)
+	if err != nil {
+		return fmt.Errorf("read installation network policy: %w", err)
+	}
+	if err := policy.Check(env); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
 	}
 	if env != nil && env.Network.Setup == "egress" && m.opt.Capacity == nil {
@@ -812,4 +816,10 @@ func (m *Manager) ValidatePolicy(env *domain.EnvironmentSpec) error {
 		}
 	}
 	return nil
+}
+
+// CurrentPolicy reads shared settings for every admission. Storage errors fail
+// closed; no controller-local cache can silently retain an older host ceiling.
+func (m *Manager) CurrentPolicy(ctx context.Context) (environmentpolicy.Policy, error) {
+	return (environmentpolicy.Settings{Store: m.opt.Store, Base: m.opt.Policy}).Effective(ctx)
 }

@@ -98,6 +98,9 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 			err = errors.Join(err, fmt.Errorf("environment cleanup (retry build or reset): %w", e))
 		}
 	}()
+	if err := m.ValidatePolicy(ctx, g.Spec.Environment); err != nil {
+		return "", nil, err
+	}
 	if g.Spec.Environment.Network.Setup == "egress" {
 		ctx, err = m.startPreparationProxy(ctx, g, log)
 		if err != nil {

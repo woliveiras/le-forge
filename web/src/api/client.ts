@@ -1,5 +1,7 @@
 import type {
   Approval,
+  InstallationNetwork,
+  NetworkPolicyView,
   EnvironmentView,
   EnvironmentCleanupResult,
   EnvironmentProposal,
@@ -152,6 +154,9 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  networkPolicy: () => request<NetworkPolicyView>(`${V1}/network-policy`),
+  previewNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy/preview`, { method: 'POST', body: { network, revision } }),
+  saveNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy`, { method: 'PUT', body: { network, revision } }),
   info: () => request<Info>(`${V1}/info`),
   health: () => request<HealthStatus>('/healthz'),
   ready: () => request<ReadyChecks>('/readyz', { allowStatuses: [503] }),

@@ -15,7 +15,7 @@ import (
 func TestPolicyRejectsManualBuildEscapes(t *testing.T) {
 	h := setup(t)
 	for _, source := range []string{"FROM alpine\nRUN --network=default echo escape", "# syntax=custom/frontend\nFROM alpine", "FROM alpine\nADD https://example.test/source /tmp/source"} {
-		if err := h.m.ValidatePolicy(&domain.EnvironmentSpec{Dockerfile: source}); !errors.Is(err, ErrInvalidDefinition) {
+		if err := h.m.ValidatePolicy(context.Background(), &domain.EnvironmentSpec{Dockerfile: source}); !errors.Is(err, ErrInvalidDefinition) {
 			t.Fatalf("accepted escape: %v", err)
 		}
 	}

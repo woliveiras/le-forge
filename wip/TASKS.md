@@ -117,6 +117,7 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 - [x] Enforce installation `environmentPolicy` on preparation/build RUN and runtime networks, manual/repository/agent definitions, approvals, cached images and node overrides. Add feature restrictions for proposals/Dockerfiles/setup/companions. Unit, storage/API integration and real sandbox command-egress tests cover the delivered subset; daemon registry egress remains external.
 - [x] Add an opt-in runtime HTTP/HTTPS egress proxy with exact per-environment host lists bounded by the installation list, public-IP validation/pinned dials, isolated internal networks, bounded denial logs and aggregate capacity/lifecycle.
+- [x] Manage installation network modes and host ceiling in Integrations with admin-only preview/confirmation, persisted revisions, usage/impact listing, dynamic enforcement and unit/integration/real-sandbox revocation/resume tests. Live proxy status/denial dashboard remains planned.
 - [x] Add preparation egress with separate setupAllowedHosts, installation validation, isolated BuildKit/setup networking, proxy capacity and cleanup, image reuse invalidation, editor fields and unit/integration/real sandbox tests. Daemon-wide registry restrictions remain pending.
 - [x] Test that runtime egress cannot bypass the proxy, allowed HTTP/HTTPS hosts work, forbidden/private destinations fail, and suspension/resume/proxy failures remain isolated. Unit, API/storage/UI integration and real dedicated-daemon tests cover the subset.
 

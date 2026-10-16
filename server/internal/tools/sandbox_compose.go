@@ -164,6 +164,11 @@ func (s *ComposeSandbox) Start(ctx context.Context) error {
 		}
 		return nil
 	}
+	if s.main.cfg.ValidateAdmission != nil {
+		if err := s.main.cfg.ValidateAdmission(ctx); err != nil {
+			return err
+		}
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stop := context.AfterFunc(s.ctx, cancel)
@@ -179,6 +184,11 @@ func (s *ComposeSandbox) Start(ctx context.Context) error {
 	}
 	if err := s.budget.ReserveGroup(ctx, s.main.cfg.Name, s.memory, s.cpu, len(s.companions)+1, s.main.inventory); err != nil {
 		return err
+	}
+	if s.main.cfg.ValidateAdmission != nil {
+		if err := s.main.cfg.ValidateAdmission(ctx); err != nil {
+			return errors.Join(err, s.budget.Release(context.WithoutCancel(ctx), s.main.cfg.Name))
+		}
 	}
 	if !networkExists {
 		args := []string{"network", "create", "--internal", "--label", "leforge.compose=" + s.fingerprint}

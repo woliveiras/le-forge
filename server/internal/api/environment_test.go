@@ -120,6 +120,7 @@ func TestEnvironmentLifecycleThroughTheAPI(t *testing.T) {
 		t.Fatalf("start after build: %d", c)
 	}
 	call(t, srv, "POST", "/api/v1/graphs/env-demo/stop", operatorTok, "", "", nil)
+	waitState(t, srv, "env-demo", "stopped")
 
 	// Changing the definition makes the environment stale.
 	changed := strings.Replace(envGraph, `["go version"]`, `["go version", "go env"]`, 1)

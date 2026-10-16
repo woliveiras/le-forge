@@ -128,6 +128,22 @@ advisory — a model that writes the call as text fails it). Errors are returned
 `[redacted]`. Tests are audited as `provider.tested` events; changes as
 `provider.changed`.
 
+## Installation network policy
+
+| Method + path | Role | Behavior |
+|---|---|---|
+| `GET /api/v1/network-policy` | viewer | Effective `network`, `revision`, `source`, update metadata and graph `usage` (requested hosts and admission status). |
+| `POST /api/v1/network-policy/preview` | admin | `{revision, network: {setupNetworks, runNetworks, egressHosts}}`; validates the draft and returns affected graphs without persisting it. |
+| `PUT /api/v1/network-policy` | admin | Saves the reviewed network settings with strict revision matching. Revision `0` requires no existing saved policy. Returns saved settings and new revision. |
+
+Network arrays must be nonempty and contain unique `none`, `bridge` or `egress`
+values. Hosts are exact lowercase DNS names, with the same 64-host ceiling as
+other environment allowlists. Unknown fields, malformed input or invalid hosts
+return 400; revision conflicts return 409. Bodies are limited to 32 KiB.
+The settings override only network fields, preserve YAML feature restrictions,
+and apply on new admission/resume without automatically stopping active work.
+See [network policy management](environments.md#manage-installation-network-policy-in-the-console).
+
 ## Project environments
 
 The environment definition is part of the graph (`spec.environment`) and is

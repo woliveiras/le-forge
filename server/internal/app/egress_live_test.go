@@ -15,6 +15,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/environment"
+	"github.com/woliveiras/le-forge/server/internal/environmentpolicy"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/storage/fsstore"
 	"github.com/woliveiras/le-forge/server/internal/tools"
@@ -98,6 +99,25 @@ func TestEgressRealSandbox(t *testing.T) {
 	if err := suspend.Suspend(ctx); err != nil {
 		t.Fatal(err)
 	}
+	settings := environmentpolicy.Settings{Store: store, Base: cfg.Isolation.Docker.EnvironmentPolicy}
+	narrow := environmentpolicy.NetworkSettings{SetupNetworks: []string{"bridge"}, RunNetworks: []string{"none", "egress"}, EgressHosts: []string{"example.com"}}
+	v, err := settings.Save(ctx, narrow, 0, "test-admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sandbox.(interface{ Start(context.Context) error }).Start(ctx); err == nil {
+		t.Fatal("suspended sandbox resumed with revoked host")
+	}
+	if _, err := factory(ctx, spec); err == nil {
+		t.Fatal("new controller ignored saved network policy")
+	}
+	narrow.EgressHosts = []string{"example.com", "127.0.0.1.nip.io"}
+	if _, err := settings.Save(ctx, narrow, v.Revision, "test-admin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sandbox.(interface{ Start(context.Context) error }).Start(ctx); err != nil {
+		t.Fatal(err)
+	}
 	sandbox, err = factory(ctx, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -113,5 +133,5 @@ func TestEgressRealSandbox(t *testing.T) {
 	if _, err := sandbox.Exec(ctx, tools.ExecRequest{Shell: "/probe http://example.com"}); err == nil {
 		t.Fatal("proxy failure not propagated")
 	}
-	t.Log("HTTP/HTTPS allowed, unlisted hosts/private IPs/direct egress blocked, suspension/resume and proxy failure verified")
+	t.Log("HTTP/HTTPS allowed, unlisted hosts/private IPs/direct egress blocked, suspension/resume, persisted policy revocation/restoration and proxy failure verified")
 }

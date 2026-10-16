@@ -23,6 +23,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/environment"
+	"github.com/woliveiras/le-forge/server/internal/environmentpolicy"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/hitl"
@@ -321,7 +322,11 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 			if net == "" {
 				net = cfg.Isolation.Docker.Network
 			}
-			if err := cfg.Isolation.Docker.EnvironmentPolicy.RunNetwork(net); err != nil {
+			policy, err := (environmentpolicy.Settings{Store: store, Base: cfg.Isolation.Docker.EnvironmentPolicy}).Effective(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if err := policy.RunNetwork(net); err != nil {
 				return nil, err
 			}
 			budget := *capacity
@@ -330,6 +335,18 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				bus.Publish(context.Background(), domain.NewEvent("sandbox.capacity", s.Graph.Metadata.ID, map[string]any{"node": s.Node.ID, "replica": s.Replica, "state": state}))
 			}
 			sandboxConfig := tools.DockerSandboxConfig{
+				ValidateAdmission: func(admissionCtx context.Context) error {
+					current, err := (environmentpolicy.Settings{Store: store, Base: cfg.Isolation.Docker.EnvironmentPolicy}).Effective(admissionCtx)
+					if err != nil {
+						return err
+					}
+					if engine.UsesEnvironment(s.Graph, s.Node) {
+						if err := current.Check(s.Graph.Spec.Environment); err != nil {
+							return err
+						}
+					}
+					return current.RunNetwork(net)
+				},
 				Capacity: &budget,
 				Name:     fmt.Sprintf("leforge-sbx-%s-%s-%d", s.Graph.Metadata.ID, s.Node.ID, s.Replica),
 				Image:    img, HostDir: s.HostWorkdir, Network: net,

@@ -98,16 +98,16 @@ func TestPreparationHostHashAndPolicy(t *testing.T) {
 	if Hash(e) != changed {
 		t.Fatal("host ordering changed hash")
 	}
-	if err := h.m.ValidatePolicy(e); err == nil {
+	if err := h.m.ValidatePolicy(context.Background(), e); err == nil {
 		t.Fatal("installation ceiling bypassed")
 	}
 	e.Network.SetupAllowedHosts = nil
-	if err := h.m.ValidatePolicy(e); err == nil {
+	if err := h.m.ValidatePolicy(context.Background(), e); err == nil {
 		t.Fatal("empty hosts accepted")
 	}
 	e.Network.SetupAllowedHosts = []string{"example.com"}
 	h.m.opt.Capacity = nil
-	if err := h.m.ValidatePolicy(e); err == nil {
+	if err := h.m.ValidatePolicy(context.Background(), e); err == nil {
 		t.Fatal("unbounded egress accepted")
 	}
 }

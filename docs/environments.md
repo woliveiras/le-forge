@@ -705,9 +705,10 @@ handing an environment to a sandbox. Existing provenance, supported-field and
 approval checks still apply. Manual Dockerfiles now use the same validated
 instruction subset as repository Dockerfiles, preventing per-instruction network
 flags, remote ADD and custom frontends from overriding the build restrictions.
-Policy changes require a server restart and apply to subsequent admissions;
-they do not terminate already running containers or remove images/workspaces.
-All controllers sharing a daemon must use the same policy. A previously ready
+Network changes saved in Integrations apply to subsequent admissions without
+a restart; YAML feature restrictions still require a restart. Neither path
+terminates already running containers or removes images/workspaces.
+Controllers share persisted network policy through the settings store. A previously ready
 image becomes blocked when its definition violates the current policy.
 
 `network.setup` also controls Dockerfile `RUN` networking: `none`, ordinary
@@ -743,7 +744,7 @@ Compose sandbox daemon, builds `Dockerfile.egress`, and tags
 `leforge/egress:latest` there. It needs access to the Go builder image/modules.
 For a different dedicated daemon, build the same Dockerfile using that daemon's
 Docker context. Do not mount the host Docker socket into an agent. Configure the
-server (restart it after configuration changes):
+server as initial defaults (restart for YAML changes; saved network policy takes precedence):
 
 ```yaml
 isolation:
@@ -877,3 +878,45 @@ direct-IP and DNS bypass attempts, committed-image proxy cleanup and network
 cleanup. It requires public Docker Hub/Alpine package repository/example.com access and DNS for
 `127.0.0.1.nip.io`. Unit and storage/API/UI integration tests cover host validation,
 independent lists, reuse invalidation, capacity and dependency/cleanup failures.
+
+
+## Manage installation network policy in the console
+
+Open **Integrations → Network policies**. Viewers and operators can inspect the
+current modes, host ceiling, source/revision and saved environments using each
+host. Administrators can edit the build/setup modes, agent modes and exact host
+list, then **Review network policy** to see which graphs would be blocked for
+new admissions. **Confirm network policy** persists the reviewed revision.
+Adding `bridge` permits unrestricted internet; adding hosts expands what
+individual environments may request. Environment host lists do not expand
+implicitly when the installation ceiling grows.
+
+Before the first save, values come from server `environmentPolicy` configuration.
+After saving, the three network fields come from the shared settings store and
+survive restarts. Other feature restrictions, proxy image, capacity and credentials
+remain server configuration. Controllers must share the same store and compatible
+server feature restrictions. No credentials or authentication settings are edited
+by this screen.
+
+The API uses compare-and-set revisions (including revision 0 for first save).
+Stale previews/saves return 409; the screen requires another review after a failed
+save. Invalid definitions return 400. Store failures or corrupt saved policies
+fail closed rather than silently reverting to YAML. Writes record the actor,
+revision and timestamp; `installation.network_policy.updated` events and structured
+logs identify successful changes.
+
+Each new admission reads shared settings, including approvals, cached environment
+validation, builds after capacity waits, standalone/Compose sandbox starts and
+idle-sandbox resumes. **Existing running tasks and builds are not automatically
+stopped or disconnected.** Stop them explicitly when access must be revoked.
+Paused tasks whose containers remain running also retain their existing network.
+Removing a host blocks resumption of an environment still requesting it; update
+and review that environment or restore the installation host before resuming.
+The preview is a snapshot of saved graph definitions, not a live container audit.
+
+`make test-egress` validates persisted host revocation and restoration against a
+real suspended sandbox, preserving its workspace. Unit, storage/API and UI tests
+cover validation, role enforcement, impact preview, conflict handling, storage
+failures and policy checks before/after capacity admission. A live proxy status
+and denial-log dashboard is still planned; build logs and daemon proxy logs remain
+the diagnostic surfaces.

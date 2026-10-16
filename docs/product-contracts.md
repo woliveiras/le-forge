@@ -252,11 +252,26 @@ It is checked on preview/save, before agent approval, on approval application,
 before builds/cache hits and before runtime admission. Developer approval cannot
 override it. Node network overrides obey the execution restriction. Manual
 Dockerfiles use the same supported subset as untrusted repository definitions.
-Policies are startup configuration; existing running containers are not revoked.
+Network fields are managed in Integrations with persisted revisions; server YAML
+provides initial defaults and the remaining feature restrictions. Existing running
+containers are not revoked automatically.
 Omitted lists preserve `none`/`bridge` compatibility; runtime defaults to `none`.
 Dockerfile RUN follows preparation networking. Daemon-wide registry access needs separate controls; runtime and preparation HTTP/HTTPS egress
 allowlists are implemented. See
 `docs/environments.md` for configuration, migration and verification boundaries.
+
+#### Delivered installation network administration
+
+Integrations exposes build/setup modes, runtime modes and the installation host
+ceiling. Viewers/operators can inspect settings and graph host usage; only admins
+can preview and save edits. Confirmation shows affected saved environments and
+warns about unrestricted bridge and existing running work. Persisted revisions
+prevent concurrent edits from overwriting each other. Saved network settings
+supersede YAML defaults across controllers sharing the store; feature flags,
+proxy provisioning and credentials remain server-owned. Storage errors fail
+closed. Start/resume and post-capacity admission recheck the current policy.
+Running tasks/builds are not killed automatically. A live proxy status/denial
+log dashboard remains planned.
 
 #### Delivered runtime egress subset
 

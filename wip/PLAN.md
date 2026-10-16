@@ -198,4 +198,5 @@ approvals. Dockerfile RUN obeys the preparation network. Node overrides cannot
 widen permitted execution networks. Configuration takes effect after restart for
 new admissions; no automatic revocation/deletion of running resources. Registry
 egress restrictions remain planned; runtime HTTP/HTTPS host allowlists via a
-managed per-replica proxy are implemented. Setup/build proxying with a separate approved host list, isolated BuildKit worker, aggregate capacity and real sandbox tests is implemented. Daemon provisioning and client-side registry authentication remain outside it. See `docs/environments.md`.
+managed per-replica proxy are implemented. Setup/build proxying with a separate approved host list, isolated BuildKit worker, aggregate capacity and real sandbox tests is implemented.
+Installation network administration is delivered in Integrations: revisioned shared settings, admin preview/confirmation, graph host usage and current-policy checks at new admission and idle resume. Existing running work requires explicit stop for revocation. A live proxy status/denial dashboard remains planned. Daemon provisioning and client-side registry authentication remain outside it. See `docs/environments.md`.

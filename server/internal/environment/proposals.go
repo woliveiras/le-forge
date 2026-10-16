@@ -81,7 +81,11 @@ func (p *Proposals) put(ctx context.Context, v *Proposal) error {
 func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.ModelRef, resume bool, actor string) (result *Proposal, err error) {
 	ctx, span := observability.Start(ctx, "environment.propose", attribute.String("leforge.graph.id", g.Metadata.ID))
 	defer func() { observability.EndSpan(span, err) }()
-	if p.Manager.opt.Policy.DisableAgentProposals {
+	policy, err := p.Manager.CurrentPolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if policy.DisableAgentProposals {
 		return nil, fmt.Errorf("%w: installation disables agent proposals", ErrInvalidDefinition)
 	}
 	if g.Spec.Environment != nil {
@@ -146,7 +150,7 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 	if e != nil {
 		return result, e
 	}
-	analysis, e := analyzeWithPolicy(ctx, p.Models, ref, evidence, p.Manager.opt.Policy)
+	analysis, e := analyzeWithPolicy(ctx, p.Models, ref, evidence, policy)
 	if e != nil {
 		return result, e
 	}
@@ -175,7 +179,7 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 		env.Origin.ContextSHA256 = snapshot.SHA256
 		snapshot.Close()
 	}
-	if err := p.Manager.ValidatePolicy(env); err != nil {
+	if err := p.Manager.ValidatePolicy(ctx, env); err != nil {
 		return result, err
 	}
 	result.Analysis = analysis
@@ -227,7 +231,7 @@ func (p *Proposals) ValidateDecision(ctx context.Context, a *domain.Approval) er
 	if v.Analysis == nil {
 		return fmt.Errorf("proposal analysis is missing")
 	}
-	if err := p.Manager.ValidatePolicy(v.Analysis.Environment); err != nil {
+	if err := p.Manager.ValidatePolicy(ctx, v.Analysis.Environment); err != nil {
 		return err
 	}
 	return validateProposalFiles(ctx, dir, v.Analysis.Environment)
@@ -258,7 +262,7 @@ func validateProposalFiles(ctx context.Context, dir string, env *domain.Environm
 }
 
 func (p *Proposals) ValidateAccepted(ctx context.Context, g *domain.Graph) error {
-	if err := p.Manager.ValidatePolicy(g.Spec.Environment); err != nil {
+	if err := p.Manager.ValidatePolicy(ctx, g.Spec.Environment); err != nil {
 		return err
 	}
 	env := g.Spec.Environment

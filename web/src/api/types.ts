@@ -582,3 +582,18 @@ export interface EnvironmentCleanupResult {
   dryRun: boolean;
   generations: EnvironmentCleanupItem[];
 }
+
+export type EnvironmentNetworkMode = 'none' | 'bridge' | 'egress';
+export interface InstallationNetwork {
+  setupNetworks: EnvironmentNetworkMode[];
+  runNetworks: EnvironmentNetworkMode[];
+  egressHosts: string[] | null;
+}
+export interface NetworkPolicyView {
+  revision: number;
+  source: 'server' | 'installation';
+  network: InstallationNetwork;
+  updatedBy?: string;
+  updatedAt?: string;
+  usage?: { graph: string; state: string; hosts: string[]; blocked: boolean; reason?: string }[];
+}

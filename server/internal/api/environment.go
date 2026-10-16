@@ -144,7 +144,7 @@ func (s *Server) resolveEnvironment(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 	if s.Environments != nil {
-		if err := s.Environments.ValidatePolicy(env); err != nil {
+		if err := s.Environments.ValidatePolicy(r.Context(), env); err != nil {
 			return err
 		}
 	}
@@ -154,7 +154,7 @@ func (s *Server) resolveEnvironment(w http.ResponseWriter, r *http.Request) erro
 
 func (s *Server) validateEnvironmentOrigin(ctx context.Context, g *domain.Graph) error {
 	if s.Environments != nil {
-		if err := s.Environments.ValidatePolicy(g.Spec.Environment); err != nil {
+		if err := s.Environments.ValidatePolicy(ctx, g.Spec.Environment); err != nil {
 			return err
 		}
 	}

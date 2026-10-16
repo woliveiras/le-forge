@@ -25,6 +25,8 @@ type EgressConfig struct {
 
 // DockerSandboxConfig describes the per-replica sandbox container.
 type DockerSandboxConfig struct {
+	// ValidateAdmission rechecks installation policy on start/resume, including after capacity waits.
+	ValidateAdmission  func(context.Context) error
 	Egress             *EgressConfig
 	RequireStandalone  bool
 	ProxyEnv           map[string]string
@@ -183,11 +185,21 @@ func (s *DockerSandbox) Start(ctx context.Context) error {
 	if s.started {
 		return nil
 	}
+	if s.cfg.ValidateAdmission != nil {
+		if err := s.cfg.ValidateAdmission(ctx); err != nil {
+			return err
+		}
+	}
 	if s.cfg.Capacity != nil {
 		n, _ := strconv.ParseInt(s.cfg.Memory, 10, 64)
 		cpu, _ := sandboxcapacity.CPU(s.cfg.CPU)
 		if err := s.cfg.Capacity.ReserveCPU(ctx, s.cfg.Name, n, cpu, s.inventory); err != nil {
 			return err
+		}
+		if s.cfg.ValidateAdmission != nil {
+			if err := s.cfg.ValidateAdmission(ctx); err != nil {
+				return errors.Join(err, s.cfg.Capacity.Release(context.WithoutCancel(ctx), s.cfg.Name))
+			}
 		}
 		if err := s.startContainer(ctx); err != nil {
 			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)

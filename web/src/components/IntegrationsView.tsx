@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { Info, ToolInfo } from '../api/types';
 import { useAsync } from '../hooks/useData';
 import { Badge, Btn, ErrorBox } from './common';
+import { NetworkPolicySection } from './NetworkPolicySection';
 import { SharedEnvironmentsSection } from './SharedEnvironmentsSection';
 import { ProvidersSection, type ProvidersHandle } from './ProvidersSection';
 
@@ -137,6 +138,8 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
           </p>
         )}
       </section>
+
+      <NetworkPolicySection canManage={role === 'admin'} />
 
       <SharedEnvironmentsSection canManage={role === 'admin'} />
 
