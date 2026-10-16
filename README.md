@@ -281,6 +281,7 @@ Full tree: [docs/folder-structure.md](docs/folder-structure.md).
 - [Security model](docs/security.md) — threat model, tool permission model, isolation
 - [Sandbox runtime](docs/sandbox-runtime.md) — agent commands in containers on a Docker daemon dedicated to LeForge
 - [Project environments](docs/environments.md) — the toolchain image agents run in, built from the console
+- [Skills and project steering](docs/instructions.md) — opt-in guidance, administration, precedence and execution manifests
 - [Configuration reference](docs/configuration.md)
 - [Deployment](docs/deployment.md) — single node, HA, Kubernetes, backup, upgrades, air-gapped
 - [Production hardening](docs/production-hardening.md)

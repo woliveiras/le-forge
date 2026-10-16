@@ -1066,6 +1066,47 @@ paths:
             text/plain: {schema: {type: string}}
         "400": {$ref: "#/components/responses/BadRequest"}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/git/{view}:
+    parameters:
+      - {$ref: "#/components/parameters/GraphId"}
+      - {name: view, in: path, required: true, schema: {type: string, enum: [status, diff, history]}}
+    get:
+      tags: [workspace]
+      operationId: inspectWorkspaceGit
+      summary: Inspect live workspace Git state without modifying it
+      description: >-
+        Diff compares tracked files with HEAD; history returns at most 50 commits.
+        Optional path is literal and relative. Node must identify a worktree-mode
+        agent; replica requires node. Inspection never creates workspaces.
+        Output is limited to 4 MiB per command and inspection to 10 seconds.
+        Unsupported configuration, metadata redirection and oversized metadata
+        fail explicitly. Recent execution context does not prove change authorship.
+      x-leforge-role: viewer
+      parameters:
+        - {name: path, in: query, schema: {type: string}}
+        - {name: node, in: query, schema: {type: string}}
+        - {name: replica, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        "200":
+          description: Live inspection; repository is false for a non-repository directory
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repository, directory, branch, content, attribution, graphId]
+                properties:
+                  repository: {type: boolean}
+                  directory: {type: string}
+                  branch: {type: string}
+                  content: {type: string}
+                  attribution: {type: string, enum: [inconclusive]}
+                  graphId: {type: string}
+                  nodeId: {type: string}
+                  replica: {type: integer, minimum: 0}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {description: Inspection failed; never returned as an empty successful diff}
   # ---------------------------------------------------------------- callbacks
   /internal/v1/executions/{executionId}/tools:
     parameters: [{$ref: "#/components/parameters/ExecutionId"}]

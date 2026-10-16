@@ -99,6 +99,8 @@ an "ingress" pill, and topics with no subscribers get a "no subscribers" pill.
 Deep links: `#/g/<graph>/canvas?sel=node:<id>` or `?sel=channel:<id>`, and
 `#/g/<graph>/messages?c=<correlation id>`.
 
+<a id="browser-environment-journeys"></a>
+
 ## Browser journeys
 
 With local Go, Git and Node installed, run from the repository root:

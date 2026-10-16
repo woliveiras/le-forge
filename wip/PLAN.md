@@ -35,6 +35,8 @@ Preserve support for LangGraph and the existing model provider system. Make prov
 
 **Acceptance criterion:** Users configure credentials through the interface and run an agent using the selected provider, without configuring secrets directly on the server during normal use.
 
+**Verified implementation:** Browser configuration and the Python SDK’s real LangGraph adapter are connected through the managed gateway. Tests cover model override, failures and credential isolation using an artificial-key deterministic model endpoint; live vendor inference quality remains outside this evidence. See [validation guide](../docs/provider-langgraph-validation.md).
+
 ### 3. Turn the Canvas into a Graph Editor
 
 Evolve the existing `GraphCanvas.tsx` view to allow users to:
@@ -47,6 +49,8 @@ Evolve the existing `GraphCanvas.tsx` view to allow users to:
 - keep the YAML editor as an advanced option.
 
 **Acceptance criterion:** Users can create, configure, save, and start a complete graph in the browser without editing YAML or accessing the machine running the service.
+
+**Verified implementation:** Component/API tests cover editing, validation, discard and version conflicts; Chromium now covers real connection dragging, Delete cancellation/confirmation and persisted agent/channel edits.
 
 ### 4. Provide Containerized Project Environments
 
@@ -87,6 +91,8 @@ Add a per-graph workspace to the console, including:
 Users may read and inspect files, but cannot edit, delete, or upload them through the console. Only authorized agents may modify the workspace; every operation must respect workspace boundaries and permissions without exposing the server's filesystem.
 
 **Acceptance criterion:** Users can start and direct tasks, monitor agents, and inspect changes entirely through the browser, without server access or CLI usage.
+
+**Delivered inspection:** Files now exposes read-only Git status, tracked diff against HEAD and bounded history, plus branch/directory/replica metadata and recent execution/tool-operation context. Real repository/API tests cover confinement and unsafe Git configuration; browser coverage starts a task and inspects its result. Attribution stays explicitly inconclusive; universal tracking of shell-produced changes and review/approval remain separate work.
 
 ### 5a. Human Review with Managed or External Previews
 
@@ -267,6 +273,8 @@ Use hybrid storage with separate responsibilities:
 Define clear precedence: global, graph, agent, and task instructions; repository instructions belong to the project scope and cannot override security policies. Show the source and effective version/content of instructions loaded in each execution. Treat repository content as untrusted input: it may guide the agent, but must never grant tools, credentials, or permissions.
 
 **Acceptance criterion:** Operators can manage global instructions through the application; project-specific instructions travel with the repository; every execution records the loaded instruction set; no instruction can elevate privileges.
+
+**Delivered scope:** Admin-managed revisioned Markdown skills, explicit graph/default/project opt-ins and narrower agent selections are available in **Skills & steering**. Project sources are immediate `.leforge/steering/*.md` files in the authorized workspace. Immutable execution manifests show included content, revision/hash and omission reasons. Bounded composition preserves mandatory agent/task text; graphs without opt-in retain their previous prompt semantics. This does not execute skill scripts, discover arbitrary instruction formats, grant permissions or implement delegation. Limits and verification are recorded in [instructions.md](../docs/instructions.md) and [parallel-delivery validation](../docs/parallel-delivery-validation.md).
 
 ### 8. Allow Dynamic Delegation to Subagents
 

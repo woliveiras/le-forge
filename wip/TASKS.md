@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (environment journeys now have Playwright coverage; graph-editor/provider journeys remain pending) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, prepared-image and immutable cache-seed reuse are implemented; shared execution/build/setup memory and concurrency budgets are implemented; idle suspension/resume and explicit cleanup of unused registered shared generations are implemented; historical unregistered resources are retained. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. The four parallel deliveries now cover browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. Environment lifecycle/reuse/capacity/network implementation and its existing acceptance evidence remain documented separately; rootless is deferred. MCPs, dynamic delegation, onboarding, universal file-change provenance, human review/previews and full Release 1 validation are not completed by this integration. See [parallel-delivery validation](../docs/parallel-delivery-validation.md) for commands, evidence and limits.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -50,7 +50,7 @@ Checked boxes represent only work that has been implemented and verified. Releas
 - [x] Keep the YAML editor as an advanced alternative, synchronized with the same model and version control.
 - [x] Store graph documents as written: `spec.defaults` are applied when graphs are validated and run, not copied into nodes, so changing a default reaches nodes without their own value (found while running the bookaneer test: changing the default model had no effect). The editor shows effective values (e.g. loop mode) where nodes leave them unset.
 - [x] Edit graph-wide settings in the visual editor (name, description, workspace repository, parameters, max hops) and per-turn agent limits (turn timeout, max tool calls, token budget). Repository URLs must be remote; local paths and non-network transports are rejected on save and before cloning.
-- [ ] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts. — Covered by component tests against the real API client (`GraphWorkspace.test.tsx`: create, edit, validate/revalidate, save, server 422, discard, conflict overwrite/reload, removal confirmation, YAML sync) and unit tests for the edit operations (`edit.test.ts`, including connect and keyboard removal). Keyboard removal was also checked manually in the browser (mock mode). Pending: browser E2E for drag-to-connect and Delete-key gestures.
+- [x] Add interaction tests for creating, editing, connecting, validating, saving, discarding, and recovering from conflicts. — Covered by component tests against the real API client (`GraphWorkspace.test.tsx`: create, edit, validate/revalidate, save, server 422, discard, conflict overwrite/reload, removal confirmation, YAML sync) and unit tests for the edit operations (`edit.test.ts`, including connect and keyboard removal). Chromium E2E now exercises real drag-to-connect and Delete-key cancellation/confirmation, agent/channel persistence and validation against the disposable real controller (`web/e2e/graph-connections.spec.ts`).
 
 **Done when:** A user can create, configure, validate, save, and start a graph through the visual interface without writing YAML.
 
@@ -153,27 +153,29 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 #### Workspace API and Security
 
-- [ ] Define file listing, reading, diff, and history endpoints limited to the graph's authorized workspace.
-- [ ] Apply path containment, symlink validation, size limits, and traversal protection to every operation.
+- [x] Define file listing, reading, diff, and history endpoints limited to the graph's authorized workspace.
+- [x] Apply path containment, symlink validation, size limits, and traversal protection to every operation.
 - [x] Expose read operations to users; do not implement user-invocable write, delete, or upload endpoints.
 - [ ] Enforce through backend authorization that only authorized agents can modify the workspace.
-- [ ] Provide Git, branch, worktree, agent/replica, and execution metadata associated with changes when available.
-- [ ] Record file changes and operations in a queryable form associated with the execution that produced them.
+- [x] Provide Git, branch, worktree, agent/replica, and execution metadata associated with changes when available.
+- [ ] Record file changes and operations in a queryable form associated with the execution that produced them. — Partial: Files projects existing structured filesystem tool events onto paths/execution IDs (latest 100 tool completions), with explicit inconclusive attribution. Arbitrary shell changes and universal change provenance are not captured.
 
 #### Operational Interface
 
 - [x] Add a file browser with a tree, loading and error states, and safe navigation.
 - [x] Add a read-only file viewer with a server-enforced content limit.
-- [ ] Add read-only Git status and diff views.
-- [ ] Show the directory, branch, replica, and execution associated with the workspace/change.
-- [ ] Allow users to start a task for a graph or agent from the interface.
-- [ ] Allow users to send instructions/commands to an agent using existing operator mechanisms, without enabling direct file editing.
+- [x] Add read-only Git status and diff views.
+- [x] Show the directory, branch, replica, and execution associated with the workspace/change.
+- [x] Allow users to start a task for a graph or agent from the interface. — Existing run controls exercised by provider, environment and Git browser journeys.
+- [x] Allow users to send instructions/commands to an agent using existing operator mechanisms, without enabling direct file editing. — Existing operator-message controls and message-driven environment resumption have browser coverage.
 - [ ] Present task state, progress, events, messages, approvals, and results in an accessible flow.
-- [ ] Link changed files, diffs, messages, and executions; clearly indicate when attribution is inconclusive.
-- [ ] Add authorization tests ensuring the interface cannot modify, delete, or upload files to the workspace.
-- [ ] Add end-to-end tests for starting a task on the web, monitoring execution, and inspecting resulting files/diffs.
+- [x] Link changed files, diffs, messages, and executions; clearly indicate when attribution is inconclusive.
+- [x] Add authorization tests ensuring the interface cannot modify, delete, or upload files to the workspace.
+- [x] Add end-to-end tests for starting a task on the web, monitoring execution, and inspecting resulting files/diffs.
 
 **Done when:** Users can operate tasks in the browser and inspect results, but no user action in the API or interface directly changes workspace files.
+
+**Verified scope:** `/git/status`, `/git/diff` (tracked changes against HEAD) and `/git/history` are read-only. Git runs against a private bounded metadata copy; executable configuration, external metadata redirection, path escapes and concurrent configuration replacement are covered by real repository tests. The UI shows recent execution/operation context rather than claiming diff authorship. See [API contracts](../docs/api.md).
 
 ### 4a. Durable Human Review and Application Previews
 
@@ -244,9 +246,9 @@ does not satisfy this milestone.
 - [x] Check tool calling in the provider connection test, and send/configure the context window (Ollama `num_ctx`, default 32768 instead of Ollama's silent 4096 truncation); prompts that do not fit fail with a clear error. (Found running the bookaneer test with local models.)
 - [x] Make native agent turns fail with the cause instead of succeeding without work: tool calls written as text (recovered when they name an offered tool), empty or cut-off answers, and running out of model rounds (rounds now follow `limits.maxToolCalls`). (Warning on save; `422` with the field path when starting a graph/node.)
 - [x] Report a once-mode agent whose only turn failed as `failed` (not `completed`), explain model timeouts (not retried; `OLLAMA_TIMEOUT_SEC`), run environment setup with `CI=true`, and offer "Build and start when ready" when a start is refused because the environment is not ready.
-- [ ] Verify and document the full path from the LangGraph runtime to the selected provider. — Verified at the protocol level (fake external runtime → `llm/chat` callback → managed provider, with no key in `TurnInput`). Pending: execution with the Python SDK's real LangGraph adapter and documentation of that path.
+- [x] Verify and document the full path from the LangGraph runtime to the selected provider. — Real Python SDK/LangGraph → callback gateway → managed provider, including node override, failure propagation and credential isolation. The local model endpoint is deterministic; this is not live vendor/model-quality validation. See [provider-langgraph-validation.md](../docs/provider-langgraph-validation.md).
 - [x] Add tests for encrypted persistence, secret update/removal, connection testing, and per-agent selection.
-- [ ] Add an end-to-end test from interface configuration to an execution that uses the selected provider. — Covered by an API integration test (configure → test → select on node → execute), component interaction tests, and a clean-install HTTP smoke test. Pending: browser-driven test (Playwright infrastructure is available; this provider journey remains pending).
+- [x] Add an end-to-end test from interface configuration to an execution that uses the selected provider. — `make test-e2e-providers` configures/tests a managed provider in Chromium, selects the model, executes the real LangGraph adapter and checks explicit errors and artificial-credential redaction. Requires Python with the SDK LangGraph extra.
 
 **Done when:** An operator creates and tests a provider on the web, selects it for an agent, and runs the agent without exposing the secret to the runtime.
 
@@ -291,23 +293,25 @@ does not satisfy this milestone.
 
 #### Content Model and Loading
 
-- [ ] Define formats and storage for global instructions and application-managed skills.
-- [ ] Define recognized formats and paths for project-specific instructions in the repository.
-- [ ] Implement explicit association of a workspace/repository with authorized graphs.
-- [ ] Implement deterministic precedence among global, graph, agent, project, and task instructions.
-- [ ] Define explicit behavior for conflicts, invalid/duplicate files, size limits, and missing instructions.
-- [ ] Load project instructions only from the authorized workspace and record their source, version/hash, and scope.
-- [ ] Treat instructions and skills as untrusted content; they cannot change grants, credentials, policies, or limits.
-- [ ] Enforce size/token limits and inform operators when content is omitted or truncated.
+- [x] Define formats and storage for global instructions and application-managed skills.
+- [x] Define recognized formats and paths for project-specific instructions in the repository.
+- [x] Implement explicit association of a workspace/repository with authorized graphs.
+- [x] Implement deterministic precedence among global, graph, agent, project, and task instructions.
+- [x] Define explicit behavior for conflicts, invalid/duplicate files, size limits, and missing instructions.
+- [x] Load project instructions only from the authorized workspace and record their source, version/hash, and scope.
+- [x] Treat instructions and skills as untrusted content; they cannot change grants, credentials, policies, or limits.
+- [x] Enforce size/token limits and inform operators when content is omitted or truncated.
 
 #### Interface, Auditing, and Tests
 
-- [ ] Add an interface for creating, editing, versioning, enabling/disabling, and deleting global instructions/skills.
-- [ ] Add an interface for associating instruction sets with graphs and agents.
-- [ ] Show recognized repository instructions, their source, and whether they were accepted for use.
-- [ ] Record and show the effective set of instructions loaded for each execution.
-- [ ] Add tests for precedence, workspace isolation, malformed instructions, size limits, and privilege non-escalation.
-- [ ] Add interface tests for administration and inspection of loaded content.
+- [x] Add an interface for creating, editing, versioning, enabling/disabling, and deleting global instructions/skills.
+- [x] Add an interface for associating instruction sets with graphs and agents.
+- [x] Show recognized repository instructions, their source, and whether they were accepted for use.
+- [x] Record and show the effective set of instructions loaded for each execution.
+- [x] Add tests for precedence, workspace isolation, malformed instructions, size limits, and privilege non-escalation.
+- [x] Add interface tests for administration and inspection of loaded content.
+
+**Verified scope:** Administration and graph associations require admin; guidance is opt-in and cannot alter grants. Project loading only considers immediate `.leforge/steering/*.md` files in the authorized workspace. Composition reserves agent/task text before optional content; required-budget/storage failures stop before runtime invocation and preserve operator requests. Immutable manifests record loaded content, versions/hashes and omissions. Unit, storage/API/engine/SDK integration, component and Chromium tests cover this scope. See [instructions.md](../docs/instructions.md) for precedence, 16 KiB content/128-entry bounds, 8192-byte conservative budget and retained-history limits.
 
 **Done when:** Global instructions are managed in the application, project instructions travel with the repository, and each execution is traceable without allowing instructions to grant privileges.
 

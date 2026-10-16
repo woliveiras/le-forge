@@ -13,11 +13,11 @@ schemas alongside the code.
 
 | Surface | Current contract and implementation | Known boundary |
 |---|---|---|
-| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); no first-class user task, MCP connection or delegation resource yet. |
+| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); no first-class user task, MCP connection or delegation resource yet. |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
 | Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; no delegation request contract is sent yet. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
 | Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | `mcp.*` is an extension point only; there is no managed MCP registry or per-connection authorization implementation. |
-| Workspace | `GET /api/v1/graphs/{id}/files` and `/files/content` are viewer-readable. Paths are resolved inside the graph/worktree root; `.git` is hidden, directory results are capped, file content is limited to 4 MiB and served as plain text with a deny-all CSP. | No Git status/diff/history API or task-to-change attribution yet. No user-facing workspace write/delete/upload API. |
+| Workspace | `GET /api/v1/graphs/{id}/files` and `/files/content` are viewer-readable. Paths are resolved inside the graph/worktree root; `.git` is hidden, directory results are capped, file content is limited to 4 MiB and served as plain text with a deny-all CSP. | Viewer-readable `/git/status`, `/git/diff` and `/git/history` now provide bounded live inspection with private Git metadata and explicit unsafe-configuration failures. Execution/tool-operation context is available, but change attribution remains inconclusive. No user-facing workspace write/delete/upload API. |
 | Persistence | `storage.Store` persists graph versions/control records, events, messages, executions, approvals, operator messages, replica status, KV, leases, and revisioned installation settings. Settings use compare-and-set revisions. Provider credentials are encrypted before storage. See [database schema](database-schema.md). | Future install-wide records should use settings or an explicitly designed store entity; graph/workspace data must remain scoped. |
 | Authorization | Current installation uses hierarchical `viewer < operator < admin` roles from static tokens or optional OIDC. Route middleware authenticates and authorizes before handlers. Per-execution callback tokens are scoped to one running turn. | There is no multi-tenant/user ownership model. A deployment is one installation security boundary; do not imply per-user data isolation that does not exist. |
 | Events and audit | Durable event envelope carries sequence, actor, graph/node/replica, execution/message IDs, trace ID and type-specific data. Provider changes/tests are installation-level events; tool and approval events are already defined. See [events](events.md). | Event append is currently best-effort for some operations. Planned security-sensitive mutations must not silently succeed without their required audit record. |
@@ -108,20 +108,21 @@ The API/schema/runtime references are updated with the implementation.
   immutable revision history, a title/description, an enabled flag, and a
   versioned Markdown body. API: `GET/POST /api/v1/skills`,
   `GET/PUT/DELETE /api/v1/skills/{skillId}`. Reads require `viewer`; writes
-  require `admin` and use `If-Match`. `DELETE` disables a skill rather than
-  erasing revisions; it returns `409` while an active graph version selects
+  require `admin`; updates/deletion use `If-Match`. `DELETE` disables a skill rather than
+  erasing revisions; it returns `409` while a latest or active graph version selects
   that skill. Existing execution manifests remain resolvable.
 - Graphs opt into skills by ID through a graph-level instruction reference;
   nodes may narrow the selected set but may not add unapproved privileges.
 - The graph field is `spec.instructions: {skillIds: string[],
-  projectSteering: boolean}`; omission means no application skill or project
+  projectSteering: boolean, installationDefaults: boolean}`; omission means no application skill or project
   steering is loaded. Nodes may optionally name a subset of the graph's
   selected skill IDs. A node cannot reference a skill that its graph did not
-  select.
+  select. Omitted/null node selection inherits; an explicit empty array selects
+  no graph skills. Installation defaults require their own graph opt-in.
 - Project steering is read only from the authorized graph workspace under
-  `.leforge/steering/`, from Markdown files whose resolved paths remain inside
-  that workspace. The graph must explicitly enable project steering. Symlinks
-  escaping the workspace are rejected.
+  `.leforge/steering/`, from immediate `*.md` files whose resolved paths remain
+  inside that workspace. The graph must explicitly enable project steering.
+  Observed symlinks and special files are rejected; rooted reads prevent escape.
 - The effective instruction precedence is platform security policy (not
   overrideable) → installation defaults → graph-selected skills → authorized
   project steering → node prompt/instructions → current task. This is
