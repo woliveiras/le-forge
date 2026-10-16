@@ -90,3 +90,10 @@ test-e2e: ## Chromium browser journey against a disposable backend (Go, Node, Gi
 test-e2e-real: ## Browser journey with shell.exec on the running dedicated sandbox daemon
 	cd server && go test -tags e2e ./cmd/forge-e2e
 	cd web && npm run test:e2e:real
+
+.PHONY: test-e2e-providers
+test-e2e-providers: ## Real LangGraph + browser provider journey, no Docker (set LEFORGE_E2E_PYTHON)
+	@test -n "$(LEFORGE_E2E_PYTHON)" || (echo "Set LEFORGE_E2E_PYTHON to Python with the langgraph extra installed"; exit 1)
+	PYTHONPATH=sdk/python "$(LEFORGE_E2E_PYTHON)" -m unittest discover -s scripts/provider-e2e -v
+	cd server && go test -tags e2e ./cmd/forge-provider-e2e
+	cd web && npm run test:e2e:providers

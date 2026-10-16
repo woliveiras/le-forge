@@ -107,3 +107,9 @@ scripts `shell.exec`, LLM replies and human answers, and by default answers
 LLM calls like the server's `mock` provider does.
 
 Run the tests: `python -m unittest discover -s tests -v`
+
+The [managed-provider validation guide](../../docs/provider-langgraph-validation.md)
+shows how to run the real LangGraph adapter through the Go gateway and a
+browser-configured provider, using deterministic local inference and artificial
+credentials. Run `make test-e2e-providers` from the repository root after
+installing the `langgraph` extra and browser prerequisites.
