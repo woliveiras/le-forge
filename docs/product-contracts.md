@@ -275,7 +275,14 @@ not checkpoint process memory. Failed stop retains capacity; failed resume
 preserves inputs for retry. Explicit task teardown still removes its container
 while keeping mounted workspace data.
 See [idle lifecycle](sandbox-runtime.md#idle-suspension-and-task-resume).
-Explicit shared-resource reclamation and global CPU accounting remain planned.
+Explicit admin cleanup now reclaims unused registered shared generations after
+revalidating environment/build/container references under the reuse lease.
+Stopped containers and ready stopped tasks retain their references. Partial
+failure invalidates reuse and keeps ownership records for retry; cleanup never
+forces Docker removal or deletes workspaces/private caches. Historical resources
+without registered ownership remain untouched. See
+[shared cleanup](environments.md#cleanup-of-unused-shared-generations).
+Global CPU accounting remains planned.
 The target lifecycle below includes those extensions.
 
 #### Planned reuse and resource lifecycle

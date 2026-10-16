@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
@@ -228,4 +230,37 @@ func (s *Server) retryEnvironmentProposal(w http.ResponseWriter, r *http.Request
 		return badRequest("%v", err)
 	}
 	return s.getEnvironmentProposal(w, r)
+}
+
+// Cleanup is explicit and admin-only. Omitted dryRun previews; deletion requires
+// both dryRun=false and concrete generation IDs from a previous inspection.
+func (s *Server) cleanupEnvironments(w http.ResponseWriter, r *http.Request) error {
+	if s.Environments == nil {
+		return engine.ErrNotFound
+	}
+	var body struct {
+		DryRun      *bool    `json:"dryRun"`
+		Generations []string `json:"generations"`
+	}
+	d := json.NewDecoder(io.LimitReader(r.Body, 16385))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&body); err != nil && err != io.EOF {
+		return badRequest("invalid cleanup request")
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		return badRequest("expected one cleanup request")
+	}
+	dryRun := body.DryRun == nil || *body.DryRun
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	result, err := s.Environments.CleanupShared(ctx, body.Generations, dryRun, identityFrom(r.Context()).Name)
+	if errors.Is(err, environment.ErrInvalidCleanup) {
+		return badRequest("%v", err)
+	}
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, result)
+	return nil
 }

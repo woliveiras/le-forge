@@ -121,6 +121,16 @@ func (m *Manager) sharedSteps(ctx context.Context, g *domain.Graph, st *Status, 
 		if e != nil && !errors.Is(e, storage.ErrNotFound) {
 			return e
 		}
+		// Retain the previous generation before a force rebuild replaces the pointer.
+		if e == nil {
+			var previous sharedEnvironment
+			if err := json.Unmarshal(data, &previous); err != nil {
+				return err
+			}
+			if err := m.trackGeneration(ctx, st.ReuseKey, previous); err != nil {
+				return err
+			}
+		}
 		hit := e == nil && !force
 		published := hit
 		defer func() {
@@ -155,22 +165,34 @@ func (m *Manager) sharedSteps(ctx context.Context, g *domain.Graph, st *Status, 
 			// Unique names prevent force rebuilds replacing images or caches in use.
 			generation := domain.NewID("shared")
 			final := "leforge-shared/" + generation + ":ready"
+			planned := sharedEnvironment{Image: final + "-user"}
+			for _, path := range g.Spec.Environment.Caches {
+				if shareableCache(path) {
+					planned.Caches = append(planned.Caches, CacheMount{Path: path, Volume: CacheVolume(generation, path)})
+				}
+			}
+			// Persist ownership before Docker work, including resources that a
+			// crash or partial build may leave behind. Missing resources are
+			// handled idempotently by explicit cleanup.
+			if e := m.trackGeneration(ctx, st.ReuseKey, planned); e != nil {
+				return e
+			}
 			prepared, e := m.prepareImage(ctx, g, final, log)
 			if e != nil {
 				return e
 			}
 			shared.Image = prepared
-			for _, path := range g.Spec.Environment.Caches {
-				if !shareableCache(path) {
-					continue
-				}
-				volume := CacheVolume(generation, path)
-				if e := m.docker(ctx, nil, io.Discard, "volume", "create", "--label", "leforge.shared="+st.ReuseKey, volume); e != nil {
+			for _, cache := range planned.Caches {
+				if e := m.docker(ctx, nil, io.Discard, "volume", "create", "--label", "leforge.shared="+st.ReuseKey, cache.Volume); e != nil {
 					return e
 				}
-				shared.Caches = append(shared.Caches, CacheMount{Path: path, Volume: volume})
+				shared.Caches = append(shared.Caches, cache)
 			}
 		}
+		if err := m.trackGeneration(ctx, st.ReuseKey, shared); err != nil {
+			return err
+		}
+		st.SharedImage = shared.Image
 		st.Reused = hit
 		// Each graph gets private writable volumes. Published seeds are only read.
 		mounts := shared.Caches

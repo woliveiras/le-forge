@@ -57,21 +57,22 @@ type CacheMount struct {
 
 // Status is the persisted state of a graph's environment.
 type Status struct {
-	Scope      string       `json:"scope,omitempty"`
-	ReuseKey   string       `json:"reuseKey,omitempty"`
-	Reused     bool         `json:"reused,omitempty"`
-	Inputs     string       `json:"inputs,omitempty"`
-	Graph      string       `json:"graph"`
-	State      State        `json:"state"`
-	Hash       string       `json:"hash,omitempty"`  // definition hash of the last build
-	Image      string       `json:"image,omitempty"` // set when ready
-	Caches     []CacheMount `json:"caches,omitempty"`
-	StartedAt  *time.Time   `json:"startedAt,omitempty"`
-	FinishedAt *time.Time   `json:"finishedAt,omitempty"`
-	Error      string       `json:"error,omitempty"`
-	Log        string       `json:"log,omitempty"` // tail of the build output
-	Actor      string       `json:"actor,omitempty"`
-	Instance   string       `json:"instance,omitempty"`
+	SharedImage string       `json:"sharedImage,omitempty"`
+	Scope       string       `json:"scope,omitempty"`
+	ReuseKey    string       `json:"reuseKey,omitempty"`
+	Reused      bool         `json:"reused,omitempty"`
+	Inputs      string       `json:"inputs,omitempty"`
+	Graph       string       `json:"graph"`
+	State       State        `json:"state"`
+	Hash        string       `json:"hash,omitempty"`  // definition hash of the last build
+	Image       string       `json:"image,omitempty"` // set when ready
+	Caches      []CacheMount `json:"caches,omitempty"`
+	StartedAt   *time.Time   `json:"startedAt,omitempty"`
+	FinishedAt  *time.Time   `json:"finishedAt,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	Log         string       `json:"log,omitempty"` // tail of the build output
+	Actor       string       `json:"actor,omitempty"`
+	Instance    string       `json:"instance,omitempty"`
 }
 
 // View is a Status compared with the graph's current definition.
@@ -296,6 +297,7 @@ func (m *Manager) run(ctx context.Context, b *build, g *domain.Graph, st *Status
 
 	stopFlush()
 	st.ReuseKey, st.Reused, st.Inputs, st.Scope = result.ReuseKey, result.Reused, result.Inputs, result.Scope
+	st.SharedImage = result.SharedImage
 
 	now := time.Now().UTC()
 	st.FinishedAt, st.Log = &now, logBuf.String()

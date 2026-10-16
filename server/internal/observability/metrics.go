@@ -11,6 +11,9 @@ import (
 const ns = "leforge"
 
 var (
+	EnvironmentCleanup        = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "environment_cleanup_total", Help: "Shared resource cleanup requests by outcome."}, []string{"outcome"})
+	EnvironmentCleanupSeconds = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "environment_cleanup_duration_seconds", Help: "Shared resource cleanup request duration."})
+
 	SandboxLifecycle        = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "sandbox_lifecycle_total", Help: "Sandbox suspend/resume operations by bounded outcome."}, []string{"action", "outcome"})
 	SandboxLifecycleSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{Namespace: ns, Name: "sandbox_lifecycle_duration_seconds", Help: "Sandbox suspend/resume latency including capacity admission."}, []string{"action"})
 

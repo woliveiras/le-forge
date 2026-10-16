@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, prepared-image and immutable cache-seed reuse are implemented; shared execution/build/setup memory and concurrency budgets are implemented; idle suspension/resume is implemented; shared-resource reclamation remains pending. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress; web-based provider configuration (section 5) and the visual graph editor (section 2) have been implemented and validated, except for browser-driven end-to-end tests (the project has no browser E2E tooling yet) and verification with the real LangGraph adapter. Containerized project environments are partially implemented: interface configuration, builds, logs, caches, and reset exist; repository discovery, approved proposals, prepared-image and immutable cache-seed reuse are implemented; shared execution/build/setup memory and concurrency budgets are implemented; idle suspension/resume and explicit cleanup of unused registered shared generations are implemented; historical unregistered resources are retained. MCPs, skills, steering, dynamic delegation, Git diffs, onboarding, and end-to-end validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -109,7 +109,7 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [ ] Add global CPU accounting.
 - [x] Stop idle execution containers between turns with configurable `isolation.docker.idleTimeout` (5m default, 0s disables). Preserve container files, workspace and caches; reacquire capacity before new work, keep paused tasks paused, retry failures without losing inputs, and document restart versus explicit teardown behavior.
 - [x] Preserve shared images/cache seeds on Reset and graph deletion; graph status retains resource references, and shared generations are conservatively retained.
-- [ ] Implement explicit reclamation of unused shared generations and crash leftovers with reference tracking.
+- [x] Implement explicit admin preview/cleanup of registered shared generations and newly tracked crash leftovers. Track exact generations across rebuilds; revalidate status/definition/build/container references under reuse leases; preserve stopped containers, other tasks and private workspaces; invalidate reuse before partial deletion and support retry. Legacy unregistered resources remain untouched. Unit, storage/API integration and real daemon tests cover the flow.
 - [ ] Record reuse, rebuild reasons, queue waits and resource-limit failures through existing events/metrics, using bounded labels and no sensitive payloads.
 
 #### Network Policy

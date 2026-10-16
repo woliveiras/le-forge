@@ -60,7 +60,8 @@ model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
 Additional Compose/devcontainer features, agent-callable environment tools,
-global CPU accounting and shared-resource reclamation remain planned.
+global CPU accounting remains planned. Explicit shared-resource cleanup is available
+through the admin API described below.
 Shared build/execution concurrency and memory budgets are available in
 [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-capacity).
 Prepared-image and cache-snapshot reuse is available as described below. See the
@@ -317,12 +318,78 @@ identity and outcome without repository URLs or file contents.
 volumes, but retain shared images and immutable seeds, including old generations.
 Existing graph status records retain their image/cache references. This
 conservative retention protects other tasks and supports reuse after all graphs
-have stopped. Explicit reclamation of unused shared generations is still
-planned; Reset is not a shared-storage garbage collector. Reuse reduces build
+have stopped. The admin cleanup API reclaims unreferenced registered generations;
+Reset itself is not a shared-storage garbage collector. Reuse reduces build
 work and downloads; execution sandboxes and environment pipelines now share
 the memory/concurrency budget in `isolation.docker.capacity`. Execution sandboxes
 [idle and resume](sandbox-runtime.md#idle-suspension-and-task-resume) without
 deleting workspaces; this budget does not cap the whole Docker VM.
+
+### Cleanup of unused shared generations
+
+Cleanup is an explicit admin operation, separate from Reset. It deletes only
+registered LeForge prepared images and immutable dependency-cache seeds. It
+does not delete workspaces, task-private caches, containers, arbitrary Docker
+images/volumes or BuildKit state, and never invokes daemon-wide prune or forced
+resource removal.
+
+Preview with `POST /api/v1/environments/cleanup` and `{}` (or
+`{"dryRun":true}`). The response contains `generations` with `id`, `image`,
+`caches`, `eligible`, `usedBy`, `removed` and optional `error`.
+Deletion requires explicit generation IDs, up to 100 per request:
+
+```json
+{"dryRun": false, "generations": ["shared_ID_FROM_PREVIEW"]}
+```
+
+Each selected generation is checked again under the same renewable storage
+lease used by environment builders. A previous preview is not authorization
+to bypass new references. Cleanup preserves:
+
+- Generations referenced by environment status, including ready stopped tasks.
+- Explicit shared-image references in graph definitions.
+- Generations while an environment build lease is active (conservatively,
+  even if that build belongs to another repository).
+- Images or seed volumes referenced by **any existing container**, including
+  stopped/suspended containers and containers using the same image under an alias.
+
+A reference is not removed just because a graph is stopped. Reset or replace
+its environment when it no longer needs that prepared generation. Container
+references remain protected until their normal lifecycle removes them.
+
+New builds register generation ownership before creating shared resources,
+including potential leftovers from failed/interrupted builds. Force rebuilds
+retain the old generation record; status identifies the precise generation
+used by each task. Existing generations become registered when reused or
+replaced by a build. Legacy status without an exact generation conservatively
+protects all generations with its reuse key. Older Docker resources without
+registered ownership remain untouched; this is not an automatic import/prune
+of historical resources.
+
+Before removal, cleanup invalidates the matching reuse pointer. Partial failure
+retains the generation record for retry, so a missing seed cannot be advertised
+as reusable. Other generations and their reuse pointers remain intact. Missing
+resources are tolerated on retry; IDs already removed report `missing:true`.
+A storage, Docker or inventory error prevents removal of the affected generation.
+Responses may contain partial results: inspect each `removed`, `usedBy` and
+`error`, not only the HTTP status. Requests are bounded to two minutes; retry
+selected unresolved IDs after restoring dependencies.
+
+Ownership is scoped to the installation store and configured Docker daemon.
+Controllers must use the same daemon configuration. The collector has no
+background schedule or age-based eviction policy.
+
+Applied attempts emit `environment.cleanup` events with the actor and generation,
+and structured outcome logs. Metrics:
+`leforge_environment_cleanup_total{outcome}` (`ok|partial|error`) and
+`leforge_environment_cleanup_duration_seconds`; trace span:
+`environment.cleanup`.
+
+Unit, storage/CLI and admin API tests cover references, ownership, force rebuilds,
+concurrent leases, invalid requests, dependency failure and retry. The real
+`make test-environment-context` suite verifies preservation of another task and
+a stopped container, actual image/seed removal, and rebuilding with the workspace
+intact.
 
 ### Build and setup capacity
 
@@ -466,6 +533,7 @@ documented in [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-cap
 | `GET /api/v1/graphs/{id}/environment/discovery` | viewer | Read-only candidate discovery in an existing checkout. |
 | `POST /api/v1/graphs/{id}/environment/resolve` | viewer | Review `{source, path, sha256, service?}`; returns a validated definition with origin. No save/build. |
 | `GET /api/v1/graphs/{id}/environment` | viewer | State compared with the saved definition (`defined`, `currentHash`, `upToDate`, `image`, `log`, ...). |
+| `POST /api/v1/environments/cleanup` | admin | Preview registered shared generations by default; explicit `dryRun:false` plus generation IDs removes only those still unused. Per-generation results report retained resources and partial failures. |
 | `POST /api/v1/graphs/{id}/environment/build` | operator | Start a build (`202`); `{"force": true}` rebuilds an up-to-date environment, otherwise that is a no-op (`200`). `409` while a build runs, `400` without `spec.environment`. |
 | `POST /api/v1/graphs/{id}/environment/reset` | admin | Delete images and caches. `409` while the graph runs. |
 
