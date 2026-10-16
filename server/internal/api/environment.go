@@ -160,5 +160,72 @@ func (s *Server) validateEnvironmentOrigin(ctx context.Context, g *domain.Graph)
 	if err != nil {
 		return badRequest("invalid workspace")
 	}
+	if s.Environments != nil {
+		return s.Environments.ValidateDefinition(ctx, g, dir)
+	}
+	if g.Spec.Environment.Origin.Source == "agent" {
+		return badRequest("proposal approval validator is unavailable")
+	}
 	return environment.ValidateAccepted(ctx, dir, g.Spec.Environment)
+}
+
+func (s *Server) getEnvironmentProposal(w http.ResponseWriter, r *http.Request) error {
+	if s.Proposals == nil {
+		return engine.ErrNotFound
+	}
+	if _, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), 0); err != nil {
+		return err
+	}
+	v, err := s.Proposals.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 200, v)
+	return nil
+}
+func (s *Server) proposeEnvironment(w http.ResponseWriter, r *http.Request) error {
+	if s.Proposals == nil {
+		return engine.ErrNotFound
+	}
+	var body struct {
+		Model  domain.ModelRef `json:"model"`
+		Resume bool            `json:"resume"`
+	}
+	d := json.NewDecoder(io.LimitReader(r.Body, 4097))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&body); err != nil && err != io.EOF {
+		return badRequest("invalid proposal request")
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		return badRequest("expected one proposal request")
+	}
+	g, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), 0)
+	if err != nil {
+		return err
+	}
+	v, err := s.Proposals.Request(r.Context(), g, body.Model, body.Resume, identityFrom(r.Context()).Name)
+	if err != nil {
+		return badRequest("%v", err)
+	}
+	writeJSON(w, http.StatusCreated, v)
+	return nil
+}
+func (s *Server) cancelEnvironmentProposal(w http.ResponseWriter, r *http.Request) error {
+	if s.Proposals == nil {
+		return engine.ErrNotFound
+	}
+	if err := s.Proposals.Cancel(r.Context(), r.PathValue("id"), identityFrom(r.Context()).Name); err != nil {
+		return badRequest("%v", err)
+	}
+	return s.getEnvironmentProposal(w, r)
+}
+func (s *Server) retryEnvironmentProposal(w http.ResponseWriter, r *http.Request) error {
+	if s.Proposals == nil {
+		return engine.ErrNotFound
+	}
+	if err := s.Proposals.Apply(r.Context(), r.PathValue("id")); err != nil {
+		return badRequest("%v", err)
+	}
+	return s.getEnvironmentProposal(w, r)
 }

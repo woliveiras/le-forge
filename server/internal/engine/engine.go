@@ -86,9 +86,10 @@ type Options struct {
 	Sandboxes  SandboxFactory
 	// Environments, when set, is consulted before starting nodes that run
 	// commands in the graph's environment (see UsesEnvironment).
-	Environments EnvironmentChecker
-	CallbackURL  string // base internal URL, e.g. http://forged:8080
-	Log          *slog.Logger
+	Environments         EnvironmentChecker
+	EnvironmentProposals EnvironmentChecker
+	CallbackURL          string // base internal URL, e.g. http://forged:8080
+	Log                  *slog.Logger
 
 	LeaseTTL           time.Duration
 	ReconcileInterval  time.Duration

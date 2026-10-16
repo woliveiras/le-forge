@@ -184,9 +184,21 @@ named build contexts and other COPY flags remain unsupported. These are conserva
 new installation-wide policy configuration. Missing/unreadable checkouts or scan
 limits return an error, never a fallback. Discovery does not clone a repository.
 
+When discovery returns `proposal_required`, an admin can request a bounded,
+tool-free model analysis of allowlisted manifests/lockfiles. A durable
+`environment` approval includes the full suggested definition, rationale and
+input fingerprint. Admin acceptance revalidates the graph version and input
+hashes, saves the exact approved definition and triggers the build. The engine
+blocks starts until ready; a graph starts automatically only when the requester
+explicitly selected that option. Rejection, expiration and cancellation do not
+build. Approved work survives restart, and failed builds can be retried. This
+workflow is available through the console and environment proposal API; invoking
+it through `environment.propose`/`environment.status` agent tools remains planned.
+See [proposal limits and behavior](environments.md#agent-proposal-and-developer-approval).
+
 **Planned — not implemented yet** (tracked in
 [TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
-Additional format support, approved agent proposals,
+Additional format support, agent-callable environment tools,
 reuse across tasks and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
 only the capabilities explicitly described as delivered above are available.
 

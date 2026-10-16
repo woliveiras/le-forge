@@ -6,6 +6,7 @@ import { useEventStream } from '../hooks/useEventStream';
 import { Badge, Btn, Empty, ErrorBox, JsonView, fmtDateTime } from './common';
 
 const KIND_HELP: Record<string, string> = {
+  environment: 'Review the proposed environment and rationale. Admin approval saves the definition and starts its build. Tasks remain blocked until ready.',
   tool: 'An agent wants to invoke a tool that requires approval.',
   message: 'A message is held at a gated channel or node.',
   turn: 'A node requires approval before each turn.',

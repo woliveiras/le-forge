@@ -53,6 +53,12 @@ func (e *Engine) Validate(g *domain.Graph) *graph.Report {
 // only limits the check to one node ("" = every enabled node).
 func (e *Engine) preflight(ctx context.Context, g *domain.Graph, only string) *graph.Report {
 	rep := &graph.Report{Valid: true, Errors: []graph.Issue{}, Warnings: []graph.Issue{}}
+	if e.opt.EnvironmentProposals != nil {
+		if err := e.opt.EnvironmentProposals.Check(ctx, g); err != nil {
+			rep.Valid = false
+			rep.Errors = append(rep.Errors, graph.Issue{Path: "spec.environment", Message: err.Error()})
+		}
+	}
 	if e.opt.Environments != nil && g.Spec.Environment != nil {
 		var users []string
 		for _, n := range g.Spec.Nodes {

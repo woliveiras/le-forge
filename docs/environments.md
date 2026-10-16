@@ -55,13 +55,61 @@ files block fallback. Scans exclude `.git`, `node_modules`, `vendor` and `.venv`
 reject symlinks in definition paths, and are limited to 10,000 entries and
 256 KiB per file. All reads remain inside the authorized workspace.
 
-**Planned, not available yet:** when no definition exists, an analysis agent
-will propose one for developer approval. Currently `proposal_required` only
-reports the absence of a definition; configure an environment manually instead.
-Additional Compose/devcontainer features, reuse across tasks
-and global resource budgets also remain planned. See the
-[planned contracts](product-contracts.md#planned-discovery-and-acceptance) and
+When no definition exists, **Analyze repository** uses the configured default
+model to propose an environment. It does not install dependencies or execute
+repository commands. See the approval workflow below.
+
+Additional Compose/devcontainer features, agent-callable environment tools,
+reuse across tasks and global resource budgets remain planned. See the
+[contracts](product-contracts.md#planned-discovery-and-acceptance) and
 [implementation checklist](../wip/TASKS.md#3-provide-containerized-project-environments).
+
+### Agent proposal and developer approval
+
+1. Save workspace changes, stop the graph, and discover its environment.
+2. If no definition exists, choose **Analyze repository**. The console uses the
+   installation's default provider/model; the API can select a model explicitly.
+   Optionally select **Start graph when the approved environment is ready**.
+3. Review the full definition, toolchain list and rationale in **Approvals**.
+   Environment approval requires an admin, because it saves the graph definition.
+   Approval never executes edits supplied in the approval answer field.
+4. Approval revalidates the graph version and analyzed inputs. A background
+   reconciler saves the exact approved definition and starts its build. Tasks
+   remain blocked until the build succeeds. If requested, the graph starts then.
+   An explicit stop, pause or kill clears that automatic-start intent.
+5. Rejection, cancellation and expiration keep tasks blocked and do not build.
+   Analysis errors are visible; request another proposal to retry. For an approved
+   build failure, use **Retry approved build** or the existing Build action.
+
+The analysis is one model call, without tools, capped at 90 seconds and 4,096
+output tokens. It reads an allowlist of manifests/toolchain files and lockfiles
+(such as `mise.toml`, `package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`),
+with at most 32 files, 128 KiB total and 10,000 scanned entries. It excludes
+steering files, `.env`, credential config and dependency/output directories;
+symlinks and oversized inputs fail explicitly. Repository text is untrusted data
+in the prompt. The proposal is a suggestion, not a tested environment.
+
+Proposals cannot set host mounts, privileges, execution networking beyond `none`,
+resource overrides or their own origin. Cache paths must stay under
+`/home/sandbox`. Dockerfile proposals receive the same validated build-context
+snapshot as repository definitions. Both analyzed-input hashes and build-context
+hashes are rechecked on acceptance and build; stale proposals require another
+analysis. The fingerprint covers analyzed inputs, not a Git commit identity.
+
+Approval expires after 24 hours without execution. Proposal state and approvals
+survive restart; approved work is reconciled again. An interrupted analysis can
+be retried after two minutes. States are `analyzing`, `awaiting_approval`,
+`building`, `ready`, `failed`, `rejected`, `expired` and `cancelled`.
+`environment.proposal` events contain identifiers and state, not file contents;
+analysis uses an `environment.propose` span and the existing model, approval and
+build telemetry. After approval saves the definition, reload graph settings to
+view the saved version and build logs.
+
+For a repository using mise, an example **proposal** might use a Dockerfile that
+installs mise, setup commands `mise install` and the project's lockfile-aware
+dependency download, and caches under `/home/sandbox`. The model must explain
+its base image, tool versions and setup network needs; the developer reviews
+all installation commands before approval. No mise commands run during analysis.
 
 ### Repository build contexts
 

@@ -57,6 +57,7 @@ type App struct {
 	Engine    *engine.Engine
 	// Environments builds project environments on the sandbox daemon.
 	Environments *environment.Manager
+	Proposals    *environment.Proposals
 	API          *api.Server
 
 	shutdownObs func(context.Context) error
@@ -147,16 +148,25 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.Proposals = &environment.Proposals{Store: a.Store, Approvals: a.Approvals, Models: a.Models, Manager: a.Environments, Directory: ws.GraphDir}
+	a.Environments.SetProposalValidator(a.Proposals.ValidateAccepted)
 	a.Engine, err = engine.New(engine.Options{
 		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
-		Sandboxes: sandboxFactory(cfg, a.Environments), Environments: a.Environments,
+		Sandboxes: sandboxFactory(cfg, a.Environments), Environments: a.Environments, EnvironmentProposals: a.Proposals,
 		CallbackURL: cfg.Server.InternalURL, Log: log,
 		LeaseTTL: cfg.Engine.LeaseTTL, ReconcileInterval: cfg.Engine.ReconcileInterval,
 		RetryBackoff: cfg.Engine.RetryBackoff, MaxConcurrentTurns: cfg.Engine.MaxConcurrentTurns,
 	})
 	if err != nil {
 		return nil, err
+	}
+	a.Proposals.Save = func(ctx context.Context, g *domain.Graph, version int, actor string) error {
+		_, _, err := a.Engine.SaveGraph(ctx, g, version, actor)
+		return err
+	}
+	a.Proposals.Start = func(ctx context.Context, id, actor string) error {
+		return a.Engine.GraphAction(ctx, id, "start", actor)
 	}
 	auth, err := api.NewAuthenticator(cfg.Auth)
 	if err != nil {
@@ -168,7 +178,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.API = api.New(api.Deps{
 		Config: cfg, Engine: a.Engine, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Providers: a.Providers, Tools: a.Tools, Workspaces: ws, Auth: auth, Log: log,
-		Environments: a.Environments,
+		Environments: a.Environments, Proposals: a.Proposals,
 	})
 	return a, nil
 }
@@ -393,6 +403,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	go a.refreshProviders(ctx)
+	go a.Proposals.Run(ctx)
 	srv := &http.Server{
 		Addr:              a.Config.Server.Addr,
 		Handler:           a.API.Handler(),

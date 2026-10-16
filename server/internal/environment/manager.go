@@ -82,13 +82,14 @@ type View struct {
 
 // Options wire a Manager.
 type Options struct {
-	Store      storage.Store
-	Bus        *events.Bus // optional
-	Workspaces Workspaces
-	DockerBin  string
-	DockerHost string
-	Instance   string
-	Log        *slog.Logger
+	ProposalValidator func(context.Context, *domain.Graph) error
+	Store             storage.Store
+	Bus               *events.Bus // optional
+	Workspaces        Workspaces
+	DockerBin         string
+	DockerHost        string
+	Instance          string
+	Log               *slog.Logger
 	// LogLimit is the build log tail kept per environment (default 64 KiB).
 	LogLimit int
 	// DefaultTimeout bounds builds without spec.environment.timeout (30m).
@@ -179,7 +180,7 @@ func (m *Manager) Build(ctx context.Context, g *domain.Graph, force bool, actor 
 			return nil, fmt.Errorf("%w: cannot prepare repository: %v", ErrInvalidDefinition, err)
 		}
 	}
-	if err := ValidateAccepted(ctx, dir, env); err != nil {
+	if err := m.ValidateDefinition(ctx, g, dir); err != nil {
 		return nil, err
 	}
 	id := g.Metadata.ID
@@ -657,4 +658,20 @@ func (t *tailBuffer) String() string {
 		return "[earlier output truncated]\n" + string(t.buf)
 	}
 	return string(t.buf)
+}
+
+// ValidateDefinition checks both filesystem provenance and durable approval.
+func (m *Manager) ValidateDefinition(ctx context.Context, g *domain.Graph, dir string) error {
+	if g.Spec.Environment != nil && g.Spec.Environment.Origin != nil && g.Spec.Environment.Origin.Source == "agent" {
+		if m.opt.ProposalValidator == nil {
+			return fmt.Errorf("%w: agent proposal approval validator is unavailable", ErrInvalidDefinition)
+		}
+		if err := m.opt.ProposalValidator(ctx, g); err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
+		}
+	}
+	return ValidateAccepted(ctx, dir, g.Spec.Environment)
+}
+func (m *Manager) SetProposalValidator(fn func(context.Context, *domain.Graph) error) {
+	m.opt.ProposalValidator = fn
 }

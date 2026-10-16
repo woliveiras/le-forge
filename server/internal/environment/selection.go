@@ -320,6 +320,9 @@ func ValidateAccepted(ctx context.Context, dir string, env *domain.EnvironmentSp
 		return nil
 	}
 	o := env.Origin
+	if o.Source == "agent" {
+		return validateProposalFiles(ctx, dir, env)
+	}
 	resolved, err := Resolve(ctx, dir, Selection{Source: o.Source, Path: o.Path, SHA256: o.SHA256, Service: o.Service, Target: o.Target})
 	if err != nil {
 		return err

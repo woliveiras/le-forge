@@ -1,6 +1,7 @@
 import type {
   Approval,
   EnvironmentView,
+  EnvironmentProposal,
   EnvironmentDiscovery,
   EnvironmentSelection,
   EnvironmentSpec,
@@ -175,6 +176,10 @@ export const api = {
   graphAction: (id: string, action: GraphAction) =>
     request<GraphStatus>(`${V1}/graphs/${enc(id)}/${action}`, { method: 'POST' }),
   status: (id: string) => request<GraphStatus>(`${V1}/graphs/${enc(id)}/status`),
+  environmentProposal: (id: string) => request<EnvironmentProposal | null>(`${V1}/graphs/${enc(id)}/environment/proposal`),
+  proposeEnvironment: (id: string, resume: boolean) => request<EnvironmentProposal>(`${V1}/graphs/${enc(id)}/environment/proposal`, { method: 'POST', body: { resume } }),
+  cancelEnvironmentProposal: (id: string) => request<EnvironmentProposal>(`${V1}/graphs/${enc(id)}/environment/proposal/cancel`, { method: 'POST' }),
+  retryEnvironmentProposal: (id: string) => request<EnvironmentProposal>(`${V1}/graphs/${enc(id)}/environment/proposal/retry`, { method: 'POST' }),
   environment: (id: string) => request<EnvironmentView>(`${V1}/graphs/${enc(id)}/environment`),
   discoverEnvironment: (id: string) => request<EnvironmentDiscovery>(`${V1}/graphs/${enc(id)}/environment/discovery`),
   resolveEnvironment: (id: string, selection: EnvironmentSelection) =>

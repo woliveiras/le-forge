@@ -57,6 +57,7 @@ type Deps struct {
 	Workspaces *workspace.Manager
 	// Environments is optional; without it the environment routes answer 404.
 	Environments *environment.Manager
+	Proposals    *environment.Proposals
 	Auth         *Authenticator
 	Log          *slog.Logger
 }
@@ -116,6 +117,10 @@ func (s *Server) routes() {
 		{"GET /api/v1/graphs/{id}/environment", R, s.getEnvironment},
 		{"GET /api/v1/graphs/{id}/environment/discovery", R, s.discoverEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/resolve", R, s.resolveEnvironment},
+		{"GET /api/v1/graphs/{id}/environment/proposal", R, s.getEnvironmentProposal},
+		{"POST /api/v1/graphs/{id}/environment/proposal", A, s.proposeEnvironment},
+		{"POST /api/v1/graphs/{id}/environment/proposal/cancel", A, s.cancelEnvironmentProposal},
+		{"POST /api/v1/graphs/{id}/environment/proposal/retry", A, s.retryEnvironmentProposal},
 		{"POST /api/v1/graphs/{id}/environment/build", O, s.buildEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/reset", A, s.resetEnvironment},
 		{"POST /api/v1/graphs/{id}/nodes/{node}/{action}", O, s.nodeAction},
@@ -570,6 +575,11 @@ func (s *Server) graphAction(w http.ResponseWriter, r *http.Request) error {
 	default:
 		return engine.ErrNotFound
 	}
+	if s.Proposals != nil && (action == "stop" || action == "kill" || action == "pause") {
+		if err := s.Proposals.DisableResume(r.Context(), id); err != nil {
+			return err
+		}
+	}
 	if err := s.Engine.GraphAction(r.Context(), id, action, identityFrom(r.Context()).Name); err != nil {
 		return err
 	}
@@ -838,6 +848,23 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) error {
 	case "reject":
 	default:
 		return engine.ErrNotFound
+	}
+	pending, err := s.Store.GetApproval(r.Context(), r.PathValue("aid"))
+	if err != nil {
+		return err
+	}
+	if pending.Kind == domain.ApprovalEnvironment {
+		if !identityFrom(r.Context()).Role.Allows(config.RoleAdmin) {
+			return fmt.Errorf("%w: environment approval requires admin", tools.ErrDenied)
+		}
+		if s.Proposals == nil {
+			return engine.ErrNotFound
+		}
+		if approve {
+			if err := s.Proposals.ValidateDecision(r.Context(), pending); err != nil {
+				return badRequest("%v", err)
+			}
+		}
 	}
 	a, err := s.Approvals.Decide(r.Context(), r.PathValue("aid"), approve, identityFrom(r.Context()).Name, body.Comment, body.Answer)
 	if err != nil {

@@ -245,10 +245,11 @@ type MessageRecord struct {
 type ApprovalKind string
 
 const (
-	ApprovalTool     ApprovalKind = "tool"     // a tool call requiring approval
-	ApprovalMessage  ApprovalKind = "message"  // a message held at a gate
-	ApprovalTurn     ApprovalKind = "turn"     // a node's turn requiring approval
-	ApprovalQuestion ApprovalKind = "question" // an agent asked a human (human.ask)
+	ApprovalEnvironment ApprovalKind = "environment" // proposed environment requiring developer approval
+	ApprovalTool        ApprovalKind = "tool"        // a tool call requiring approval
+	ApprovalMessage     ApprovalKind = "message"     // a message held at a gate
+	ApprovalTurn        ApprovalKind = "turn"        // a node's turn requiring approval
+	ApprovalQuestion    ApprovalKind = "question"    // an agent asked a human (human.ask)
 )
 
 type ApprovalStatus string

@@ -344,6 +344,61 @@ paths:
               schema: {$ref: "#/components/schemas/EnvironmentDefinition"}
         "400": {$ref: "#/components/responses/BadRequest"}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/environment/proposal:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [environments]
+      operationId: getEnvironmentProposal
+      summary: Read durable proposal state and rationale
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Current proposal or null when absent
+          content:
+            application/json:
+              schema: {type: [object, "null"]}
+    post:
+      tags: [environments]
+      operationId: proposeEnvironment
+      summary: Analyze manifests without tools and request developer approval
+      description: Requires a stopped graph with no environment and no discovered definition. Does not build or execute repository commands. One model call bounded to 90 seconds. Admin approval through Approvals revalidates inputs and saves/builds the definition. Model defaults to the configured provider; resume explicitly opts into starting the graph once ready.
+      x-leforge-role: admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                model:
+                  type: object
+                  properties:
+                    provider: {type: string}
+                    name: {type: string}
+                resume: {type: boolean, default: false}
+      responses:
+        "201": {description: Proposal persisted and awaiting admin approval}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/v1/graphs/{id}/environment/proposal/cancel:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    post:
+      tags: [environments]
+      operationId: cancelEnvironmentProposal
+      summary: Cancel analysis or a pending proposal without building
+      x-leforge-role: admin
+      responses:
+        "200": {description: Cancelled proposal}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /api/v1/graphs/{id}/environment/proposal/retry:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    post:
+      tags: [environments]
+      operationId: retryEnvironmentProposal
+      summary: Revalidate and retry an already approved environment build
+      x-leforge-role: admin
+      responses:
+        "200": {description: Current proposal state}
+        "400": {$ref: "#/components/responses/BadRequest"}
   /api/v1/graphs/{id}/environment/build:
     parameters: [{$ref: "#/components/parameters/GraphId"}]
     post:
@@ -1462,7 +1517,7 @@ components:
         nodeId: {type: string}
         replica: {type: integer}
         executionId: {type: string}
-        kind: {enum: [tool, message, turn, question]}
+        kind: {enum: [tool, message, turn, question, environment]}
         status: {$ref: "#/components/schemas/ApprovalStatus"}
         title: {type: string}
         detail: {description: "tool: {tool,args}; message: {graphId,channel,message,onTimeout}; turn: {inputs,onTimeout}; question: {question}"}

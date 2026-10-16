@@ -64,11 +64,11 @@ describe('EnvironmentDiscovery', () => {
     expect(onAccept).not.toHaveBeenCalled();
   });
 
-  it('reports absent definitions without claiming an agent proposal ran', async () => {
-    fakeApi({ [`GET ${discoveryPath}`]: () => ({ source: 'none', status: 'proposal_required', candidates: [] }) });
+  it('offers analysis for absent definitions without claiming it already ran', async () => {
+    fakeApi({ [`GET ${discoveryPath}`]: () => ({ source: 'none', status: 'proposal_required', candidates: [] }), 'GET /api/v1/graphs/g/environment/proposal': () => null });
     render(<EnvironmentDiscovery graphId="g" disabled={false} onAccept={vi.fn()} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Discover environment' }));
-    expect(await screen.findByText(/Agent proposals are not available yet/)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Analyze repository' })).toBeTruthy();
   });
 
   it('blocks invalid candidates and discovery when an explicit definition exists', async () => {

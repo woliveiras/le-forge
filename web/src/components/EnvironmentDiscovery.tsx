@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { EnvironmentDiscovery as Discovery, EnvironmentSpec } from '../api/types';
 import { Btn, ErrorBox } from './common';
+import { EnvironmentProposal } from './EnvironmentProposal';
 
 /** Discovery and review do not save the graph or start a build. */
 export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
@@ -53,7 +54,7 @@ export function EnvironmentDiscovery({ graphId, disabled, onAccept }: {
     <Btn small disabled={disabled || busy} onClick={() => void discover()}>{busy ? 'Checking…' : 'Discover environment'}</Btn>
     <ErrorBox error={error} />
     {result?.status === 'configured' && <p>An environment is already saved. Remove it and save the graph before discovering another.</p>}
-    {result?.status === 'proposal_required' && <p>No environment definition found. Agent proposals are not available yet; configure an image or Dockerfile manually.</p>}
+    {result?.status === 'proposal_required' && <EnvironmentProposal graphId={graphId} disabled={disabled || busy} />}
     {!!result?.candidates.length && <>
       <p className="muted small">Source: {result.source}</p>
       <label>Repository definition

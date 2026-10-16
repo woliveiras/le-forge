@@ -328,7 +328,7 @@ export interface MessageRecord {
   updatedAt: string;
 }
 
-export type ApprovalKind = 'tool' | 'message' | 'turn' | 'question';
+export type ApprovalKind = 'tool' | 'message' | 'turn' | 'question' | 'environment';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
 export interface Approval {
@@ -546,4 +546,14 @@ export function traceIdFromParent(tp: unknown): string | undefined {
   if (typeof tp !== 'string') return undefined;
   const parts = tp.split('-');
   return parts.length >= 4 ? parts[1] : undefined;
+}
+
+export interface EnvironmentProposal {
+ id: string;
+ graphId: string;
+ graphVersion: number;
+ state: 'analyzing' | 'awaiting_approval' | 'building' | 'ready' | 'failed' | 'rejected' | 'expired' | 'cancelled';
+ error?: string;
+ resume: boolean;
+ analysis?: { environment: EnvironmentSpec; rationale: string; tools: string[] };
 }
