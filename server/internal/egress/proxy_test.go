@@ -191,3 +191,23 @@ func TestAllowedHostResolvingPrivatelyIsDenied(t *testing.T) {
 		}
 	}
 }
+
+func TestDenialReasonsAreSafeStructuredEvents(t *testing.T) {
+	var log bytes.Buffer
+	p, err := New([]string{"example.com"}, slog.New(slog.NewJSONHandler(&log, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "http://forbidden.example/private?secret=token", nil))
+	if !strings.Contains(log.String(), `"reason":"host_not_allowed"`) || strings.Contains(log.String(), "secret") || strings.Contains(log.String(), "private?") {
+		t.Fatal(log.String())
+	}
+	log.Reset()
+	p.resolver = resolverFunc(func(context.Context, string, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+	})
+	p.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "http://example.com", nil))
+	if !strings.Contains(log.String(), `"reason":"private_address"`) {
+		t.Fatal(log.String())
+	}
+}

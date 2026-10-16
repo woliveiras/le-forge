@@ -1,3 +1,4 @@
+import { EnvironmentProxies } from './EnvironmentProxies';
 import { useEffect } from 'react';
 import { api } from '../api/client';
 import type { Graph, GraphNode } from '../api/types';
@@ -16,6 +17,7 @@ export function AgentEnvironment({ graph, node }: { graph: Graph; node: GraphNod
     {source === 'graph' ? <GraphEnvironment key={graph.metadata.id} graph={graph} /> : <p>{source === 'image'
       ? `Commands use the agent sandbox image: ${isolation.image || 'installation default'}. The graph environment does not block this agent.`
       : 'Commands use process isolation inside the LeForge server. The graph environment does not apply.'}</p>}
+    {source !== 'process' && <EnvironmentProxies key={`proxies-${graph.metadata.id}`} graphId={graph.metadata.id} />}
     {source !== 'process' && <AgentCapacity key={graph.metadata.id} graphId={graph.metadata.id} nodeId={node.id} />}
   </section>;
 }

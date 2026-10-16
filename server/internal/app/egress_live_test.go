@@ -92,12 +92,29 @@ func TestEgressRealSandbox(t *testing.T) {
 	run("/probe http://169.254.169.254", false)
 	run("/probe http://1.1.1.1 direct", false)
 	run(`! awk '$2 == "00000000" { found=1 } END { exit !found }' /proc/net/route`, true)
+	status, err := manager.ProxyStatus(ctx, id)
+	if err != nil || len(status.Proxies) != 1 || status.Proxies[0].State != "running" {
+		t.Fatal(status, err)
+	}
+	found := false
+	for _, request := range status.Proxies[0].Requests {
+		if request.Host == "example.org" && request.Outcome == "denied" && request.Reason == "host_not_allowed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("real denial missing from proxy diagnostics", status)
+	}
 	suspend, ok := sandbox.(interface{ Suspend(context.Context) error })
 	if !ok {
 		t.Fatal("missing suspension")
 	}
 	if err := suspend.Suspend(ctx); err != nil {
 		t.Fatal(err)
+	}
+	status, err = manager.ProxyStatus(ctx, id)
+	if err != nil || len(status.Proxies) != 1 || status.Proxies[0].State != "exited" {
+		t.Fatal("suspended proxy state", status, err)
 	}
 	settings := environmentpolicy.Settings{Store: store, Base: cfg.Isolation.Docker.EnvironmentPolicy}
 	narrow := environmentpolicy.NetworkSettings{SetupNetworks: []string{"bridge"}, RunNetworks: []string{"none", "egress"}, EgressHosts: []string{"example.com"}}

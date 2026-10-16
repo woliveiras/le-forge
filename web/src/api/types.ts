@@ -597,3 +597,11 @@ export interface NetworkPolicyView {
   updatedAt?: string;
   usage?: { graph: string; state: string; hosts: string[]; blocked: boolean; reason?: string }[];
 }
+
+export interface ProxyRequest {
+ time: string; host: string; outcome: 'allowed' | 'denied' | 'failed'; reason: string; durationMs: number;
+}
+export interface ProxyStatus {
+ name: string; phase: string; state: string; requests: ProxyRequest[]; warning?: string; capturedAt: string;
+}
+export interface ProxyView { proxies: ProxyStatus[]; lastPreparation?: ProxyStatus; truncated: boolean }

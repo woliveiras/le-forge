@@ -917,6 +917,49 @@ The preview is a snapshot of saved graph definitions, not a live container audit
 `make test-egress` validates persisted host revocation and restoration against a
 real suspended sandbox, preserving its workspace. Unit, storage/API and UI tests
 cover validation, role enforcement, impact preview, conflict handling, storage
-failures and policy checks before/after capacity admission. A live proxy status
-and denial-log dashboard is still planned; build logs and daemon proxy logs remain
-the diagnostic surfaces.
+failures and policy checks before/after capacity admission. Per-environment proxy status and sampled denial diagnostics are available below.
+
+
+## Proxy state and blocked access in the console
+
+In **Graph settings → Environment** or the agent's **Command environment** panel,
+select **Show proxy diagnostics**. Viewers, operators and administrators can inspect
+this read-only view. While open, it refreshes about every ten seconds after the
+previous query completes; it also offers manual refresh. Closing it stops polling.
+
+Each current runtime or build/setup proxy shows its container name, phase, Docker
+process state, capture time and recent blocked/failed requests. Reasons distinguish
+unapproved hosts, private/reserved DNS answers, invalid destinations, unsupported
+protocols/ports, exhausted proxy request capacity and upstream failures. Legacy
+request records without a reason display “Reason not recorded”. A running process
+is **not** a network connectivity/health check. Suspended proxy containers appear
+as `exited`; this is not by itself evidence of a fault. Read errors are presented
+as unavailable/unknown, never as a healthy proxy or zero blocked requests.
+
+The API reads at most 32 managed proxy containers per graph, verifies ownership
+labels before reading logs, and projects only timestamp, valid hostname, outcome,
+reason code and duration. It never returns raw Docker logs, container configuration,
+request paths, headers or payloads. Each proxy sample uses the last 100 log lines
+from the previous 24 hours, with a 256 KiB read bound and a ten-second query timeout.
+Displayed counts describe the sample, not lifetime totals. Long-lived HTTPS CONNECT
+requests are logged when the tunnel closes. Attempts blocked directly by network
+isolation never reach the proxy and therefore do not appear here.
+
+Before removing the preparation proxy, the controller stores one bounded snapshot
+in shared storage. The last captured preparation remains visible after cleanup,
+including its capture time and state at capture, until replaced by another snapshot
+or removed by environment reset. Snapshot failures produce a build-log warning and
+do not make a successful build fail. Runtime history follows Docker log retention
+and disappears when the corresponding proxy container is removed. This is not a
+persistent audit trail or a streaming monitoring system.
+
+On upgrade, rebuild the trusted proxy image with `make egress-image` to emit the
+new reason codes, and stop/start older tasks to create proxy containers with the
+monitoring labels. An empty result means no **monitored** containers were found;
+it does not prove that no older proxy exists. Provisioning/restarting existing
+installation resources remains an explicit operator action.
+
+`make test-egress` now verifies live runtime state, sampled denial reasons,
+suspended state and preparation snapshots after cleanup on the dedicated daemon.
+Unit, storage/API and UI integration tests cover data projection, malformed logs,
+ownership, bounded samples, failures, roles, refresh and stale-data handling.

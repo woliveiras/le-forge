@@ -84,6 +84,10 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
 		if g.Spec.Environment.Network.Setup == "egress" {
+			if captureErr := m.capturePreparationProxy(cleanup, g.Metadata.ID); captureErr != nil {
+				fmt.Fprintln(log, "==> Preparation proxy diagnostics could not be saved")
+				m.opt.Log.Warn("preparation proxy diagnostics unavailable", "graph", g.Metadata.ID, "err", captureErr)
+			}
 			fmt.Fprintln(log, "==> Preparation proxy request outcomes (last 50)")
 			if logErr := m.docker(cleanup, nil, log, "logs", "--tail", "50", preparationProxy(g.Metadata.ID)); logErr != nil {
 				m.opt.Log.Warn("preparation proxy logs unavailable", "graph", g.Metadata.ID, "err", logErr)

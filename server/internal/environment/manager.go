@@ -590,6 +590,9 @@ func (m *Manager) Reset(ctx context.Context, graphID, actor string) error {
 	if err := m.opt.Store.KVDelete(ctx, kvNamespace, graphID); err != nil && !errors.Is(err, storage.ErrNotFound) {
 		errs = append(errs, err.Error())
 	}
+	if err := m.opt.Store.KVDelete(ctx, proxyHistoryNamespace, graphID); err != nil && !errors.Is(err, storage.ErrNotFound) {
+		errs = append(errs, "remove proxy diagnostics: "+err.Error())
+	}
 	m.publish(ctx, domain.EvEnvReset, graphID, actor, map[string]any{"errors": len(errs)})
 	if len(errs) > 0 {
 		return fmt.Errorf("environment reset incomplete: %s", strings.Join(errs, "; "))

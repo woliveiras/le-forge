@@ -219,7 +219,7 @@ func (s *ComposeSandbox) Start(ctx context.Context) error {
 			if s.egress && c.Name == "leforge-egress" {
 				args[len(args)-2] = "/" // scratch proxy needs no writable working directory
 				args = args[:len(args)-1]
-				args = append(args, "--read-only", "--pids-limit", "128", "--log-opt", "max-size=10m", "--log-opt", "max-file=2", c.Image)
+				args = append(args, "--read-only", "--pids-limit", "128", "--log-opt", "max-size=10m", "--log-opt", "max-file=2", "--label", "leforge.egress=true", "--label", "leforge.graph="+s.main.cfg.Labels["leforge.graph"], "--label", "leforge.egress.phase=runtime", c.Image)
 			}
 			args = append(args, c.Command...)
 			if out, e := s.main.docker(ctx, args...); e != nil {

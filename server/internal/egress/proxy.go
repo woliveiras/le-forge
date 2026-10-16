@@ -108,14 +108,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	r = r.WithContext(ctx)
 	start := time.Now()
-	outcome, host := "denied", ""
+	outcome, host, reason := "denied", "", "invalid_destination"
 	defer func() {
-		p.log.Info("egress request", "host", host, "outcome", outcome, "durationMs", time.Since(start).Milliseconds())
+		p.log.Info("egress request", "host", host, "outcome", outcome, "reason", reason, "durationMs", time.Since(start).Milliseconds())
 	}()
 	select {
 	case p.slots <- struct{}{}:
 		defer func() { <-p.slots }()
 	default:
+		outcome, reason = "failed", "capacity_exhausted"
 		http.Error(w, "proxy capacity exhausted", 503)
 		return
 	}
@@ -125,11 +126,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		host, port, err = net.SplitHostPort(r.Host)
 		if err != nil || port != "443" {
 			host = ""
+			reason = "unsupported_port"
 			http.Error(w, "CONNECT requires port 443", 403)
 			return
 		}
 	} else {
 		if r.URL.Scheme != "http" || r.URL.User != nil || r.URL.Host == "" || r.Header.Get("Upgrade") != "" {
+			reason = "unsupported_protocol"
 			http.Error(w, "only HTTP and HTTPS CONNECT are supported", 403)
 			return
 		}
@@ -138,6 +141,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			port = r.URL.Port()
 		}
 		if port != "80" {
+			host = ""
+			reason = "unsupported_port"
 			http.Error(w, "HTTP requires port 80", 403)
 			return
 		}
@@ -149,6 +154,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !p.hosts[host] {
+		reason = "host_not_allowed"
 		http.Error(w, "host not allowed", 403)
 		return
 	}
@@ -156,17 +162,19 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		upstream, err := p.connect(r.Context(), "tcp", net.JoinHostPort(host, port))
 		if err != nil {
 			status := 502
-			outcome = "failed"
+			outcome, reason = "failed", "upstream_failure"
 			if errors.Is(err, ErrDenied) {
 				status = 403
-				outcome = "denied"
+				outcome, reason = "denied", "private_address"
 			}
 			http.Error(w, "upstream unavailable or denied", status)
 			return
 		}
 		defer upstream.Close()
+		outcome, reason = "failed", "upstream_failure"
 		hj, ok := w.(http.Hijacker)
 		if !ok {
+			outcome, reason = "failed", "upstream_failure"
 			http.Error(w, "tunnel unavailable", 500)
 			return
 		}
@@ -184,7 +192,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err = buffer.Flush(); err != nil {
 			return
 		}
-		outcome = "allowed"
+		outcome, reason = "allowed", "permitted"
 		done := make(chan struct{})
 		go func() { _, _ = io.Copy(upstream, buffer); _ = upstream.Close(); close(done) }()
 		_, _ = io.Copy(client, upstream)
@@ -202,13 +210,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pr.Out.Header.Del("Proxy-Connection")
 	}, ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 		status := 502
-		outcome = "failed"
+		outcome, reason = "failed", "upstream_failure"
 		if errors.Is(err, ErrDenied) {
 			status = 403
-			outcome = "denied"
+			outcome, reason = "denied", "private_address"
 		}
 		http.Error(w, "upstream unavailable or denied", status)
 	}}
-	outcome = "allowed"
+	outcome, reason = "allowed", "permitted"
 	proxy.ServeHTTP(w, r)
 }

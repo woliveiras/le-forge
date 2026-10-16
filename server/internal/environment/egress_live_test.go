@@ -96,6 +96,10 @@ func TestPreparationEgressRealSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("real preparation: %v\n%s", err, log.String())
 	}
+	status, statusErr := m.ProxyStatus(ctx, id)
+	if statusErr != nil || len(status.Proxies) != 0 || status.LastPreparation == nil || len(status.LastPreparation.Requests) == 0 {
+		t.Fatal("preparation diagnostics did not survive cleanup", status, statusErr)
+	}
 	var out bytes.Buffer
 	if err := m.docker(ctx, nil, &out, "run", "--rm", "--network", "none", "--entrypoint", "sh", image, "-c", `test "$(cat /tmp/setup-proof)" = setup-ok && test -z "$HTTP_PROXY$HTTPS_PROXY$http_proxy$https_proxy"`); err != nil {
 		t.Fatalf("committed image: %s %v", out.String(), err)

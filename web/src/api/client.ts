@@ -1,5 +1,6 @@
 import type {
   Approval,
+  ProxyView,
   InstallationNetwork,
   NetworkPolicyView,
   EnvironmentView,
@@ -154,6 +155,7 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  environmentProxies: (id: string) => request<ProxyView>(`${V1}/graphs/${encodeURIComponent(id)}/environment/proxies`),
   networkPolicy: () => request<NetworkPolicyView>(`${V1}/network-policy`),
   previewNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy/preview`, { method: 'POST', body: { network, revision } }),
   saveNetworkPolicy: (network: InstallationNetwork, revision: number) => request<NetworkPolicyView>(`${V1}/network-policy`, { method: 'PUT', body: { network, revision } }),

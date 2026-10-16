@@ -116,6 +116,7 @@ func (s *Server) routes() {
 		{"GET /api/v1/graphs/{id}/status", R, s.graphStatus},
 		{"POST /api/v1/environments/cleanup", A, s.cleanupEnvironments},
 		{"GET /api/v1/graphs/{id}/environment", R, s.getEnvironment},
+		{"GET /api/v1/graphs/{id}/environment/proxies", R, s.environmentProxies},
 		{"GET /api/v1/graphs/{id}/environment/discovery", R, s.discoverEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/resolve", R, s.resolveEnvironment},
 		{"GET /api/v1/graphs/{id}/environment/proposal", R, s.getEnvironmentProposal},

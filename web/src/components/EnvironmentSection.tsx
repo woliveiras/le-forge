@@ -1,3 +1,4 @@
+import { EnvironmentProxies } from './EnvironmentProxies';
 import { useEffect, useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { EnvironmentSpec, Graph } from '../api/types';
@@ -74,6 +75,7 @@ export function EnvironmentSection({
   return (
     <fieldset aria-label="Environment">
       <legend>Environment</legend>
+      <EnvironmentProxies key={savedGraph.metadata.id} graphId={savedGraph.metadata.id} />
       <p className="muted tiny">
         The container image agents run their commands in when their Command sandbox uses docker isolation without an
         image of their own. LeForge builds it on its own sandbox daemon, never on your machine.

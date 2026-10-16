@@ -270,8 +270,8 @@ prevent concurrent edits from overwriting each other. Saved network settings
 supersede YAML defaults across controllers sharing the store; feature flags,
 proxy provisioning and credentials remain server-owned. Storage errors fail
 closed. Start/resume and post-capacity admission recheck the current policy.
-Running tasks/builds are not killed automatically. A live proxy status/denial
-log dashboard remains planned.
+Running tasks/builds are not killed automatically. Per-environment proxy status and sampled blocked-request diagnostics are delivered
+in graph settings and agent panels.
 
 #### Delivered runtime egress subset
 
@@ -307,6 +307,20 @@ registry/CDN hosts. Daemon provisioning pulls and client-side registry
 authentication are outside this subset; daemon-wide registry restrictions remain
 planned. There is no private-IP exception or automatic allowlist expansion.
 See [environment preparation](environments.md#build-and-setup-egress-proxy-implemented).
+
+#### Delivered proxy diagnostics subset
+
+The environment and agent panels expose read-only runtime/build proxy container
+state and bounded recent request outcomes, with explicit unavailable/error states.
+Queries verify graph ownership and return structured fields only. The preparation
+proxy's last snapshot persists across container cleanup until replaced/reset.
+Runtime samples remain tied to Docker container/log retention. Sampling covers
+at most 32 proxies and 100 recent log lines per proxy, not lifetime counters.
+Running means process state, not connectivity health; direct network-layer blocks
+and still-open CONNECT tunnels are outside the completed-request sample.
+Older containers require recreation for monitoring labels; reason codes require
+an updated trusted proxy image. Long-term audit history and streaming monitoring
+remain outside this delivered subset.
 
 #### Delivered reuse subset
 
