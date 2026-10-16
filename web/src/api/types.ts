@@ -608,3 +608,14 @@ export interface ProxyView { proxies: ProxyStatus[]; lastPreparation?: ProxyStat
 
 export interface HistoryRetentionPolicy { days: number; maxEvents: number }
 export interface HistoryRetentionView { policy: HistoryRetentionPolicy; revision: number; updatedAt?: string; updatedBy?: string }
+
+export interface GitInspection {
+  graphId: string;
+  nodeId?: string;
+  replica?: number;
+  repository: boolean;
+  directory: string;
+  branch: string;
+  content: string;
+  attribution: string;
+}

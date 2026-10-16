@@ -274,6 +274,8 @@ export const api = {
     request<ProviderTestResult>(`${V1}/providers/test`, { method: 'POST', body: input }),
   tools: () => request<ToolInfo[]>(`${V1}/tools`),
 
+  gitInspection: (id: string, view: 'status' | 'diff' | 'history', f: { path?: string; node?: string; replica?: number } = {}) =>
+    request<import('./types').GitInspection>(`${V1}/graphs/${enc(id)}/git/${view}`, { query: f }),
   files: (id: string, f: { path?: string; node?: string; replica?: number } = {}) =>
     request<FileEntry[]>(`${V1}/graphs/${enc(id)}/files`, { query: f }),
   fileContent: (id: string, f: { path: string; node?: string; replica?: number }) =>
