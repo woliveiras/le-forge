@@ -28,12 +28,92 @@ docker compose up        # the whole platform, offline, on one machine
 | **Queue semantics** | `queue` (point-to-point, competing consumers), `topic` (pub-sub by name, wildcard subscriptions), `fanout` (copy per target node), `broadcast` (copy per replica). |
 | **Clusters** | N replicas per node, fixed or **autoscaled** on backlog, isolated or **ring** communications. Replicas compete over the same queue. |
 | **Tool permissions** | Default-deny capability grants (`filesystem.read`, `shell.exec`, `git.write`, `http.fetch`, …) narrowed by paths, commands, hosts and rate limits; optional per-tool human approval. Enforced in a gateway the agent cannot bypass. |
-| **Isolation** | Process sandbox, Docker sandbox per replica (no network by default), Kubernetes deployment; per-replica git worktrees. External agents hold no credentials. |
+| **Isolation** | Local process execution (same OS permissions as the platform user), Docker sandbox per replica (no network by default), Kubernetes deployment; per-replica git worktrees. See [execution modes and security](#execution-modes-and-security). |
 | **Persistence & recovery** | Graphs, versions, executions, messages, approvals, state, events and leases are stored in SQLite / PostgreSQL / filesystem. Unacked messages are redelivered; a crashed instance's replicas are taken over when its leases expire. |
 | **Pluggable everything** | Brokers: NATS JetStream (default), Redis Streams, RabbitMQ, Kafka, filesystem, memory. Storage: SQLite, PostgreSQL, filesystem. Models: Ollama, vLLM, OpenAI-compatible, Anthropic-compatible, OpenRouter, HuggingFace TGI, offline mock. Runtimes: native Go agent, echo, external (LangGraph, AutoGen, CrewAI, custom — any language). |
 | **Observability** | Prometheus metrics, OpenTelemetry traces that follow a message across agents and brokers, OTLP logs, Grafana dashboard and alerts, full message history with causal chains, live event stream, graph visualisation. |
 | **Human in the loop** | Approval gates on channels, turns, outputs and tools; agents can ask a human a question; pause/resume of graphs and nodes; operator chat with running agents; message injection. |
 | **Workspace inspection** | Browse graph workspaces and read agent-produced files in the console; user-side workspace editing and uploads are not exposed. |
+
+## Execution modes and security
+
+LeForge can run directly on your machine without Docker, in Docker Compose,
+or on a remote server. **Where the platform runs and how agent commands are
+isolated are separate choices.** Opening the console on your laptop does not
+make commands run on that laptop: tools execute where the `forged` server and
+its configured execution backend run.
+
+| Platform deployment | Agent command mode | Where commands execute | Security boundary |
+|---|---|---|---|
+| Bare metal / native process on your machine | `process` | Child processes of your local `forged` | Same OS rights as the user running LeForge; no container isolation between commands and the platform. |
+| Docker Compose on your machine | `process` | Inside the `forged` container | The container separates execution from the host, but commands share the platform's container and can access files available to its user, including mounted data. |
+| Native or Compose, with a dedicated sandbox daemon configured | `docker` | A separate sandbox container per agent replica | Commands receive the replica workspace and configured caches, with resource limits and no network by default. They do not run inside `forged`. |
+| Remote server or VM | `process` or `docker` | On the remote execution infrastructure | The selected mode has the same boundaries as above. A remote host separates work from your laptop, but does not itself isolate agents from the server's data and services. |
+
+### Native execution without a container sandbox
+
+Run `forged` directly on the host and select this setting on the agent node:
+
+```yaml
+isolation:
+  mode: process
+```
+
+The [without-Docker setup](docs/getting-started.md#5-run-without-docker) uses
+SQLite and filesystem queues, so it does not require the Compose services.
+Install the project's tools on that host: for a React project, Node and the
+chosen package manager must be available to LeForge. Commands start in the
+configured workspace, inherit the platform's `PATH`, and receive a reduced
+environment rather than your complete interactive shell environment.
+
+The implementation calls this a `ProcessSandbox`, but it is **not an OS
+security sandbox**. It bounds execution time and captured output and validates
+the starting directory. It does not prevent an allowed program, package install
+script or test from accessing other files or networks available to that OS user.
+Tool grants and approval gates still apply to tool calls; they do not confine
+everything a program can do after `shell.exec` starts it. Use this mode for work
+you trust under a suitably restricted OS account.
+
+### Docker execution and remote hosting
+
+Running the platform in Compose does not automatically put every agent command
+in its own sandbox. Select `isolation.mode: docker` for that boundary. The
+standard Compose setup provides a dedicated Docker-in-Docker daemon; agents
+do not receive the host Docker socket or access to the daemon API. Sandbox
+containers are unprivileged, but the dedicated daemon itself uses
+`privileged: true`. On macOS it runs inside the Docker Desktop or Colima Linux
+VM. Container isolation therefore reduces exposure but is not a guarantee
+against host compromise. See [sandbox runtime](docs/sandbox-runtime.md).
+
+Network access is a separate setting: sandbox execution defaults to `none`;
+approved `egress` mode allows selected HTTP/HTTPS destinations, while `bridge`
+allows broader access within the daemon's firewall rules. Dependency updates
+need the relevant package registries permitted by the environment's network
+policy. See [project environments](docs/environments.md).
+
+For remote installations, prefer a host or VM dedicated to LeForge, keep
+unrelated workloads and production credentials out of the execution environment,
+and use Docker isolation for untrusted commands. Protect the console and API
+with authentication, TLS and restricted network access; keep internal services
+private. Remote hosting does not make an internet-exposed installation safe by
+default. Follow the [security model](docs/security.md) and
+[production hardening guide](docs/production-hardening.md).
+
+### Reviewing a React application in the browser
+
+An agent can update dependencies and run tests, lint and builds in either mode.
+With native execution on your machine, you can start the development server in
+a separate terminal in the same workspace and open its local URL. On a remote
+host, `localhost` in your browser refers to your own computer; access needs an
+explicitly configured tunnel or protected proxy. A Docker sandbox's listening
+port is not automatically exposed to your browser either.
+
+LeForge does not yet provide managed application preview sessions. Its
+`shell.exec` tool runs commands that terminate, with a timeout, and is not a
+process manager for persistent development servers or watchers. Human approval
+and `human.ask` are available, but keeping an application running and exposing
+an authenticated preview while review is pending requires additional lifecycle
+and routing support.
 
 ## macOS setup with Colima
 
@@ -173,9 +253,11 @@ flowchart LR
 ```
 
 The engine is a **reconciler**: desired state lives in storage, every instance
-takes leases on the replicas it runs, and agents never touch the broker, the
-model keys or the host directly — they reach the world only through the tool
-and LLM gateways, under their node's grants.
+takes leases on the replicas it runs, and agent runtime requests reach tools
+and models through the tool and LLM gateways under their node's grants.
+Commands launched by those tools have the access of their execution mode;
+`process` execution does not isolate them from the platform user's files or
+OS permissions. See [execution modes and security](#execution-modes-and-security).
 
 ## Repository layout
 
