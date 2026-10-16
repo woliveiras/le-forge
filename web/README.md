@@ -128,7 +128,7 @@ The suite covers discovery/review/acceptance, approval before build and automati
 resume, compatible reuse in another task, rejection, analysis failure and build
 failure. Recovery journeys also exercise CPU-only and memory-only admission
 waits, cancellation followed by a fresh start, successful build retry after a
-transient failure, and idle suspension/message-driven resume. They read the same
+transient failure, build/setup waiting behind execution capacity, and idle suspension/message-driven resume. They read the same
 workspace file through the Files screen before and after resume. The disposable
 installation has a 1 CPU / 256 MiB budget, ten slots, and a one-second idle timeout;
 continuous holders reserve 0.8 CPU or 224 MiB, so only the intended budget is
@@ -147,6 +147,9 @@ With the existing dedicated `sandbox-daemon` running and `alpine:3.22` already
 available inside it, run `make test-e2e-real` from the repository root. This also
 requires local Go, Git, Node, Docker CLI and Playwright Chromium. Override the
 Compose container name with `LEFORGE_TEST_SANDBOX_CONTAINER` if necessary.
+The mise journey downloads a pinned public mise image, Node and npm packages,
+so preparation also requires internet access. Project commands stay inside the
+dedicated daemon; no project toolchain is installed on the host.
 
 The launcher verifies the `sandbox-daemon` service label, cross-compiles a
 test-only controller and transfers it with the built console into a unique
@@ -163,6 +166,13 @@ checks both markers, including re-reading the first after the second execution.
 Persisted tool/execution events, distinct workdirs and a shared prepared-image
 identity prove execution, workspace separation and compatible reuse. Only model
 inference is deterministic; no paid provider credentials are required.
+
+The suite also discovers, accepts, builds and executes the supported LeForge,
+devcontainer, Dockerfile and Compose sources; a changed lockfile triggers rebuild.
+Reset of one task preserves the other task's shared image and both workspaces.
+The [mise example](../examples/projects/mise-node/README.md) runs approved tool
+installation, locked dependency installation, build and tests with offline
+execution in two isolated tasks, checking prepared-image reuse and private caches.
 
 The controller stops its tasks, resets their environments and cleans only shared
 generations registered in its temporary database on shutdown. It never prunes the

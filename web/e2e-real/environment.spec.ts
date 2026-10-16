@@ -116,3 +116,43 @@ for (const [source, path] of [
     }
   });
 }
+
+test('mise proposal installs locked tools and dependencies, builds and tests offline in two isolated tasks', async ({ page }) => {
+  test.setTimeout(480000);
+  await page.addInitScript(() => localStorage.setItem('leforgeToken', 'e2e-admin-token'));
+  const views = [];
+  for (const id of ['fixture-mise-a', 'fixture-mise-b']) {
+    await page.goto(`/#/g/${id}/canvas`);
+    await page.getByRole('button', { name: 'Graph settings', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Discover environment', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Environment analysis' })).toContainText('No environment definition found');
+    await page.getByLabel('Start graph when the approved environment is ready').check();
+    await page.getByRole('button', { name: 'Analyze repository', exact: true }).click();
+    await expect(page.getByText('Environment proposal: awaiting_approval')).toBeVisible();
+    expect((await read(page, id, 'environment')).state).toBe('absent');
+    expect(await read(page, id, 'executions')).toHaveLength(0);
+    await page.goto('/#/approvals');
+    const approval = page.locator('article.approval').filter({ hasText: id });
+    await expect(approval).toContainText('mise install');
+    await approval.getByRole('button', { name: 'Approve', exact: true }).click();
+    await expect.poll(async () => {
+      const view = await read(page, id, 'environment');
+      if (view.state === 'failed') throw new Error(JSON.stringify(view));
+      return view.state;
+    }, { timeout: 180000 }).toBe('ready');
+    await expect.poll(async () => (await read(page, id, 'executions')).map((e: { status: string }) => e.status), { timeout: 60000 }).toEqual(['succeeded']);
+    views.push(await read(page, id, 'environment'));
+    await page.goto(`/#/g/${id}/canvas`);
+    await page.locator('.react-flow__node').filter({ hasText: 'worker' }).click();
+    await expect(page.getByText(/Real shell verified:.*exit code: 0/).first()).toContainText('tests 2');
+    await file(page, id);
+  }
+  expect(views[0].reused ?? false).toBe(false);
+  expect(views[1].reused).toBe(true);
+  expect(views[1].sharedImage).toBe(views[0].sharedImage);
+  expect(views[1].image).not.toBe(views[0].image);
+  expect(views[0].caches).toHaveLength(1);
+  expect(views[1].caches[0].volume).not.toBe(views[0].caches[0].volume);
+  await file(page, 'fixture-mise-a');
+  await expect(page.getByRole('region', { name: 'File contents' })).not.toContainText('fixture-mise-b');
+});

@@ -17,7 +17,7 @@ legacy-resource deletion are not required for this release.
 | CPU/memory/count, build/setup admission, cancellation | capacity and progress integration/live tests; browser recovery tests | Browser preparation wait and subsequent setup passed |
 | Idle resume | engine sandbox_idle tests; `make test-sandbox-capacity`; browser recovery | Run final suites |
 | Network restrictions and diagnostics | policy/egress/history/retention tests; dedicated-daemon scripts | Run final network suites |
-| Representative mise repository | No completed example yet | Add runnable example and real validation |
+| Representative mise repository | `examples/projects/mise-node`; real browser approvals, tool/dependency install, offline build/tests, isolated task reuse | Passed on dedicated daemon |
 
 Do not interpret unchecked legacy checklist rows as proof of missing code. This
 map separates existing evidence from the outstanding closure checks. Final
@@ -27,6 +27,11 @@ commands and outcomes will be recorded here after execution.
 
 - `go test -tags e2e ./cmd/forge-e2e`: passed.
 - `make test-e2e`: 10 browser tests passed.
-- `make test-e2e-real`: 5 browser tests passed against the dedicated daemon.
+- `make test-e2e-real`: 6 browser tests passed against the dedicated daemon.
   Inference is scripted; approval, builds, native `shell.exec`, workspace writes,
   invalidation and Reset use real components. No external model quality claim.
+
+The mise journey uses a pinned public image and Node version, a committed npm
+lockfile and `.dockerignore` exclusions for installed dependencies and outputs.
+The first attempt without those exclusions correctly blocked continuation after
+setup changed the approved context; the corrected example passed end to end.

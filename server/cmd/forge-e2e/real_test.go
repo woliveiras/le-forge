@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 )
 
 func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 	p := realProvider{}
-	for _, id := range []string{"fixture-real-a", "fixture-real-b", "fixture-source-leforge", "fixture-source-devcontainer", "fixture-source-dockerfile", "fixture-source-compose"} {
+	for _, id := range []string{"fixture-real-a", "fixture-real-b", "fixture-source-leforge", "fixture-source-devcontainer", "fixture-source-dockerfile", "fixture-source-compose", "fixture-mise-a", "fixture-mise-b"} {
 		response, err := p.Chat(context.Background(), &llm.ChatRequest{Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: id}}})
 		if err != nil {
 			t.Fatal(err)
@@ -29,6 +30,9 @@ func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 		}
 		if len(args.Argv) != 3 || args.Argv[0] != "sh" || args.Argv[1] != "-ec" || !strings.Contains(args.Argv[2], id) || !strings.Contains(args.Argv[2], "test ! -e result.txt") {
 			t.Fatalf("invalid shell proof: %+v", args)
+		}
+		if strings.Contains(args.Argv[2], "npm test") != strings.HasPrefix(id, "fixture-mise-") {
+			t.Fatalf("unexpected toolchain command: %s", args.Argv[2])
 		}
 		if strings.Contains(args.Argv[2], "package-lock.json") != (id == "fixture-source-leforge") {
 			t.Fatalf("unexpected manifest mutation for %s: %s", id, args.Argv[2])
@@ -50,5 +54,22 @@ func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 	response, err = p.Chat(context.Background(), &llm.ChatRequest{Metadata: map[string]string{"purpose": "environment.proposal"}})
 	if err != nil || !strings.Contains(response.Message.Content, "alpine:3.22") {
 		t.Fatalf("analysis: %+v %v", response, err)
+	}
+}
+
+func TestMiseProposalUsesPrivateToolsAndApprovedSetupNetwork(t *testing.T) {
+	r, err := (realProvider{}).Chat(context.Background(), &llm.ChatRequest{Metadata: map[string]string{"purpose": "environment.proposal"}, Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: "leforge-mise-example"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proposal struct {
+		Environment domain.EnvironmentSpec `json:"environment"`
+	}
+	if err := json.Unmarshal([]byte(r.Message.Content), &proposal); err != nil {
+		t.Fatal(err)
+	}
+	e := proposal.Environment
+	if !strings.Contains(e.Dockerfile, "@sha256:") || !strings.Contains(e.Dockerfile, "MISE_DATA_DIR=/home/sandbox/") || e.Network.Setup != "bridge" || e.Network.Run != "none" || len(e.Setup) != 3 || len(e.Caches) != 1 || e.Caches[0] != "/home/sandbox/.npm/_cacache" {
+		t.Fatalf("unsafe or incomplete fixture: %+v", e)
 	}
 }

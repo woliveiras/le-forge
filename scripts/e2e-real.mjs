@@ -51,9 +51,10 @@ try {
   const candidate = await docker('exec', daemon, 'mktemp', '-d', '/tmp/leforge-browser-real.XXXXXX');
   if (!/^\/tmp\/leforge-browser-real\.[A-Za-z0-9]+$/.test(candidate)) throw new Error('Unexpected temporary path');
   remote = candidate;
+  await cp(join(repo, 'examples/projects/mise-node'), join(local, 'mise-node'), { recursive: true });
   await cp(join(repo, 'web/dist'), join(local, 'web'), { recursive: true });
   await new Promise((resolve, reject) => {
-    const archive = spawn('tar', ['-C', local, '-cf', '-', 'controller', 'web']);
+    const archive = spawn('tar', ['-C', local, '-cf', '-', 'controller', 'web', 'mise-node']);
     const unpack = spawn('docker', ['exec', '-i', daemon, 'tar', '-C', remote, '-xf', '-']);
     archive.stdout.pipe(unpack.stdin);
     archive.stderr.pipe(process.stderr); unpack.stderr.pipe(process.stderr);
