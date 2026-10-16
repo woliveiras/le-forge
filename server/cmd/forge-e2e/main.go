@@ -57,6 +57,9 @@ func run() error {
 	cfg.Instance = "browser-e2e"
 	cfg.LLM = config.LLM{}
 	cfg.Server.Addr = "127.0.0.1:18089"
+	if addr := os.Getenv("LEFORGE_E2E_ADDR"); addr != "" {
+		cfg.Server.Addr = addr
+	}
 	cfg.Server.InternalAddr = ""
 	cfg.Server.WebDir = "../web/dist"
 	cfg.Storage = config.Storage{Type: "sqlite", Dir: filepath.Join(root, "store")}

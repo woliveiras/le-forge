@@ -6,6 +6,7 @@ import { Badge, Btn, ErrorBox, Modal } from './components/common';
 import { GraphList } from './components/GraphList';
 import { GraphWorkspace, type GraphTab } from './components/GraphWorkspace';
 import { IntegrationsView } from './components/IntegrationsView';
+import { SkillsView } from './components/SkillsView';
 import { useAsync, useThrottled } from './hooks/useData';
 import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
 
@@ -19,12 +20,14 @@ type Route =
   | { view: 'graphs' }
   | { view: 'approvals' }
   | { view: 'integrations' }
+  | { view: 'skills' }
   | { view: 'graph'; id: string; tab: GraphTab; correlationId?: string };
 
 function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
   const parts = path.split('/').filter(Boolean);
   if (parts[0] === 'approvals') return { view: 'approvals' };
+  if (parts[0] === 'skills') return { view: 'skills' };
   if (parts[0] === 'integrations') return { view: 'integrations' };
   if (parts[0] === 'g' && parts[1]) {
     const tab = (['canvas', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
@@ -38,6 +41,7 @@ function parseRoute(hash: string): Route {
 
 function routeHash(r: Route): string {
   if (r.view === 'approvals') return '#/approvals';
+  if (r.view === 'skills') return '#/skills';
   if (r.view === 'integrations') return '#/integrations';
   if (r.view === 'graph')
     return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
@@ -115,6 +119,9 @@ function Shell() {
           ))}
         </nav>
         <span className="spacer" />
+        <button type="button" className={`approvals-btn ${route.view === 'skills' ? 'on' : ''}`} onClick={() => go({ view: 'skills' })}>
+          Skills & steering
+        </button>
         {info.data && (
           <span className="infra" title={`instance ${info.data.instance} · version ${info.data.version}`}>
             <span className="infra-meta">{info.data.queue} · {info.data.storage}</span>
@@ -154,6 +161,7 @@ function Shell() {
             onChanged={() => void graphs.reload()}
           />
         )}
+        {route.view === 'skills' && <SkillsView role={info.data?.identity?.role} onChanged={() => void graphs.reload()} />}
         {route.view === 'approvals' && <ApprovalsView onChanged={() => void approvals.reload()} />}
         {route.view === 'integrations' && <IntegrationsView info={info.data} infoError={info.error} />}
         {route.view === 'graph' &&

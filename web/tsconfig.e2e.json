@@ -3,6 +3,7 @@
   "include": [
     "e2e",
     "playwright.config.ts",
+    "playwright.instructions.config.ts",
     "e2e-real",
     "playwright.real.config.ts"
   ],

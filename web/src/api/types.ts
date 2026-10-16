@@ -31,6 +31,7 @@ export interface GraphMetadata {
 }
 
 export interface GraphSpec {
+  instructions?: import("./instructions").InstructionRefs;
   parameters?: Parameter[];
   workspace?: { path?: string; git?: boolean; repo?: string };
   environment?: EnvironmentSpec;
@@ -163,6 +164,7 @@ export interface IsolationSpec {
 }
 
 export interface GraphNode {
+  skillIds?: string[] | null;
   id: string;
   name?: string;
   description?: string;
