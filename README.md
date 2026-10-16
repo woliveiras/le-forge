@@ -35,6 +35,56 @@ docker compose up        # the whole platform, offline, on one machine
 | **Human in the loop** | Approval gates on channels, turns, outputs and tools; agents can ask a human a question; pause/resume of graphs and nodes; operator chat with running agents; message injection. |
 | **Workspace inspection** | Browse graph workspaces and read agent-produced files in the console; user-side workspace editing and uploads are not exposed. |
 
+## macOS setup with Colima
+
+If you already have Docker with Compose working, skip to the
+[Quickstart](#quickstart-60-seconds). Otherwise, Colima can run the Docker
+engine in a Linux VM on your Mac, without Docker Desktop.
+
+With [Homebrew](https://brew.sh/) installed, install Colima and the Docker
+client and plugins:
+
+```bash
+brew install colima docker docker-compose docker-buildx
+
+mkdir -p ~/.docker/cli-plugins
+ln -s "$(brew --prefix)/opt/docker-compose/bin/docker-compose" \
+  ~/.docker/cli-plugins/docker-compose
+ln -s "$(brew --prefix)/opt/docker-buildx/bin/docker-buildx" \
+  ~/.docker/cli-plugins/docker-buildx
+```
+
+If a plugin link already exists, check it before replacing it.
+
+On Apple Silicon with macOS 13 or newer, start the VM with Apple's
+virtualization framework and VirtioFS file sharing:
+
+```bash
+colima start --runtime docker --vm-type vz --mount-type virtiofs \
+  --cpus 4 --memory 8 --disk 100
+```
+
+The 4 CPUs, 8 GiB of RAM and 100 GiB virtual disk are suggested starting
+settings for LeForge, not minimum requirements. Adjust them to your machine;
+local models need additional resources. On other supported Macs, use
+`colima start --runtime docker --cpus 4 --memory 8 --disk 100`.
+
+Verify the engine, plugins and a test container:
+
+```bash
+colima status
+docker info
+docker compose version
+docker buildx version
+docker run --rm hello-world
+```
+
+Initial setup and image downloads need internet access. Use `colima stop`
+to stop the VM and `colima start` to restart it with its saved settings.
+Then continue below to create LeForge's `.env` and start the platform.
+See the official [installation](https://colima.run/docs/installation/) and
+[configuration](https://colima.run/docs/configuration/) guides for details.
+
 ## Quickstart (60 seconds)
 
 Requirements: Docker with Compose v2.
