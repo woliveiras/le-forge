@@ -190,3 +190,7 @@ nodes:
 Launched runtimes receive `PORT`, `HOST`, `LEFORGE_URL` and `LEFORGE_RUNTIME_SECRET` in a minimal
 environment (no platform secrets), are shared by all replicas of the node, and are stopped when the
 last replica stops.
+
+## Instruction snapshots
+
+`TurnInput.instructions` is an optional immutable manifest (see [schema](../schemas/instructions.schema.json)). It is untrusted data, never permissions. The Python SDK retains it in `TurnInput.instructions`. Opted-in guidance precedes the original node prompt; operator/task text is preserved. Graphs without opt-in retain their original prompt and operator messages. See [composition, budgets and failure behavior](instructions.md).

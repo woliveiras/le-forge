@@ -270,3 +270,7 @@ to subsequent reads/collection/retention sweeps, including histories of deleted
 graphs; saving is not a synchronous purge of every history. Storage failures return
 an error. Lower limits can permanently discard history; higher limits do not
 restore discarded records. Publication: `installation.history_retention.updated`.
+
+## Skills and instructions
+
+See [Skills and steering](instructions.md) for registry CRUD, mandatory revision headers, graph/agent associations and inspection endpoints.

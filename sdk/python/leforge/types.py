@@ -298,11 +298,13 @@ class TurnInput:
     parameters: Dict[str, str] = field(default_factory=dict)
     config: Dict[str, Any] = field(default_factory=dict)
     callback: Optional[Callback] = None
+    instructions: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_json(cls, d: Dict[str, Any]) -> "TurnInput":
         cb = d.get("callback")
         return cls(
+            instructions=d.get("instructions"),
             execution_id=d.get("executionId", ""),
             graph_id=d.get("graphId", ""),
             graph_name=d.get("graphName", ""),

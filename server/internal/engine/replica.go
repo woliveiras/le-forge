@@ -268,6 +268,18 @@ func (r *replica) run() {
 			continue
 		}
 
+		// Check once-mode completion before claiming another operator request.
+		if n.Loop.Mode == domain.LoopOnce && r.runIter >= 1 {
+			if lastTurnErr != nil {
+				failedFinal = "its only turn failed: " + truncate(lastTurnErr.Error(), 300)
+				r.fail(ctx, failedFinal)
+				return
+			}
+			r.complete(ctx, "ran once")
+			completed = true
+			return
+		}
+
 		ops, err := e.store.ConsumeOperatorMessages(ctx, gr.g.Metadata.ID, r.nodeID, r.index)
 		if err != nil && ctx.Err() == nil {
 			log.Warn("operator messages", "err", err)
@@ -277,16 +289,6 @@ func (r *replica) run() {
 		var delSubs []*sub
 		switch n.Loop.Mode {
 		case domain.LoopOnce:
-			if r.runIter >= 1 {
-				if lastTurnErr != nil {
-					failedFinal = "its only turn failed: " + truncate(lastTurnErr.Error(), 300)
-					r.fail(ctx, failedFinal)
-					return
-				}
-				r.complete(ctx, "ran once")
-				completed = true
-				return
-			}
 			dels, delSubs = r.fetch(ctx, n.Loop.BatchSize, 0)
 		case domain.LoopContinuous:
 			dels, delSubs = r.fetch(ctx, n.Loop.BatchSize, 0)

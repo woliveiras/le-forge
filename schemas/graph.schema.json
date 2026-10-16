@@ -30,6 +30,7 @@
       "required": ["nodes"],
       "additionalProperties": false,
       "properties": {
+        "instructions": {"$ref": "#/$defs/Instructions"},
         "parameters": {"type": "array", "items": {"$ref": "#/$defs/Parameter"}},
         "workspace": {"$ref": "#/$defs/Workspace"},
         "environment": {"$ref": "#/$defs/Environment"},
@@ -41,6 +42,14 @@
     }
   },
   "$defs": {
+    "Instructions": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "skillIds": {"type":"array", "maxItems":128, "uniqueItems":true, "items":{"$ref":"#/$defs/DNSLabel"}},
+        "projectSteering": {"type":"boolean", "description":"Authorize .leforge/steering/*.md from this graph/replica workspace."},
+        "installationDefaults": {"type":"boolean", "description":"Opt into installation default skills. False by default."}
+      }
+    },
     "DNSLabel": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
     "Duration": {
       "description": "Go duration string ('90s', '1h30m') or a number of seconds. Empty string = unset.",
@@ -191,6 +200,7 @@
       "patternProperties": {"^x-.+": {"description": "Extension: stored and returned verbatim, never interpreted."}},
       "anyOf": [{"required": ["id"]}, {"required": ["name"]}],
       "properties": {
+        "skillIds": {"type":["array","null"], "uniqueItems":true, "items":{"$ref":"#/$defs/DNSLabel"}, "description":"Null/absent inherits graph skillIds; [] selects none; otherwise a subset of graph skillIds."},
         "id": {"$ref": "#/$defs/DNSLabel"},
         "name": {"type": "string"},
         "description": {"type": "string"},

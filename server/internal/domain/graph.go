@@ -38,7 +38,15 @@ type GraphMetadata struct {
 	Extensions Extensions `json:"-" yaml:"-"`
 }
 
+type InstructionRefs struct {
+	SkillIDs             []string `json:"skillIds,omitempty" yaml:"skillIds,omitempty"`
+	ProjectSteering      bool     `json:"projectSteering,omitempty" yaml:"projectSteering,omitempty"`
+	InstallationDefaults bool     `json:"installationDefaults,omitempty" yaml:"installationDefaults,omitempty"`
+}
+
 type GraphSpec struct {
+	Instructions InstructionRefs `json:"instructions,omitempty" yaml:"instructions,omitempty"`
+
 	Parameters []Parameter   `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 	Workspace  WorkspaceSpec `json:"workspace,omitempty" yaml:"workspace,omitempty"`
 	// Environment is the container image agents' commands run in when they
@@ -141,6 +149,8 @@ type NodeDefaults struct {
 
 // Node is an agent placed in the graph.
 type Node struct {
+	SkillIDs SkillSelection `json:"skillIds" yaml:"skillIds"`
+
 	ID          string        `json:"id" yaml:"id"`
 	Name        string        `json:"name,omitempty" yaml:"name,omitempty"`
 	Description string        `json:"description,omitempty" yaml:"description,omitempty"`
