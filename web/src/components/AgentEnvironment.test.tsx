@@ -13,6 +13,14 @@ const renderPanel = (g = graph) => render(<EventStreamProvider token="test"><Age
 beforeEach(() => vi.stubGlobal('EventSource', FakeEventSource));
 afterEach(cleanup);
 describe('agent environment integration', () => {
+  it('shows a persisted image blocked by current installation policy', async () => {
+    fakeApi({ 'GET /api/v1/graphs/g/environment': () => ({ ...view, state: 'ready', changeReasons: ['installation_policy'], buildReasons: [], upToDate: false }), 'GET /api/v1/graphs/g/events': () => [] });
+    renderPanel();
+    expect(await screen.findByText('Blocked by installation policy')).toBeTruthy();
+    expect(screen.getByText(/review the definition before building/)).toBeTruthy();
+    expect(screen.getByText(/Agent start is blocked/)).toBeTruthy();
+    expect(screen.queryByText(/Environment is ready for commands/)).toBeNull();
+  });
   it('shows build waiting, rebuild reasons, execution admission and refreshes to reused ready', async () => {
     let response = view;
     fakeApi({

@@ -190,3 +190,11 @@ replica. Variants are standalone (no override merging). Runtime-only helpers use
 private internal networks and atomic CPU/memory/count admission; idle suspension
 preserves their data. Advanced Compose fields remain explicitly unsupported; see
 `docs/environments.md` for the accepted subset and lifecycle.
+
+Installation policy delivery note: `isolation.docker.environmentPolicy` now
+validates allowed preparation/execution networks and feature restrictions across
+manual, repository and agent definitions, including cached builds and persisted
+approvals. Dockerfile RUN obeys the preparation network. Node overrides cannot
+widen permitted execution networks. Configuration takes effect after restart for
+new admissions; no automatic revocation/deletion of running resources. Registry
+egress and host allowlists via a proxy remain planned. See `docs/environments.md`.

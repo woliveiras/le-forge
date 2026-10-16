@@ -143,11 +143,21 @@ func (s *Server) resolveEnvironment(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
+	if s.Environments != nil {
+		if err := s.Environments.ValidatePolicy(env); err != nil {
+			return err
+		}
+	}
 	writeJSON(w, http.StatusOK, env)
 	return nil
 }
 
 func (s *Server) validateEnvironmentOrigin(ctx context.Context, g *domain.Graph) error {
+	if s.Environments != nil {
+		if err := s.Environments.ValidatePolicy(g.Spec.Environment); err != nil {
+			return err
+		}
+	}
 	if g.Spec.Environment == nil || g.Spec.Environment.Origin == nil {
 		return nil
 	}

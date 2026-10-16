@@ -1,6 +1,7 @@
 import type { EnvironmentView, Graph, GraphNode } from '../api/types';
 
 export const reasonLabel = (reason: string): string => ({
+  installation_policy: 'Definition blocked by installation policy; review the definition before building',
   explicit_rebuild: 'Explicit rebuild requested',
   definition_changed: 'Environment definition or accepted build context changed',
   repository_inputs_changed: 'Repository manifests or lockfiles changed',
@@ -10,6 +11,7 @@ export const reasonLabel = (reason: string): string => ({
 }[reason] ?? `Other reason: ${reason}`);
 
 export function environmentPhase(view: EnvironmentView): string {
+  if (view.changeReasons?.includes('installation_policy')) return 'Blocked by installation policy';
   if (view.state === 'failed') return 'Build failed';
   if (view.state === 'ready') return view.upToDate ? 'Ready' : 'Outdated';
   if (view.state === 'absent') return 'Not built';

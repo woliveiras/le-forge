@@ -1,0 +1,36 @@
+package environmentpolicy
+
+import (
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"testing"
+)
+
+func TestPolicy(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		p      Policy
+		e      domain.EnvironmentSpec
+		denied bool
+	}{
+		{name: "compatible defaults"},
+		{name: "offline", p: Policy{SetupNetworks: []string{"none"}, RunNetworks: []string{"none"}}, e: domain.EnvironmentSpec{Network: domain.EnvironmentNetwork{Setup: "none"}}},
+		{name: "implicit setup denied", p: Policy{SetupNetworks: []string{"none"}}, denied: true},
+		{name: "run denied", p: Policy{RunNetworks: []string{"none"}}, e: domain.EnvironmentSpec{Network: domain.EnvironmentNetwork{Run: "bridge"}}, denied: true},
+		{name: "host denied", e: domain.EnvironmentSpec{Network: domain.EnvironmentNetwork{Run: "host"}}, denied: true},
+		{name: "setup", p: Policy{DisableSetup: true}, e: domain.EnvironmentSpec{Setup: []string{"echo ready"}}, denied: true},
+		{name: "Dockerfile", p: Policy{DisableDockerfiles: true}, e: domain.EnvironmentSpec{Dockerfile: "FROM alpine"}, denied: true},
+		{name: "agent", p: Policy{DisableAgentProposals: true}, e: domain.EnvironmentSpec{Origin: &domain.EnvironmentOrigin{Source: "agent"}}, denied: true},
+		{name: "companions", p: Policy{DisableCompanions: true}, e: domain.EnvironmentSpec{Companions: []domain.Companion{{Name: "db", Image: "postgres"}}}, denied: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.p.Check(&test.e); (err != nil) != test.denied {
+				t.Fatalf("Check: %v", err)
+			}
+		})
+	}
+	for _, p := range []Policy{{SetupNetworks: []string{}}, {RunNetworks: []string{"host"}}, {SetupNetworks: []string{"custom"}}} {
+		if p.Validate() == nil {
+			t.Fatal("invalid policy accepted")
+		}
+	}
+}

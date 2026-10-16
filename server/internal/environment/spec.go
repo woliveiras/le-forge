@@ -25,7 +25,7 @@ const SandboxHome = "/home/sandbox"
 
 // wrapperVersion changes the hash of every environment when the generated
 // user layer changes, so existing images are rebuilt.
-const wrapperVersion = 1
+const wrapperVersion = 2
 
 // Hash identifies the image a definition produces. Settings that do not
 // change the image (run network, timeout, setup limits) are excluded, so
@@ -120,4 +120,12 @@ func contextHash(env *domain.EnvironmentSpec) string {
 		return ""
 	}
 	return env.Origin.ContextSHA256
+}
+
+// BuildKit calls its ordinary bridge-backed network "default".
+func buildNetwork(env *domain.EnvironmentSpec) string {
+	if SetupNetwork(env) == "none" {
+		return "none"
+	}
+	return "default"
 }

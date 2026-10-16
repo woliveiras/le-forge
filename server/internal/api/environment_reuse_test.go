@@ -60,7 +60,7 @@ func TestRepositoryEnvironmentReuseThroughAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(string(data), "buildx build --builder ") != 1 {
+	if strings.Count(string(data), "buildx build --network default --builder ") != 1 {
 		t.Fatal(string(data))
 	}
 	if code := call(t, srv, "POST", "/api/v1/graphs/first/environment/reset", adminTok, "application/json", `{}`, nil); code != 200 {

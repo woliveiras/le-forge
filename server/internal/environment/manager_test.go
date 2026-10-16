@@ -215,7 +215,7 @@ func TestBuildFromImageWithSetupAndCaches(t *testing.T) {
 	calls := strings.Join(h.docker.calls(t), "\n")
 	for _, want := range []string{
 		"pull golang:1.26",
-		"build -t leforge-env/bookaneer:" + hash + "-user --label leforge.graph=bookaneer --label leforge.environment=" + hash + " -",
+		"build --network none -t leforge-env/bookaneer:" + hash + "-user --label leforge.graph=bookaneer --label leforge.environment=" + hash + " -",
 		"run --name leforge-envbuild-bookaneer --network bridge --cap-drop ALL --security-opt no-new-privileges -e CI=true",
 		"-v /host" + h.ws + ":/workspace -w /workspace --entrypoint sh leforge-env/bookaneer:" + hash + "-user -c set -e",
 		"commit leforge-envbuild-bookaneer leforge-env/bookaneer:" + hash,
@@ -266,7 +266,7 @@ func TestBuildFromDockerfileWithoutSetup(t *testing.T) {
 	}
 	calls := strings.Join(h.docker.calls(t), "\n")
 	for _, want := range []string{
-		"build --pull -t leforge-env/bookaneer:" + hash + "-base",
+		"build --pull --network default -t leforge-env/bookaneer:" + hash + "-base",
 		"tag leforge-env/bookaneer:" + hash + "-user leforge-env/bookaneer:" + hash,
 		"rmi leforge-env/bookaneer:" + hash + "-base",
 	} {

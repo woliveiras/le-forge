@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/environmentpolicy"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
@@ -92,6 +93,7 @@ type View struct {
 
 // Options wire a Manager.
 type Options struct {
+	Policy            environmentpolicy.Policy
 	Capacity          *sandboxcapacity.Manager
 	ProposalValidator func(context.Context, *domain.Graph) error
 	Store             storage.Store
@@ -128,6 +130,9 @@ type build struct {
 }
 
 func New(opt Options) (*Manager, error) {
+	if err := opt.Policy.Validate(); err != nil {
+		return nil, err
+	}
 	if opt.Store == nil || opt.Workspaces == nil {
 		return nil, errors.New("environment: store and workspaces are required")
 	}
@@ -166,6 +171,10 @@ func (m *Manager) Get(ctx context.Context, g *domain.Graph) (*View, error) {
 		}
 	}
 	v := m.view(g, st)
+	if v.UpToDate && m.ValidatePolicy(g.Spec.Environment) != nil {
+		v.UpToDate = false
+		v.ChangeReasons = append(v.ChangeReasons, "installation_policy")
+	}
 	if v.UpToDate && g.Spec.Workspace.Repo != "" {
 		dir, err := m.opt.Workspaces.Ensure(ctx, g)
 		if err != nil {
@@ -473,7 +482,7 @@ func (m *Manager) prepareImage(ctx context.Context, g *domain.Graph, final strin
 		}
 	} else {
 		fmt.Fprintln(log, "==> Building the environment Dockerfile")
-		args := append([]string{"build", "--pull", "-t", baseTag}, labels...)
+		args := append([]string{"build", "--pull", "--network", buildNetwork(env), "-t", baseTag}, labels...)
 		if env.Target != "" {
 			fmt.Fprintf(log, "==> Selected build stage: %s\n", env.Target)
 			args = append(args, "--target", env.Target)
@@ -504,7 +513,7 @@ func (m *Manager) prepareImage(ctx context.Context, g *domain.Graph, final strin
 	}
 
 	fmt.Fprintf(log, "==> Adding the sandbox user (uid %d)\n", SandboxUID)
-	args := append([]string{"build", "-t", userTag}, labels...)
+	args := append([]string{"build", "--network", "none", "-t", userTag}, labels...)
 	if err := m.docker(ctx, strings.NewReader(UserLayer(base, env.Caches)), log, append(args, "-")...); err != nil {
 		return "", fmt.Errorf("add sandbox user (the base image needs /bin/sh): %w", err)
 	}
@@ -607,6 +616,17 @@ type Sandbox struct {
 func (m *Manager) SandboxFor(ctx context.Context, g *domain.Graph) (*Sandbox, error) {
 	if g.Spec.Environment == nil {
 		return nil, ErrNotDefined
+	}
+	dir := ""
+	if g.Spec.Environment.Origin != nil {
+		var err error
+		dir, err = m.opt.Workspaces.Ensure(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := m.ValidateDefinition(ctx, g, dir); err != nil {
+		return nil, err
 	}
 	v, err := m.Get(ctx, g)
 	if err != nil {
@@ -750,6 +770,10 @@ func (t *tailBuffer) String() string {
 
 // ValidateDefinition checks both filesystem provenance and durable approval.
 func (m *Manager) ValidateDefinition(ctx context.Context, g *domain.Graph, dir string) error {
+	if err := m.ValidatePolicy(g.Spec.Environment); err != nil {
+		m.opt.Log.Warn("environment definition denied by installation policy", "graph", g.Metadata.ID)
+		return err
+	}
 	if g.Spec.Environment != nil && g.Spec.Environment.Origin != nil && g.Spec.Environment.Origin.Source == "agent" {
 		if m.opt.ProposalValidator == nil {
 			return fmt.Errorf("%w: agent proposal approval validator is unavailable", ErrInvalidDefinition)
@@ -762,4 +786,17 @@ func (m *Manager) ValidateDefinition(ctx context.Context, g *domain.Graph, dir s
 }
 func (m *Manager) SetProposalValidator(fn func(context.Context, *domain.Graph) error) {
 	m.opt.ProposalValidator = fn
+}
+
+// ValidatePolicy checks installation restrictions before review, build and reuse.
+func (m *Manager) ValidatePolicy(env *domain.EnvironmentSpec) error {
+	if err := m.opt.Policy.Check(env); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
+	}
+	if env != nil && env.Dockerfile != "" {
+		if err := validateRepositoryDockerfile(env.Dockerfile); err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
+		}
+	}
+	return nil
 }

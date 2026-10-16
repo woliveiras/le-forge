@@ -16,6 +16,8 @@ describe('environment presentation', () => {
     expect(environmentPhase({ ...view, state: 'ready' })).toBe('Outdated');
     expect(environmentPhase({ ...view, phase: undefined })).toBe('Building…');
     expect(reasonLabel('repository_inputs_changed')).toContain('lockfiles');
+    expect(reasonLabel('installation_policy')).toContain('review the definition');
+    expect(environmentPhase({ ...view, state: 'ready', changeReasons: ['installation_policy'] })).toBe('Blocked by installation policy');
     expect(reasonLabel('future')).toBe('Other reason: future');
   });
   it('keeps the newest valid transition per replica and excludes builds and other agents', () => {

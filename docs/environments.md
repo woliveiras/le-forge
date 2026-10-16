@@ -662,3 +662,65 @@ helper references to an existing shared generation protect it from cleanup.
 using already cached `alpine:3.22`: DNS communication, no default route/published
 ports, per-replica data isolation, CPU/memory limits, atomic admission, suspension,
 resume and independent teardown. It does not fetch credentials or pull fixtures.
+
+## Installation environment policy (implemented)
+
+Configure `isolation.docker.environmentPolicy` in the server YAML. These settings
+are controlled by the installation administrator, independently of repository
+files and developer approval. For example, to allow only disconnected preparation
+and execution:
+
+```yaml
+isolation:
+  docker:
+    network: none
+    environmentPolicy:
+      setupNetworks: [none]
+      runNetworks: [none]
+      disableAgentProposals: false
+      disableDockerfiles: false
+      disableSetup: false
+      disableCompanions: false
+```
+
+Omitted network lists permit `none` and `bridge`, preserving existing
+installations; an explicit empty list or another network mode is invalid.
+Environment preparation still defaults to `bridge`, and execution defaults to
+`none`. With the restrictive example above, definitions must explicitly request
+`network.setup: none`; denied requests are rejected, never silently rewritten.
+Repository and agent definitions retain their stricter execution rule (`none`),
+even if the installation permits manually configured `bridge` execution.
+Node-level overrides, including nodes with their own image, must also satisfy
+`runNetworks`; host, container and custom Docker networks are not accepted.
+Compose helpers retain the reviewed private internal network, unless
+`disableCompanions` blocks them entirely.
+
+The analysis agent receives these restrictions in its system prompt; the server
+still independently validates its output. Policy checks run during API
+preview/save, before opening or accepting an agent approval,
+when applying an approval, before builds (including cache hits), and before
+handing an environment to a sandbox. Existing provenance, supported-field and
+approval checks still apply. Manual Dockerfiles now use the same validated
+instruction subset as repository Dockerfiles, preventing per-instruction network
+flags, remote ADD and custom frontends from overriding the build restrictions.
+Policy changes require a server restart and apply to subsequent admissions;
+they do not terminate already running containers or remove images/workspaces.
+All controllers sharing a daemon must use the same policy. A previously ready
+image becomes blocked when its definition violates the current policy.
+
+`network.setup` also controls Dockerfile `RUN` networking (`none` or BuildKit's
+ordinary `default` network). The image format version was advanced so earlier
+images built without that restriction are rebuilt. This is a **command network
+policy**, not a daemon firewall: registry pulls, image resolution (including
+external COPY sources) and builder provisioning still use the daemon's network.
+Base images remain trusted installation inputs. Per-host allowlists, an egress
+proxy and registry restrictions remain planned. Use daemon/network infrastructure
+controls when registry or host-level egress must also be restricted.
+
+`make test-environment-policy` validates Docker `RUN`, production reuse setup,
+and command execution with no route/egress in the dedicated sandbox daemon,
+using cached `alpine:3.22`. It also verifies rejection of a cached image after a
+network override. Unit and storage/API integration tests cover definition
+rejection, cached build checks, approval revalidation and node overrides. The
+real build fixture uses a cached base without forced pulls; production build
+argument wiring and failure handling are covered by the integration suite.

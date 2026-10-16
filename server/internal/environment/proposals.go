@@ -81,6 +81,9 @@ func (p *Proposals) put(ctx context.Context, v *Proposal) error {
 func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.ModelRef, resume bool, actor string) (result *Proposal, err error) {
 	ctx, span := observability.Start(ctx, "environment.propose", attribute.String("leforge.graph.id", g.Metadata.ID))
 	defer func() { observability.EndSpan(span, err) }()
+	if p.Manager.opt.Policy.DisableAgentProposals {
+		return nil, fmt.Errorf("%w: installation disables agent proposals", ErrInvalidDefinition)
+	}
 	if g.Spec.Environment != nil {
 		return nil, fmt.Errorf("remove the existing environment before requesting analysis")
 	}
@@ -143,7 +146,7 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 	if e != nil {
 		return result, e
 	}
-	analysis, e := Analyze(ctx, p.Models, ref, evidence)
+	analysis, e := analyzeWithPolicy(ctx, p.Models, ref, evidence, p.Manager.opt.Policy)
 	if e != nil {
 		return result, e
 	}
@@ -171,6 +174,9 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 		}
 		env.Origin.ContextSHA256 = snapshot.SHA256
 		snapshot.Close()
+	}
+	if err := p.Manager.ValidatePolicy(env); err != nil {
+		return result, err
 	}
 	result.Analysis = analysis
 	result.InputSHA256 = evidence.SHA256
@@ -218,6 +224,12 @@ func (p *Proposals) ValidateDecision(ctx context.Context, a *domain.Approval) er
 	if err != nil {
 		return err
 	}
+	if v.Analysis == nil {
+		return fmt.Errorf("proposal analysis is missing")
+	}
+	if err := p.Manager.ValidatePolicy(v.Analysis.Environment); err != nil {
+		return err
+	}
 	return validateProposalFiles(ctx, dir, v.Analysis.Environment)
 }
 
@@ -246,6 +258,9 @@ func validateProposalFiles(ctx context.Context, dir string, env *domain.Environm
 }
 
 func (p *Proposals) ValidateAccepted(ctx context.Context, g *domain.Graph) error {
+	if err := p.Manager.ValidatePolicy(g.Spec.Environment); err != nil {
+		return err
+	}
 	env := g.Spec.Environment
 	if env == nil || env.Origin == nil || env.Origin.Source != "agent" {
 		return nil

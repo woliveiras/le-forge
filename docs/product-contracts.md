@@ -243,6 +243,20 @@ is ready. Stale approvals, analysis failures, timeouts and build failures remain
 visible with an explicit recovery path. Exact new endpoints and state schemas
 remain to be specified; the delivered build states above are unchanged today.
 
+#### Delivered installation policy
+
+`isolation.docker.environmentPolicy` now restricts preparation and execution
+networks and can disable agent proposals, Dockerfiles, setup or Compose helpers.
+It is checked on preview/save, before agent approval, on approval application,
+before builds/cache hits and before runtime admission. Developer approval cannot
+override it. Node network overrides obey the execution restriction. Manual
+Dockerfiles use the same supported subset as untrusted repository definitions.
+Policies are startup configuration; existing running containers are not revoked.
+Omitted lists preserve `none`/`bridge` compatibility; runtime defaults to `none`.
+Dockerfile RUN follows preparation networking. Registry access and per-host
+allowlists need separate controls; the egress proxy remains planned. See
+`docs/environments.md` for configuration, migration and verification boundaries.
+
 #### Delivered reuse subset
 
 Repository graphs with default isolated workspace paths reuse prepared images

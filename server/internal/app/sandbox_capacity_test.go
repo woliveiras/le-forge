@@ -72,3 +72,20 @@ func TestConfiguredSandboxBudgetWiring(t *testing.T) {
 		t.Fatal("over-budget node accepted")
 	}
 }
+
+func TestInstallationPolicyRejectsNodeNetworkOverride(t *testing.T) {
+	cfg := config.Default()
+	cfg.Isolation.Docker.EnvironmentPolicy.RunNetworks = []string{"none"}
+	cfg.Isolation.Docker.Bin = "/nonexistent-policy-test-docker"
+	store, err := fsstore.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory := sandboxFactory(cfg, nil, store, events.NewBus(store, slog.Default()))
+	for _, network := range []string{"bridge", "host", "container:other", "custom"} {
+		spec := engine.SandboxSpec{Graph: &domain.Graph{Metadata: domain.GraphMetadata{ID: "policy"}}, Node: &domain.Node{ID: "worker", Isolation: domain.IsolationSpec{Mode: domain.IsolationDocker, Image: "alpine", Network: network}}, HostWorkdir: t.TempDir()}
+		if _, err := factory(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "installation environment policy") {
+			t.Fatalf("override %s: %v", network, err)
+		}
+	}
+}

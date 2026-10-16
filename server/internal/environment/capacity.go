@@ -207,7 +207,7 @@ func (m *Manager) prepareBoundedImage(ctx context.Context, g *domain.Graph, fina
 		}
 	}
 	var input io.Reader = strings.NewReader(dockerfile)
-	args := []string{"buildx", "build", "--builder", builderName(b.id), "--load", "--pull", "--progress", "plain", "-t", final + "-user", "--label", "leforge.graph=" + b.id, "--label", "leforge.environment=" + Hash(env)}
+	args := []string{"buildx", "build", "--network", buildNetwork(env), "--builder", builderName(b.id), "--load", "--pull", "--progress", "plain", "-t", final + "-user", "--label", "leforge.graph=" + b.id, "--label", "leforge.environment=" + Hash(env)}
 	if snapshot != nil {
 		f, e := wrappedContext(snapshot.File, dockerfile)
 		if e != nil {

@@ -146,7 +146,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.Environments, err = environment.New(environment.Options{
 		Store: a.Store, Bus: a.Bus, Workspaces: ws, Instance: cfg.Instance, Log: log,
 		DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
-		Capacity: capacityManager(cfg, a.Store),
+		Capacity: capacityManager(cfg, a.Store), Policy: cfg.Isolation.Docker.EnvironmentPolicy,
 	})
 	if err != nil {
 		return nil, err
@@ -318,6 +318,9 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 			}
 			if net == "" {
 				net = cfg.Isolation.Docker.Network
+			}
+			if err := cfg.Isolation.Docker.EnvironmentPolicy.RunNetwork(net); err != nil {
+				return nil, err
 			}
 			budget := *capacity
 			budget.Notify = func(name, state string) {

@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/woliveiras/le-forge/server/internal/environmentpolicy"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
@@ -150,11 +151,12 @@ type Isolation struct {
 }
 
 type DockerIsolation struct {
-	IdleTimeout time.Duration          `yaml:"idleTimeout"` // zero disables suspension between turns
-	Capacity    sandboxcapacity.Policy `yaml:"capacity"`
-	Bin         string                 `yaml:"bin"`
-	Image       string                 `yaml:"image"`
-	Network     string                 `yaml:"network"`
+	EnvironmentPolicy environmentpolicy.Policy `yaml:"environmentPolicy"`
+	IdleTimeout       time.Duration            `yaml:"idleTimeout"` // zero disables suspension between turns
+	Capacity          sandboxcapacity.Policy   `yaml:"capacity"`
+	Bin               string                   `yaml:"bin"`
+	Image             string                   `yaml:"image"`
+	Network           string                   `yaml:"network"`
 	// Host is the Docker daemon sandboxes run on (DOCKER_HOST syntax, e.g.
 	// tcp://sandbox-daemon:2376). Setting it enables the "sandbox"
 	// readiness check. Empty = the docker CLI default (DOCKER_HOST from the
@@ -355,6 +357,12 @@ func splitList(s string) []string {
 }
 
 func (c *Config) Validate() error {
+	if err := c.Isolation.Docker.EnvironmentPolicy.Validate(); err != nil {
+		return err
+	}
+	if err := c.Isolation.Docker.EnvironmentPolicy.RunNetwork(c.Isolation.Docker.Network); err != nil {
+		return err
+	}
 	if c.Isolation.Docker.IdleTimeout < 0 {
 		return fmt.Errorf("isolation.docker.idleTimeout must be nonnegative")
 	}
