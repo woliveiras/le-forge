@@ -80,6 +80,8 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 #### Definition Sources
 
+- [x] Read-only discovery API with unit and API integration tests: candidate inspection for the agreed priority, hashes, service names, explicit overrides and bounded checkout reads. Acceptance/UI, full format/policy validation, build contexts and analysis-agent invocation remain separate pending work.
+
 - [x] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands. (**Graph settings → Environment**.)
 - [ ] Extend the environment API/data contracts to record discovery candidates, selected source, repository revision, accepted definition, approval state and reuse identity; reconcile the existing per-graph lifecycle with shared images/caches before implementation.
 - [ ] Discover definitions in order: `.leforge/environment.yaml`, `.devcontainer/devcontainer.json`, Dockerfiles, then Docker Compose. Preserve explicit interface overrides and show the effective source. A LeForge-specific file is never required.

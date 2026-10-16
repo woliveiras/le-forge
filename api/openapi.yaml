@@ -279,6 +279,37 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Environment"}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/graphs/{id}/environment/discovery:
+    parameters: [{$ref: "#/components/parameters/GraphId"}]
+    get:
+      tags: [environments]
+      operationId: discoverEnvironment
+      summary: Inspect environment candidates in an existing checkout without accepting or building
+      x-leforge-role: viewer
+      responses:
+        "200":
+          description: Advisory discovery result; invalid candidates block fallback
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [source, status, candidates]
+                properties:
+                  source: {type: string, enum: [interface, leforge, devcontainer, dockerfile, compose, none]}
+                  status: {type: string, enum: [configured, review_required, invalid, proposal_required]}
+                  candidates:
+                    type: array
+                    items:
+                      type: object
+                      required: [path, sha256]
+                      properties:
+                        path: {type: string}
+                        sha256: {type: string, description: Empty when the file could not be read safely}
+                        services: {type: array, items: {type: string}}
+                        error: {type: string}
+        "400":
+          description: Workspace unavailable or scan failed; no fallback is performed
+        "404": {$ref: "#/components/responses/NotFound"}
   /api/v1/graphs/{id}/environment/build:
     parameters: [{$ref: "#/components/parameters/GraphId"}]
     post:

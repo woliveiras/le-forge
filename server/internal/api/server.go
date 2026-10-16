@@ -114,6 +114,7 @@ func (s *Server) routes() {
 		{"POST /api/v1/graphs/{id}/{action}", O, s.graphAction},
 		{"GET /api/v1/graphs/{id}/status", R, s.graphStatus},
 		{"GET /api/v1/graphs/{id}/environment", R, s.getEnvironment},
+		{"GET /api/v1/graphs/{id}/environment/discovery", R, s.discoverEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/build", O, s.buildEnvironment},
 		{"POST /api/v1/graphs/{id}/environment/reset", A, s.resetEnvironment},
 		{"POST /api/v1/graphs/{id}/nodes/{node}/{action}", O, s.nodeAction},

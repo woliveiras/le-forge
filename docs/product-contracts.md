@@ -150,9 +150,20 @@ cause the gateway to select a different connection.
   `leforge_environment_build_duration_seconds{outcome}`; span
   `environment.build`.
 
+**Delivered discovery API:** `GET /graphs/{id}/environment/discovery` (viewer)
+reads an existing checkout without mutation. Explicit `spec.environment` returns
+`source: interface`, `status: configured`; otherwise discovery follows LeForge,
+devcontainer, Dockerfile, Compose precedence. Results contain `source`, `status`
+(`review_required`, `invalid`, or `proposal_required`) and `candidates` with
+`path`, `sha256`, optional `services` and `error`. No source contents are returned.
+Discovery performs bounded structural inspection only; accepting definitions,
+full policy validation, build contexts, agent analysis and reuse are not delivered.
+Missing/unreadable checkouts or scan limits return an error, never a fallback.
+See [discovery limitations](environments.md) for supported inputs and limits.
+
 **Planned — not implemented yet** (tracked in
 [TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
-repository discovery, approved agent proposals, reuse across tasks and global
+repository definition acceptance, approved agent proposals, reuse across tasks and global
 resource scheduling extend the delivered per-graph environment above. These
 are target contracts, not currently available API or console features.
 

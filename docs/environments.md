@@ -14,7 +14,23 @@ is installed on your machine, and agents never get access to Docker.
 | Understand what happens on Build | [How a build works](#how-a-build-works) |
 | Fix a failed build | [Troubleshooting](#troubleshooting) |
 
-**Planned, not available yet:** discover environments in this order:
+**Available through the API:** `GET /api/v1/graphs/{id}/environment/discovery`
+(viewer) inspects an existing checkout, preserving explicit graph configuration.
+It finds `.leforge/environment.yaml`, then `.devcontainer/devcontainer.json`,
+then Dockerfiles, then standard Compose filenames. It returns candidate paths,
+content hashes, Compose service names and structural errors, without file
+contents, saving, cloning, building or executing anything. Multiple candidates
+remain available for review; malformed higher-priority files block fallback.
+A missing checkout is an error, not an empty repository. Scans exclude `.git`,
+`node_modules`, `vendor` and `.venv`, reject definition symlinks, and are limited
+to 10,000 entries and 256 KiB per definition. Devcontainer inspection currently
+accepts strict JSON with `name`, `image` and string `postCreateCommand` only.
+Dockerfiles and Compose receive basic structural inspection, not full build or
+policy validation. `proposal_required` means no definition was found; it does
+not launch an analysis agent. Acceptance, policy validation and UI integration
+remain planned.
+
+**Planned, not available yet:** accept discovered environments in this order:
 `.leforge/environment.yaml` → `.devcontainer/devcontainer.json` → Dockerfiles
 → Docker Compose. When none exists, an agent will analyze the repository and
 propose an environment, requiring developer approval before building or running

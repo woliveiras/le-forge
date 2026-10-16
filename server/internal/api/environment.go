@@ -85,3 +85,28 @@ func (s *Server) resetEnvironment(w http.ResponseWriter, r *http.Request) error 
 	writeJSON(w, http.StatusOK, v)
 	return nil
 }
+
+// Discovery reads only an existing graph checkout; it does not clone or build.
+func (s *Server) discoverEnvironment(w http.ResponseWriter, r *http.Request) error {
+	g, _, err := s.Engine.GetGraph(r.Context(), r.PathValue("id"), 0)
+	if err != nil {
+		return err
+	}
+	if g.Spec.Environment != nil {
+		writeJSON(w, http.StatusOK, environment.Discovery{Source: "interface", Status: "configured", Candidates: []environment.EnvironmentCandidate{}})
+		return nil
+	}
+	if s.Workspaces == nil {
+		return engine.ErrNotFound
+	}
+	dir, err := s.Workspaces.GraphDir(g)
+	if err != nil {
+		return badRequest("invalid workspace")
+	}
+	result, err := environment.Discover(r.Context(), dir)
+	if err != nil {
+		return badRequest("environment discovery unavailable: %v", err)
+	}
+	writeJSON(w, http.StatusOK, result)
+	return nil
+}
