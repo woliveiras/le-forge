@@ -30,15 +30,21 @@ sequenceDiagram
   R->>RT: Turn(TurnInput, TurnEnv)
   RT->>R: env.Emit({type, payload, target?})
   RT-->>R: TurnResult
-  loop each emit
+  loop each emit, until the first error
     R->>R: parent.Child() → hops+1, causation_id, inherited correlation & trace
     R->>RO: Route(node, msg, channel)
     RO-->>R: matching channels (types filter, when, target)
     R->>B: Publish(each channel)
     R->>S: RecordMessage(published)
   end
-  R->>B: Ack(delivery)
-  R->>S: MarkProcessed(group, id), RecordMessage(acked), PutExecution(succeeded)
+  alt all outputs published or durably held for approval
+    R->>B: Ack(delivery)
+    R->>S: MarkProcessed(group, id), RecordMessage(acked), PutExecution(succeeded)
+  else output construction or publication failed
+    R->>B: Nack(back-off), or Term at maxDeliver
+    R->>S: RecordMessage(nacked / dead_lettered), PutExecution(failed)
+    Note over R,B: No ack or processed marker; partial outputs may repeat on retry
+  end
 ```
 
 ## 2. External (Python) agent turn with callbacks

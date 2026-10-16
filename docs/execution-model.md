@@ -46,14 +46,14 @@ Counted limits decide whether a turn *starts*; they never cut one short.
 | 5. Turn gate | If `approval.beforeTurn`, block on a human. | Rejected → inputs dead-lettered, execution `cancelled`. |
 | 6. Input build | Prompt with parameters substituted. Platform preamble: identity, directories, inputs framed as untrusted data, outputs and routing hints, granted tools, ring neighbours, operator messages, unset parameters, stop protocol. Callback URL and token for external runtimes. | — |
 | 7. Runtime call | `Runtime.Turn(ctx, in, env)` under `limits.turnTimeout`. Tool calls are capped by `limits.maxToolCalls`, tokens by `limits.maxTokens`. | Error, timeout or `retry: true` → nack with exponential back-off; dead letter at `maxDeliver`. |
-| 8. Publish | Every emit (from the result and from `env.Emit` or `/emit`) → `Child` message → hop check → route → publish, or hold at a gate. | A publish error is logged; the remaining emits continue. |
+| 8. Publish | Every emit (from the result and from `env.Emit` or `/emit`) → `Child` message → hop check → route → publish, or hold at a gate. | The first publication error stops remaining emits and fails the turn. Inputs are nacked with back-off, or dead-lettered at `maxDeliver`; none are acked or marked processed. |
 | 9. Ack | Ack each input, `MarkProcessed`, `acked` history row. | Ack failure → redelivery → dedupe. |
 | 10. Signals | Ring broadcast stored; auto-stop handshake updated. | — |
 
 ## 4. Delivery guarantees
 
 - **At-least-once delivery.** Every broker adapter leases deliveries for `ackWait` and redelivers unacked messages with `attempt+1`. After `maxDeliver` attempts, a message is dead-lettered: NATS writes it to a per-graph DLQ stream, other adapters to dead streams, queues or topics. Dead letters are counted in `Stats.Dead` where the adapter can tell.
-- **Ack after publish.** Outputs are published before inputs are acked. A crash between the two redelivers the inputs.
+- **Ack after successful publication.** All routed outputs must be published successfully (or durably held for human approval) before any input is acked or marked processed. An output construction or publication error fails the turn and follows the same retry/dead-letter policy as a runtime error. Intentional routing drops (no matching route or hop limit) remain successful dispositions. A crash between publication and acknowledgement redelivers the inputs.
 - **Effectively-once processing.** Before a turn, a delivery already recorded as `acked` for the same group is skipped. After a turn, `MarkProcessed(group, id)` records the processing. NATS publishes also carry `Nats-Msg-Id` for broker-side duplicate suppression of producer retries.
 
 Duplicates can still occur in these cases:
@@ -61,6 +61,7 @@ Duplicates can still occur in these cases:
 | Case | Why |
 |---|---|
 | The turn succeeded, outputs were published, then the process died before ack and history write. | The redelivered input is processed again and its outputs are re-emitted with *new* message ids. Downstream dedupe does not catch them. |
+| A turn published some outputs before another publication failed. | The successful outputs remain delivered. Retrying the turn creates new message IDs, so downstream deduplication does not eliminate these repeated outputs. |
 | A history write failed. | The pre-check reads history, not the `processed` table. |
 | Lease overlap during failover. | An instance that stalled past `LeaseTTL` and the new owner may both run one turn. |
 | Kafka rebalance or crash. | Records after an uncommitted offset are redelivered. |

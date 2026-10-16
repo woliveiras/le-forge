@@ -62,13 +62,15 @@ func (e *Engine) emit(ctx context.Context, gr *graphRun, n *domain.Node, replica
 		e.drop(ctx, gid, n.ID, m, res.Reason, "no_route")
 		return nil, nil
 	}
+	var ids []string
 	for _, c := range res.Channels {
 		gate := c.Approval || n.Approval.BeforeEmit
 		if err := e.publish(ctx, gr.g, c, m.Clone(), gate, n.Approval); err != nil {
-			return nil, err
+			return ids, err
 		}
+		ids = []string{m.ID}
 	}
-	return []string{m.ID}, nil
+	return ids, nil
 }
 
 func (e *Engine) drop(ctx context.Context, gid, node string, m *domain.Message, reason, metric string) {

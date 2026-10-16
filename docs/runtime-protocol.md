@@ -115,15 +115,20 @@ running the turn, so `callback.url` always points at that instance (`server.inte
 |---|---|
 | Turn exceeds `limits.turnTimeout` (default 30 m) | Request cancelled; turn **failed**; inputs nacked with back-off |
 | Non-2xx from `/v1/turn`, connection error, invalid JSON | Turn **failed**; inputs nacked with exponential back-off (`retryBackoff × 2^(attempt-1)`, ≤ 5 m) |
+| Output construction or publication fails after the runtime returns | Turn **failed**; stop remaining emits; no input is acked or marked processed. Inputs are nacked with back-off, or dead-lettered at `maxDeliver`. Outputs already published are not rolled back. |
 | `retry: true` | Same as failed, without counting as an error in your code path |
 | Inputs reach the channel's `maxDeliver` (default 5) | Dead-lettered; visible as `dead_lettered` in history |
 | Operator `kill` | Request cancelled; turn **cancelled**; inputs redelivered immediately |
 | Platform crash mid-turn | Execution marked **interrupted** by whoever takes the replica over; inputs redelivered after the broker lease (`ackWait`) |
 
+Publication success includes durable acceptance at a human approval gate; the producer does not wait for the human decision. Intentional routing drops (no matching route or hop limit) are not publication failures.
+
 **Idempotency expectations.** Delivery is at-least-once: the same input message can reach your
 agent more than once (after a failed turn, a crash, or a broker redelivery). The engine deduplicates
 messages already acked by the same consumer group, but side effects you performed *during* a failed
-turn (files written, external calls) are not rolled back. Write turns so that re-running them is
+turn (files written, external calls) are not rolled back. A publication failure can also leave
+partial outputs delivered; a retried turn emits new message IDs, so downstream agents must
+tolerate duplicates. Write turns so that re-running them is
 safe — key outputs by input message id or `metadata.correlation_id`, overwrite rather than append.
 
 Callbacks: `GET /tools`, `GET/PUT /state`, `POST /output` are safe to retry. `POST /tools/{name}`

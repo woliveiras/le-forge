@@ -47,7 +47,12 @@ LeForge defines workflows as versioned graph documents. Nodes describe agents,
 their model and runtime configuration, tool grants, and execution policies.
 Channels connect nodes and provide durable queue, topic, fan-out, and broadcast
 semantics. The engine claims messages, invokes the configured runtime, routes
-outputs, and acknowledges inputs only after publication.
+outputs, and acknowledges inputs only after all routed outputs have been
+successfully published or durably held for human approval. A publication failure
+fails the turn and retries its inputs with back-off (or dead-letters them at the
+delivery limit), without acknowledging or marking them processed. Partial outputs
+are not rolled back and can be duplicated on retry; see
+[delivery guarantees](execution-model.md#4-delivery-guarantees).
 
 Each turn is bounded by configured time, token, and tool-call limits. Tool
 access is enforced by a default-deny gateway; model credentials and broker

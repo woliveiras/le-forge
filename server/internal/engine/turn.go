@@ -202,6 +202,24 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		err = errors.New("agent asked to retry later")
 	}
 
+	// Publish before acknowledging any input. A partial publication cannot be
+	// rolled back: retrying the turn may emit duplicates with new message IDs.
+	if err == nil {
+		emits := append(env.drainEmits(), res.Emits...)
+		var parentMsg *domain.Message
+		if len(inputs) > 0 {
+			parentMsg = inputs[0]
+		}
+		for _, em := range emits {
+			ids, publishErr := e.emit(context.WithoutCancel(turnCtx), gr, n, r.index, x, parentMsg, em)
+			x.OutputIDs = append(x.OutputIDs, ids...)
+			if publishErr != nil {
+				err = fmt.Errorf("publish turn outputs: %w", publishErr)
+				break
+			}
+		}
+	}
+
 	if err != nil {
 		observability.EndSpan(span, err)
 		st := domain.ExecFailed
@@ -235,6 +253,10 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		}
 		x.Usage = env.usage()
 		x.ToolCalls = env.toolCalls()
+		if res != nil {
+			x.Usage.Add(domain.Usage{InputTokens: res.Usage.InputTokens, OutputTokens: res.Usage.OutputTokens})
+			x.ToolCalls += res.ToolCalls
+		}
 		finish(st, err.Error())
 		if killed {
 			return turnOutcome{}
@@ -242,21 +264,8 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		return turnOutcome{err: err}
 	}
 
-	// Success: publish, then ack. A crash between the two redelivers the
-	// inputs; consumers drop the duplicate by message id.
-	emits := append(env.drainEmits(), res.Emits...)
-	var parentMsg *domain.Message
-	if len(inputs) > 0 {
-		parentMsg = inputs[0]
-	}
+	// Every output was published or durably held for approval.
 	pubCtx := context.WithoutCancel(turnCtx)
-	for _, em := range emits {
-		ids, perr := e.emit(pubCtx, gr, n, r.index, x, parentMsg, em)
-		if perr != nil {
-			e.log.Warn("emit failed", "graph", gid, "node", n.ID, "err", perr)
-		}
-		x.OutputIDs = append(x.OutputIDs, ids...)
-	}
 	for i, d := range dels {
 		if err := d.Ack(pubCtx); err != nil {
 			e.log.Warn("ack failed", "err", err)
