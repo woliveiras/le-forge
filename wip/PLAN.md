@@ -92,7 +92,7 @@ Users may read and inspect files, but cannot edit, delete, or upload them throug
 
 **Acceptance criterion:** Users can start and direct tasks, monitor agents, and inspect changes entirely through the browser, without server access or CLI usage.
 
-**Delivered inspection:** Files now exposes read-only Git status, tracked diff against HEAD and bounded history, plus branch/directory/replica metadata and recent execution/tool-operation context. Real repository/API tests cover confinement and unsafe Git configuration; browser coverage starts a task and inspects its result. Attribution stays explicitly inconclusive; universal tracking of shell-produced changes and review/approval remain separate work.
+**Delivered inspection:** Files now exposes read-only Git status, tracked diff against HEAD and bounded history, plus branch/directory/replica metadata and recent execution/tool-operation context. Real repository/API tests cover confinement and unsafe Git configuration; browser coverage starts a task and inspects its result. Attribution stays explicitly inconclusive; universal tracking of shell-produced changes remains separate work. Durable candidate review is delivered independently in section 5a.
 
 ### 5a. Human Review with Managed or External Previews
 
