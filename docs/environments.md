@@ -219,8 +219,8 @@ image copies by tag and digest, and an unavailable registry.
    user-level installs and dependency downloads (`go mod download`,
    `mise install`, `pnpm install`). They run **without root**: install system
    packages in the Dockerfile instead.
-4. **Network during setup**: `bridge` (default) lets setup download packages;
-   `none` for fully offline builds.
+4. **Network during build and setup**: `bridge` (default) lets setup download packages;
+   `none` for commands without networking, or `egress` with **Build and setup hosts**.
 5. **Network for agents**: `none` (default), unrestricted `bridge` when permitted,
    or `egress` with exact **Allowed hosts**. Installation policy bounds both
    environment and agent overrides; an egress environment cannot override to
@@ -565,7 +565,7 @@ documented in [sandbox capacity](sandbox-runtime.md#global-execution-sandbox-cap
 | Start refused: `the definition changed since the last build` | The environment was edited and saved | **Build** again |
 | `add sandbox user (the base image needs /bin/sh)` | Distroless or scratch base image | Use an image with a shell, or a Dockerfile `FROM` one |
 | Setup fails with `permission denied` installing packages | Setup runs as user 10001 | Move `apt-get`/`apk add` into the Dockerfile |
-| Setup fails downloading | Setup network is `none`, or the daemon is offline | Set **Network during setup** to `bridge`; check **Integrations → Sandbox runtime** |
+| Setup fails downloading | Setup network is `none`, or the daemon is offline | Review the permitted hosts with `egress`, or choose `bridge` if installation policy permits it; check **Integrations → Sandbox runtime** |
 | `build timed out after 30m0s` | Long downloads or compilation | Raise **Build timeout** (up to `2h`) |
 | `build interrupted: the LeForge instance running it stopped` | `forged` restarted mid-build | **Build again** |
 | Reset: `stop it before resetting its environment` | The graph is running | Stop the graph, then reset |
@@ -710,14 +710,15 @@ they do not terminate already running containers or remove images/workspaces.
 All controllers sharing a daemon must use the same policy. A previously ready
 image becomes blocked when its definition violates the current policy.
 
-`network.setup` also controls Dockerfile `RUN` networking (`none` or BuildKit's
-ordinary `default` network). The image format version was advanced so earlier
-images built without that restriction are rebuilt. This is a **command network
-policy**, not a daemon firewall: registry pulls, image resolution (including
-external COPY sources) and builder provisioning still use the daemon's network.
-Base images remain trusted installation inputs. Runtime HTTP/HTTPS host allowlists
-are implemented below; registry restrictions and proxying setup/build remain planned. Use daemon/network infrastructure
-controls when registry or host-level egress must also be restricted.
+`network.setup` also controls Dockerfile `RUN` networking: `none`, ordinary
+BuildKit networking for `bridge`, or an isolated worker and managed proxy for
+`egress`. Earlier images built without preparation-network enforcement are
+invalidated by the versioned image format. This is a **command network policy**,
+not a daemon firewall. BuildKit image resolution/layer requests traverse the proxy
+in egress mode, while daemon provisioning and client-side authentication remain
+outside it. Base images remain trusted installation inputs. See the runtime and
+preparation proxy sections below for scope and configuration. Daemon-wide registry
+restrictions remain planned.
 
 `make test-environment-policy` validates Docker `RUN`, production reuse setup,
 and command execution with no route/egress in the dedicated sandbox daemon,
@@ -808,10 +809,8 @@ replica. At most 64 requests run concurrently; HTTP requests are bounded to two
 minutes and CONNECT tunnels to five minutes. The Docker daemon remains a trusted
 installation component and must retain its network/firewall isolation.
 
-This first proxy delivery covers **runtime execution**. Setup/build commands
-still use `bridge` or `none`; package installation needing those phases is governed
-by `setupNetworks`. Registry pulls, builder provisioning, private destinations,
-per-path policy and proxying setup/build remain outside this runtime allowlist.
+Runtime and preparation use separate host lists. See the preparation proxy below.
+Private destinations and per-path policy remain unsupported.
 
 Validation: `make test-egress` cross-compiles the real proxy, builds unique fixture
 images on the dedicated daemon (cached Alpine required), and checks HTTP/HTTPS to
@@ -821,3 +820,60 @@ suspension/resume and fail-closed proxy failure. It requires public internet acc
 for the permitted endpoint and removes only its test-owned resources. Unit and
 API/storage/component integration tests also cover DNS pinning, redirects,
 malformed definitions, installation ceilings, approval gates and stale groups.
+
+
+## Build and setup egress proxy (implemented)
+
+The environment editor offers **Network during build and setup → egress** and
+**Build and setup hosts**. This list is independent of the runtime list:
+
+```yaml
+image: alpine:3.22
+network:
+  setup: egress
+  setupAllowedHosts: [registry-1.docker.io, auth.docker.io, production.cloudfront.docker.com, registry.npmjs.org]
+  run: none
+```
+
+Enable `egress` in installation `environmentPolicy.setupNetworks`, and include
+every requested host in `environmentPolicy.egressHosts`. Provision `egressImage`
+as described above. Repository and agent definitions use the same validation;
+approval cannot override the installation ceiling. Exact-host validation and
+private-address rejection are the same as for runtime. Changing the preparation
+host set changes the image/reuse key; reordering it does not. Runtime hosts still
+do not affect image reuse.
+
+A preparation pipeline reserves the worker plus one proxy atomically. The proxy
+adds one container slot, 64 MiB of memory and 0.25 CPU to the worker's reservation.
+Preparation egress requires capacity management. A dedicated internal bridge with
+isolated gateway mode connects the BuildKit worker, proxy and sequential setup
+container. Only the proxy receives an external uplink. BuildKit RUN and setup DNS
+are disabled; proxy URLs use the inspected internal IP. Ignoring proxy variables
+cannot enable direct internet access. The worker uses BuildKit's bridge network;
+no host-network or insecure build entitlement is requested.
+
+The [Docker container Buildx driver](https://docs.docker.com/build/builders/drivers/docker-container/)
+receives HTTP/HTTPS proxy settings, as do Dockerfile RUN instructions
+and setup commands. Programs must support explicit proxies. Setup proxy variables
+are cleared when committing the final image; execution gets its own policy.
+The proxy is removed after build/setup, including failures and cancellation. A
+failed cleanup retains capacity until retry/reset confirms workers are gone.
+Progress and failure messages use existing environment build logs/events; proxy
+logs record host, outcome and duration without request paths or credentials.
+The last 50 proxy outcomes are copied to the environment build log before cleanup.
+
+BuildKit image manifests and layer downloads also traverse this proxy, so the
+list must include the registry and any CDN/redirect destinations it uses. Missing
+hosts produce a failed build; LeForge never expands the list automatically.
+The example Docker Hub destinations can vary by registry/CDN configuration.
+**Daemon-side provisioning of the proxy and BuildKit images and Buildx client-side
+registry authentication remain outside this policy.** This is not a daemon-wide
+registry firewall and does not configure registry credentials. Private registries
+with private IPs remain unsupported by the proxy.
+
+`make test-egress` also runs the production preparation pipeline on the dedicated
+daemon: real BuildKit RUN, setup, approved access, forbidden/private hosts,
+direct-IP and DNS bypass attempts, committed-image proxy cleanup and network
+cleanup. It requires public Docker Hub/Alpine package repository/example.com access and DNS for
+`127.0.0.1.nip.io`. Unit and storage/API/UI integration tests cover host validation,
+independent lists, reuse invalidation, capacity and dependency/cleanup failures.

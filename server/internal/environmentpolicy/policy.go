@@ -36,7 +36,7 @@ func (p Policy) Validate() error {
 			return fmt.Errorf("environment policy %s must not be empty", field)
 		}
 		for _, network := range networks(list) {
-			if network != "none" && network != "bridge" && !(field == "runNetworks" && network == "egress") {
+			if network != "none" && network != "bridge" && network != "egress" {
 				return fmt.Errorf("environment policy %s has an unsupported network mode", field)
 			}
 		}
@@ -78,6 +78,21 @@ func (p Policy) Check(e *domain.EnvironmentSpec) error {
 		}
 	} else if len(e.Network.AllowedHosts) > 0 {
 		return fmt.Errorf("allowedHosts requires execution network egress")
+	}
+	if err := domain.ValidateEgressHosts(e.Network.SetupAllowedHosts); err != nil {
+		return err
+	}
+	if e.Network.Setup == "egress" {
+		if len(e.Network.SetupAllowedHosts) == 0 {
+			return fmt.Errorf("setup egress requires setupAllowedHosts")
+		}
+		for _, host := range e.Network.SetupAllowedHosts {
+			if !slices.Contains(p.EgressHosts, host) {
+				return fmt.Errorf("installation does not permit a requested preparation host")
+			}
+		}
+	} else if len(e.Network.SetupAllowedHosts) > 0 {
+		return fmt.Errorf("setupAllowedHosts requires preparation network egress")
 	}
 	setup := e.Network.Setup
 	if setup == "" {

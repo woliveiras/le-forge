@@ -37,10 +37,12 @@ func newFakeDocker(t *testing.T) *fakeDocker {
 	script := `#!/bin/sh
 d=` + dir + `
 echo "$*" >> "$d/calls.log"
-sub="$1"; [ "$1" = image ] || [ "$1" = volume ] || [ "$1" = buildx ] && sub="$1-$2"
+sub="$1"; [ "$1" = image ] || [ "$1" = volume ] || [ "$1" = buildx ] || [ "$1" = network ] && sub="$1-$2"
 [ -f "$d/slow-$sub" ] && sleep 30
 if [ -f "$d/fail-$sub" ]; then echo "step output"; echo "boom: $sub failed" >&2; exit 1; fi
 case "$sub" in
+  inspect) [ -f "$d/proxy-address" ] && cat "$d/proxy-address" ;;
+  buildx-create) cat > /dev/null ;;
   pull) echo "Pulling from library"; echo "Status: Downloaded" ;;
   build|buildx-build) cat > /dev/null; echo "Successfully built" ;;
   run) echo "setup ran: $*" ;;

@@ -174,3 +174,14 @@ it('offers reviewed egress and preserves the explicit host list when editing it'
   await userEvent.selectOptions(screen.getByLabelText('Network for agents'), 'none');
   expect(onChange.mock.calls.at(-1)?.[0](graph(env)).spec.environment?.network).toEqual({ run: 'none', allowedHosts: undefined });
 });
+
+it('edits preparation hosts independently from runtime hosts and clears only the preparation list', async () => {
+  fakeApi({ 'GET /api/v1/graphs/g/environment': () => view() });
+  const env = { image: 'alpine', network: { setup: 'egress' as const, setupAllowedHosts: ['registry.npmjs.org'], run: 'egress' as const, allowedHosts: ['example.com'] } };
+  const { onChange } = renderSection({ graph: graph(env), savedGraph: graph(env) });
+  expect((screen.getByLabelText('Network during build and setup') as HTMLSelectElement).value).toBe('egress');
+  const field = screen.getByLabelText('Build and setup hosts (one exact DNS name per line)');
+  expect((field as HTMLTextAreaElement).value).toBe('registry.npmjs.org');
+  await userEvent.selectOptions(screen.getByLabelText('Network during build and setup'), 'none');
+  expect(onChange.mock.calls.at(-1)?.[0](graph(env)).spec.environment?.network).toEqual({ ...env.network, setup: 'none', setupAllowedHosts: undefined });
+});

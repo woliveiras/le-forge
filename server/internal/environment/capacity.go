@@ -33,6 +33,9 @@ func builderContainer(id string) string { return "buildx_buildkit_" + builderNam
 // crashes until this graph's next build/reset confirms all workers are gone.
 func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io.Writer, run func(context.Context) (string, []CacheMount, error)) (image string, caches []CacheMount, err error) {
 	if m.opt.Capacity == nil {
+		if g.Spec.Environment.Network.Setup == "egress" {
+			return "", nil, fmt.Errorf("preparation egress requires capacity management")
+		}
 		return run(ctx)
 	}
 	budget := *m.opt.Capacity
@@ -68,12 +71,24 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 			return out.String(), err
 		})
 	}
-	if err := budget.ReserveCPU(ctx, buildContainer(g.Metadata.ID), memory, cpu, inventory); err != nil {
+	count, reservedMemory, reservedCPU := 1, memory, cpu
+	if g.Spec.Environment.Network.Setup == "egress" {
+		count = 2
+		reservedMemory += preparationProxyMemory
+		reservedCPU += preparationProxyCPU
+	}
+	if err := budget.ReserveGroup(ctx, buildContainer(g.Metadata.ID), reservedMemory, reservedCPU, count, inventory); err != nil {
 		return "", nil, err
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 		defer cancel()
+		if g.Spec.Environment.Network.Setup == "egress" {
+			fmt.Fprintln(log, "==> Preparation proxy request outcomes (last 50)")
+			if logErr := m.docker(cleanup, nil, log, "logs", "--tail", "50", preparationProxy(g.Metadata.ID)); logErr != nil {
+				m.opt.Log.Warn("preparation proxy logs unavailable", "graph", g.Metadata.ID, "err", logErr)
+			}
+		}
 		e := m.cleanBuildResources(cleanup, g.Metadata.ID)
 		if e == nil {
 			e = budget.Release(cleanup, buildContainer(g.Metadata.ID))
@@ -83,12 +98,18 @@ func (m *Manager) withBuildCapacity(ctx context.Context, g *domain.Graph, log io
 			err = errors.Join(err, fmt.Errorf("environment cleanup (retry build or reset): %w", e))
 		}
 	}()
+	if g.Spec.Environment.Network.Setup == "egress" {
+		ctx, err = m.startPreparationProxy(ctx, g, log)
+		if err != nil {
+			return "", nil, err
+		}
+	}
 	return run(context.WithValue(ctx, buildBudgetKey{}, buildBudget{g.Metadata.ID, memory, cpu}))
 }
 
 // Names are deterministic so a new control-plane process can recover workers.
 func (m *Manager) cleanBuildResources(ctx context.Context, id string) error {
-	for _, name := range []string{builderContainer(id), buildContainer(id), buildContainer(id) + "-copy"} {
+	for _, name := range []string{builderContainer(id), buildContainer(id), buildContainer(id) + "-copy", preparationProxy(id)} {
 		var out bytes.Buffer
 		if err := m.docker(ctx, nil, &out, "ps", "-aq", "--filter", "name=^/"+regexp.QuoteMeta(name)+"$"); err != nil {
 			return fmt.Errorf("list build workers: %w", err)
@@ -96,6 +117,17 @@ func (m *Manager) cleanBuildResources(ctx context.Context, id string) error {
 		if ids := strings.Fields(out.String()); len(ids) > 0 {
 			if err := m.docker(ctx, nil, io.Discard, append([]string{"rm", "-f"}, ids...)...); err != nil {
 				return fmt.Errorf("remove build worker: %w", err)
+			}
+		}
+	}
+	var networks bytes.Buffer
+	if err := m.docker(ctx, nil, &networks, "network", "ls", "--filter", "name=^"+preparationNetworkName(id)+"$", "--format", "{{.Name}}"); err != nil {
+		return fmt.Errorf("list preparation networks: %w", err)
+	}
+	for _, name := range strings.Fields(networks.String()) {
+		if name == preparationNetworkName(id) {
+			if err := m.docker(ctx, nil, io.Discard, "network", "rm", name); err != nil {
+				return fmt.Errorf("remove preparation network: %w", err)
 			}
 		}
 	}
@@ -177,6 +209,9 @@ func (m *Manager) prepareBoundedImage(ctx context.Context, g *domain.Graph, fina
 		return "", fmt.Errorf("environment build requires capacity admission")
 	}
 	env := g.Spec.Environment
+	if _, ok := ctx.Value(preparationKey{}).(preparationNetwork); env.Network.Setup == "egress" && !ok {
+		return "", fmt.Errorf("preparation egress proxy is not admitted")
+	}
 	source := env.Dockerfile
 	var snapshot *ContextSnapshot
 	if env.Context != "" {
@@ -232,7 +267,22 @@ func (m *Manager) prepareBoundedImage(ctx context.Context, g *domain.Graph, fina
 	}
 	memory := strconv.FormatInt(b.memory, 10)
 	create := []string{"buildx", "create", "--name", builderName(b.id), "--driver", "docker-container", "--driver-opt", "memory=" + memory + ",memory-swap=" + memory + ",restart-policy=no,cpu-period=100000,cpu-quota=" + strconv.FormatInt(b.cpu*100, 10)}
-	if err = m.docker(ctx, nil, log, create...); err != nil {
+	var configuration io.Reader
+	if n, ok := ctx.Value(preparationKey{}).(preparationNetwork); ok {
+		// The worker has no uplink. RUN DNS is disabled; proxy requests use the
+		// inspected internal address, never Docker's external DNS forwarding.
+		configuration = strings.NewReader("[dns]\n  nameservers = [\"127.0.0.1\"]\n[worker.oci]\n  networkMode = \"bridge\"\n")
+		create = append(create, "--buildkitd-config", "/dev/stdin", "--driver-opt", "network="+n.name)
+		for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+			create = append(create, "--driver-opt", "env."+key+"="+n.proxyURL)
+			args = append(args, "--build-arg", key+"="+n.proxyURL)
+		}
+		for _, key := range []string{"NO_PROXY", "no_proxy"} {
+			create = append(create, "--driver-opt", "env."+key+"=")
+			args = append(args, "--build-arg", key+"=")
+		}
+	}
+	if err = m.docker(ctx, configuration, log, create...); err != nil {
 		return "", fmt.Errorf("create bounded builder: %w", err)
 	}
 	defer func() {

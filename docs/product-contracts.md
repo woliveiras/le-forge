@@ -136,7 +136,7 @@ cause the gateway to select a different connection.
 
 - `spec.environment` in the graph document is the single effective
   definition: `image` or `dockerfile`, `setup[]`, `network.setup`/`network.run`
-  (`none`/`bridge`, plus runtime `egress` with `network.allowedHosts`),
+  (`none`/`bridge`/`egress`, with separate `network.setupAllowedHosts` and `network.allowedHosts`),
   `caches[]`, `timeout`, `cpu`, `memory`, and optional
   `origin` for accepted repository definitions. It is versioned
   with the graph and saved through the graph `PUT`.
@@ -254,8 +254,7 @@ override it. Node network overrides obey the execution restriction. Manual
 Dockerfiles use the same supported subset as untrusted repository definitions.
 Policies are startup configuration; existing running containers are not revoked.
 Omitted lists preserve `none`/`bridge` compatibility; runtime defaults to `none`.
-Dockerfile RUN follows preparation networking. Registry access and per-host
-allowlists for setup/build need separate controls; runtime HTTP/HTTPS egress
+Dockerfile RUN follows preparation networking. Daemon-wide registry access needs separate controls; runtime and preparation HTTP/HTTPS egress
 allowlists are implemented. See
 `docs/environments.md` for configuration, migration and verification boundaries.
 
@@ -272,9 +271,27 @@ lifecycle participates in global capacity, idle suspension and group ownership.
 Changed lists require replacing the old task group; they do not rebuild images.
 
 This delivers runtime HTTP/80 and CONNECT/443 destination restrictions, not TLS
-content inspection, private-service access, arbitrary protocols or setup/build
-proxying. Registry access remains a separate daemon concern. See
+content inspection, private-service access or arbitrary protocols. Preparation
+proxying is delivered separately below. Daemon-wide registry controls remain planned. See
 `docs/environments.md` for configuration, image provisioning and tested limits.
+
+#### Delivered preparation egress subset
+
+`network.setup: egress` with `network.setupAllowedHosts` covers Dockerfile RUN and
+setup. The installation must enable that mode and approve every exact host.
+The editor exposes the preparation list separately from runtime hosts. The
+BuildKit worker and setup use an isolated internal network with external DNS
+disabled; only their managed proxy has an uplink. Preparation requires global
+capacity admission for worker plus proxy (one extra slot, 64 MiB, 0.25 CPU).
+Host-set changes invalidate compatible-image reuse. Failure/cancellation cleans
+the group, retaining capacity if cleanup cannot be confirmed; committed setup
+images clear transient proxy variables.
+
+BuildKit registry/layer requests use the preparation proxy and require approved
+registry/CDN hosts. Daemon provisioning pulls and client-side registry
+authentication are outside this subset; daemon-wide registry restrictions remain
+planned. There is no private-IP exception or automatic allowlist expansion.
+See [environment preparation](environments.md#build-and-setup-egress-proxy-implemented).
 
 #### Delivered reuse subset
 

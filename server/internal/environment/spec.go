@@ -39,6 +39,7 @@ func definitionDigest(env *domain.EnvironmentSpec) string {
 	}
 	sort.Strings(caches)
 	b, _ := json.Marshal(struct {
+		SetupHosts    []string `json:"setupHosts,omitempty"`
 		V             int      `json:"v"`
 		Image         string   `json:"image,omitempty"`
 		Dockerfile    string   `json:"dockerfile,omitempty"`
@@ -48,7 +49,7 @@ func definitionDigest(env *domain.EnvironmentSpec) string {
 		Target        string   `json:"target,omitempty"`
 		Context       string   `json:"context,omitempty"`
 		ContextSHA256 string   `json:"contextSHA256,omitempty"`
-	}{wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Target, env.Context, contextHash(env)})
+	}{sortedHosts(env.Network.SetupAllowedHosts), wrapperVersion, strings.TrimSpace(env.Image), strings.TrimSpace(env.Dockerfile), env.Setup, SetupNetwork(env), caches, env.Target, env.Context, contextHash(env)})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -128,4 +129,10 @@ func buildNetwork(env *domain.EnvironmentSpec) string {
 		return "none"
 	}
 	return "default"
+}
+
+func sortedHosts(hosts []string) []string {
+	result := append([]string(nil), hosts...)
+	sort.Strings(result)
+	return result
 }

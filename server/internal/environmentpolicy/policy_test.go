@@ -58,3 +58,28 @@ func TestEgressPolicy(t *testing.T) {
 		t.Fatal("ignored allowlist on non-proxy network")
 	}
 }
+
+func TestPreparationEgressPolicy(t *testing.T) {
+	p := Policy{SetupNetworks: []string{"none", "egress"}, EgressHosts: []string{"packages.example"}}
+	for _, tc := range []struct {
+		mode  string
+		hosts []string
+		valid bool
+	}{
+		{"egress", []string{"packages.example"}, true},
+		{"egress", nil, false},
+		{"egress", []string{"other.example"}, false},
+		{"egress", []string{"*.example"}, false},
+		{"egress", []string{"packages.example", "packages.example"}, false},
+		{"none", []string{"packages.example"}, false},
+		{"none", nil, true},
+	} {
+		e := &domain.EnvironmentSpec{Image: "alpine", Network: domain.EnvironmentNetwork{Setup: tc.mode, SetupAllowedHosts: tc.hosts}}
+		if err := p.Check(e); (err == nil) != tc.valid {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+	}
+	if err := (Policy{}).Check(&domain.EnvironmentSpec{Network: domain.EnvironmentNetwork{Setup: "egress", SetupAllowedHosts: []string{"packages.example"}}}); err == nil {
+		t.Fatal("not opt-in")
+	}
+}

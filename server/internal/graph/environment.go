@@ -57,12 +57,8 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 		}
 	}
 	for field, v := range map[string]string{"network.setup": env.Network.Setup, "network.run": env.Network.Run} {
-		if v != "" && v != "none" && v != "bridge" && !(field == "network.run" && v == "egress") {
-			if field == "network.run" {
-				r.errf(p+"."+field, "must be none, bridge or egress")
-			} else {
-				r.errf(p+"."+field, "must be none or bridge")
-			}
+		if v != "" && v != "none" && v != "bridge" && v != "egress" {
+			r.errf(p+"."+field, "must be none, bridge or egress")
 		}
 	}
 	if err := domain.ValidateEgressHosts(env.Network.AllowedHosts); err != nil {
@@ -70,6 +66,12 @@ func validateEnvironment(r *Report, env *domain.EnvironmentSpec) {
 	}
 	if (env.Network.Run == "egress") != (len(env.Network.AllowedHosts) > 0) {
 		r.errf(p+".network", "egress requires allowedHosts; other modes cannot declare them")
+	}
+	if err := domain.ValidateEgressHosts(env.Network.SetupAllowedHosts); err != nil {
+		r.errf(p+".network.setupAllowedHosts", "%s", err)
+	}
+	if (env.Network.Setup == "egress") != (len(env.Network.SetupAllowedHosts) > 0) {
+		r.errf(p+".network", "setup egress requires setupAllowedHosts; other modes cannot declare them")
 	}
 	seen := map[string]bool{}
 	for i, dir := range env.Caches {

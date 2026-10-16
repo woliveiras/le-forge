@@ -85,7 +85,8 @@
         "network": {
           "type": "object", "additionalProperties": false,
           "properties": {
-            "setup": {"enum": ["none", "bridge"], "description": "Network of setup commands. Default bridge."},
+            "setupAllowedHosts": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string"}, "description": "Exact hosts for build and setup; requires setup egress and installation approval."},
+            "setup": {"enum": ["none", "bridge", "egress"], "description": "Network of setup commands. Default bridge."},
             "allowedHosts": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string"}, "description": "Exact lowercase DNS hosts; requires run egress and installation approval."},
             "run": {"enum": ["none", "bridge", "egress"], "description": "Default network of agents using the environment. Default none; a node's isolation.network overrides it."}
           }

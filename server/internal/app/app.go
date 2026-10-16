@@ -146,7 +146,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.Environments, err = environment.New(environment.Options{
 		Store: a.Store, Bus: a.Bus, Workspaces: ws, Instance: cfg.Instance, Log: log,
 		DockerBin: cfg.Isolation.Docker.Bin, DockerHost: cfg.Isolation.Docker.Host,
-		Capacity: capacityManager(cfg, a.Store), Policy: cfg.Isolation.Docker.EnvironmentPolicy,
+		EgressImage: cfg.Isolation.Docker.EgressImage, Capacity: capacityManager(cfg, a.Store), Policy: cfg.Isolation.Docker.EnvironmentPolicy,
 	})
 	if err != nil {
 		return nil, err

@@ -130,3 +130,54 @@ func TestRepositoryEgressReviewAndAgentHosts(t *testing.T) {
 		t.Fatal("Docker started before approval", string(data))
 	}
 }
+
+func TestRepositoryPreparationEgressReviewAndAgentHosts(t *testing.T) {
+	root := t.TempDir()
+	bin, log := fakeDaemonCLI(t)
+	srv, app := setupApp(t, func(c *config.Config) {
+		c.Workspaces.Root = root
+		c.Isolation.Docker.Bin = bin
+		c.Isolation.Docker.EnvironmentPolicy.SetupNetworks = []string{"none", "egress"}
+		c.Isolation.Docker.EnvironmentPolicy.EgressHosts = []string{"example.com"}
+	})
+	doc := "apiVersion: leforge.io/v1\nkind: Graph\nmetadata: {name: egress}\nspec:\n  nodes: [{id: worker, runtime: {kind: echo}}]\n"
+	if code := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/yaml", doc, nil); code != 201 {
+		t.Fatal(code)
+	}
+	dir := filepath.Join(root, "egress", ".leforge")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "environment.yaml")
+	for _, tc := range []struct {
+		host   string
+		status int
+	}{{"example.com", 200}, {"other.example", 400}, {"*.example.com", 400}} {
+		if err := os.WriteFile(path, []byte("image: alpine\nnetwork: {setup: egress, setupAllowedHosts: ['"+tc.host+"']}"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		var d environment.Discovery
+		if code := call(t, srv, "GET", "/api/v1/graphs/egress/environment/discovery", viewerTok, "", "", &d); code != 200 {
+			t.Fatal(code)
+		}
+		b, _ := json.Marshal(environment.Selection{Source: d.Source, Path: d.Candidates[0].Path, SHA256: d.Candidates[0].SHA256})
+		if code := call(t, srv, "POST", "/api/v1/graphs/egress/environment/resolve", viewerTok, "application/json", string(b), nil); code != tc.status {
+			t.Fatalf("%s: %d", tc.host, code)
+		}
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	provider := &proposalProvider{body: `{"environment":{"image":"alpine","network":{"setup":"egress","setupAllowedHosts":["other.example"]}},"rationale":"download tools"}`}
+	app.Models.Add(llm.ProviderConfig{Name: "analysis"}, provider)
+	if code := call(t, srv, "POST", "/api/v1/graphs/egress/environment/proposal", adminTok, "application/json", `{"model":{"provider":"analysis"}}`, nil); code != 400 {
+		t.Fatal(code)
+	}
+	provider.body = `{"environment":{"image":"alpine","network":{"setup":"egress","setupAllowedHosts":["example.com"]}},"rationale":"approved destination"}`
+	if code := call(t, srv, "POST", "/api/v1/graphs/egress/environment/proposal", adminTok, "application/json", `{"model":{"provider":"analysis"}}`, nil); code != 201 {
+		t.Fatal(code)
+	}
+	if data, err := os.ReadFile(log); err == nil && len(data) > 0 {
+		t.Fatal("Docker started before approval", string(data))
+	}
+}

@@ -139,15 +139,17 @@ export function EnvironmentSection({
           </span>
           <FieldIssues issues={issues} field="spec.environment.setup" />
           <label>
-            Network during setup
+            Network during build and setup
             <select
               value={env?.network?.setup ?? 'bridge'}
-              onChange={(event) => patch({ network: { ...env?.network, setup: event.target.value as 'none' | 'bridge' } })}
+              onChange={(event) => patch({ network: { ...env?.network, setup: event.target.value as 'none' | 'bridge' | 'egress', setupAllowedHosts: event.target.value === 'egress' ? env?.network?.setupAllowedHosts : undefined } })}
             >
               <option value="bridge">bridge — internet, to download tools and dependencies</option>
+              <option value="egress">egress — approved HTTP/HTTPS hosts through a proxy</option>
               <option value="none">none</option>
             </select>
           </label>
+          {env?.network?.setup === 'egress' && <LinesField label="Build and setup hosts (one exact DNS name per line)" values={env.network.setupAllowedHosts} placeholder="registry.npmjs.org" onChange={(setupAllowedHosts) => patch({ network: { ...env.network, setupAllowedHosts } })} />}
           <label>
             Network for agents
             <select
@@ -156,7 +158,7 @@ export function EnvironmentSection({
             >
               <option value="none">none — default</option>
               <option value="bridge">bridge — unrestricted internet</option>
-<option value="egress">egress — approved HTTP/HTTPS hosts through a proxy</option>
+              <option value="egress">egress — approved HTTP/HTTPS hosts through a proxy</option>
             </select>
           </label>
           {env?.network?.run === 'egress' && <LinesField label="Allowed hosts (one exact DNS name per line)" values={env.network.allowedHosts} placeholder="registry.npmjs.org" onChange={(allowedHosts) => patch({ network: { ...env.network, allowedHosts } })} />}

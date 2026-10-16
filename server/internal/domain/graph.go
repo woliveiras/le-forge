@@ -103,7 +103,8 @@ type EnvironmentSpec struct {
 
 // EnvironmentNetwork is the network of each environment phase.
 type EnvironmentNetwork struct {
-	AllowedHosts []string `json:"allowedHosts,omitempty" yaml:"allowedHosts,omitempty"`
+	SetupAllowedHosts []string `json:"setupAllowedHosts,omitempty" yaml:"setupAllowedHosts,omitempty"`
+	AllowedHosts      []string `json:"allowedHosts,omitempty" yaml:"allowedHosts,omitempty"`
 	// Setup defaults to "bridge": installing tools needs the internet.
 	Setup string `json:"setup,omitempty" yaml:"setup,omitempty"`
 	// Run is the default for agent sandboxes ("none"); a node's

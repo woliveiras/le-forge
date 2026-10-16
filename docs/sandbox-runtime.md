@@ -201,8 +201,8 @@ your services.
 - **Kubernetes isolation** still runs tools in the `forged` pod.
 - **Runtime egress is opt-in:** `bridge` remains unrestricted; use environment
   `network.run: egress` with approved `allowedHosts` for HTTP/HTTPS destination
-  restrictions. See `docs/environments.md`; setup/build and registry traffic are
-  outside the runtime proxy.
+  restrictions. See `docs/environments.md`; setup/build use a separate `setupAllowedHosts` list with `network.setup: egress`.
+  Daemon provisioning and client-side registry authentication remain outside these proxies.
 - **One daemon per installation:** caches and images are shared by all graphs.
 
 ## Global execution-sandbox capacity

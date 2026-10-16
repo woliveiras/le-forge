@@ -93,6 +93,7 @@ type View struct {
 
 // Options wire a Manager.
 type Options struct {
+	EgressImage       string
 	Policy            environmentpolicy.Policy
 	Capacity          *sandboxcapacity.Manager
 	ProposalValidator func(context.Context, *domain.Graph) error
@@ -135,6 +136,9 @@ func New(opt Options) (*Manager, error) {
 	}
 	if opt.Store == nil || opt.Workspaces == nil {
 		return nil, errors.New("environment: store and workspaces are required")
+	}
+	if opt.EgressImage == "" {
+		opt.EgressImage = "leforge/egress:latest"
 	}
 	if opt.DockerBin == "" {
 		opt.DockerBin = "docker"
@@ -714,6 +718,11 @@ func (m *Manager) publish(ctx context.Context, t domain.EventType, graphID, acto
 
 // docker runs one CLI call against the sandbox daemon, streaming output.
 func (m *Manager) docker(ctx context.Context, stdin io.Reader, out io.Writer, args ...string) error {
+	var err error
+	args, err = preparationArgs(ctx, args)
+	if err != nil {
+		return err
+	}
 	args = boundedRunArgs(ctx, args)
 	cmd := tools.DockerCommand(ctx, m.opt.DockerBin, m.opt.DockerHost, args...)
 	cmd.Stdin = stdin
@@ -793,6 +802,9 @@ func (m *Manager) SetProposalValidator(fn func(context.Context, *domain.Graph) e
 func (m *Manager) ValidatePolicy(env *domain.EnvironmentSpec) error {
 	if err := m.opt.Policy.Check(env); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
+	}
+	if env != nil && env.Network.Setup == "egress" && m.opt.Capacity == nil {
+		return fmt.Errorf("%w: preparation egress requires capacity management", ErrInvalidDefinition)
 	}
 	if env != nil && env.Dockerfile != "" {
 		if err := validateRepositoryDockerfile(env.Dockerfile); err != nil {

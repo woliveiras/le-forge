@@ -61,3 +61,5 @@ PROXY
 tar -C "$task_tmp" -cf - Dockerfile forge-egress probe | "$task_tmp/docker-sandbox" build --network none -t "$proxy_image" -
 proxy_built=true
 go test ./internal/app -run '^TestEgressRealSandbox$' -count=1 -v -timeout 4m
+
+go test ./internal/environment -run '^TestPreparationEgressRealSandbox$' -count=1 -v -timeout 6m

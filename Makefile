@@ -21,7 +21,7 @@ build: ## Build forged and forge binaries into server/bin
 egress-image: ## Build the managed proxy image inside the dedicated sandbox daemon
 	./scripts/build-egress-image.sh
 
-test-egress: ## Real HTTP/HTTPS allowlist and direct-egress isolation checks on the dedicated daemon
+test-egress: ## Real runtime/build/setup HTTP/HTTPS allowlist and isolation checks on the dedicated daemon
 	./scripts/test-egress.sh
 
 test-environment-policy: ## Installation policy network checks on the dedicated daemon (cached alpine:3.22 required)
