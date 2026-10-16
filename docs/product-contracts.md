@@ -637,3 +637,17 @@ Unsupported: implicit override merging, helper builds, environment/secret inject
 mounts, ports, privileges, network overrides, application-health conditions and
 helper availability during build/setup. Rejection is explicit; unrelated services
 never start. See [Compose services](environments.md#compose-runtime-services).
+
+### Delivered agent environment tools
+
+`environment.status` and `environment.propose` are grant-controlled, own-graph
+operations for native/external agents through the same gateway. Proposing requires
+a Docker node without its own image override and no accepted/repository environment.
+The complete definition remains untrusted: installation policy and repository
+fingerprints are checked, and administrator approval is mandatory. The tool waits
+for approval and build readiness; the executor switches the sandbox while retaining
+the workspace before commands continue. Pending/failed proposal gates block ordinary
+tool calls. Rejection/expiration/stale inputs/build or sandbox failures remain
+visible errors. Pending approval is cancelled on caller timeout where possible;
+approved durable work may finish after a turn ends. Restart continuation uses
+existing queue/execution retry semantics. See the environment/tool documentation.

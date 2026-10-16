@@ -200,3 +200,11 @@ new admissions; no automatic revocation/deletion of running resources. Registry
 egress restrictions remain planned; runtime HTTP/HTTPS host allowlists via a
 managed per-replica proxy are implemented. Setup/build proxying with a separate approved host list, isolated BuildKit worker, aggregate capacity and real sandbox tests is implemented.
 Installation network administration is delivered in Integrations: revisioned shared settings, admin preview/confirmation, graph host usage and current-policy checks at new admission and idle resume. Existing running work requires explicit stop for revocation. Per-environment proxy process state and sampled denial diagnostics are delivered in environment/agent panels, with bounded reads and a retained preparation snapshot. Collected denials now persist for seven days/up to 1,000 per graph by default, with admin-configurable installation bounds in Integrations (1–90 days, 1–10,000 blocks, confirmation and revision checks), through background and lifecycle collection, with an independent history UI/API and explicit sampling limitations. Daemon provisioning and client-side registry authentication remain outside it. See `docs/environments.md`.
+
+Agent environment tools delivery note: explicit grants expose own-graph
+`environment.status` and `environment.propose`. The latter submits a complete
+validated definition from a Docker node using the graph environment, waits for
+administrator approval/build, and prepares the approved sandbox before commands
+continue with the same workspace. Existing repository definitions take priority.
+Timeout/restart semantics follow the turn and persisted proposal lifecycle; no
+in-memory call restoration or arbitrary graph targeting is implied.

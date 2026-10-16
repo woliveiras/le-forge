@@ -48,6 +48,8 @@ type Principal struct {
 	Workdir string
 	// Sandbox executes commands for this replica (process or container).
 	Sandbox Sandbox
+	// PrepareTool validates/prepares the execution environment after authorization.
+	PrepareTool func(context.Context, string) error
 	// Actor is recorded in the audit log.
 	Actor string
 }

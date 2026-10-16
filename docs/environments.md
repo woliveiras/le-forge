@@ -1015,3 +1015,21 @@ The `installation.history_retention.updated` event records the administrator,
 revision, days and event cap; as with other installation settings, event publication
 is best effort and is not a guaranteed audit trail. Real sandbox tests verify that
 saved retention changes apply to both runtime and preparation history.
+
+### Agent-requested environments (implemented)
+
+Agents granted `environment.status` and `environment.propose` can inspect their
+own graph and submit a complete environment definition when no accepted or
+repository definition exists. Docker nodes using the graph environment may
+request this while running. The existing Approvals screen presents the complete
+definition/rationale and requires an administrator decision. Approval revalidates
+repository inputs and installation policy, builds the environment and releases
+the waiting tool only when ready; the executor replaces the sandbox while keeping
+its workspace before further commands run. See [tool contracts](tool-permissions.md#environment-tools)
+for grants, cancellation, timeout/restart behavior and supported scope.
+
+Unit and integration tests cover scope/grants, invalid definitions, policy,
+discovery precedence, rejection/expiration, stale inputs, cancellation, build
+failure and sandbox replacement failures. `make test-environment-context` includes
+a real agent-tool gateway → persisted approval → build → continuation test, with
+an unprivileged command in the approved sandbox on the dedicated daemon.

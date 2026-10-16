@@ -154,6 +154,11 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 	a.Proposals = &environment.Proposals{Store: a.Store, Approvals: a.Approvals, Models: a.Models, Manager: a.Environments, Directory: ws.GraphDir}
 	a.Environments.SetProposalValidator(a.Proposals.ValidateAccepted)
+	for _, tool := range a.Proposals.AgentTools() {
+		if err := a.Tools.Register(tool); err != nil {
+			return nil, err
+		}
+	}
 	a.Engine, err = engine.New(engine.Options{
 		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
@@ -253,7 +258,7 @@ func (t toolGateway) NeedsApproval(p *tools.Principal, name string) bool {
 		return false
 	}
 	g, err := tools.Authorize(p, tool)
-	return err == nil && g.RequiresApproval
+	return err == nil && (g.RequiresApproval || name == "environment.propose")
 }
 
 func openBroker(ctx context.Context, cfg *config.Config) (queue.Broker, error) {

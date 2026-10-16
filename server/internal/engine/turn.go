@@ -430,6 +430,7 @@ func (e *Engine) neighbours(ctx context.Context, graphID, node string, me, size 
 // door out of an agent: tools go through the gateway with this replica's
 // grants, model calls through the LLM registry with this node's model.
 type turnEnv struct {
+	toolMu    sync.Mutex
 	r         *replica
 	gr        *graphRun
 	n         *domain.Node
@@ -447,10 +448,17 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 	r.mu.Lock()
 	wd := r.workdir
 	r.mu.Unlock()
-	return &turnEnv{r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
+	env := &turnEnv{r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
 		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
 		Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
 	}}
+	env.principal.PrepareTool = func(ctx context.Context, name string) error {
+		if name == "environment.status" || name == "environment.propose" {
+			return nil
+		}
+		return env.ensureEnvironment(ctx)
+	}
+	return env
 }
 
 // SpanContext is the turn's span; callback requests from external runtimes
@@ -458,6 +466,8 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 func (t *turnEnv) SpanContext() trace.SpanContext { return t.span }
 
 func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMessage) (*tools.Result, error) {
+	t.toolMu.Lock()
+	defer t.toolMu.Unlock()
 	t.mu.Lock()
 	t.calls++
 	calls := t.calls
@@ -473,7 +483,13 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 		t.r.setState(domain.ReplicaAwaitingApproval, "waiting for approval: "+name)
 		defer t.r.setState(domain.ReplicaRunning, "")
 	}
-	return t.gr.e.opt.Tools.Invoke(ctx, t.principal, name, args)
+	result, err := t.gr.e.opt.Tools.Invoke(ctx, t.principal, name, args)
+	if err == nil && name == "environment.propose" && result != nil && !result.IsError {
+		if err := t.ensureEnvironment(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return result, err
 }
 
 func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {

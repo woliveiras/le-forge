@@ -51,8 +51,9 @@ type replica struct {
 	pokeCh     chan struct{}
 	doneCh     chan struct{}
 
-	subs    []sub
-	sandbox tools.Sandbox
+	subs              []sub
+	sandbox           tools.Sandbox
+	sandboxDefinition string
 }
 
 type sub struct {
@@ -463,6 +464,11 @@ func (r *replica) setup(ctx context.Context) error {
 			return fmt.Errorf("sandbox: %w", err)
 		}
 		r.sandbox = sb
+		definition, err := environmentDefinition(gr.g)
+		if err != nil {
+			return fmt.Errorf("environment identity: %w", err)
+		}
+		r.sandboxDefinition = definition
 	}
 	rt := e.opt.Runtimes[n.Runtime.Kind]
 	if rt == nil {

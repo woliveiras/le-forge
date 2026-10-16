@@ -13,6 +13,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/hitl"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/storage"
+	"github.com/woliveiras/le-forge/server/internal/tools"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -79,6 +80,27 @@ func (p *Proposals) put(ctx context.Context, v *Proposal) error {
 
 // Request performs one bounded, tool-free model turn and creates a durable gate.
 func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.ModelRef, resume bool, actor string) (result *Proposal, err error) {
+	return p.request(ctx, g, ref, resume, actor, nil, nil)
+}
+
+// RequestDefinition accepts a complete agent definition, never an approval.
+func (p *Proposals) RequestDefinition(ctx context.Context, g *domain.Graph, a *Analysis, caller *tools.Principal) (*Proposal, error) {
+	if caller == nil || caller.GraphID != g.Metadata.ID || g.Node(caller.NodeID) == nil {
+		return nil, tools.ErrDenied
+	}
+	node := g.Node(caller.NodeID)
+	if node.Isolation.Mode != domain.IsolationDocker || node.Isolation.Image != "" {
+		return nil, fmt.Errorf("environment.propose requires a Docker node using the graph environment")
+	}
+	if a == nil {
+		return nil, fmt.Errorf("complete proposal is required")
+	}
+	if err := ValidateAnalysis(a); err != nil {
+		return nil, err
+	}
+	return p.request(ctx, g, domain.ModelRef{}, false, caller.Actor, a, caller)
+}
+func (p *Proposals) request(ctx context.Context, g *domain.Graph, ref domain.ModelRef, resume bool, actor string, supplied *Analysis, caller *tools.Principal) (result *Proposal, err error) {
 	ctx, span := observability.Start(ctx, "environment.propose", attribute.String("leforge.graph.id", g.Metadata.ID))
 	defer func() { observability.EndSpan(span, err) }()
 	policy, err := p.Manager.CurrentPolicy(ctx)
@@ -95,7 +117,7 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 	if e != nil {
 		return nil, e
 	}
-	if rec.State != domain.GraphStopped && rec.State != domain.GraphFailed {
+	if supplied == nil && rec.State != domain.GraphStopped && rec.State != domain.GraphFailed {
 		return nil, fmt.Errorf("stop the graph before analyzing its environment")
 	}
 	old, e := p.Get(ctx, g.Metadata.ID)
@@ -150,9 +172,12 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 	if e != nil {
 		return result, e
 	}
-	analysis, e := analyzeWithPolicy(ctx, p.Models, ref, evidence, policy)
-	if e != nil {
-		return result, e
+	analysis := supplied
+	if analysis == nil {
+		analysis, e = analyzeWithPolicy(ctx, p.Models, ref, evidence, policy)
+		if e != nil {
+			return result, e
+		}
 	}
 	if e = ctx.Err(); e != nil {
 		return result, e
@@ -202,7 +227,13 @@ func (p *Proposals) Request(ctx context.Context, g *domain.Graph, ref domain.Mod
 		return result, e
 	}
 	expires := time.Now().Add(24 * time.Hour)
-	_, e = p.Approvals.Create(ctx, &domain.Approval{ID: result.ID, GraphID: result.GraphID, Kind: domain.ApprovalEnvironment, Title: "Approve proposed development environment", Detail: detail, ExpiresAt: &expires})
+	approval := &domain.Approval{ID: result.ID, GraphID: result.GraphID, Kind: domain.ApprovalEnvironment, Title: "Approve proposed development environment", Detail: detail, ExpiresAt: &expires}
+	if caller != nil {
+		approval.NodeID = caller.NodeID
+		approval.Replica = caller.Replica
+		approval.ExecutionID = caller.ExecutionID
+	}
+	_, e = p.Approvals.Create(ctx, approval)
 	return result, e
 }
 

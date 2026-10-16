@@ -146,3 +146,49 @@ code execution. Repository internals change only through the git tools.
    `tools.Builtin`.
 3. Pick a capability name `<domain>.<verb>`; reuse an existing one only if the risk is identical.
 4. Document the arguments in the JSON Schema — it is what the model reads.
+
+## Environment tools
+
+`environment.status {}` reads only the calling graph's readiness and proposal
+ID/state/error. `environment.propose {environment, rationale, tools}` accepts a
+complete definition from an agent and waits for **administrator** approval and a
+successful build. Both require explicit grants (`environment.status` and
+`environment.propose`); neither accepts a graph ID, revision, approval decision,
+resource override or resume target. A grant with `requiresApproval: false` does
+not remove the mandatory environment approval. Ordinary gateway tool approval,
+when configured, is an additional gate rather than approval of the definition.
+
+The proposing node must use Docker isolation without an explicit image override.
+There must be no existing environment or repository definition: discovery still
+has priority. The proposal includes an image or inline Dockerfile, setup/cache/
+network choices, a bounded rationale and toolchain names. Installation policy,
+manifest fingerprints and build-context validation apply before approval/build.
+Origin and context metadata are derived by the server, never accepted from agents.
+
+The calling turn waits (within its configured turn timeout), with the replica
+shown as awaiting approval, until the durable proposal is ready. Approval records
+include node, replica and execution identity. The environment reconciler performs
+the approved build; the executor replaces the old sandbox before commands resume,
+keeping the workspace. Concurrent tool calls within a turn are serialized. Other
+ordinary tool calls check the graph's proposal gate and refuse pending/failed
+states; `environment.status` remains available. Already executing commands are
+not forcibly revoked by creating a proposal.
+
+Rejection, expiration, cancellation, stale inputs and build failures return tool
+errors, never a ready environment. A timeout while awaiting approval attempts to
+cancel that proposal; after approval, a durable build can finish independently of
+the original turn. Restart recovery follows existing execution/message retry
+semantics, not restoration of an in-memory model call. The agent can inspect
+status after a retry; approved build failures can be retried from the existing
+proposal UI. Sandbox replacement/capacity failures prevent commands from using the
+old environment and can be retried after resolving the failure. Neither tool
+approves a proposal or weakens installation policy.
+
+```yaml
+isolation:
+  mode: docker
+tools:
+  - environment.status
+  - environment.propose
+  - {name: shell.exec, commands: ["go test *"]}
+```

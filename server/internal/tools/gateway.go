@@ -114,6 +114,15 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 		}
 	}
 
+	if p.PrepareTool != nil {
+		if prepareErr := p.PrepareTool(ctx, name); prepareErr != nil {
+			outcome = "error"
+			g.audit(ctx, p, domain.EvToolCompleted, name, args, outcome, time.Since(start), prepareErr)
+			result := &Result{Content: prepareErr.Error(), IsError: true}
+			g.cap(result)
+			return result, nil
+		}
+	}
 	g.audit(ctx, p, domain.EvToolInvoked, name, args, "started", 0, nil)
 	inv := &Invocation{Principal: p, Args: args, Grant: grant, Workdir: p.Workdir, Sandbox: p.Sandbox, Approver: g.Approver}
 	if inv.Sandbox == nil {
