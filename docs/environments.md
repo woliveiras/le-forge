@@ -127,7 +127,10 @@ Manual inline Dockerfiles still have no repository context.
 
 The snapshot applies Docker ignore patterns, including `!` exceptions and `**`.
 A Dockerfile-specific `<Dockerfile>.dockerignore` takes precedence over the
-context's `.dockerignore`. `.git`, `.env`, and `.env.*` are always excluded,
+context's `.dockerignore`. The internal `.leforge` directory is excluded from
+COPY inputs so runtime scratch files do not invalidate approved builds; the
+source definition `.leforge/environment.yaml` is still independently fingerprinted
+and revalidated. `.git`, `.leforge`, `.env`, and `.env.*` are always excluded,
 even if an ignore negation would include them. Included symlinks and special
 files are rejected; ignored files are not read. Context paths cannot escape the
 authorized workspace. Limits are 10,000 scanned entries and 64 MiB of included
@@ -602,9 +605,12 @@ Docker agents also show the latest recorded admission transition per replica
 from the latest 200 graph capacity events, refreshed through SSE and five-second
 polling. This is explicitly recent history, not a durable queue position or a
 claim about current execution. It distinguishes waiting, granted, released,
-failed and cancelled admission; no queue position or ETA is inferred. Full
-browser E2E coverage remains pending; component/client integration and real
-daemon tests validate the presentation contract and persisted build progress.
+failed and cancelled admission; no queue position or ETA is inferred. Browser
+environment journeys are covered by `make test-e2e` (see
+[the web testing guide](../web/README.md#browser-environment-journeys)). These use
+the real controller with deterministic Docker/model fixtures. Component/client
+integration and dedicated-daemon tests cover additional presentation contracts,
+capacity transitions and real container behavior.
 
 CPU admission shares the same durable reservation as memory/count throughout
 sequential build, setup and cache copies. The default per-pipeline CPU request is

@@ -138,7 +138,7 @@ func snapshotContext(ctx context.Context, dir string, env *domain.EnvironmentSpe
 		}
 		// These installation protections cannot be undone by ignore negations.
 		base := entry.Name()
-		if base == ".git" || base == ".env" || strings.HasPrefix(base, ".env.") {
+		if base == ".git" || base == ".leforge" || base == ".env" || strings.HasPrefix(base, ".env.") {
 			if entry.IsDir() {
 				return fs.SkipDir
 			}

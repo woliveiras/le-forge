@@ -39,7 +39,7 @@ func snapshotEntries(t *testing.T, s *ContextSnapshot) map[string]string {
 
 func TestContextIgnoreAndStableHash(t *testing.T) {
 	dir := t.TempDir()
-	for name, body := range map[string]string{"src/app.txt": "hello", "build/drop.txt": "omit", "build/keep.txt": "keep", ".git/config": "synthetic", ".env": "synthetic", ".env.local": "synthetic", ".dockerignore": "build/**\n!build/keep.txt\n!.env\n!.git/config\n"} {
+	for name, body := range map[string]string{"src/app.txt": "hello", "build/drop.txt": "omit", "build/keep.txt": "keep", ".git/config": "synthetic", ".leforge/worker/r0/log": "internal", ".env": "synthetic", ".env.local": "synthetic", ".dockerignore": "build/**\n!build/keep.txt\n!.env\n!.git/config\n"} {
 		writeDiscoveryFile(t, dir, name, body)
 	}
 	env := contextEnv()
@@ -52,7 +52,7 @@ func TestContextIgnoreAndStableHash(t *testing.T) {
 	if entries["src/app.txt"] != "hello" || entries["build/keep.txt"] != "keep" {
 		t.Fatalf("missing included files: %+v", entries)
 	}
-	for _, name := range []string{"build/drop.txt", ".git/config", ".env", ".env.local"} {
+	for _, name := range []string{"build/drop.txt", ".leforge/worker/r0/log", ".git/config", ".env", ".env.local"} {
 		if _, ok := entries[name]; ok {
 			t.Fatalf("included excluded %s", name)
 		}
@@ -267,5 +267,39 @@ func TestResolveContextFromLeForgeAndCompose(t *testing.T) {
 				t.Fatalf("unrelated file invalidated context: %v", err)
 			}
 		})
+	}
+}
+
+func TestRuntimeScratchDoesNotInvalidateAcceptedContext(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	writeDiscoveryFile(t, dir, "Dockerfile", "FROM alpine:3.22\nCOPY . /app\n")
+	writeDiscoveryFile(t, dir, ".dockerignore", "!.leforge/**\n")
+	discovery, err := Discover(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := discovery.Candidates[0]
+	env, err := Resolve(ctx, dir, Selection{Source: discovery.Source, Path: candidate.Path, SHA256: candidate.SHA256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeDiscoveryFile(t, dir, ".leforge/worker/r0/output.txt", "internal runtime data")
+	if err := ValidateAccepted(ctx, dir, env); err != nil {
+		t.Fatalf("runtime scratch invalidated approval: %v", err)
+	}
+	snapshot, err := SnapshotContext(ctx, dir, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Close()
+	for name := range snapshotEntries(t, snapshot) {
+		if strings.HasPrefix(name, ".leforge/") {
+			t.Fatalf("runtime data exposed: %s", name)
+		}
+	}
+	writeDiscoveryFile(t, dir, "Dockerfile", "FROM alpine:3.22\nRUN echo changed\n")
+	if err := ValidateAccepted(ctx, dir, env); err == nil {
+		t.Fatal("changed definition accepted")
 	}
 }

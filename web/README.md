@@ -98,3 +98,34 @@ an "ingress" pill, and topics with no subscribers get a "no subscribers" pill.
 
 Deep links: `#/g/<graph>/canvas?sel=node:<id>` or `?sel=channel:<id>`, and
 `#/g/<graph>/messages?c=<correlation id>`.
+
+## Browser environment journeys
+
+With local Go, Git and Node installed, run from the repository root:
+
+```bash
+cd web
+npm ci
+npx playwright install chromium
+cd ..
+make test-e2e
+```
+
+Playwright builds the production console and a test-only Go controller
+(`server/cmd/forge-e2e`, build tag `e2e`), bound to `127.0.0.1:18089`.
+The port must be free: the suite never reuses a running installation. Each run
+creates temporary repositories, SQLite storage, credentials and workspaces,
+removed when the controller shuts down. Tests use fixed public fixture tokens.
+No local configuration or real provider credentials are loaded.
+
+The browser uses the real API, persistence, approval controller, environment
+manager and execution engine. Docker commands and the analysis provider are
+controlled fixtures; execution uses the echo runtime. These tests verify browser
+orchestration, not container isolation or external model behavior. Run
+`make test-environment-context` separately for the dedicated-daemon coverage.
+
+The suite covers discovery/review/acceptance, approval before build and automatic
+resume, compatible reuse in another task, rejection, analysis failure and build
+failure. Failed tests retain screenshots and traces in `web/test-results/`;
+`cd web && npx playwright show-report` opens the HTML report. There are no automatic
+retries, intercepted browser API responses or fixed sleeps.

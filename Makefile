@@ -80,3 +80,8 @@ k8s-render: ## Render platform manifests (kustomize) and agent runtimes for GRAP
 
 clean: ## Remove build outputs
 	rm -rf server/bin web/dist
+
+.PHONY: test-e2e
+test-e2e: ## Chromium browser journey against a disposable backend (Go, Node, Git, Playwright Chromium required)
+	cd server && go test -tags e2e ./cmd/forge-e2e
+	cd web && npm run test:e2e
