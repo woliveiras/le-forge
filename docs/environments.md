@@ -61,7 +61,9 @@ When no definition exists, **Analyze repository** uses the configured default
 model to propose an environment. It does not install dependencies or execute
 repository commands. See the approval workflow below.
 
-Additional Compose/devcontainer features and agent-callable environment tools remain planned.
+Additional Compose/devcontainer features remain outside this release. Agent-callable
+`environment.status` and `environment.propose` are implemented for an initially
+unconfigured environment.
 Global CPU accounting is enforced across execution, build and setup. Explicit shared-resource cleanup is available
 through the admin API described below.
 Shared build/execution concurrency and memory budgets are available in

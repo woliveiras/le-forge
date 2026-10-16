@@ -194,30 +194,32 @@ blocks starts until ready; a graph starts automatically only when the requester
 explicitly selected that option. Rejection, expiration and cancellation do not
 build. Approved work survives restart, and failed builds can be retried. This
 workflow is available through the console and environment proposal API; invoking
-it through `environment.propose`/`environment.status` agent tools remains planned.
+it through `environment.propose`/`environment.status` agent tools is implemented
+for the own-graph, initially unconfigured environment (see tool contracts).
 See [proposal limits and behavior](environments.md#agent-proposal-and-developer-approval).
 
-**Planned — not implemented yet** (tracked in
-[TASKS.md, section 3](../wip/TASKS.md#3-provide-containerized-project-environments)):
-Additional format support, agent-callable environment tools,
-broader reuse lifecycle and global resource scheduling extend the delivered subset. The sections below retain the full target contracts;
-only the capabilities explicitly described as delivered above are available.
+**Delivered scope and limits:** discovery, initial proposals, prepared-image/cache-seed
+reuse, global CPU/memory/count admission, idle suspension and explicit shared
+cleanup are implemented. Full Compose/devcontainer compatibility, replacement
+proposals with diffs, registry-wide egress controls and exact queue ETAs are
+outside this release. See [sandbox acceptance evidence](sandbox-acceptance.md).
 
-#### Planned discovery and acceptance
+<a id="planned-discovery-and-acceptance"></a>
+#### Discovery and acceptance
 
 Repositories do not need LeForge-specific files. Preserve an explicit
 operator-configured environment; otherwise discover definitions in the order
 below. Acceptance saves the effective definition into `spec.environment`,
 creating a graph version attributed to the accepting operator. Keep the source,
-repository revision and definition hash as provenance so changes can be detected
+bounded input fingerprints and definition hashes as provenance (not a full Git revision) so changes can be detected
 before acceptance and build.
 
-| Priority | Source | Planned contract |
+| Priority | Source | Delivered contract |
 |---|---|---|
 | 1 | `.leforge/environment.yaml` | Highest repository priority; same environment fields, with validated repository-relative Dockerfile paths and build contexts confined to the authorized workspace. |
 | 2 | `.devcontainer/devcontainer.json` | Support the image/post-create command subset initially; report unsupported fields explicitly. |
 | 3 | Dockerfiles | Discover candidates and build targets within bounded repository paths; ask the operator to choose when ambiguous. Validate build context containment and respect ignore rules. |
-| 4 | Docker Compose | Discover `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` and explicitly selected variants. Select a development service and review required companion services; do not start the entire stack automatically. Supported fields and override handling must be specified before implementation. |
+| 4 | Docker Compose | Discover `compose.yaml`, `compose.yml`, `docker-compose.yaml`, `docker-compose.yml` and explicitly selected variants. Select a development service and review required companion services; do not start the entire stack automatically. Only the documented supported fields and standalone variants are accepted. |
 | 5 | Agent analysis | Only when no definition file is found: analyze manifests, lockfiles and toolchain declarations such as `mise.toml`, `go.mod` and `package.json`, then propose an environment for developer approval. |
 
 Show discovered definitions for operator acceptance before building. An invalid
@@ -229,11 +231,11 @@ interpolation and build contexts require the same validation and trust boundary.
 
 The analysis agent must work before a project environment exists, using bounded,
 read-only access to the authorized repository without installing dependencies
-or executing repository commands. The planned tools are:
+or executing repository commands. The delivered tools are:
 
 - `environment.propose {image or dockerfile, setup, network, caches, rationale}`:
   propose the tools/image, preparation steps and resource needs; open an approval
-  showing the complete definition, rationale and diff against the current one.
+  showing the complete definition and rationale. Replacement of an existing environment and diff review remain outside this release.
 - `environment.status`: report environment/build state and why work is waiting.
 
 The developer approval gate blocks both building and task execution. Rejection
@@ -241,8 +243,8 @@ or cancellation must not start either. Approval saves the accepted definition
 as a new graph version with the approver as actor; revalidate its revision and
 installation policy before building. Execution resumes only after the environment
 is ready. Stale approvals, analysis failures, timeouts and build failures remain
-visible with an explicit recovery path. Exact new endpoints and state schemas
-remain to be specified; the delivered build states above are unchanged today.
+visible with an explicit recovery path. The API and tool contracts are documented
+in [environments](environments.md) and [tool permissions](tool-permissions.md).
 
 #### Delivered installation policy
 
@@ -375,7 +377,7 @@ without registered ownership remain untouched. See
 Global CPU accounting is implemented for execution, builds, setup and cache copies, with finite defaults, atomic durable reservations, kernel caps, cancellation and readmission on resume. Legacy memory-only reservations block new admission until normal stop/reset releases them.
 The target lifecycle below includes those extensions.
 
-#### Planned reuse and resource lifecycle
+#### Reuse and resource lifecycle
 
 Reuse prepared images and compatible dependency caches across tasks for the
 same authorized repository and effective environment. The reuse identity must
@@ -399,16 +401,14 @@ resumable task state and workspace data.
 
 Track references and ownership for shared images/caches. Reset, graph deletion
 and cleanup must not remove resources another task still needs; reclaim unused
-resources through an explicit lifecycle. The existing per-graph reset contract
-must be extended and tested before enabling shared resources.
+resources through an explicit lifecycle. Reset retains shared generations; explicit cleanup rechecks references before removal.
 
 The console should explain source selection, approval waits, reuse versus
 rebuild (and why), capacity waits and reset effects. Extend existing audit and
 telemetry mechanisms for these outcomes without sensitive payloads or unbounded
 metric labels. Unit, integration and browser tests must cover discovery order,
 approval gating, reuse/invalidation, concurrent access, workspace isolation,
-resource admission and safe reset; the implementation checklist records these
-as pending work.
+resource admission and safe reset; see the acceptance evidence for coverage and limits.
 
 ## 4. User Tasks and Child Executions
 
@@ -621,7 +621,8 @@ build-reason categories, active build phases and capacity waits. The agent panel
 respects inherited isolation and image overrides, shows environment readiness
 and errors, and presents recent per-replica admission history. Structured status
 is persisted independently of build logs. Exact changed-file diffs, durable
-execution queue positions/ETAs and browser E2E remain planned.
+execution queue positions/ETAs remain outside this release. Browser E2E includes
+both deterministic Docker fixtures and a real dedicated-daemon journey.
 
 ### Reviewed Compose dependency groups
 
