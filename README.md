@@ -108,12 +108,23 @@ host, `localhost` in your browser refers to your own computer; access needs an
 explicitly configured tunnel or protected proxy. A Docker sandbox's listening
 port is not automatically exposed to your browser either.
 
-LeForge does not yet provide managed application preview sessions. Its
-`shell.exec` tool runs commands that terminate, with a timeout, and is not a
-process manager for persistent development servers or watchers. Human approval
-and `human.ask` are available, but keeping an application running and exposing
-an authenticated preview while review is pending requires additional lifecycle
-and routing support.
+For Docker nodes, `review.request` freezes the candidate, starts an optional
+HTTP application and suspends the agent until a human decides in **Approvals →
+Application reviews**. The human can open a React application in the browser or
+validate an API with cURL/Postman, then approve, request changes or reject it.
+The agent cannot publish completion while that gate is pending.
+
+The preview gateway **ships with LeForge and runs locally by default**. It uses
+protected per-review URLs such as `http://<review-id>.localhost:8082`, with no
+cloud account, public DNS or external tunnel service. Docker application ports
+remain private. Remote installations can use the same gateway through an
+administrator-configured private tunnel or HTTPS endpoint.
+
+Review can also record an external CI environment, local branch validation or
+explicit acceptance without executing the application, according to the node's
+review policy. Approval does not merge a PR or deploy. Native application
+supervision and automatic GitHub/Bitbucket/GitLab CI adapters remain future work.
+See [setup, grants, HTTP clients and recovery](docs/sandbox-runtime.md#human-review-and-application-previews).
 
 ## macOS setup with Colima
 

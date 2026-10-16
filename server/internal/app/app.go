@@ -33,6 +33,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
 	"github.com/woliveiras/le-forge/server/internal/queue/brokers"
+	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/runtime"
 	"github.com/woliveiras/le-forge/server/internal/runtime/echo"
 	"github.com/woliveiras/le-forge/server/internal/runtime/external"
@@ -59,9 +60,11 @@ type App struct {
 	Gateway   *tools.Gateway
 	Engine    *engine.Engine
 	// Environments builds project environments on the sandbox daemon.
-	Environments *environment.Manager
-	Proposals    *environment.Proposals
-	API          *api.Server
+	Environments   *environment.Manager
+	Proposals      *environment.Proposals
+	API            *api.Server
+	Reviews        *review.Manager
+	PreviewGateway *review.Gateway
 
 	shutdownObs func(context.Context) error
 }
@@ -154,12 +157,46 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 	a.Proposals = &environment.Proposals{Store: a.Store, Approvals: a.Approvals, Models: a.Models, Manager: a.Environments, Directory: ws.GraphDir}
 	a.Environments.SetProposalValidator(a.Proposals.ValidateAccepted)
+	if cfg.Preview.Addr != "" {
+		factory := sandboxFactory(cfg, a.Environments, a.Store, a.Bus)
+		driver := &review.DockerDriver{Bin: cfg.Isolation.Docker.Bin, Host: cfg.Isolation.Docker.Host, RelayBinary: cfg.Preview.RelayBinary, Capacity: capacityManager(cfg, a.Store)}
+		driver.StartSandbox = func(ctx context.Context, r *review.Record, work, control string) (tools.Sandbox, error) {
+			if r.Graph.Spec.Environment != nil && engine.UsesEnvironment(r.Graph, r.Graph.Node(r.NodeID)) {
+				env, e := a.Environments.SandboxFor(ctx, r.Graph)
+				if e != nil {
+					return nil, e
+				}
+				var caches []string
+				for _, v := range env.Volumes {
+					parts := strings.SplitN(v, ":", 2)
+					if len(parts) != 2 {
+						return nil, fmt.Errorf("invalid cache mount")
+					}
+					caches = append(caches, parts[1])
+				}
+				body, e := json.Marshal(map[string]any{"command": r.Request.Command, "cwd": filepath.ToSlash(filepath.Join("/workspace", r.Request.Cwd)), "caches": caches})
+				if e != nil {
+					return nil, e
+				}
+				if e = review.WriteControl(control, body); e != nil {
+					return nil, e
+				}
+			}
+			return factory(ctx, engine.SandboxSpec{Graph: r.Graph, Node: r.Graph.Node(r.NodeID), Replica: r.Replica, Workdir: work, HostWorkdir: ws.HostPath(work), Name: r.Name(), Command: []string{"/leforge-preview/forge-preview", "serve", "/leforge-preview/config.json"}, ExtraVolumes: []string{ws.HostPath(control) + ":/leforge-preview:ro"}, ReadOnlyCaches: true})
+		}
+		a.Reviews = review.New(review.Options{Store: a.Store, Bus: a.Bus, Root: filepath.Join(ws.Root, ".reviews"), Instance: cfg.Instance, Driver: driver})
+		a.PreviewGateway = &review.Gateway{Manager: a.Reviews, BaseURL: cfg.Preview.BaseURL, ConsoleOrigins: cfg.Preview.ConsoleOrigins}
+		if err := a.Tools.Register(a.Reviews.Tool()); err != nil {
+			return nil, err
+		}
+	}
 	for _, tool := range a.Proposals.AgentTools() {
 		if err := a.Tools.Register(tool); err != nil {
 			return nil, err
 		}
 	}
 	a.Engine, err = engine.New(engine.Options{
+		Reviews:  a.Reviews,
 		Instance: cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
 		Sandboxes: sandboxFactory(cfg, a.Environments, a.Store, a.Bus), Environments: a.Environments, EnvironmentProposals: a.Proposals,
@@ -186,6 +223,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		log.Warn("API authentication is DISABLED; never expose this instance beyond localhost")
 	}
 	a.API = api.New(api.Deps{
+		Reviews: a.Reviews, PreviewGateway: a.PreviewGateway,
 		Config: cfg, Engine: a.Engine, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Providers: a.Providers, Tools: a.Tools, Workspaces: ws, Auth: auth, Log: log,
 		Environments: a.Environments, Proposals: a.Proposals,
@@ -366,6 +404,20 @@ func sandboxFactory(cfg *config.Config, envs *environment.Manager, store storage
 				Labels:  map[string]string{"leforge.graph": s.Graph.Metadata.ID, "leforge.node": s.Node.ID},
 				Volumes: volumes,
 			}
+			if s.Name != "" {
+				sandboxConfig.Name = s.Name
+			}
+			sandboxConfig.Command = s.Command
+			if s.ReadOnlyCaches {
+				for i, v := range sandboxConfig.Volumes {
+					parts := strings.SplitN(v, ":", 2)
+					if len(parts) != 2 {
+						return nil, fmt.Errorf("invalid managed cache mount")
+					}
+					sandboxConfig.Volumes[i] = parts[0] + ":/leforge-preview-cache" + parts[1] + ":ro"
+				}
+			}
+			sandboxConfig.Volumes = append(sandboxConfig.Volumes, s.ExtraVolumes...)
 			if net == "egress" {
 				if len(allowedHosts) == 0 {
 					return nil, fmt.Errorf("egress requires an accepted environment with allowedHosts")
@@ -488,13 +540,33 @@ func (a *App) Run(ctx context.Context) error {
 	defer func() { stopHistory(); <-historyDone }()
 	go a.refreshProviders(ctx)
 	go a.Proposals.Run(ctx)
+	reviewCtx, stopReviews := context.WithCancel(ctx)
+	reviewDone := make(chan struct{})
+	go func() {
+		defer close(reviewDone)
+		if a.Reviews != nil {
+			a.Reviews.Run(reviewCtx)
+		}
+	}()
+	defer func() { stopReviews(); <-reviewDone }()
 	srv := &http.Server{
 		Addr:              a.Config.Server.Addr,
 		Handler:           a.API.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-	errc := make(chan error, 2)
+	errc := make(chan error, 3)
+	var previewServer *http.Server
+	if a.PreviewGateway != nil {
+		previewServer = &http.Server{Addr: a.Config.Preview.Addr, Handler: a.PreviewGateway, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+		go func() {
+			if a.Config.Preview.TLSCert != "" {
+				errc <- previewServer.ListenAndServeTLS(a.Config.Preview.TLSCert, a.Config.Preview.TLSKey)
+			} else {
+				errc <- previewServer.ListenAndServe()
+			}
+		}()
+	}
 	var internal *http.Server
 	if h := a.API.InternalHandler(); h != nil {
 		internal = &http.Server{Addr: a.Config.Server.InternalAddr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
@@ -522,11 +594,16 @@ func (a *App) Run(ctx context.Context) error {
 	// finishing its turn still needs the callback API.
 	a.Engine.Shutdown(sctx)
 	_ = srv.Shutdown(sctx)
+	if previewServer != nil {
+		_ = previewServer.Shutdown(sctx)
+	}
 	if internal != nil {
 		_ = internal.Shutdown(sctx)
 	}
 	stopHistory()
 	<-historyDone
+	stopReviews()
+	<-reviewDone
 	return a.Close(sctx)
 }
 

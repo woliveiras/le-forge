@@ -255,6 +255,36 @@ func (r *replica) run() {
 		}
 
 		r.suspendIdle(ctx)
+		if e.opt.Reviews != nil {
+			pending, err := e.opt.Reviews.Pending(ctx, gr.g.Metadata.ID, r.nodeID, r.index)
+			if !pending && err == nil {
+				terminal, checkErr := e.opt.Reviews.Terminal(ctx, gr.g.Metadata.ID, r.nodeID, r.index)
+				if checkErr != nil {
+					err = checkErr
+				} else if terminal != "" {
+					failedFinal = "human review " + terminal
+					r.fail(ctx, failedFinal)
+					return
+				}
+			}
+			if pending || err != nil {
+				waitStart := time.Now()
+				if pending {
+					r.suspendForReview(ctx)
+				}
+				detail := "waiting for durable human review"
+				if err != nil {
+					detail = "cannot check human review: " + err.Error()
+				}
+				r.setState(domain.ReplicaAwaitingApproval, detail)
+				r.wait(ctx, time.Second)
+				r.mu.Lock()
+				r.runStart = r.runStart.Add(time.Since(waitStart))
+				r.idleSince = time.Now()
+				r.mu.Unlock()
+				continue
+			}
+		}
 
 		// --- should another turn start? -----------------------------------
 		if done, why := r.stopPolicyMet(n); done {

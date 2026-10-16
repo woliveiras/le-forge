@@ -17,6 +17,7 @@ build: ## Build forged and forge binaries into server/bin
 	$(GO) build -o bin/forged ./cmd/forged
 	$(GO) build -o bin/forge ./cmd/forge
 	$(GO) build -o bin/forge-egress ./cmd/forge-egress
+	GOOS=linux CGO_ENABLED=0 $(GO) build -o bin/forge-preview-linux ./cmd/forge-preview
 
 egress-image: ## Build the managed proxy image inside the dedicated sandbox daemon
 	./scripts/build-egress-image.sh
@@ -98,3 +99,7 @@ test-e2e-providers: ## Real LangGraph + browser provider journey, no Docker (set
 	PYTHONPATH=sdk/python "$(LEFORGE_E2E_PYTHON)" -m unittest discover -s scripts/provider-e2e -v
 	cd server && go test -tags e2e ./cmd/forge-provider-e2e
 	cd web && npm run test:e2e:providers
+
+.PHONY: test-preview
+test-preview: ## Real sandbox preview gateway, HTTP client and lifecycle checks
+	./scripts/test-preview.sh

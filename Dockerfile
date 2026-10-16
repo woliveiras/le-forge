@@ -19,7 +19,8 @@ RUN go mod download
 COPY server/ ./
 ARG VERSION=dev
 RUN go build -ldflags "-s -w -X github.com/woliveiras/le-forge/server/internal/api.Version=${VERSION}" -o /out/forged ./cmd/forged \
- && go build -ldflags "-s -w" -o /out/forge ./cmd/forge
+ && go build -ldflags "-s -w" -o /out/forge ./cmd/forge \
+ && go build -ldflags "-s -w" -o /out/forge-preview-linux ./cmd/forge-preview
 
 FROM alpine:3.22
 # git: workspaces and worktrees; python3: QA agents run test suites through
@@ -31,10 +32,12 @@ RUN apk add --no-cache ca-certificates git python3 tini docker-cli docker-cli-bu
  && mkdir -p /var/lib/leforge/data /var/lib/leforge/workspaces /app \
  && chown -R leforge:leforge /var/lib/leforge
 COPY --from=build /out/forged /out/forge /usr/local/bin/
+COPY --from=build /out/forge-preview-linux /usr/local/lib/leforge/forge-preview-linux
 COPY --from=web /web/dist /app/web
 COPY examples /app/examples
 COPY deploy/config/forge.yaml /etc/leforge/forge.yaml
 ENV LEFORGE_WEB_DIR=/app/web \
+    LEFORGE_PREVIEW_RELAY=/usr/local/lib/leforge/forge-preview-linux \
     LEFORGE_STORAGE_DIR=/var/lib/leforge/data \
     LEFORGE_WORKSPACES=/var/lib/leforge/workspaces \
     LEFORGE_QUEUE_DIR=/var/lib/leforge/data/queues \

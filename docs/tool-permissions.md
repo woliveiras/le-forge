@@ -192,3 +192,20 @@ tools:
   - environment.propose
   - {name: shell.exec, commands: ["go test *"]}
 ```
+
+## `review.request`: durable human gate
+
+This explicit capability is available when the preview subsystem is enabled.
+It requires a Docker node and freezes only the invocation's own workspace.
+Optional application `command` additionally passes the node's `shell.exec`
+command allowlist and any `requiresApproval` check. The operator-owned
+`config.reviewPolicy` selects reviewers/required method; tool arguments cannot
+change policy. `title` and `instructions` identify the requested validation;
+`command`, `cwd`, `port`, `readyPath`, `lifetimeSeconds`, `checks` and `externalUrl`
+are optional. See the [complete example and limits](sandbox-runtime.md#requesting-a-review).
+
+A successful result has `yield: true`. The engine ends the turn, suppresses its
+outputs and releases its input lease; subsequent runtime/model/tool calls cannot
+bypass the gate. Approve/request-changes delivers a durable review result in a
+later turn. Completion is refused for rejected, unapproved or changed candidates.
+Existing per-tool approval does not itself approve the final candidate.

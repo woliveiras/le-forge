@@ -229,6 +229,16 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	rt := e.opt.Runtimes[n.Runtime.Kind]
 	res, err := rt.Turn(turnCtx, in, env)
 	killed := errors.Is(turnCtx.Err(), context.Canceled)
+	env.mu.Lock()
+	yielded := env.yielded
+	env.mu.Unlock()
+	if yielded {
+		// A persisted review owns the continuation. Discard every output from
+		// this turn, including callbacks made before requesting review.
+		env.drainEmits()
+		res = &runtime.TurnResult{Summary: "Awaiting durable human review"}
+		err = nil
+	}
 	if err == nil && res == nil {
 		err = errors.New("runtime returned no result")
 	}
@@ -236,9 +246,13 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		err = errors.New("agent asked to retry later")
 	}
 
+	if err == nil && !yielded && e.opt.Reviews != nil {
+		err = e.opt.Reviews.AssertApproved(turnCtx, gid, n.ID, r.index)
+	}
+
 	// Publish before acknowledging any input. A partial publication cannot be
 	// rolled back: retrying the turn may emit duplicates with new message IDs.
-	if err == nil {
+	if err == nil && !yielded {
 		emits := append(env.drainEmits(), res.Emits...)
 		var parentMsg *domain.Message
 		if len(inputs) > 0 {
@@ -324,6 +338,13 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	x.ToolCalls = env.toolCalls() + res.ToolCalls
 	finish(domain.ExecSucceeded, "")
 	span.SetAttributes(attribute.Int("leforge.outputs", len(x.OutputIDs)))
+	if yielded {
+		r.mu.Lock()
+		r.runIter-- // the suspended operation still needs its continuation turn
+		r.pendStop = false
+		r.mu.Unlock()
+		return turnOutcome{}
+	}
 
 	// Auto-stop handshake: declaration, then confirmation on the next turn.
 	if n.Loop.Stop.Policy == domain.StopAuto {
@@ -472,10 +493,11 @@ type turnEnv struct {
 	principal *tools.Principal
 	span      trace.SpanContext
 
-	mu    sync.Mutex
-	emits []runtime.Emit
-	use   domain.Usage
-	calls int
+	mu      sync.Mutex
+	yielded bool
+	emits   []runtime.Emit
+	use     domain.Usage
+	calls   int
 }
 
 func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *turnEnv {
@@ -503,6 +525,10 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 	t.toolMu.Lock()
 	defer t.toolMu.Unlock()
 	t.mu.Lock()
+	if t.yielded {
+		t.mu.Unlock()
+		return nil, fmt.Errorf("turn yielded to human review")
+	}
 	t.calls++
 	calls := t.calls
 	t.mu.Unlock()
@@ -518,6 +544,11 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 		defer t.r.setState(domain.ReplicaRunning, "")
 	}
 	result, err := t.gr.e.opt.Tools.Invoke(ctx, t.principal, name, args)
+	if err == nil && result != nil && result.Yield {
+		t.mu.Lock()
+		t.yielded = true
+		t.mu.Unlock()
+	}
 	if err == nil && name == "environment.propose" && result != nil && !result.IsError {
 		if err := t.ensureEnvironment(ctx); err != nil {
 			return nil, err
@@ -527,6 +558,12 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 }
 
 func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {
+	t.mu.Lock()
+	yielded := t.yielded
+	t.mu.Unlock()
+	if yielded {
+		return nil, fmt.Errorf("turn yielded to human review")
+	}
 	e := t.gr.e
 	if e.opt.Models == nil {
 		return nil, errors.New("no model providers configured")
@@ -567,6 +604,12 @@ func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResp
 }
 
 func (t *turnEnv) Emit(ctx context.Context, em runtime.Emit) error {
+	t.mu.Lock()
+	yielded := t.yielded
+	t.mu.Unlock()
+	if yielded {
+		return fmt.Errorf("turn yielded to human review")
+	}
 	if strings.TrimSpace(em.Type) == "" {
 		return errors.New("emit: type is required")
 	}
@@ -578,6 +621,9 @@ func (t *turnEnv) Emit(ctx context.Context, em runtime.Emit) error {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.yielded {
+		return fmt.Errorf("turn yielded to human review")
+	}
 	if len(t.emits) >= 1000 {
 		return errors.New("emit: at most 1000 messages per turn")
 	}

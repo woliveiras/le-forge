@@ -514,3 +514,20 @@ func scanDocs[T any](rows *sql.Rows) ([]*T, error) {
 	}
 	return out, rows.Err()
 }
+
+// PutOperatorMessageOnce is an idempotent outbox delivery; it never resurrects
+// a message consumed before a controller crash.
+func (s *Store) PutOperatorMessageOnce(ctx context.Context, m *domain.OperatorMessage) error {
+	if m == nil || m.ID == "" {
+		return fmt.Errorf("sqlstore: operator message id is required")
+	}
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = time.Now().UTC()
+	}
+	doc, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, s.q(`INSERT INTO operator_messages (id, graph_id, node_id, replica, created_at, consumed_at, doc) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`), m.ID, m.GraphID, m.NodeID, m.Replica, s.ts(m.CreatedAt), s.tsPtr(m.Consumed), string(doc))
+	return err
+}

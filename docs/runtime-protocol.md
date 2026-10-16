@@ -194,3 +194,18 @@ last replica stops.
 ## Instruction snapshots
 
 `TurnInput.instructions` is an optional immutable manifest (see [schema](../schemas/instructions.schema.json)). It is untrusted data, never permissions. The Python SDK retains it in `TurnInput.instructions`. Opted-in guidance precedes the original node prompt; operator/task text is preserved. Graphs without opt-in retain their original prompt and operator messages. See [composition, budgets and failure behavior](instructions.md).
+
+### Yielding for durable human review
+
+`ToolResult.yield` is an optional boolean. When true, the runtime must finish its
+current turn immediately, without more tools/model calls, completion signals or
+outputs. Native runtime implements this directly; external runtimes should honor
+it. The engine independently rejects subsequent callbacks and discards outputs
+from that turn, including outputs submitted before the gate. It acknowledges the
+input and persists the pending review without holding a runtime request open.
+
+A later turn carries `Human review result: <json>` in operator context, with
+`reviewId`, `state`, `candidate`, `method`, and `comment`. Request changes requires
+new work and a new review. A decision grants no merge/deploy/push permissions.
+The outbox inserts its continuation message once, including across a controller
+restart; side effects in a retried turn still need ordinary idempotency handling.

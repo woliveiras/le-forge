@@ -121,3 +121,18 @@ The loaded event also includes `omitted`. The turn span records
 `leforge_instruction_loads_total{outcome="loaded|failed"}` and
 `leforge_instruction_load_duration_seconds` cover resolution plus persistence;
 labels contain no skill IDs, paths or content.
+
+## Application review events
+
+`review.requested`, `review.session`, `review.session_failed`,
+`review.session_stopped`, `review.restarted`, `review.expired`, `review.cancelled`,
+`review.decided`, `review.access_revoked`, and `review.continuation_queued` carry
+`{id, state, session, generation}`, with graph/node/replica/execution correlation.
+The durable record carries the decision actor, timestamp, method and feedback.
+Event payloads do not contain preview credentials or HTTP request bodies.
+
+Metrics: `leforge_review_transitions_total{action}`,
+`leforge_preview_access_total{outcome}`, and
+`leforge_preview_request_duration_seconds`; labels use bounded outcomes/actions,
+not review IDs. Reconciliation creates a `review.reconcile` trace span. Cleanup
+failures are logged with the review ID and retried while accounting is retained.

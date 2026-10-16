@@ -142,6 +142,57 @@ paths:
             application/json:
               schema: {$ref: '../schemas/instructions.schema.json#/$defs/Snapshot'}
         '404': {description: Unknown execution or no snapshot (legacy or failed before context preparation)}
+  /api/v1/reviews:
+    get:
+      tags: [approvals]
+      operationId: listReviews
+      summary: List durable application reviews visible to the current reviewer
+      x-leforge-role: operator
+      responses:
+        "200":
+          description: Safe review views without credentials or internal paths
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/HumanReview"}}
+  /api/v1/reviews/{review}/{action}:
+    post:
+      tags: [approvals]
+      operationId: reviewAction
+      summary: Decide or operate an authorized application review
+      x-leforge-role: operator
+      parameters:
+        - {name: review, in: path, required: true, schema: {type: string}}
+        - name: action
+          in: path
+          required: true
+          schema: {type: string, enum: [decide, credential, restart, renew, revoke-access, logs]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                state: {type: string, enum: [approved, changes_requested, rejected]}
+                method: {type: string, enum: [managed, external, local, without_execution]}
+                comment: {type: string, maxLength: 16000}
+                revision: {type: integer, description: Required for decide; must equal the current generation}
+                browser: {type: boolean, description: Credential action only; one-use exchange when true}
+      responses:
+        "200":
+          description: Review view, private credential with URL, or bounded logs according to action
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/HumanReview"}
+                  - {type: object, required: [token, url], properties: {token: {type: string}, url: {type: string}}}
+                  - {type: object, required: [logs], properties: {logs: {type: string}}}
+        "400": {description: Invalid request or action}
+        "403": {description: Reviewer or required method denied}
+        "404": {description: Review not found}
+        "409": {description: Stale candidate or generation, repeated decision, or unavailable session}
   /healthz:
     get:
       tags: [system]
@@ -1689,9 +1740,33 @@ components:
         name: {type: string}
         description: {type: string}
         parameters: {type: object}
+    HumanReview:
+      type: object
+      required: [id, graphId, nodeId, candidate, state, session, generation, revision, request]
+      properties:
+        id: {type: string}
+        graphId: {type: string}
+        nodeId: {type: string}
+        replica: {type: integer}
+        candidate: {type: string, description: SHA-256 workspace content identity}
+        state: {type: string, enum: [pending, approved, changes_requested, rejected, cancelled, expired, superseded]}
+        session: {type: string, enum: [none, queued, starting, ready, failed, expired, stopped]}
+        generation: {type: integer}
+        revision: {type: integer, description: Generation used for decisions}
+        request: {type: object, description: Title, instructions, command, port, readiness, TTL, reported checks and optional external URL}
+        url: {type: string}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+        sessionExpires: {type: string, format: date-time}
+        decidedAt: {type: [string, "null"], format: date-time}
+        decidedBy: {type: string}
+        method: {type: string}
+        comment: {type: string}
+        error: {type: string}
     ToolResult:
       type: object
       properties:
+        yield: {type: boolean, description: Finish this turn immediately and wait for durable continuation}
         content: {type: string}
         data: {description: "Optional structured output (e.g. shell.exec returns exitCode, stdout, stderr)"}
         isError: {type: boolean}

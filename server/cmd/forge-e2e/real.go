@@ -30,6 +30,9 @@ type realProvider struct{ analysisProvider }
 const miseProposal = `{"environment":{"dockerfile":"FROM ghcr.io/jdx/mise:2026.10.4-debian@sha256:2fb7fa9a4120333531a8a70296d4ea152ffd3e7658dcf29ac75774a7d78dec24\nENV MISE_DATA_DIR=/home/sandbox/.local/share/mise MISE_CONFIG_DIR=/home/sandbox/.config/mise MISE_CACHE_DIR=/home/sandbox/.cache/mise\n","setup":["mise trust /workspace/mise.toml","mise install","mise exec -- npm ci --ignore-scripts"],"caches":["/home/sandbox/.npm/_cacache"],"network":{"setup":"bridge","run":"none"}},"rationale":"Pinned mise and Node toolchain; setup downloads Node and locked npm packages using bridge network. Runtime is offline. npm lifecycle scripts are disabled; toolchain installation and mutable workspace remain private to each task.","tools":["mise","node","npm"]}`
 
 func (realProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	if r.Metadata["graph"] == "fixture-preview" {
+		return previewInference(r)
+	}
 	if r.Metadata["purpose"] == "environment.proposal" {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleUser && strings.Contains(m.Content, "leforge-mise-example") {
@@ -94,6 +97,10 @@ func runReal() error {
 	}
 	cfg := config.Default()
 	cfg.Instance = filepath.Base(root)
+	cfg.Preview.Addr = "127.0.0.1:18092"
+	cfg.Preview.BaseURL = "http://localhost:18092"
+	cfg.Preview.ConsoleOrigins = []string{"http://127.0.0.1:18090"}
+	cfg.Preview.RelayBinary = "forge-preview-linux"
 	cfg.LLM = config.LLM{}
 	cfg.Server.Addr, cfg.Server.InternalAddr, cfg.Server.WebDir = "127.0.0.1:18090", "", "web"
 	cfg.Storage = config.Storage{Type: "sqlite", Dir: filepath.Join(root, "store")}
@@ -164,6 +171,10 @@ func runReal() error {
 			return err
 		}
 	}
+	if err := seedPreview(ctx, a, cfg); err != nil {
+		return err
+	}
+	ids = append(ids, "fixture-preview")
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGTERM, os.Interrupt)
 	defer signal.Stop(signals)
@@ -202,6 +213,18 @@ func runReal() error {
 		}
 		if err := a.Environments.Reset(cleanup, id, "fixture-cleanup"); err != nil {
 			errs = append(errs, err)
+		}
+	}
+	if reviews, e := a.Reviews.List(cleanup); e != nil {
+		errs = append(errs, e)
+	} else {
+		for _, r := range reviews {
+			if e = a.Reviews.Driver.Stop(cleanup, r); e != nil {
+				errs = append(errs, e)
+			}
+			if out, e := exec.CommandContext(cleanup, "docker", "rm", "-f", r.Name()).CombinedOutput(); e != nil {
+				errs = append(errs, fmt.Errorf("preview cleanup: %s: %w", out, e))
+			}
 		}
 	}
 	preview, err := a.Environments.CleanupShared(cleanup, nil, true, "fixture-cleanup")

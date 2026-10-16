@@ -322,6 +322,11 @@ func (e *Engine) graphAction(ctx context.Context, id, action, actor string) erro
 	if err := e.store.PutGraphRecord(ctx, rec); err != nil {
 		return err
 	}
+	if (action == "stop" || action == "kill") && e.opt.Reviews != nil {
+		if err := e.opt.Reviews.Cancel(ctx, id, "", actor); err != nil {
+			return err
+		}
+	}
 	e.bus.Publish(ctx, domain.NewEvent(ev, id, map[string]any{"action": action, "runId": rec.RunID}).WithActor(actor))
 	e.Nudge()
 	return nil
@@ -401,6 +406,11 @@ func (e *Engine) NodeAction(ctx context.Context, id, node, action, actor string)
 	}
 	if err := e.putNodeControl(ctx, id, node, c); err != nil {
 		return err
+	}
+	if (action == "stop" || action == "kill") && e.opt.Reviews != nil {
+		if err := e.opt.Reviews.Cancel(ctx, id, node, actor); err != nil {
+			return err
+		}
 	}
 	e.bus.Publish(ctx, domain.NewEvent(domain.EvLog, id, map[string]any{"message": "node " + action, "node": node}).WithNode(node, -1).WithActor(actor))
 	e.Nudge()

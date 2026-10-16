@@ -18,7 +18,7 @@ const arch = await docker('exec', daemon, 'uname', '-m');
 const goarch = { aarch64: 'arm64', x86_64: 'amd64' }[arch];
 if (!goarch) throw new Error(`Unsupported daemon architecture: ${arch}`);
 const local = await mkdtemp(join(tmpdir(), 'leforge-browser-real-'));
-let remote, controller, server;
+let remote, controller, server, previewServer;
 const forwards = new Set();
 let stopping = false;
 async function shutdown() {
@@ -26,6 +26,7 @@ async function shutdown() {
   stopping = true;
   try {
     server?.close();
+    previewServer?.close();
     for (const socket of forwards) socket.destroy();
     if (controller && controller.exitCode === null) {
       const pid = await docker('exec', daemon, 'cat', `${remote}/pid`);
@@ -48,13 +49,16 @@ try {
   await exec('go', ['build', '-tags', 'e2e', '-o', join(local, 'controller'), './cmd/forge-e2e'], {
     cwd: join(repo, 'server'), env: { ...process.env, GOOS: 'linux', GOARCH: goarch, CGO_ENABLED: '0' },
   });
+  await exec('go', ['build', '-o', join(local, 'forge-preview-linux'), './cmd/forge-preview'], {cwd:join(repo,'server'),env:{...process.env,GOOS:'linux',GOARCH:goarch,CGO_ENABLED:'0'}});
+  await exec('npx',['vite','build','preview-fixture','--config','vite.config.ts','--outDir','../preview-fixture-dist'],{cwd:join(repo,'web')});
+  await cp(join(repo,'web/preview-fixture-dist'),join(local,'preview-web'),{recursive:true});
   const candidate = await docker('exec', daemon, 'mktemp', '-d', '/tmp/leforge-browser-real.XXXXXX');
   if (!/^\/tmp\/leforge-browser-real\.[A-Za-z0-9]+$/.test(candidate)) throw new Error('Unexpected temporary path');
   remote = candidate;
   await cp(join(repo, 'examples/projects/mise-node'), join(local, 'mise-node'), { recursive: true });
   await cp(join(repo, 'web/dist'), join(local, 'web'), { recursive: true });
   await new Promise((resolve, reject) => {
-    const archive = spawn('tar', ['-C', local, '-cf', '-', 'controller', 'web', 'mise-node']);
+    const archive = spawn('tar', ['-C', local, '-cf', '-', 'controller', 'web', 'mise-node', 'forge-preview-linux', 'preview-web']);
     const unpack = spawn('docker', ['exec', '-i', daemon, 'tar', '-C', remote, '-xf', '-']);
     archive.stdout.pipe(unpack.stdin);
     archive.stderr.pipe(process.stderr); unpack.stderr.pipe(process.stderr);
@@ -81,4 +85,12 @@ try {
   });
   server.on('error', error => { console.error(error); process.exitCode = 1; void shutdown(); });
   server.listen(18090, '127.0.0.1');
+  previewServer = createServer(socket => {
+    forwards.add(socket);
+    const tunnel = spawn('docker',['exec','-i',daemon,'nc','127.0.0.1','18092']);
+    socket.pipe(tunnel.stdin);tunnel.stdout.pipe(socket);tunnel.stderr.resume();
+    tunnel.stdin.on('error',()=>socket.destroy());tunnel.once('error',error=>socket.destroy(error));tunnel.once('exit',()=>socket.destroy());socket.on('error',()=>{});socket.once('close',()=>{forwards.delete(socket);tunnel.kill();});
+  });
+  previewServer.on('error',error=>{console.error(error);process.exitCode=1;void shutdown();});
+  previewServer.listen(18092,'127.0.0.1');
 } catch (error) { console.error(error); process.exitCode = 1; await shutdown(); }

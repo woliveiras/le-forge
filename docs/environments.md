@@ -442,7 +442,9 @@ removed after preparation.
 
 The budget covers worker containers, not daemon image pull/load/commit overhead,
 external runtimes or the entire Colima/Docker VM. Leave VM headroom. Global CPU
-accounting and a dedicated queue display remain planned.
+accounting is implemented across execution and preparation. Settings and the
+agent panel show capacity waits; exact queue positions and ETAs remain outside
+the supported scope.
 Run `make test-environment-context` for real bounded builds, setup, context
 validation, stage selection, failures, reuse and isolation checks.
 
@@ -619,7 +621,10 @@ verifies the corresponding real daemon resource limits and preservation.
 `make test-e2e-real` additionally runs Chromium through proposal, administrator
 approval, build and native `shell.exec` on the dedicated daemon, then repeats the
 journey with compatible image reuse and distinct workspace files. Only model
-inference is scripted; see the [real-browser setup](../web/README.md#browser-journey-with-the-real-sandbox).
+inference is scripted. The suite also covers all four discovery sources, lockfile
+invalidation/rebuild, Reset preservation and the
+[mise example](../examples/projects/mise-node/README.md), including real dependency
+installation and offline build/tests. See the [real-browser setup](../web/README.md#browser-journey-with-the-real-sandbox).
 
 CPU admission shares the same durable reservation as memory/count throughout
 sequential build, setup and cache copies. The default per-pipeline CPU request is
@@ -1048,3 +1053,14 @@ discovery precedence, rejection/expiration, stale inputs, cancellation, build
 failure and sandbox replacement failures. `make test-environment-context` includes
 a real agent-tool gateway → persisted approval → build → continuation test, with
 an unprivileged command in the approved sandbox on the dedicated daemon.
+
+## Supported release acceptance
+
+The supported sandbox scope and executed validation are recorded in
+[sandbox acceptance](sandbox-acceptance.md). For a repository with only
+`mise.toml` and npm manifests, use the [tested example](../examples/projects/mise-node/README.md).
+Keep generated dependencies and outputs out of an approved Docker context with
+`.dockerignore`; otherwise setup can change that context and correctly block
+continuation until a new review. Full Compose/devcontainer compatibility,
+replacement proposals, daemon-wide registry filtering and exact queue ETAs are
+separate increments, not implied by this release.

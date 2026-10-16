@@ -621,3 +621,23 @@ export interface GitInspection {
   content: string;
   attribution: string;
 }
+
+export interface HumanReview {
+ id: string;
+ graphId: string;
+ nodeId: string;
+ replica: number;
+ request: { title: string; instructions: string; command?: string[]; checks?: string[]; externalUrl?: string };
+ candidate: string;
+ state: string;
+ session: string;
+ generation: number;
+ revision: number;
+ url: string;
+ sessionExpires: string;
+ expiresAt: string;
+ method?: string;
+ comment?: string;
+ error?: string;
+ decidedBy?: string;
+}

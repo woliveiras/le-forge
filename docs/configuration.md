@@ -189,3 +189,26 @@ runtimes: {sharedSecretEnv: LEFORGE_RUNTIME_SECRET}
 observability: {otlpEndpoint: "http://otel-collector.observability:4318", traceSampleRatio: 0.2}
 engine: {leaseTTL: 30s, reconcileInterval: 5s, maxConcurrentTurns: 64}
 ```
+
+## Built-in preview gateway
+
+```yaml
+preview:
+  addr: 127.0.0.1:8082
+  baseUrl: http://localhost:8082
+  consoleOrigins: [http://localhost:8080]
+  relayBinary: bin/forge-preview-linux
+  containerLocal: false
+  tlsCert: ""
+  tlsKey: ""
+```
+
+An empty `addr` disables managed review tools and the listener. `baseUrl` is the
+address reachable by the human, with a review-specific subdomain added by LeForge.
+`consoleOrigins` must include the exact browser origin (scheme, host and port).
+Remote URLs require HTTPS and `tlsCert`/`tlsKey`. `containerLocal: true` permits a
+container listener on all interfaces only with a localhost base URL; the operator
+must publish its host port on loopback. Bundled Compose does this explicitly.
+Environment overrides: `LEFORGE_PREVIEW_ADDR`, `LEFORGE_PREVIEW_BASE_URL`,
+`LEFORGE_PREVIEW_RELAY`, `LEFORGE_PREVIEW_CONTAINER_LOCAL`.
+See [preview operations](sandbox-runtime.md#human-review-and-application-previews).

@@ -54,7 +54,7 @@ Evolve the existing `GraphCanvas.tsx` view to allow users to:
 
 ### 4. Provide Containerized Project Environments
 
-Agents need the project's real toolchain (for example Go, Node, and pnpm) to install dependencies, build, and run tests. The dedicated sandbox daemon and interface-configured environments already provide the foundation. Extend them with repository discovery, approved agent proposals, and reuse across tasks; repositories must not require LeForge-specific files.
+Agents need the project's real toolchain (for example Go, Node, and pnpm) to install dependencies, build, and run tests. The supported sandbox scope is implemented: dedicated daemon, repository discovery, approved initial proposals, compatible reuse, capacity, idle resume and reference-safe cleanup. No LeForge-specific file is required. See [acceptance evidence and explicit limits](../docs/sandbox-acceptance.md); this does not complete the other Release 1 workstreams.
 
 Give each graph a managed **environment**:
 
@@ -72,7 +72,7 @@ Give each graph a managed **environment**:
 - reuse prepared images and compatible dependency caches across tasks for the same authorized repository and effective environment. The delivered implementation shares prepared base/user layers and immutable cache seeds, copies seeds into private writable caches, and reruns setup in each isolated graph workspace; Identify compatibility from the definition, relevant setup inputs (including lockfiles), platform and policy; reuse unchanged environments and rebuild when those inputs change or the operator requests it;
 - keep task workspaces/worktrees and active execution containers isolated. Share only caches that support concurrent use, otherwise serialize access or isolate them. Never share task outputs, credentials or private repository data across unauthorized scopes;
 - bound memory and CPU per sandbox and enforce a global concurrency/resource budget, queueing tasks when capacity is exhausted. The delivered budget reserves memory and slots across execution sandboxes and environment pipelines, with persistent accounting and cancellation. BuildKit workers, setup and cache copies run sequentially under one reservation; global CPU accounting now shares those atomic durable reservations and applies kernel caps to execution, BuildKit, setup and cache copies. Delivered idle suspension stops execution containers between turns after a configurable timeout (5m by default, 0s disables), preserves their files/workspaces/caches, and readmits the same container before new work. Active turns are excluded; process memory is not checkpointed. Image/cache reuse saves build time and disk, while active-container limits control memory consumption;
-- expose environment state (`pending`, `building`, `ready`, `failed`), structured build phases and reason categories (delivered in settings and the agent panel), approval and capacity waiting states, reuse decisions, build logs, **Rebuild**, and **Reset** in the console. Reset and graph deletion must respect shared-resource ownership and active references: never remove images or caches another task still needs; delivered Integrations UI previews exact resources, requires selection/confirmation, and reports partial outcomes; admin preview/cleanup reclaims unused registered generations after rechecking environment/build/container references under reuse leases. Keep historical resources without ownership records; never force removal or delete workspaces/private caches.
+- expose environment state (`absent`, `building`, `ready`, `failed`), structured build phases and reason categories (delivered in settings and the agent panel), approval and capacity waiting states, reuse decisions, build logs, **Rebuild**, and **Reset** in the console. Reset and graph deletion must respect shared-resource ownership and active references: never remove images or caches another task still needs; delivered Integrations UI previews exact resources, requires selection/confirmation, and reports partial outcomes; admin preview/cleanup reclaims unused registered generations after rechecking environment/build/container references under reuse leases. Keep historical resources without ownership records; never force removal or delete workspaces/private caches.
 
 Environment definitions coming from repositories or agents are untrusted content: they cannot change grants, credentials, limits, or network policy beyond what the installation allows.
 
@@ -96,16 +96,28 @@ Users may read and inspect files, but cannot edit, delete, or upload them throug
 
 ### 5a. Human Review with Managed or External Previews
 
-**Status: planned, not implemented.** Existing approvals, workspaces, Docker
-environments and operator messages provide foundations. They do not currently
-provide managed long-running application processes or authenticated preview URLs.
+**Status: implemented for Docker sandboxes.** LeForge ships its own local-first
+preview gateway, supervised HTTP processes, durable review gates and console
+review actions. Browser and cURL acceptance use real containers on the dedicated
+daemon. Setup and limits are in `docs/sandbox-runtime.md`; API/tool/runtime
+contracts are documented alongside the existing contracts. Native process
+supervision and automatic provider-specific PR/CI adapters remain later work.
+
+The implementation uses a scoped Docker exec stdio relay to a registered
+container/port, without opening sandbox ports or changing egress policy. Review
+records hold a SHA-256 workspace snapshot, generation, reviewer/method policy,
+decision timestamp and durable continuation outbox. Runtime cache copies are
+private but are not included in the source digest. Snapshots and stopped
+containers are retained; offline-controller cleanup waits for reconciliation.
+Private tunnels are administrator-configured, never an external-service
+requirement for local operation.
 
 Make human review a durable workflow step tied to the exact proposed change.
 The agent prepares the change, runs required checks, supplies review instructions,
 and requests review. The platform persists the request and yields execution;
 no model call, tool invocation or input-message lease stays open for the human's
-entire review. Approval resumes the configured downstream work exactly once
-at the business-operation level through idempotent continuation handling.
+entire review. Approval queues an idempotent continuation through insert-once delivery.
+Retried business operations still require their own idempotency controls.
 Reuse approval storage/decision conventions, but add a durable continuation:
 `human.ask` alone is not a lifecycle manager for this workflow.
 
@@ -189,8 +201,8 @@ tunnel. Keep local authentication enabled and use appropriate cookie settings
 for each transport. Prefer a dedicated host per session so applications using
 absolute paths, redirects, cookies and WebSockets do not need a URL prefix.
 The URL routes only to a registered session's approved HTTP port. A scoped
-relay on the dedicated sandbox network connects it to the gateway; it must not
-open general access to platform services, the Docker API, LAN or other sessions.
+Docker exec stdio relay connects the registered container loopback port to the
+gateway without publishing application ports or opening general network access.
 Inbound review access and outbound application egress are separate policies;
 the existing egress proxy does not provide this ingress feature.
 
@@ -222,7 +234,8 @@ preview state and URL. Actions are approve, request changes, reject/cancel, and
 restart/extend preview within policy. Request changes returns feedback to the
 agent and requires a new review for the next candidate. Decision and continuation
 creation must be atomic or use a transactional outbox; duplicate decisions and
-replayed deliveries must not duplicate downstream effects. Review expiration
+replayed deliveries must not duplicate continuation messages; downstream effects
+retain their own idempotency requirements. Review expiration
 never auto-approves this gate; preview expiry alone is not review rejection.
 
 Record session lifecycle, readiness, access denials, review decisions and

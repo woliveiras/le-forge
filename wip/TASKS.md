@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. The four parallel deliveries now cover browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. Environment lifecycle/reuse/capacity/network implementation and its existing acceptance evidence remain documented separately; rootless is deferred. MCPs, dynamic delegation, onboarding, universal file-change provenance, human review/previews and full Release 1 validation are not completed by this integration. See [parallel-delivery validation](../docs/parallel-delivery-validation.md) for commands, evidence and limits.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. The four parallel deliveries now cover browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCPs, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation are not completed by this integration. See [parallel-delivery validation](../docs/parallel-delivery-validation.md) for commands, evidence and limits.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -83,7 +83,7 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Read-only discovery API with unit and API integration tests: candidate inspection for the agreed priority, hashes, service names, explicit overrides and bounded checkout reads. Supported-format validation, build contexts and operator-triggered analysis are delivered below; broader format/policy support remains pending.
 
 - [x] Allow operators to configure an environment in the interface: a prebuilt image, or a Dockerfile plus setup commands. (**Graph settings → Environment**.)
-- [ ] Extend the environment API/data contracts to record discovery candidates, selected source, repository revision, accepted definition, approval state and reuse identity; reconcile the existing per-graph lifecycle with shared images/caches before implementation.
+- [x] Persist discovery/selection provenance, accepted definitions, durable proposal approvals and reuse identity. Use bounded manifest/context fingerprints, not a full Git revision. Per-graph setup/images/caches remain private while prepared generations are shared; see environment/proposals and storage/API integration tests.
 - [x] Discover definitions in order: `.leforge/environment.yaml`, `.devcontainer/devcontainer.json`, Dockerfiles, then Docker Compose. Preserve explicit interface overrides and show the effective source. A LeForge-specific file is never required.
 - [x] Parse the LeForge definition and the supported image/post-create subset of devcontainer configuration. Report malformed and unsupported fields; an invalid higher-priority file must not silently trigger a fallback or agent proposal.
 - [x] Support validated repository contexts for local COPY/ADD, Docker ignore rules, bounded tar snapshots and acceptance/cache invalidation by digest. Cover unit, API integration and real dedicated-sandbox builds. Additional Dockerfile features remain pending.
@@ -96,14 +96,14 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Treat repository and agent definitions as untrusted: they cannot raise resource limits, mount host paths, request privileges, or widen network policy beyond installation settings.
 - [x] Persist full environment proposals in developer Approvals; admin approval revalidates inputs, saves the definition and starts build. Block graph/node starts until ready, optionally start the graph after readiness, restore approved work after restart, and expose rejection/cancellation/expiration/errors and approved-build retry. Unit, API/UI integration and real sandbox tests cover the workflow. Repository fingerprinting covers analyzed inputs rather than Git commit identity.
 - [x] Add the `environment.status` tool and the `environment.propose` tool (own graph, Docker node without image override; complete agent definition; durable approval/build and blocking turn continuation): the complete proposal opens a developer approval gate. Keep the task waiting until acceptance; rejection/cancellation must not build or run anything. Revalidate the approved revision, build after acceptance, and resume execution only when ready; expose build failures and retries.
-- [ ] Provide an example proposal flow for a repository using `mise.toml` (base image with mise, `mise install`, dependency download).
+- [x] Provide the [mise proposal example](../examples/projects/mise-node/README.md): pinned public image and Node, locked npm install, developer approval, offline build/tests and second-task reuse with private workspaces/caches. Verified by `make test-e2e-real`; inference is scripted.
 
 #### Reuse Across Tasks and Resource Budgets
 
 - [x] Define a repository/installation-scoped reuse key from the full image-definition digest, accepted context, bounded manifests/lockfiles, daemon platform/address and versioned policy. Setup output stays private; arbitrary setup reruns in each task. The fingerprint is bounded and is not a full Git revision.
 - [x] Reuse compatible prepared images across repository graphs with renewable leases, force rebuilds and input invalidation. Setup runs per isolated workspace; shared images exclude setup container state. API/UI status and logs explain reuse. Unit, API integration and real sandbox tests cover the flow.
 - [x] Reuse immutable dependency-cache seeds within the exact repository/installation scope. Copy seeds read-only into task-private writable volumes before setup; never publish runtime mutations. Cache declarations must exclude credentials and task outputs. Concurrent writers never share a volume across graphs.
-- [ ] Create isolated task workspaces/worktrees and active containers; allow continuation of the same task to reuse its container without sharing mutable task state with other tasks.
+- [x] Isolate graph/replica workspaces and active containers. Idle continuation reuses the same stopped container after capacity readmission; real daemon tests verify files/cache preservation and two-task isolation. Process-memory checkpointing and arbitrary controller-restart continuity are not promised.
 - [x] Enforce finite memory/swap caps and a global count/reserved-memory budget for Docker execution sandboxes; persist reservations, inspect daemon inventory, wait/cancel admission and release only after confirmed removal. Preserve existing node CPU limits. Unit, configuration/app integration, concurrency and real cgroup tests verify the flow.
 - [x] Extend global memory/concurrency admission to image builds, setup and cache-copy helpers. Use bounded temporary BuildKit workers, sequential setup/copies, cancellable waiting and durable reservations retained on cleanup failures.
 - [x] Add global CPU accounting for execution/build/setup/cache-copy pipelines: finite total/default CPU, decimal parsing, atomic durable reservations, conservative legacy handling, kernel caps, cancellation and idle readmission. Unit, configuration/storage/component integration, concurrent-manager and real-daemon cgroup/CPU-only admission tests cover the flow.
@@ -111,7 +111,7 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 - [x] Preserve shared images/cache seeds on Reset and graph deletion; graph status retains resource references, and shared generations are conservatively retained.
 - [x] Implement explicit admin preview/cleanup of registered shared generations and newly tracked crash leftovers. Track exact generations across rebuilds; revalidate status/definition/build/container references under reuse leases; preserve stopped containers, other tasks and private workspaces; invalidate reuse before partial deletion and support retry. Legacy unregistered resources remain untouched. Unit, storage/API integration and real daemon tests cover the flow.
 - [x] Add Integrations UI for shared generation previews, retention reasons, selection (up to 100) and explicit confirmation; display partial/missing/retained outcomes and refresh after attempts. Cover policy units, component/API-client integration, and real sandbox cleanup validation.
-- [ ] Record reuse, rebuild reasons, queue waits and resource-limit failures through existing events/metrics, using bounded labels and no sensitive payloads.
+- [x] Record reuse/build reasons in environment events and status, capacity transitions in events and bounded metrics, plus build/admission/lifecycle/cleanup outcome and duration metrics. Covered by progress/API, capacity metric and live tests; exact queue position/ETA is outside scope.
 
 #### Network Policy
 
@@ -135,17 +135,17 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 #### Tests and Documentation
 
 - [x] Unit tests for definition parsing, precedence, hashing, policy enforcement on untrusted definitions, and lifecycle transitions, including build failures and cancellations. — Done for validation, hashing, the user layer, lifecycle, failures, cancellation, concurrency, interrupted builds and reset. Precedence and repository/agent-source validation are now covered; installation-wide policy, cached-image revocation and persisted approval revalidation are now covered.
-- [ ] Integration tests against a real dedicated daemon: build from each source, run `shell.exec` in the environment, reset, and rebuild; verify no container or image is created on the host daemon. — API integration tests run with a scripted Docker CLI; a manual run against the real `sandbox-daemon` verified Dockerfile build, setup, commit, cache population, uid 10001 workspace writes, `network none`, reset (refused while running) and cleanup on graph deletion. Pending: automating that run and the repository/agent sources.
-- [ ] Interface tests for configuration, state display, proposal approval, Rebuild, and Reset. — Done except proposal approval (not implemented yet).
-- [ ] Add unit tests for discovery priority, ambiguous candidates, malformed definitions, supported Compose/devcontainer fields, context containment and absent-definition fallback; include approval rejection, stale approval, timeout and analysis failure.
+- [x] `make test-e2e-real` discovers, accepts, builds and executes native `shell.exec` for all four supported repository sources plus approved proposals. It checks uid 10001, shared-image location in the dedicated daemon, workspace isolation, lockfile invalidation/rebuild and Reset preservation. `make test-sandbox` separately checks host sandbox inventory and network isolation.
+- [x] Interface tests for configuration, state display, proposal approval/rejection, Rebuild and Reset: component/client integration, deterministic browser tests and real browser lifecycle checks.
+- [x] Add unit tests for discovery priority, ambiguous candidates, malformed definitions, supported Compose/devcontainer fields, context containment and absent-definition fallback; include approval rejection, stale approval, timeout and analysis failure. See discovery, selection, context, proposal_analysis and proposals tests.
 - [x] Add unit, storage/API integration and real sandbox tests for reuse keys, input invalidation, build deduplication across manager instances, lease-wait cancellation, private cache copies, failed setup/copy, workspace isolation and Reset retention.
 - [x] Test execution-sandbox budgets, multi-controller admission, memory/count boundaries, queue cancellation, cleanup failures and restart accounting, including a real dedicated daemon.
 - [x] Test build resource budgets with unit, storage/API integration and real dedicated-daemon checks, including selected contexts, failure, cleanup/recovery and competition with execution admission.
 - [x] Test idle/resume lifecycle: unit eligibility/failure checks, engine/storage/queue integration for active turns, schedules, paused tasks and input retry, plus real daemon stop/start, preserved files/container identity and capacity release/readmission.
-- [ ] Add integration tests with repository fixtures and the real dedicated daemon for each source and the approved-proposal flow; prove no build/task starts before approval and failures remain visible.
-- [ ] Add integration tests proving compatible tasks reuse an image/cache, changed lockfiles invalidate reuse, concurrent builds are deduplicated, task workspaces and unauthorized repositories remain isolated, and reset cannot remove referenced resources. Verify queue admission, resource release and idle-container resume.
-- [ ] Add interface tests for candidate selection, developer approval/rejection, reuse/invalidation explanations and capacity waiting; add browser E2E for a repository without LeForge files through discovery or proposal, approval, build, execution and a subsequent reused environment. — Environment journeys implemented in `make test-e2e` (Chromium, real API/SQLite/controllers, deterministic Docker/model fixtures), including pre-approval blocking, rejection and analysis/build failures. Browser recovery coverage now includes CPU-only and memory-only waits, cancellation/restart, successful build retry and idle suspension/message-driven resume with workspace contents checked through Files. A real-daemon browser journey (`make test-e2e-real`) additionally covers proposal/approval, native shell.exec, prepared-image reuse and isolated workspace files; only inference is scripted. Broader rebuild-invalidation and build/setup queue browser journeys remain pending.
-- [ ] Document discovery priority, supported file formats, ambiguity/error handling, approval, reuse/invalidation, resource budgets, shared-resource reset and troubleshooting in the environment, deployment and getting-started guides.
+- [x] Add integration tests with repository fixtures and the real dedicated daemon for each source and the approved-proposal flow; prove no build/task starts before approval and failures remain visible. Covered by API/proposal integration, `make test-environment-context` and the real browser source matrix.
+- [x] Add integration tests proving compatible tasks reuse an image/cache, changed lockfiles invalidate reuse, concurrent builds are deduplicated, task workspaces and unauthorized repositories remain isolated, and reset cannot remove referenced resources. Verify queue admission, resource release and idle-container resume. Covered by reuse/capacity/cleanup integration and dedicated-daemon suites.
+- [x] Browser E2E covers discovery/review, initial proposal approval and rejection, pre-approval blocking, analysis/build failure, compatible reuse, CPU/memory execution waits, cancellation/restart, retry, build/setup waiting and idle resume with preserved files. `make test-e2e` uses real controllers with Docker/model fixtures; `make test-e2e-real` uses real containers, all discovery sources, rebuild/Reset and the mise project. Only model inference is scripted in the real suite.
+- [x] Document discovery priority, supported file formats, ambiguity/error handling, approval, reuse/invalidation, resource budgets, shared-resource reset and troubleshooting in the environment, deployment and getting-started guides. See the updated guides and [acceptance record](../docs/sandbox-acceptance.md).
 
 **Done when:** A repository needs no LeForge-specific file: discovery follows the agreed precedence, and absence of definitions leads to agent analysis with developer approval before building or executing. Compatible subsequent tasks reuse images/caches with isolated workspaces and bounded active resources. Rebuild, reset and cleanup respect shared references; all project commands stay inside LeForge containers, nothing is installed on the host, and agents never access Docker.
 
@@ -179,46 +179,38 @@ Decisions recorded for this section: a Docker daemon dedicated to LeForge (Docke
 
 ### 4a. Durable Human Review and Application Previews
 
-Planned work; no item below is delivered. See `PLAN.md`, section 5a. Container
-workflow assertions elsewhere in this checklist apply to managed Docker
-environments, not to the explicitly selected native `process` execution mode.
+Delivered for Docker sandboxes. See `PLAN.md` section 5a and the operational
+contract in `docs/sandbox-runtime.md#human-review-and-application-previews`.
+The explicitly selected native `process` mode remains outside managed preview
+supervision.
 
 #### Review Contract and Continuation
 
-- [ ] Define durable review, candidate snapshot, evidence, preview generation, authorized reviewer and continuation contracts. Preserve existing approval clients and document new API/event contracts.
-- [ ] Support managed preview, external CI URL, local branch validation and explicit acceptance without manual execution; enforce operator-required review methods and accurately record the chosen method.
-- [ ] Freeze candidate content, include dirty workspace changes in its identity, supersede stale reviews and revalidate identity before continuation. Do not equate a branch name with immutable evidence.
-- [ ] Persist the pending gate and release the active turn/input lease. Atomically record decisions and continuation work, with idempotent consumers and restart recovery; never auto-approve on timeout.
-- [ ] Implement approve, request changes, reject/cancel and review expiry. Keep preview expiry distinct from review expiry, and keep PR creation, merge and deploy authorization separate.
+- [x] Persist candidate SHA-256, frozen content including dirty changes, generation, reviewer/method policy, decision actor/time and a durable continuation outbox. Preserve existing approval clients.
+- [x] Support managed HTTP previews and manually supplied external URLs, local validation, and acceptance without execution; label reported checks/external links as unverified.
+- [x] Yield the runtime turn and release its input lease; block further model/tool callbacks and output. Recheck candidate identity at decision, continuation delivery and completion.
+- [x] Implement approve, request changes, reject, lifecycle cancellation and review expiry. Keep preview expiry separate; decisions do not merge or deploy.
+- [x] Insert continuation messages once across controller recovery without resetting consumed messages. External effects retain normal idempotency requirements.
 
-#### Service Supervision and Resource Ownership
+#### Service Supervision and Protected Access
 
-- [ ] Implement policy-checked Docker service start/status/stop against a frozen candidate, using argv, workspace-relative directory, approved HTTP port, readiness path and bounded lifetime. Do not run persistent servers through `shell.exec`.
-- [ ] Supervise process exit/readiness and bounded logs; persist queued/starting/ready/failed/expired/stopped states and generation IDs. Remove routes when readiness is lost.
-- [ ] Reserve CPU/memory/slots and approved helper services through shared admission; keep active preview leases alive across idle suspension and enforce TTL/renewal bounds.
-- [ ] Reconcile sessions after controller restart; restart expired sessions only after admission/readiness. Revoke access on completion, cancellation or supersession; stop owned processes without deleting persistent data. Surface cleanup errors and retain accounting until confirmed release.
+- [x] Supervise an explicitly authorized argv/cwd/HTTP port/readiness path in Docker with bounded lifetime, process group termination and bounded logs.
+- [x] Reuse shared CPU/memory/slot admission and approved helper configuration; suspend the agent sandbox during human waiting, keep preview accounting separate, and copy caches into private runtime storage.
+- [x] Reconnect after controller restart; stop on readiness loss, expiry or decision, expose cleanup failures, retry cleanup and retain accounting until confirmed release. Preserve persistent workspaces/snapshots/containers.
+- [x] Bundle a local-by-default gateway with loopback host publication and per-review origins, without external services or public DNS. Supply a scoped stdio relay without published application ports.
+- [x] Authenticate browser exchange/cookies and dedicated client headers per session, preserve application Authorization, enforce origins and body/concurrency/stream bounds, and revoke active streams.
+- [x] Support HTTP, React routes/assets, application cookies and WebSockets. Document remote TLS/DNS/private-tunnel configuration and local resolver troubleshooting.
 
-#### Protected HTTP Access
+#### Interface, Contracts and Validation
 
-- [ ] Ship and manage the preview gateway as part of LeForge, with local operation as the default and no external preview service, cloud account, public DNS or third-party tunnel dependency. Bind host-facing listeners and Compose published ports to loopback by default.
-- [ ] Design and implement a narrowly scoped relay from the dedicated sandbox network to the built-in gateway on a separate preview origin. Support authenticated HTTP on loopback; require TLS for remote access unless carried entirely through an explicitly configured secure private tunnel. Register only approved session/port targets; prevent arbitrary forwarding, SSRF and lateral access to other sessions, platform services, LAN or Docker API.
-- [ ] Provide a reachable host per preview and support HTTP, redirects, application cookies and WebSockets without requiring application path-prefix changes. Document required local/remote DNS, TLS and private-tunnel configuration.
-- [ ] Enforce per-session authorization even where existing platform roles are installation-wide. Implement browser authentication exchange, session-scoped cookies, CSRF/CORS policy and stripping of platform credentials before upstream forwarding.
-- [ ] Implement explicitly issued, short-lived, revocable human client credentials in a dedicated gateway header; preserve application Authorization headers. Keep secrets out of URLs, logs, model context and cURL/Postman exports.
-- [ ] Enforce request/body/connection limits and close active streams/WebSockets on expiry or revocation. Keep ingress and egress policy independent and use isolated test data for mutable API requests.
-
-#### Interface, Integrations and Validation
-
-- [ ] Show candidate/check evidence, instructions, pending gate, preview readiness/URL, failures and expiry; provide open/copy URL, credential-free cURL/Postman templates, decision actions and bounded restart/renewal.
-- [ ] Accept manually attached external CI/PR evidence with explicit unverified provenance. Later add provider adapters with authenticated event validation and exact repository/revision matching; external links alone cannot approve a gate.
-- [ ] Add lifecycle/access/decision/continuation events, bounded metrics and traces with correlation IDs; redact credentials and exclude HTTP payloads from access logs.
-- [ ] Add unit tests for policy, invalid command/path/port inputs, state transitions, candidate invalidation, expiry, authorization, dependency errors and continuation idempotency.
-- [ ] Add real integration tests spanning storage/queue/controller, Docker supervisor, gateway and HTTP application: readiness failure, process crash, capacity waits, restart recovery, duplicate decisions, stale evidence, cleanup failure, token revocation and concurrent review sessions.
-- [ ] Add browser E2E against a real preview route for React assets/navigation/cookies/WebSockets and approval/request-changes; verify backend GET and mutable HTTP requests with real cURL and a documented manual Postman run. Cover application auth alongside gateway auth, denied cross-session access, blocked internal targets and expiry of active connections.
-- [ ] Verify the default local journey without external gateway services or public DNS, including local hostname resolution, transport-appropriate authentication cookies, native/Compose gateway packaging and denial of access from other machines. Use prepared fixtures so package downloads and model-provider access do not obscure gateway independence.
-- [ ] Test a remote-host topology where the reviewer cannot reach sandbox IPs, and verify external CI, local branch review and acceptance without manual execution. Demonstrate that accepting a review does not itself merge or deploy.
-- [ ] Add user/operator setup and troubleshooting documentation, run relevant unit/integration/browser checks and record results before marking this feature delivered.
-- [ ] Later: add native process supervision under an explicit host-execution policy, reusing the review contract and clearly reporting its weaker isolation.
+- [x] Show candidate evidence, instructions, readiness/expiry/errors, preview URL, browser opening, private credential issuance, cURL template, logs, decisions, revoke/restart/renew actions.
+- [x] Document API, tool yield/continuation, configuration, lifecycle events and bounded metrics/traces without credential or HTTP payload logging.
+- [x] Add unit/integration coverage for invalid inputs, permissions, stale candidates, concurrent decisions, cleanup failure, expiry, generation changes, cross-session credentials, storage recovery and engine gating.
+- [x] Exercise real Docker HTTP requests and cURL, network-none/no-published-port isolation, private cache mutation, controller reconstruction, expiry/restart and final shutdown (`make test-preview`).
+- [x] Exercise real Chromium React navigation, mutable HTTP with application auth, cookies, WebSockets, approve/revoke and request-changes/new-review (`make test-e2e-real`), through a private gateway forwarder while sandbox IPs remain unreachable.
+- [x] Provide a manual Postman recipe and remote TLS configuration. Automated tests use HTTP/cURL and a private remote topology; an interactive Postman session and a public DNS/TLS deployment are not claimed as tested.
+- [ ] Later: native process supervision under explicit host-execution policy, with its weaker isolation clearly reported.
+- [ ] Later: provider-specific PR/CI adapters with authenticated event validation and exact revision matching. Manual external/local review already works.
 
 **Done when:** The remote Docker web and HTTP review journeys in `PLAN.md` 5a
 pass, including protected access, durable human waiting, exact candidate binding,

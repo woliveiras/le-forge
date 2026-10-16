@@ -11,6 +11,9 @@ import (
 const ns = "leforge"
 
 var (
+	ReviewTransitions         = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "review_transitions_total", Help: "Human review and preview lifecycle transitions."}, []string{"action"})
+	PreviewAccess             = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "preview_access_total", Help: "Preview HTTP access by bounded outcome."}, []string{"outcome"})
+	PreviewRequestSeconds     = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "preview_request_duration_seconds", Help: "Authorized preview HTTP and WebSocket connection duration."})
 	EnvironmentCleanup        = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "environment_cleanup_total", Help: "Shared resource cleanup requests by outcome."}, []string{"outcome"})
 	EnvironmentCleanupSeconds = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "environment_cleanup_duration_seconds", Help: "Shared resource cleanup request duration."})
 
