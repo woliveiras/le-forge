@@ -317,6 +317,15 @@ Deliver the next increments in this order:
    connection quotas and filterable call/approval/outcome history. For each vendor,
    require unit, real-boundary integration, browser E2E and authorized live tests.
 
+**Delivered template/link increment:** The authenticated backend catalogue now
+publishes five immutable v1 presets (DeepWiki, GitHub read-only, Context7, Hugging
+Face and W&B). Browser links pin ID/version, survive login and show a review before
+an administrator fills and saves the connection. The persisted reference is
+validated against endpoint/service; custom endpoints require detachment. Invalid
+links/versions fail explicitly. Opening a link does not create, discover or grant.
+Unit/API integration and Chromium cover this increment; live vendor acceptance,
+template upgrade previews and the OAuth lifecycle remain pending.
+
 **Planned browser-link and OAuth journey:** A link to the user's LeForge
 installation opens a reviewed template in the connection screen, preserving the
 pending selection through LeForge login. Links contain only public template

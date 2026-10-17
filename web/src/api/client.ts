@@ -1,4 +1,4 @@
-import type { MCPConnection, MCPConnectionInput } from './types';
+import type { MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
 import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
 import type {
   Approval,
@@ -160,6 +160,7 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  mcpTemplates: () => request<MCPTemplate[]>(`${V1}/mcp/templates`),
   mcpConnections: () => request<MCPConnection[]>(`${V1}/mcp/connections`),
   mcpTools: () => request<ToolInfo[]>(`${V1}/mcp/tools`),
   saveMCP: (input: MCPConnectionInput, revision?: number) => request<MCPConnection>(`${V1}/mcp/connections${revision ? '/'+enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', headers: revision ? {'If-Match': String(revision)} : undefined, body:input}),

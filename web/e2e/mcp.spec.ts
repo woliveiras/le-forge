@@ -35,3 +35,39 @@ test('executes MCP through the agent gateway and denies ungranted and disabled t
  await page.goto('/#/g/mcp-allowed/canvas');await page.getByRole('button',{name:'Stop all',exact:true}).click();await expect(page.getByRole('button',{name:'Run all',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Run all',exact:true}).click();
  await expect.poll(async()=>{const res=await page.request.get('/api/v1/graphs/mcp-allowed/events',{headers});return (await res.json()).some((e:{type:string;data:{tool?:string}})=>e.type==='tool.denied'&&e.data.tool==='mcp.runtime.search');}).toBe(true);
 });
+
+test('opens a pinned template through login and saves only after review',async({page})=>{
+ await page.goto('/#/integrations/connect?template=deepwiki&version=1');
+ await page.getByLabel('API token',{exact:true}).fill('e2e-admin-token');
+ await page.getByRole('button',{name:'Continue',exact:true}).click();
+ const review=page.getByRole('article',{name:'Review MCP template'});
+ await expect(review).toContainText('DeepWiki · version 1');
+ await expect(page).toHaveURL(/template=deepwiki&version=1/);
+ const before=await page.request.get('/api/v1/mcp/connections',{headers});
+ expect((await before.json()).some((c:{id:string})=>c.id==='deepwiki')).toBe(false);
+ await review.getByRole('button',{name:'Use template defaults'}).click();
+ const section=page.getByRole('region',{name:'MCP connections',exact:true});
+ await expect(section.getByLabel('MCP endpoint',{exact:true})).toHaveValue('https://mcp.deepwiki.com/mcp');
+ await section.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ const card=section.getByRole('article',{name:'MCP DeepWiki',exact:true});
+ await expect(card).toContainText('Template: deepwiki v1');await expect(card).toContainText('untested');
+ const saved=await page.request.get('/api/v1/mcp/connections/deepwiki',{headers});
+ expect(await saved.json()).toMatchObject({template:{id:'deepwiki',version:1},tools:[],credentialConfigured:false});
+ await page.reload();await expect(card).toContainText('Template: deepwiki v1');
+ await section.getByRole('button',{name:'Edit DeepWiki',exact:true}).click();
+ await section.getByLabel('Connection name',{exact:true}).fill('DeepWiki reviewed');
+ await section.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(section.getByRole('article',{name:'MCP DeepWiki reviewed',exact:true})).toContainText('Template: deepwiki v1');
+});
+
+test('rejects invalid template links and allows catalogue navigation without creating connections',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ for(const query of ['template=deepwiki&version=99','template=deepwiki&version=1&token=synthetic']){
+  await page.goto('/#/integrations/connect?'+query);
+  await expect(page.getByRole('region',{name:'MCP templates'})).toContainText(query.includes('99')?'Unknown MCP template version':'Invalid MCP connection link');
+  await expect(page.getByRole('button',{name:'Use template defaults'})).toHaveCount(0);
+ }
+ await page.getByRole('link',{name:'GitHub read-only · v1',exact:true}).click();
+ await expect(page.getByRole('article',{name:'Review MCP template'})).toContainText('https://api.githubcopilot.com/mcp/readonly');
+ await expect(page.getByLabel('Connection ID',{exact:true})).toHaveValue('');
+});

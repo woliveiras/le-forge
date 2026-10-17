@@ -28,12 +28,13 @@ type Credential struct {
 	Clear bool   `json:"clear,omitempty"`
 }
 type Input struct {
-	ID         string      `json:"id"`
-	Name       string      `json:"name"`
-	Service    string      `json:"service"`
-	Endpoint   string      `json:"endpoint"`
-	Enabled    bool        `json:"enabled"`
-	Credential *Credential `json:"credential,omitempty"`
+	Template   *TemplateRef `json:"template,omitempty"`
+	ID         string       `json:"id"`
+	Name       string       `json:"name"`
+	Service    string       `json:"service"`
+	Endpoint   string       `json:"endpoint"`
+	Enabled    bool         `json:"enabled"`
+	Credential *Credential  `json:"credential,omitempty"`
 }
 type Tool struct {
 	Name        string          `json:"name"`
@@ -41,21 +42,22 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
-	ID                   string     `json:"id"`
-	Name                 string     `json:"name"`
-	Service              string     `json:"service"`
-	Endpoint             string     `json:"endpoint"`
-	Enabled              bool       `json:"enabled"`
-	Revision             int64      `json:"revision"`
-	Status               string     `json:"status"`
-	CredentialConfigured bool       `json:"credentialConfigured"`
-	Tools                []Tool     `json:"tools"`
-	ToolsRevision        int64      `json:"toolsRevision"`
-	LastTest             *time.Time `json:"lastTest,omitempty"`
-	Error                string     `json:"error,omitempty"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	UpdatedAt            time.Time  `json:"updatedAt"`
-	UpdatedBy            string     `json:"updatedBy"`
+	Template             *TemplateRef `json:"template,omitempty"`
+	ID                   string       `json:"id"`
+	Name                 string       `json:"name"`
+	Service              string       `json:"service"`
+	Endpoint             string       `json:"endpoint"`
+	Enabled              bool         `json:"enabled"`
+	Revision             int64        `json:"revision"`
+	Status               string       `json:"status"`
+	CredentialConfigured bool         `json:"credentialConfigured"`
+	Tools                []Tool       `json:"tools"`
+	ToolsRevision        int64        `json:"toolsRevision"`
+	LastTest             *time.Time   `json:"lastTest,omitempty"`
+	Error                string       `json:"error,omitempty"`
+	CreatedAt            time.Time    `json:"createdAt"`
+	UpdatedAt            time.Time    `json:"updatedAt"`
+	UpdatedBy            string       `json:"updatedBy"`
 }
 type record struct {
 	View
@@ -73,6 +75,9 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateTemplate(in); err != nil {
+		return err
+	}
 	u, e := url.Parse(in.Endpoint)
 	if !identifier.MatchString(in.ID) || len(strings.TrimSpace(in.Name)) == 0 || len(in.Name) > 120 {
 		return fmt.Errorf("%w: valid id and display name required", ErrInvalid)
@@ -165,6 +170,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint", ErrInvalid)
 	}
 	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled
+	r.Template = in.Template
 	r.Name = in.Name
 	r.Service = in.Service
 	r.Endpoint = in.Endpoint

@@ -642,13 +642,17 @@ export interface HumanReview {
  decidedBy?: string;
 }
 
+export interface MCPTemplateRef { id: string; version: number }
+export interface MCPTemplate extends MCPTemplateRef { name: string; service: string; endpoint: string; authentication: string; guidance: string; source: string; reviewedAt: string; validation: string }
 export interface MCPConnection {
+  template?: MCPTemplateRef;
   id: string; name: string; service: string; endpoint: string; enabled: boolean;
   revision: number; status: string; credentialConfigured: boolean; error?: string;
   toolsRevision: number; tools: {name: string; description?: string; inputSchema: unknown}[];
   lastTest?: string; updatedAt: string; updatedBy: string;
 }
 export interface MCPConnectionInput {
+  template?: MCPTemplateRef;
   id: string; name: string; service: string; endpoint: string; enabled: boolean;
   credential?: {value?: string; clear?: boolean};
 }

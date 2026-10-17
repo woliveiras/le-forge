@@ -1,7 +1,9 @@
 # MCP template candidates
 
-Research date: 2026-10-17. This is a proposed catalogue, not a list of shipped
-integrations. The four Release 1 integrations remain GitHub, Bitbucket Cloud,
+Research date: 2026-10-17. This is a candidate survey, not a list of certified
+integrations. Five initial v1 presets now ship in the catalogue (DeepWiki, GitHub
+read-only, Context7, Hugging Face and W&B); see [template usage](mcp.md#versioned-templates-and-browser-links).
+Live qualification and the remaining candidates are still planned. The four Release 1 integrations remain GitHub, Bitbucket Cloud,
 Jira Cloud and Confluence Cloud; see [their contracts](mcp-integrations.md).
 
 A template should prefill reviewed configuration and explain prerequisites. It

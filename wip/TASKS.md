@@ -289,7 +289,8 @@ All behavior changes below require unit and real-boundary integration tests;
 complete each product with browser E2E and an opt-in live test using authorized
 credentials/resources. Fixture coverage alone does not complete live acceptance.
 
-- [ ] Implement versioned templates with endpoint parameters, credential modes, source/review date, scope guidance, validation status and explicit tool grants; preview template upgrades without silently expanding access.
+- [x] Implement the initial versioned template catalogue with public endpoint/service defaults, authentication guidance, source/review date and validation status; persist and validate template references without granting tools. — Five v1 presets, unit tests, API/persistence integration and Chromium save/edit coverage.
+- [ ] Extend templates with parameterized endpoints and credential modes, and preview version upgrades without silently expanding access. — Initial presets are fixed endpoints; manual customization detaches the reference.
 - [ ] GitHub: add the github.com PAT template, read-only/toolset profiles and a tested per-tool fine-grained permission matrix; distinguish repository defaults from enforced credential restrictions.
 - [ ] GitHub: implement host-owned OAuth app registration/configuration and guided consent; test expiry, organization/SSO restrictions and insufficient permissions.
 - [ ] GitHub: validate repository/issue/PR reads, an approved test mutation, inaccessible repository denial and revocation in browser and live-service acceptance.
@@ -299,9 +300,9 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 - [ ] Bitbucket Cloud: guide organization-linked workspace/repository selection and read/write MCP scopes; test unlinked workspaces, cross-workspace denial, PR reads and an approved test mutation; pipelines/merge are separate grants.
 - [ ] Jira Cloud: guide site/project selection and read/search/write MCP scopes; test JQL/issue reads, missing scope/project access, field/transition failures and approved test writes; exclude delete/manage from initial defaults.
 - [ ] Confluence Cloud: guide site/space selection and read/search/write MCP scopes; test restricted content, page/search reads, approved updates, version conflicts and permission failures; do not fetch returned attachment links automatically.
-#### Browser-Link Connection and OAuth Lifecycle (Planned)
+#### Browser-Link Connection and OAuth Lifecycle
 
-- [ ] Add shareable links to a template/version on the configured local or hosted LeForge installation; validate public parameters, reject credentials/unknown templates and preserve selection through login. Opening a link only prepares a review screen, never creates a connection or grants tools.
+- [x] Add shareable links to a template/version on the local or hosted LeForge installation; validate public parameters, reject extra parameters/unknown templates and preserve selection through login. — Hash route, review screen, explicit admin save, unit and Chromium tests; opening a link never creates a connection or grants tools.
 - [ ] Add endpoint/scope review and an explicit authorize action for permitted operators; retain protected API-key/PAT entry for providers without OAuth. Never include secrets in connection links.
 - [ ] Qualify provider authorization metadata and client registration; configure an exact backend callback URL independent of the frontend hash route and validate issuer/authorization endpoints under the network policy.
 - [ ] Implement authorization-code flow with PKCE and expiring, single-use state bound to the initiating user/session, installation and connection; reject forged, mismatched, replayed or expired callbacks and untrusted return destinations.
@@ -317,7 +318,7 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 #### Additional Template Backlog
 
 - [x] Survey additional official MCP servers for software, data, ML and AI engineering. — [13 candidates and delivery order](../docs/mcp-templates.md), reviewed 2026-10-17; this does not certify compatibility or add all candidates to Release 1.
-- [ ] First wave: ship DeepWiki, Context7, Hugging Face and W&B templates with protocol qualification, unit/integration/browser coverage and opt-in live smoke tests; only DeepWiki has prior installed-flow evidence.
+- [ ] Qualify first-wave templates with protocol/live smoke tests: DeepWiki, Context7, Hugging Face and W&B. — Presets and template/link unit/integration/browser coverage are delivered; current live vendor qualification remains pending, with prior installed-flow evidence only for DeepWiki.
 - [ ] Add typed, encrypted custom-header support and bounded non-secret metadata headers for dbt/LangSmith; qualify per-tool auth requirements; add Sentry OAuth and Databricks workspace/service authentication profiles.
 - [ ] Qualify BigQuery stateless protocol and Snowflake lifecycle differences before implementing compatibility profiles, IAM/role guidance and data-query cost controls.
 - [ ] Design isolated managed MCP hosting for Playwright, MLflow and Qdrant, including inbound TLS/auth, upstream credentials, process lifecycle, resource limits and explicit private-network policy; never run arbitrary server commands in the main process.

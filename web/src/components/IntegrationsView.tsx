@@ -27,7 +27,7 @@ function Status({
   return <Badge tone="bad">Unavailable</Badge>;
 }
 
-export function IntegrationsView({ info, infoError }: { info?: Info; infoError?: string }) {
+export function IntegrationsView({ info, infoError, connectQuery }: { info?: Info; infoError?: string; connectQuery?: string }) {
   const health = useAsync(api.health, []);
   const tools = useAsync(api.tools, []);
   const readiness = useAsync(api.ready, []);
@@ -146,7 +146,7 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
 
       <SharedEnvironmentsSection canManage={role === 'admin'} />
 
-      <MCPSection role={role} />
+      <MCPSection key={connectQuery ?? "manual"} role={role} connectQuery={connectQuery} />
       <ProvidersSection ref={providersRef} canEdit={role === 'admin'} canTest={role === 'admin' || role === 'operator'} />
 
       <section className="integration-section">

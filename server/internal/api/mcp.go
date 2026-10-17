@@ -100,3 +100,8 @@ func (s *Server) mcpTools(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, out)
 	return nil
 }
+
+func (s *Server) mcpTemplates(w http.ResponseWriter, r *http.Request) error {
+	writeJSON(w, http.StatusOK, mcpconfig.Templates())
+	return nil
+}

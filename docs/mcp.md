@@ -94,3 +94,32 @@ Vendor setup is being specified in [priority integration contracts](mcp-integrat
 The [template candidate catalogue](mcp-templates.md) distinguishes proposed
 configurations from verified compatibility. Both are planning documents; the
 current runtime limits described above remain unchanged.
+
+## Versioned templates and browser links
+
+The authenticated `GET /api/v1/mcp/templates` catalogue provides version 1 of
+DeepWiki, GitHub read-only, Context7, Hugging Face and W&B. Each template includes
+public defaults, authentication guidance, source/review date and validation status.
+These presets do not certify vendor compatibility; test each connection before use.
+
+Open `#/integrations/connect?template=deepwiki&version=1` on your installation
+(for example `http://localhost:8080/#/integrations/connect?template=deepwiki&version=1`).
+The same hash route works on a hosted installation and survives the login reload.
+Catalogue links can be copied from the browser. Links accept only one template ID
+and one positive version; unknown versions and extra parameters are rejected.
+Never include credentials in a link.
+
+The review screen displays the endpoint and authentication guidance. An administrator
+must choose **Use template defaults**, review/edit the connection ID and name, enter
+any credential in the protected field, and explicitly save. Opening a link performs
+no discovery, writes or grants. The saved connection records `template: {id, version}`
+and starts untested with no tools. Existing discovery and per-agent authorization
+remain separate actions. Duplicate connection IDs fail rather than overwrite.
+
+Template versions are immutable source-controlled defaults. The API rejects an
+unknown reference or a service/endpoint that differs from the pinned version.
+**Customize without template** detaches that reference before manual configuration;
+existing endpoint-change credential protections still apply. Editing a pinned
+connection in the console preserves its version. There is no automatic upgrade or
+upgrade-preview workflow yet. OAuth consent/callback/renewal/revocation and live
+vendor qualification remain planned.

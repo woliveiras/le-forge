@@ -109,6 +109,7 @@ func (s *Server) routes() {
 	A := config.RoleAdmin
 	routes := []route{
 		{"GET /api/v1/mcp/connections", R, s.mcpList},
+		{"GET /api/v1/mcp/templates", R, s.mcpTemplates},
 		{"GET /api/v1/mcp/tools", R, s.mcpTools},
 		{"POST /api/v1/mcp/connections", A, s.mcpPut},
 		{"GET /api/v1/mcp/connections/{connection}", R, s.mcpGet},

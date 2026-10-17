@@ -155,3 +155,41 @@ func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMCPVersionedTemplatesPersistence(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	var catalogue []mcpconfig.Template
+	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 5 {
+		t.Fatal(code, catalogue)
+	}
+	template := catalogue[0]
+	in := mcpconfig.Input{ID: "from-template", Name: "From template", Service: template.Service, Endpoint: template.Endpoint, Enabled: true, Template: &template.TemplateRef}
+	body, _ := json.Marshal(in)
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", operatorTok, "application/json", string(body), nil); code != 403 {
+		t.Fatal(code)
+	}
+	var saved mcpconfig.View
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), &saved); code != 201 {
+		t.Fatal(code)
+	}
+	loaded, err := a.MCP.Get(t.Context(), in.ID)
+	if err != nil || loaded.Template == nil || *loaded.Template != template.TemplateRef || loaded.Status != "untested" || len(loaded.Tools) != 0 {
+		t.Fatal(loaded, err)
+	}
+	var read mcpconfig.View
+	if code := call(t, srv, "GET", "/api/v1/mcp/connections/"+in.ID, viewerTok, "", "", &read); code != 200 || read.Template == nil || *read.Template != template.TemplateRef {
+		t.Fatal(code, read)
+	}
+	for _, bad := range []mcpconfig.Input{
+		{ID: "bad-version", Name: "Bad", Service: template.Service, Endpoint: template.Endpoint, Template: &mcpconfig.TemplateRef{ID: template.ID, Version: 999}},
+		{ID: "bad-endpoint", Name: "Bad", Service: template.Service, Endpoint: "https://other.example/mcp", Template: &template.TemplateRef},
+	} {
+		body, _ = json.Marshal(bad)
+		if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 422 {
+			t.Fatal(code)
+		}
+		if _, err := a.MCP.Get(t.Context(), bad.ID); err == nil {
+			t.Fatal("invalid template persisted")
+		}
+	}
+}
