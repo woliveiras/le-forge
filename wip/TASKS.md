@@ -632,3 +632,34 @@ Treat that intermittent test behavior as unresolved; it is not an established UX
 regression or a claimed fix. No installation rebuild/restart, deployment, secret
 change, data migration or commit was performed. Activation and another developer
 usability round remain pending; the overall usability checkbox stays open.
+
+
+**UX-01–UX-05 installation activation (2026-10-17):** Implementation commit
+322f3bd was activated using docker compose build forged and docker compose up -d
+--no-deps --force-recreate --wait forged. Only forged was rebuilt/recreated. Health
+returned ok; the existing workspace, data, journal and client-certificate volumes
+were reused. PostgreSQL retained three graphs and nine graph versions. Other
+services, including Ollama and the sandbox daemon, remained running.
+
+Authenticated Chrome validation on localhost:8080 confirmed graph opening by
+clicking the card description outside its title, explicit Configure reader links,
+unchanged saved graph version/grants, connection-to-agent context and return links
+through Runs and reload, and separate invocation/lifecycle counts. Saving the
+existing public DeepWiki validation connection without changing its fields showed
+“Connection saved. Discovering tools…” and automatically discovered three tools.
+It remained credential-free and had no saved agent grants. Its connection revision,
+catalogue revision and discovery timestamp advanced as expected.
+
+A single new read-only reader execution (exe_mvcoynbnbb657e8bc131ce1afd81, graph v7)
+completed using ollama-local / llama3.2:latest. Runs recorded two tool attempts and
+two observed invocations with four lifecycle events; get_me and get_file_contents
+both completed through the GitHub gateway. No graph or tool grants were edited and
+no repository-writing tool was used. The fresh execution.instructions.loaded event
+wrapped without overlapping reader n0 in Events. The earlier event was outside the
+general recent-event window, so validation used this new execution.
+
+Screenshots of installed graph cards, automatic discovery, Events and tool outcomes
+were inspected. This is installation activation evidence, not developer usability
+acceptance. The broader developer usability round and the previously recorded
+intermittent sandbox supervision test remain open. No secret values, authentication
+configuration, external OAuth applications or persistent volumes were changed.
