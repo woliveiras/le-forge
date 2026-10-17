@@ -73,8 +73,8 @@ func testOAuthMultipleServiceConnections(t *testing.T, automatic bool) {
 		return CallWithClient(ctx, upstream.URL, token, name, args, upstream.Client())
 	}
 	inputs := []Input{
-		{ID: "personal", Name: "GitHub pessoal", Service: "github", Enabled: true, Endpoint: "https://api.githubcopilot.com/mcp/", OAuth: &OAuthConfig{Issuer: githubOAuthIssuer, ClientID: "personal", Scopes: []string{"read:user", "read:org"}}, OAuthClientSecret: &Credential{Value: "fixture-client-secret"}},
-		{ID: "work", Name: "Atlassian trabalho", Service: "atlassian", Enabled: true, Endpoint: "https://mcp.atlassian.com/v2/mcp", OAuth: &OAuthConfig{Issuer: mcptest.AtlassianIssuer, ClientID: "work", Scopes: []string{"read:me", "offline_access", "read:jira:agent-interface", "read:confluence:agent-interface"}}},
+		{ID: "personal", Name: "Personal GitHub", Service: "github", Enabled: true, Endpoint: "https://api.githubcopilot.com/mcp/", OAuth: &OAuthConfig{Issuer: githubOAuthIssuer, ClientID: "personal", Scopes: []string{"read:user", "read:org"}}, OAuthClientSecret: &Credential{Value: "fixture-client-secret"}},
+		{ID: "work", Name: "Work Atlassian", Service: "atlassian", Enabled: true, Endpoint: "https://mcp.atlassian.com/v2/mcp", OAuth: &OAuthConfig{Issuer: mcptest.AtlassianIssuer, ClientID: "work", Scopes: []string{"read:me", "offline_access", "read:jira:agent-interface", "read:confluence:agent-interface"}}},
 		{ID: "gitlab", Name: "GitLab instance", Service: "gitlab", Enabled: true, Endpoint: "https://gitlab.example.org/api/v4/mcp", OAuth: &OAuthConfig{Issuer: "https://gitlab.example.org", ClientID: "gitlab", Scopes: []string{"mcp"}}},
 	}
 	second := inputs[1]

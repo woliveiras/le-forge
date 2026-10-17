@@ -285,7 +285,7 @@ by the existing server-side transport. Custom settings require the server's own
 MCP contract, not just an OAuth-enabled REST API.
 
 Use unique IDs such as `github-personal`, `atlassian-work` and `atlassian-other`,
-with display names such as “GitHub pessoal” and “Atlassian trabalho”. The same
+with display names such as “Personal GitHub” and “Work Atlassian”. The same
 service can have multiple connections. These remain installation-owned settings,
 managed by LeForge administrators; they are not personal user accounts or social
 login. Every ID has its own encrypted credentials, scopes, revision, catalogue,

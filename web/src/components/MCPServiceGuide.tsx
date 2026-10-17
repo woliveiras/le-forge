@@ -1,6 +1,6 @@
 export function MCPServiceGuide({service}:{service:string}) {
  return <aside aria-label="OAuth service setup">
-  <p>Connections belong to this LeForge installation. Use separate IDs and names, such as GitHub pessoal and Atlassian trabalho. Each connection has its own credentials and agent grants.</p>
+  <p>Connections belong to this LeForge installation. Use separate IDs and names, such as Personal GitHub and Work Atlassian. Each connection has its own credentials and agent grants.</p>
   {service==='github'?<>
    <p>Register a dedicated GitHub OAuth App with the callback below and your LeForge homepage. Enter its Client ID and client secret. Start with read:user and offline_access; private repository access needs a separate permission review.</p>
    <a href="https://github.com/settings/applications/new" target="_blank" rel="noreferrer">Register GitHub OAuth App</a>
