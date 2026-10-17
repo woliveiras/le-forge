@@ -7,7 +7,10 @@ The current [generic client](mcp.md) supports public HTTPS Streamable HTTP,
 protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries,
 redirects and private destinations. Generic pre-registered OAuth now supports the
 browser lifecycle; see [implementation and limits](mcp.md#browser-oauth-pre-registered-clients).
-Vendor qualification and other credential modes remain pending.
+GitHub, Atlassian, GitLab and custom setup profiles are available for pre-registered
+clients; [registration and evidence](mcp.md#service-setup-and-independent-connections)
+distinguish fixture coverage from pending live/corporate qualification. Other
+credential modes remain pending.
 See also the [additional template survey](mcp-templates.md).
 
 ## GitHub
@@ -117,3 +120,16 @@ The survey is complete at documentation level. OAuth registration/refresh detail
 exact tool-to-API permission mappings and live acceptance are explicit remaining
 implementation qualifications. The additional candidates do not expand Release 1
 acceptance automatically.
+
+
+## GitLab MCP (instance-specific)
+
+The profile derives `/api/v4/mcp` from a selected HTTPS instance origin and requests
+`mcp`. The official MCP guide now documents pre-registered public applications,
+including UI support from 19.3; legacy REST/PAT `api` permissions are not equivalent.
+The scoped public-PKCE metadata compatibility rule and registration instructions
+are described in [the setup guide](mcp.md#gitlab-instance-setup). Exact instance,
+version, group/instance enablement, refresh/revocation and live tool authorization
+remain external acceptance requirements. No registration is performed automatically.
+
+[Official GitLab MCP contract](https://docs.gitlab.com/user/model_context_protocol/mcp_server/).

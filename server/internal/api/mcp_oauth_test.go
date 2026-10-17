@@ -156,3 +156,33 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 		t.Fatal(connection)
 	}
 }
+
+func TestMCPOAuthServiceConfigurationAPI(t *testing.T) {
+	srv, _ := setupApp(t, nil)
+	for _, in := range []mcpconfig.Input{
+		{ID: "personal", Name: "GitHub pessoal", Service: "github", Enabled: true, Endpoint: "https://api.githubcopilot.com/mcp/", OAuth: &mcpconfig.OAuthConfig{Issuer: "https://github.com/login/oauth", ClientID: "registered", Scopes: []string{"read:user"}}},
+		{ID: "work", Name: "Atlassian trabalho", Service: "atlassian", Enabled: true, Endpoint: "https://mcp.atlassian.com/v2/mcp", OAuth: &mcpconfig.OAuthConfig{Issuer: mcptest.AtlassianIssuer, ClientID: "registered", Scopes: []string{"read:me"}}},
+		{ID: "gitlab", Name: "GitLab", Service: "gitlab", Enabled: true, Endpoint: "https://gitlab.example.org/api/v4/mcp", OAuth: &mcpconfig.OAuthConfig{Issuer: "https://gitlab.example.org", ClientID: "registered", Scopes: []string{"mcp"}}},
+	} {
+		raw, _ := json.Marshal(in)
+		if code := call(t, srv, "POST", "/api/v1/mcp/connections", viewerTok, "application/json", string(raw), nil); code != 403 {
+			t.Fatal(code)
+		}
+		var saved mcpconfig.View
+		if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(raw), &saved); code != 201 || saved.OAuth.Status != "authorization_required" || len(saved.Tools) != 0 {
+			t.Fatal(code, saved)
+		}
+	}
+	var list []mcpconfig.View
+	if code := call(t, srv, "GET", "/api/v1/mcp/connections", viewerTok, "", "", &list); code != 200 || len(list) != 3 {
+		t.Fatal(code, list)
+	}
+	for _, body := range []string{
+		`{"id":"bad","name":"Bad","service":"gitlab","endpoint":"https://gitlab.example.org/api/v4/mcp","oauth":{"issuer":"https://other.example","clientId":"registered","scopes":["mcp"]}}`,
+		`{"id":"bad","name":"Bad","service":"gitlab","endpoint":"https://gitlab.example.org/api/v4/mcp","oauth":{"issuer":"https://gitlab.example.org","clientId":"registered","scopes":["api"]}}`,
+	} {
+		if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", body, nil); code != 422 {
+			t.Fatal(code)
+		}
+	}
+}

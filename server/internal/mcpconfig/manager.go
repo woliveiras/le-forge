@@ -107,9 +107,12 @@ func validate(in Input) error {
 		return fmt.Errorf("%w: endpoint must be HTTPS without user info, query or fragment", ErrInvalid)
 	}
 	switch in.Service {
-	case "github", "bitbucket", "jira", "confluence", "generic":
+	case "github", "atlassian", "gitlab", "bitbucket", "jira", "confluence", "generic":
 	default:
 		return fmt.Errorf("%w: unknown service", ErrInvalid)
+	}
+	if err := validateServiceOAuth(in); err != nil {
+		return err
 	}
 	if c := in.Credential; c != nil && (len(c.Value) > 16384 || strings.ContainsAny(c.Value, "\r\n") || c.Clear && c.Value != "") {
 		return fmt.Errorf("%w: invalid credential update", ErrInvalid)
@@ -197,7 +200,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 	if r.OAuth != nil {
 		oldOAuth = &r.OAuth.OAuthConfig
 	}
-	oauthChanged := !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
+	oauthChanged := r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
 	if oauthChanged {
 		r.OAuthRefreshSealed = ""
 		r.OAuthMeta = oauthMetadata{}

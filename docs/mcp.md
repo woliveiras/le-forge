@@ -131,7 +131,8 @@ configure its issuer, client ID, requested scopes and optional client secret.
 Public clients use token endpoint authentication `none`; confidential clients use
 `client_secret_basic` or advertised `client_secret_post`. Missing authentication
 metadata defaults to `client_secret_basic` (RFC 8414); an explicitly empty list
-is rejected. GitHub.com has the narrowly scoped compatibility profile below.
+is rejected. GitHub.com and public GitLab MCP clients have narrowly scoped compatibility
+profiles below.
 Automatic client registration and live-provider qualification remain pending.
 Historical v1 template guidance describes their original Bearer/no-auth presets;
 OAuth settings are configured separately and do not come from a shared link.
@@ -268,3 +269,120 @@ account authorization; that remains pending a user-registered app and consent.
 Sources: [GitHub MCP host integration](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md),
 [OAuth authorization and refresh](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps),
 [RFC 8414 metadata defaults](https://www.rfc-editor.org/rfc/rfc8414.html#section-2).
+
+
+## Service setup and independent connections
+
+In **Integrations**, choose **GitHub**, **Atlassian**, **GitLab** or **Custom**.
+Existing Jira, Confluence and Bitbucket service labels remain readable/editable.
+Choose **Use OAuth defaults** to prepare the fields; review them before saving.
+Applying defaults clears client-registration fields in the form. It does not
+register an external application or authorize access. A pinned v1 template must
+be detached with **Customize without template** first. GitLab's instance field
+accepts an HTTPS origin and derives `/api/v4/mcp`; private networks remain blocked
+by the existing server-side transport. Custom settings require the server's own
+MCP contract, not just an OAuth-enabled REST API.
+
+Use unique IDs such as `github-personal`, `atlassian-work` and `atlassian-other`,
+with display names such as “GitHub pessoal” and “Atlassian trabalho”. The same
+service can have multiple connections. These remain installation-owned settings,
+managed by LeForge administrators; they are not personal user accounts or social
+login. Every ID has its own encrypted credentials, scopes, revision, catalogue,
+authorization transactions and revocation state. Agent grants name the connection:
+`mcp.github-personal.search` cannot authorize `mcp.atlassian-work.search`.
+Changing a service invalidates that connection's OAuth authorization/catalogue.
+
+The form reports **Configuration pending** until a registered client ID is entered.
+Saved OAuth connections show **Authorization required**, **Authorized**, **Error**,
+**Revoked** or an authorization-in-progress state. **Reauthorize** starts a new
+bound transaction. Discovery errors remain distinct from successful token exchange.
+Revocation affects that connection's local credentials and catalogue; no other
+connection's persisted state or grants are edited. External providers can share
+or revoke application-wide grants, so separate LeForge connections do not promise
+isolation from provider-wide account or app revocation.
+
+OAuth errors expose only authored guidance from recognized error codes. Upstream
+error descriptions and URLs are never echoed. Check client registration/callback
+for invalid-client/grant errors, MCP scopes for scope errors, and corporate
+site/project/IP/domain/SSO policies for access denials. A `403` alone does not prove
+which policy failed. Missing refresh credentials or failed renewal requires fresh
+consent. If upstream revocation is unsupported or fails, local access remains
+revoked and the administrator must review provider account settings.
+
+### Atlassian Cloud MCP v2
+
+Public metadata checked on 2026-10-17 advertises:
+
+- Resource: `https://mcp.atlassian.com/v2/mcp`.
+- Issuer: `https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3`.
+- Authorization: `https://auth.atlassian.com/authorize`.
+- Token: `https://auth.atlassian.com/oauth/token`.
+- Revocation: `https://auth.atlassian.com/oauth/revoke`.
+- Client methods: `none`, `client_secret_post`, `client_secret_basic`, and
+  `private_key_jwt`; LeForge supports the first three, not signed client assertions.
+
+LeForge's suggested scopes are `read:me offline_access read:jira:agent-interface
+read:confluence:agent-interface`. Review the tools/sites actually needed before
+consent. Search and write tools may need additional **MCP** scopes; the defaults
+are not permission to use every discovered tool. The issuer is checked against
+resource metadata at every authorization start, so a changed provider contract
+fails visibly rather than silently redirecting credentials.
+
+A compatible pre-registered MCP client must be supplied by your administrator or
+Atlassian. Request a dedicated client with the exact callback displayed by LeForge,
+Authorization Code/PKCE S256, supported client authentication, reviewed MCP scopes
+and refresh-token access. No verified self-service manual registration portal is
+provided here. The advertised DCR endpoint is not called by LeForge. An ordinary
+`auth.atlassian.com` REST 3LO app is not assumed compatible. Without a matching
+registration, the real connection remains pending. Corporate admins may also need
+to allow the callback domain, site and outbound IP. These approvals must happen
+outside this implementation; no corporate settings are changed automatically.
+
+Sources: [MCP resource metadata](https://mcp.atlassian.com/.well-known/oauth-protected-resource/v2/mcp),
+[issuer metadata](https://auth.atlassian.com/.well-known/oauth-authorization-server/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3),
+[official Atlassian MCP setup](https://github.com/atlassian/atlassian-mcp-server).
+The legacy `mcp.atlassian.com` issuer metadata is not interchangeable with the
+issuer advertised for this v2 resource.
+
+### GitLab instance setup
+
+Choose the exact public HTTPS instance origin, for example `https://gitlab.com`
+or `https://gitlab.example.org`. The endpoint is `<origin>/api/v4/mcp`, issuer
+`<origin>`, and requested scope `mcp`. A REST `api` scope is rejected as a substitute.
+GitLab documents pre-registration through user/group/admin UI starting in 19.3:
+create an OAuth application, set the exact LeForge callback, select `mcp`, clear
+**Confidential**, and enter its application ID in LeForge. Instance/group MCP
+access must be enabled. Older versions require separate qualification; an older
+REST OAuth application is not assumed sufficient.
+
+GitLab.com's current metadata lists only confidential client methods even though
+the MCP registration guide prescribes a public client. LeForge allows public
+PKCE only for service `gitlab`, its exact origin/resource pairing, canonical
+`/oauth/authorize` and `/oauth/token` endpoints, and metadata advertising basic or
+post authentication. Custom services and unrelated issuers do not inherit this
+exception. Public clients send no client secret; confidential clients still must
+use a supported advertised method. TLS/public-network checks and S256 remain
+mandatory. Refresh and `/oauth/revoke` use the same connection-specific client.
+
+Sources: [GitLab MCP pre-registration](https://docs.gitlab.com/user/model_context_protocol/mcp_server/#reuse-a-single-oauth-application),
+[GitLab.com resource metadata](https://gitlab.com/.well-known/oauth-protected-resource/api/v4/mcp),
+[GitLab.com issuer metadata](https://gitlab.com/.well-known/oauth-authorization-server).
+An instance can differ from GitLab.com: review its version, metadata, registration
+and corporate controls before authorizing. No application is created by LeForge.
+
+### Qualification and remaining external acceptance
+
+Contract fixtures exercise real TLS OAuth exchanges and MCP discovery/calls,
+encrypted filesystem persistence, overlapping pending authorizations, refresh,
+revocation and exact gateway grants. Chromium covers the setup defaults, four
+simultaneous connections (including two of one service), failed/denied consent,
+re-authorization, independent revocation and absence of fixture secrets in browser
+storage and API views. Generic issuer mismatch, network policy and credential
+redaction tests remain applicable. This is fixture evidence, not live vendor
+certification.
+
+Pending for each real connection: administrator-supplied registration and consent;
+actual discovery and a permitted read tool; expiry/renewal; provider revocation;
+insufficient-scope and corporate policy denial. GitLab also needs qualification of
+the selected instance/version. There is no DCR, installation login change, per-user
+credential ownership or external OAuth registration in this delivery.

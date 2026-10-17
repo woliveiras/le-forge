@@ -35,3 +35,22 @@ it('adds exact grants, preserves existing restrictions and removes stale grants'
  await userEvent.click(await within(region).findByRole('checkbox',{name:'mcp.team.search'}));expect(latest).toContainEqual({name:'mcp.team.search'});expect(latest).toContainEqual({name:'filesystem.read',paths:['src/**']});
  await userEvent.click(within(region).getByRole('checkbox',{name:/mcp.removed.search/}));expect(latest).not.toContain('mcp.removed.search');
 });
+it('prepares known services explicitly, validates GitLab domains and saves public OAuth without secrets',async()=>{
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[], 'GET /api/v1/mcp/oauth/config':()=>({callbackUrl:'https://forge.example/api/v1/mcp/oauth/callback'}),'POST /api/v1/mcp/connections':()=>connection});
+ render(<MCPSection role="admin"/>);
+ await userEvent.selectOptions(screen.getByRole('combobox',{name:/Service/}),'atlassian');
+ await userEvent.click(screen.getByRole('button',{name:'Use OAuth defaults'}));
+ expect((screen.getByLabelText('MCP endpoint') as HTMLInputElement).value).toBe('https://mcp.atlassian.com/v2/mcp');
+ expect(await screen.findByText('https://forge.example/api/v1/mcp/oauth/callback')).toBeTruthy();
+ expect(screen.getByText(/REST API 3LO application is not assumed/)).toBeTruthy();
+ await userEvent.selectOptions(screen.getByRole('combobox',{name:/Service/}),'gitlab');
+ await userEvent.clear(screen.getByLabelText('GitLab instance URL'));await userEvent.type(screen.getByLabelText('GitLab instance URL'),'http://gitlab.example');
+ await userEvent.click(screen.getByRole('button',{name:'Use OAuth defaults'}));expect(await screen.findByText(/GitLab instance must be an HTTPS origin/)).toBeTruthy();
+ await userEvent.clear(screen.getByLabelText('GitLab instance URL'));await userEvent.type(screen.getByLabelText('GitLab instance URL'),'https://gitlab.example');
+ await userEvent.click(screen.getByRole('button',{name:'Use OAuth defaults'}));
+ await userEvent.type(screen.getByLabelText('Connection ID'),'gitlab-work');await userEvent.type(screen.getByLabelText('Connection name'),'GitLab work');await userEvent.type(screen.getByLabelText('OAuth client ID'),'registered-public-client');
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ const body=backend.find('POST','/api/v1/mcp/connections')[0].body;
+ expect(body).toMatchObject({id:'gitlab-work',service:'gitlab',endpoint:'https://gitlab.example/api/v4/mcp',oauth:{issuer:'https://gitlab.example',clientId:'registered-public-client',scopes:['mcp']}});
+ expect(body).not.toHaveProperty('oauthClientSecret');expect(body).not.toHaveProperty('credential');
+});

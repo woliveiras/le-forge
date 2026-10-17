@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -19,19 +20,69 @@ type OAuthServer struct {
 	*httptest.Server
 	mu          sync.Mutex
 	codes       map[string]url.Values
+	hosts       []string
 	Refreshes   atomic.Int32
 	Revocations atomic.Int32
 }
 
-func NewOAuth(resource string) *OAuthServer { return newOAuth(resource, false) }
+func NewOAuth(resource string) *OAuthServer { return newOAuth(resource, "generic") }
 
 // NewGitHubOAuth reproduces GitHub.com metadata and token wire formats locally.
-func NewGitHubOAuth() *OAuthServer { return newOAuth("https://api.githubcopilot.com/mcp/", true) }
+func NewGitHubOAuth() *OAuthServer { return newOAuth("https://api.githubcopilot.com/mcp/", "github") }
 
-func newOAuth(resource string, github bool) *OAuthServer {
+const AtlassianIssuer = "https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3"
+
+func NewAtlassianOAuth() *OAuthServer {
+	return newOAuth("https://mcp.atlassian.com/v2/mcp", "atlassian")
+}
+func NewGitLabOAuth(origin string) *OAuthServer { return newOAuth(origin+"/api/v4/mcp", "gitlab") }
+func newOAuth(resource string, service string) *OAuthServer {
+	github := service == "github"
+	issuer := ""
+	if github {
+		issuer = "https://github.com/login/oauth"
+	}
+	if service == "atlassian" {
+		issuer = AtlassianIssuer
+	}
+	if service == "gitlab" {
+		issuer = strings.TrimSuffix(resource, "/api/v4/mcp")
+	}
 	f := &OAuthServer{codes: map[string]url.Values{}}
+	if issuer != "" {
+		for _, raw := range []string{issuer, resource} {
+			u, _ := url.Parse(raw)
+			f.hosts = append(f.hosts, u.Host)
+		}
+	}
 	f.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if service == "atlassian" || service == "gitlab" {
+			u, _ := url.Parse(issuer)
+			origin := u.Scheme + "://" + u.Host
+			if r.URL.Path == "/.well-known/oauth-authorization-server"+u.Path {
+				methods := []string{"none", "client_secret_post", "client_secret_basic"}
+				if service == "gitlab" {
+					methods = []string{"client_secret_basic", "client_secret_post"}
+				}
+				auth := origin + "/authorize"
+				if service == "gitlab" {
+					auth = origin + "/oauth/authorize"
+				}
+				json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": auth, "token_endpoint": origin + "/oauth/token", "revocation_endpoint": origin + "/oauth/revoke", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": methods})
+				return
+			}
+			ru, _ := url.Parse(resource)
+			if r.URL.Path == ru.Path {
+				w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+ru.Scheme+"://"+ru.Host+"/.well-known/oauth-protected-resource"+ru.Path+`"`)
+				w.WriteHeader(401)
+				return
+			}
+			if r.URL.Path == "/.well-known/oauth-protected-resource"+ru.Path {
+				json.NewEncoder(w).Encode(map[string]any{"resource": resource, "authorization_servers": []string{issuer}})
+				return
+			}
+		}
 		switch r.URL.Path {
 		case "/.well-known/oauth-authorization-server/login/oauth":
 			if !github {
@@ -51,7 +102,7 @@ func newOAuth(resource string, github bool) *OAuthServer {
 		case "/mcp":
 			w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+f.URL+`/resource"`)
 			w.WriteHeader(401)
-		case "/authorize", "/login/oauth/authorize":
+		case "/authorize", "/login/oauth/authorize", "/oauth/authorize":
 			q := r.URL.Query()
 			if q.Get("code_challenge_method") != "S256" || q.Get("resource") != resource {
 				http.Error(w, "invalid authorization", 400)
@@ -73,8 +124,8 @@ func newOAuth(resource string, github bool) *OAuthServer {
 			out := target.Query()
 			out.Set("state", q.Get("state"))
 			out.Set("iss", f.URL)
-			if github {
-				out.Set("iss", "https://github.com/login/oauth")
+			if issuer != "" {
+				out.Set("iss", issuer)
 			}
 			if q.Get("decision") == "deny" {
 				out.Set("error", "access_denied")
@@ -87,9 +138,13 @@ func newOAuth(resource string, github bool) *OAuthServer {
 			}
 			target.RawQuery = out.Encode()
 			http.Redirect(w, r, target.String(), 303)
-		case "/token", "/login/oauth/access_token":
+		case "/token", "/login/oauth/access_token", "/oauth/token":
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "invalid form", 400)
+				return
+			}
+			if (service == "gitlab" || service == "atlassian") && (r.Form.Get("client_secret") != "" || r.Header.Get("Authorization") != "") {
+				http.Error(w, "public fixture client required", 401)
 				return
 			}
 			if github && (r.Form.Get("client_secret") != "fixture-client-secret" || r.Header.Get("Authorization") != "") {
@@ -130,9 +185,15 @@ func newOAuth(resource string, github bool) *OAuthServer {
 				if github {
 					return "read:user,read:org"
 				}
+				if service == "gitlab" {
+					return "mcp"
+				}
+				if service == "atlassian" {
+					return "read:me offline_access read:jira:agent-interface read:confluence:agent-interface"
+				}
 				return "read"
 			}()})
-		case "/revoke":
+		case "/revoke", "/oauth/revoke":
 			f.Revocations.Add(1)
 			if err := r.ParseForm(); err != nil {
 				http.Error(w, "bad form", 400)
@@ -157,21 +218,27 @@ func newOAuth(resource string, github bool) *OAuthServer {
 
 // GitHubClient routes only these fixture public URLs to the TLS server. It is
 // injected exclusively by tests; production retains public-network validation.
-func (f *OAuthServer) GitHubClient() *http.Client {
-	client := f.Client()
-	transport := client.Transport
-	target, _ := url.Parse(f.URL)
-	client.Transport = fixtureTransport(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Host == "github.com" || r.URL.Host == "api.githubcopilot.com" {
-			r = r.Clone(r.Context())
-			u := *r.URL
-			u.Scheme, u.Host = target.Scheme, target.Host
-			r.URL = &u
-			r.Host = target.Host
+func (f *OAuthServer) GitHubClient() *http.Client { return OAuthClient(f) }
+
+// OAuthClient routes public contract URLs only inside the fixture harness.
+func OAuthClient(fixtures ...*OAuthServer) *http.Client {
+	transport := fixtures[0].Client().Transport
+	return &http.Client{Transport: fixtureTransport(func(r *http.Request) (*http.Response, error) {
+		for _, f := range fixtures {
+			for _, host := range f.hosts {
+				if r.URL.Host == host {
+					target, _ := url.Parse(f.URL)
+					r = r.Clone(r.Context())
+					u := *r.URL
+					u.Scheme, u.Host = target.Scheme, target.Host
+					r.URL = &u
+					r.Host = target.Host
+					return f.Client().Transport.RoundTrip(r)
+				}
+			}
 		}
 		return transport.RoundTrip(r)
-	})
-	return client
+	})}
 }
 
 type fixtureTransport func(*http.Request) (*http.Response, error)

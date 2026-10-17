@@ -18,21 +18,22 @@ export function MCPOAuthReturn({query,canManage,onChanged}:{query:string;canMana
  return <section aria-label="OAuth return"><h3>Return from OAuth provider</h3>
   {!valid?<ErrorBox error="Invalid OAuth return. Start authorization again from the connection."/>:<>
    <p>Complete the connection using the same LeForge login that started authorization.</p>
-   <ErrorBox error={error}/>{result?<p role="status">{result}</p>:canManage?<Btn disabled={busy} onClick={()=>void complete()}>Complete OAuth connection</Btn>:<p>Sign in as the administrator who started this connection.</p>}
+   <ErrorBox error={error}/>{error&&<p>Check the registered callback, MCP scopes and corporate access policy. Restart authorization from the connection after correcting configuration; do not reuse an expired or denied return.</p>}{result?<p role="status">{result}</p>:canManage?<Btn disabled={busy} onClick={()=>void complete()}>Complete OAuth connection</Btn>:<p>Sign in as the administrator who started this connection.</p>}
   </>}
  </section>;
 }
 export function MCPOAuthActions({connection,canManage,onChanged}:{connection:MCPConnection;canManage:boolean;onChanged:()=>Promise<void>}) {
  const [busy,setBusy]=useState(false);const [error,setError]=useState<string>();const [confirm,setConfirm]=useState(false);
  const oauth=connection.oauth!;
+ const status=error?'Error — last OAuth action failed':oauth.status==='revoked'?'Revoked':oauth.status==='reauthorization_required'||connection.status==='unavailable'?'Error — authorization or discovery needs attention':oauth.status==='authorized'?'Authorized':oauth.status==='authorization_required'?'Authorization required':'Authorization in progress';
  async function start(){setBusy(true);setError(undefined);try{const result=await api.startMCPOAuth(connection.id);window.location.assign(result.url);}catch(e){setError(errorMessage(e));setBusy(false);}}
  async function revoke(){setBusy(true);setError(undefined);try{await api.revokeMCPOAuth(connection.id);setConfirm(false);await onChanged();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  return <section aria-label={`OAuth ${connection.name}`}>
-  <p>OAuth: {oauth.status} · Issuer: {oauth.issuer}</p><p>Requested scopes: {oauth.scopes.join(', ')||'Provider defaults'} · Granted: {oauth.grantedScopes?.join(', ')||'Not authorized'}</p>
+  <p>{status}</p><p>OAuth: {oauth.status} · Issuer: {oauth.issuer}</p><p>Requested scopes: {oauth.scopes.join(', ')||'Provider defaults'} · Granted: {oauth.grantedScopes?.join(', ')||'Not authorized'}</p>
   {oauth.expiresAt&&<p>Token expires: {oauth.expiresAt}. Renewal is attempted before use when supported.</p>}
   {oauth.revocation&&<p>Local access revoked. Provider revocation: {oauth.revocation}. {oauth.revocation!=='requested'&&'Review and revoke access in the provider account settings.'}</p>}
-  <ErrorBox error={error}/>
-  {canManage&&<div className="btn-row"><Btn disabled={busy||!connection.enabled} onClick={()=>void start()}>Authorize {connection.name}</Btn>
+  <ErrorBox error={error}/>{(error||connection.error)&&<p>Check the client registration and exact callback. A 403 may indicate insufficient MCP scopes, repository/site permissions, SSO, or a corporate IP/domain policy. Correct the specific restriction before reauthorizing.</p>}
+  {canManage&&<div className="btn-row"><Btn disabled={busy||!connection.enabled} onClick={()=>void start()}>{oauth.status==='authorized'||oauth.status==='reauthorization_required'||oauth.status==='revoked'?'Reauthorize':'Authorize'} {connection.name}</Btn>
    {confirm?<><p>Revoke this connection for all agents? Already dispatched calls cannot be undone.</p><Btn disabled={busy} onClick={()=>void revoke()}>Confirm revoke {connection.name}</Btn><Btn disabled={busy} onClick={()=>setConfirm(false)}>Cancel revocation</Btn></>:<Btn disabled={busy||oauth.status==='revoked'} onClick={()=>setConfirm(true)}>Revoke OAuth {connection.name}</Btn>}
   </div>}
  </section>;

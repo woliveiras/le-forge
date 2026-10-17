@@ -113,7 +113,19 @@ func run() error {
 	defer fixtureOAuth.Close()
 	githubOAuth := mcptest.NewGitHubOAuth()
 	defer githubOAuth.Close()
-	a.MCP.OAuthClient = githubOAuth.GitHubClient()
+	atlassianOAuth := mcptest.NewAtlassianOAuth()
+	defer atlassianOAuth.Close()
+	gitlabOAuth := mcptest.NewGitLabOAuth("https://gitlab.fixture.example")
+	defer gitlabOAuth.Close()
+	a.MCP.OAuthClient = mcptest.OAuthClient(githubOAuth, atlassianOAuth, gitlabOAuth)
+	for _, in := range []mcpconfig.Input{
+		{ID: "atlassian-oauth-fixture-config", Name: atlassianOAuth.URL, Service: "atlassian", Endpoint: "https://mcp.atlassian.com/v2/mcp", OAuth: &mcpconfig.OAuthConfig{Issuer: mcptest.AtlassianIssuer, ClientID: "fixture", Scopes: []string{"read:me", "offline_access", "read:jira:agent-interface", "read:confluence:agent-interface"}}},
+		{ID: "gitlab-oauth-fixture-config", Name: gitlabOAuth.URL, Service: "gitlab", Endpoint: "https://gitlab.fixture.example/api/v4/mcp", OAuth: &mcpconfig.OAuthConfig{Issuer: "https://gitlab.fixture.example", ClientID: "fixture", Scopes: []string{"mcp"}}},
+	} {
+		if _, err := a.MCP.Put(ctx, in, 0, "fixture"); err != nil {
+			return err
+		}
+	}
 	if _, err := a.MCP.Put(ctx, mcpconfig.Input{ID: "github-oauth-fixture-config", Name: githubOAuth.URL, Service: "github", Endpoint: "https://api.githubcopilot.com/mcp/", Enabled: false, OAuth: &mcpconfig.OAuthConfig{Issuer: "https://github.com/login/oauth", ClientID: "fixture-client", Scopes: []string{"read:user", "read:org"}}}, 0, "fixture"); err != nil {
 		return err
 	}
@@ -121,13 +133,13 @@ func run() error {
 		return err
 	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
-		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" {
+		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" && endpoint != "https://mcp.atlassian.com/v2/mcp" && endpoint != "https://gitlab.fixture.example/api/v4/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
-		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" {
+		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" && endpoint != "https://mcp.atlassian.com/v2/mcp" && endpoint != "https://gitlab.fixture.example/api/v4/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.CallWithClient(ctx, fixtureMCP.URL, token, name, args, fixtureMCP.Client())

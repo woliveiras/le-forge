@@ -127,6 +127,9 @@ func oauthJSON(ctx context.Context, client *http.Client, endpoint string, form u
 	if err != nil || len(data) > 65536 {
 		return oauthError("OAuth response exceeds limits")
 	}
+	if err := oauthProviderError(data); err != nil {
+		return err
+	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return oauthError("OAuth request rejected; authorize again or check provider settings")
 	}
@@ -170,6 +173,29 @@ func oauthClientMethod(meta oauthMetadata, confidential bool) (string, error) {
 		return "none", nil
 	}
 	return "", fmt.Errorf("%w: OAuth client authentication method unsupported", ErrInvalid)
+}
+
+// Only allowlisted error codes become authored guidance; upstream descriptions,
+// URIs and other payloads can contain credentials and must never be echoed.
+func oauthProviderError(data []byte) error {
+	var response struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(data, &response) != nil || response.Error == "" {
+		return nil
+	}
+	switch response.Error {
+	case "invalid_client", "incorrect_client_credentials", "unauthorized_client":
+		return oauthError("OAuth client registration rejected; check the client ID, authentication method and registered client secret")
+	case "invalid_grant", "bad_verification_code", "redirect_uri_mismatch":
+		return oauthError("OAuth authorization expired or callback rejected; verify the exact registered callback and start authorization again")
+	case "invalid_scope", "insufficient_scope":
+		return oauthError("OAuth scopes rejected; use the MCP scopes permitted by the client registration and administrator")
+	case "access_denied":
+		return oauthError("OAuth access denied; review consent and corporate site, domain, IP or SSO policies with the administrator")
+	default:
+		return oauthError("OAuth provider rejected the request; check client registration and access policy")
+	}
 }
 
 func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error) {
@@ -221,7 +247,7 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 			return meta, err
 		}
 	}
-	if _, err := oauthClientMethod(meta, r.OAuthClientSealed != ""); err != nil {
+	if _, err := connectionClientMethod(r, meta); err != nil {
 		return meta, err
 	}
 	if m.OAuthClient == nil {
@@ -317,7 +343,7 @@ func (m *Manager) tokenRequest(ctx context.Context, r record, meta oauthMetadata
 		}
 		secret = string(b)
 	}
-	method, err := oauthClientMethod(meta, secret != "")
+	method, err := connectionClientMethod(r, meta)
 	if err != nil {
 		return result, err
 	}
@@ -586,7 +612,7 @@ func (m *Manager) revokeRemote(ctx context.Context, r record, t oauthTokens) (st
 			continue
 		}
 		form := url.Values{"client_id": {r.OAuth.ClientID}, "token": {entry.value}, "token_type_hint": {entry.hint}}
-		method, err := oauthClientMethod(r.OAuthMeta, secret != "")
+		method, err := connectionClientMethod(r, r.OAuthMeta)
 		if err != nil {
 			return "failed", err
 		}

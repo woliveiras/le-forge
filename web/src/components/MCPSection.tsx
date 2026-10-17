@@ -1,3 +1,5 @@
+import { MCPServiceGuide } from './MCPServiceGuide';
+import { oauthDefaults, serviceOptions } from './mcpServices';
 import { MCPOAuthReturn, MCPOAuthActions, MCPOAuthCallbackURL } from './MCPOAuth';
 import { MCPTemplates } from './MCPTemplates';
 import { useState } from 'react';
@@ -10,6 +12,7 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
   const list=useAsync(api.mcpConnections,[]);
   const [input,setInput]=useState<MCPConnectionInput>(empty);
   const [revision,setRevision]=useState<number>();
+  const [gitlabInstance,setGitlabInstance]=useState('https://gitlab.com');
   const [token,setToken]=useState('');
   const [clientSecret,setClientSecret]=useState('');
   const [clearClientSecret,setClearClientSecret]=useState(false);
@@ -17,7 +20,8 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string>();
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,template:c.template,oauth:c.oauth?{issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,template:c.template,oauth:c.oauth?{issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   async function discover(id:string,action:'test'|'tools/refresh'){setBusy(true);setError(undefined);try{await api.refreshMCP(id,action);await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   return <section className="integration-section" aria-label="MCP connections">
@@ -35,11 +39,17 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
       {input.template&&<p>Template: {input.template.id} v{input.template.version}. Review the fields, then save. <Btn onClick={()=>setInput({...input,template:undefined})}>Customize without template</Btn></p>}
       <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={input.id} disabled={!!revision||busy} onChange={e=>setInput({...input,id:e.target.value})}/></label>
       <label>Connection name<input required maxLength={120} value={input.name} onChange={e=>setInput({...input,name:e.target.value})}/></label>
-      <label>Service<select disabled={!!input.template} value={input.service} onChange={e=>setInput({...input,service:e.target.value})}>{['generic','github','bitbucket','jira','confluence'].map(s=><option key={s}>{s}</option>)}</select></label>
+      <label>Service<select disabled={!!input.template} value={input.service} onChange={e=>setInput({...input,service:e.target.value})}>{serviceOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+      <MCPServiceGuide service={input.service}/>
+      {!input.template&&<>
+        {input.service==='gitlab'&&<label>GitLab instance URL<input type="url" value={gitlabInstance} onChange={e=>setGitlabInstance(e.target.value)}/></label>}
+        <p>Apply defaults to prepare OAuth fields. This clears the client registration fields in the form; review and save to change the connection.</p>
+        <Btn disabled={busy} onClick={applyDefaults}>Use OAuth defaults</Btn>
+      </>}
       <label>MCP endpoint<input type="url" required placeholder="https://mcp.example.com/mcp" readOnly={!!input.template} value={input.endpoint} onChange={e=>setInput({...input,endpoint:e.target.value})}/></label>
       <label><input type="checkbox" checked={!!input.oauth} onChange={e=>{setInput({...input,oauth:e.target.checked?{issuer:'',clientId:'',scopes:[]}:undefined});setToken('');setClear(false);setClientSecret('');setClearClientSecret(false);}}/>Use browser OAuth</label>
       {input.oauth?<fieldset><legend>OAuth client registration</legend>
-        <MCPOAuthCallbackURL/><p>Review the issuer and scopes before saving.</p>
+        <MCPOAuthCallbackURL/><p>Review the issuer and scopes before saving.</p>{!input.oauth.clientId&&<p role="status">Configuration pending: enter a pre-registered OAuth client ID.</p>}
         <label>OAuth issuer<input required type="url" value={input.oauth.issuer} onChange={e=>setInput({...input,oauth:{...input.oauth!,issuer:e.target.value}})}/></label>
         <label>OAuth client ID<input required value={input.oauth.clientId} onChange={e=>setInput({...input,oauth:{...input.oauth!,clientId:e.target.value}})}/></label>
         <label>OAuth scopes (space separated)<input value={input.oauth.scopes.join(' ')} onChange={e=>setInput({...input,oauth:{...input.oauth!,scopes:e.target.value.split(' ')}})}/></label>

@@ -301,6 +301,12 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 - [ ] Bitbucket Cloud: guide organization-linked workspace/repository selection and read/write MCP scopes; test unlinked workspaces, cross-workspace denial, PR reads and an approved test mutation; pipelines/merge are separate grants.
 - [ ] Jira Cloud: guide site/project selection and read/search/write MCP scopes; test JQL/issue reads, missing scope/project access, field/transition failures and approved test writes; exclude delete/manage from initial defaults.
 - [ ] Confluence Cloud: guide site/space selection and read/search/write MCP scopes; test restricted content, page/search reads, approved updates, version conflicts and permission failures; do not fetch returned attachment links automatically.
+- [x] Offer GitHub, Atlassian, GitLab instance and custom OAuth setup defaults and exact callback/registration guidance; preserve legacy labels and explicitly report pending external qualification.
+- [x] Exercise independent installation-owned connections, including repeated services, overlapping OAuth transactions, renewal/revocation isolation and per-agent exact grants with unit, TLS integration and browser fixtures.
+- [x] Support the documented GitLab public pre-registration contract with PKCE, canonical instance endpoints and `mcp` scope; reject REST scope substitution and unrelated metadata.
+- [ ] Complete live Atlassian MCP client provisioning/consent and corporate domain/site/IP approval with the administrator; do not substitute an unqualified REST 3LO app.
+- [ ] Qualify the chosen GitLab instance/version using a user-approved registration, real tool read, renewal, revocation and scope/policy denials.
+
 #### Browser-Link Connection and OAuth Lifecycle
 
 - [x] Add shareable links to a template/version on the local or hosted LeForge installation; validate public parameters, reject extra parameters/unknown templates and preserve selection through login. — Hash route, review screen, explicit admin save, unit and Chromium tests; opening a link never creates a connection or grants tools.

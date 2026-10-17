@@ -36,3 +36,12 @@ it('shows the configured callback and reports configuration errors',async()=>{
  fakeApi({'GET /api/v1/mcp/oauth/config':()=>apiError(400,'Configure public URL','invalid')});
  render(<MCPOAuthCallbackURL/>);expect(await screen.findByText('Configure public URL')).toBeTruthy();
 });
+it('distinguishes discovery errors from authorized tokens and labels reauthorization',()=>{
+ const view=render(<MCPOAuthActions connection={{...connection,status:'unavailable',error:'Discovery failed'}} canManage onChanged={async()=>{}}/>);
+ expect(screen.getByText('Error — authorization or discovery needs attention')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Reauthorize OAuth example'})).toBeTruthy();
+ expect(screen.getByText(/corporate IP\/domain policy/)).toBeTruthy();
+ view.rerender(<MCPOAuthActions connection={{...connection,oauth:{...connection.oauth!,status:'revoked'}}} canManage onChanged={async()=>{}}/>);
+ expect(screen.getByText('Revoked')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Revoke OAuth OAuth example'}).hasAttribute('disabled')).toBe(true);
+});

@@ -78,7 +78,7 @@ test('GitHub contract: confidential consent, comma scopes, renewal, errors and l
  await page.getByRole('button',{name:'Authorize GitHub OAuth browser',exact:true}).click();
  await page.getByRole('button',{name:'Allow fixture access'}).click();
  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
- await expect(page.getByText(/OAuth token response invalid/)).toBeVisible();
+ await expect(page.getByText(/OAuth client registration rejected/)).toBeVisible();
  await page.goto('/#/integrations'); await page.reload();
  await page.getByRole('button',{name:'Edit GitHub OAuth browser',exact:true}).click();
  await page.getByLabel('OAuth client secret (optional)',{exact:true}).fill('fixture-client-secret');
@@ -97,4 +97,56 @@ test('GitHub contract: confidential consent, comma scopes, renewal, errors and l
  await card.getByRole('button',{name:'Confirm revoke GitHub OAuth browser',exact:true}).click();
  await expect(card).toContainText('OAuth: revoked'); await expect(card).toContainText('Provider revocation: unsupported');
  await expect(card).not.toContainText('mcp.github-oauth-browser.search');
+});
+
+test('keeps personal, corporate and GitLab OAuth connections and agent grants independent',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ const configurations:Record<string,{name:string;endpoint:string;oauth:{issuer:string}}>= {};
+ for(const service of ['github','atlassian','gitlab']){
+  const config=await (await page.request.get(`/api/v1/mcp/connections/${service}-oauth-fixture-config`,{headers})).json();configurations[service]=config;
+  const authorization=service==='github'?'https://github.com/login/oauth/authorize':service==='atlassian'?'https://auth.atlassian.com/authorize':'https://gitlab.fixture.example/oauth/authorize';
+  await page.route(authorization+'?**',async route=>{
+   const url=new URL(route.request().url());const response=await route.fetch({url:config.name+url.pathname+url.search,maxRedirects:0});await route.fulfill({response});
+  });
+ }
+ const connections=[['personal-mcp','GitHub pessoal','github'],['work-mcp','Atlassian trabalho','atlassian'],['work-two-mcp','Atlassian outro trabalho','atlassian'],['gitlab-mcp','GitLab equipe','gitlab']];
+ for(const [id,name,service] of connections){
+  await page.goto('/#/integrations');await page.reload();
+  await page.getByRole('combobox',{name:/^Service/}).selectOption(service);
+  if(service==='gitlab')await page.getByLabel('GitLab instance URL').fill('https://gitlab.fixture.example');
+  await page.getByRole('button',{name:'Use OAuth defaults',exact:true}).click();
+  await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue(configurations[service].endpoint);
+  await expect(page.getByText(new URL('/api/v1/mcp/oauth/callback',page.url()).href,{exact:true})).toBeVisible();
+  await page.getByLabel('Connection ID',{exact:true}).fill(id);await page.getByLabel('Connection name',{exact:true}).fill(name);
+  await page.getByLabel('OAuth client ID',{exact:true}).fill(id);
+  if(service==='github'){
+   await page.getByLabel('OAuth client secret (optional)',{exact:true}).fill('fixture-client-secret');
+   await page.getByLabel('OAuth scopes (space separated)',{exact:true}).fill('read:user read:org');
+  }
+  await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+  await page.getByRole('button',{name:'Authorize '+name,exact:true}).click();
+  await page.getByRole('button',{name:'Allow fixture access'}).click();
+  await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);
+  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
+  await expect(page.getByRole('status')).toContainText('OAuth connected.');
+  await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText(`mcp.${id}.search`);
+ }
+ const before=await (await page.request.get('/api/v1/mcp/connections/personal-mcp',{headers})).json();
+ const graphID='multi-mcp-grants';
+ expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id:graphID,name:graphID},spec:{nodes:[{id:'worker',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},isolation:{mode:'process'},loop:{mode:'once'},prompt:'test',tools:[]}]}}})).status()).toBe(201);
+ await page.goto(`/#/g/${graphID}/canvas?sel=node:worker`);
+ const grants=page.getByRole('region',{name:'MCP permissions',exact:true});
+ for(const [id] of connections)await expect(grants.getByRole('checkbox',{name:`mcp.${id}.search`,exact:true})).not.toBeChecked();
+ await grants.getByRole('checkbox',{name:'mcp.personal-mcp.search',exact:true}).check();
+ await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/v1/graphs/'+graphID)&&r.request().method()==='PUT'&&r.status()===200),page.getByRole('button',{name:'Save graph',exact:true}).click()]);
+ await page.goto('/#/integrations');
+ const work=page.getByRole('article',{name:'MCP Atlassian trabalho',exact:true});
+ await work.getByRole('button',{name:'Revoke OAuth Atlassian trabalho',exact:true}).click();await work.getByRole('button',{name:'Confirm revoke Atlassian trabalho',exact:true}).click();
+ await expect(work).toContainText('OAuth: revoked');await expect(work).not.toContainText('mcp.work-mcp.search');
+ for(const name of ['GitHub pessoal','Atlassian outro trabalho','GitLab equipe'])await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText('OAuth: authorized');
+ expect(await (await page.request.get('/api/v1/mcp/connections/personal-mcp',{headers})).json()).toEqual(before);
+ await work.getByRole('button',{name:'Reauthorize Atlassian trabalho',exact:true}).click();await page.getByRole('button',{name:'Deny fixture access'}).click();await page.getByRole('button',{name:'Complete OAuth connection'}).click();await expect(page.getByText(/authorization cancelled or denied/)).toBeVisible();
+ await page.goto('/#/integrations');await page.reload();await expect(page.getByRole('article',{name:'MCP GitHub pessoal',exact:true})).toContainText('OAuth: authorized');
+ const stored=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));
+ for(const secret of ['fixture-client-secret','fixture-refresh-token','fixture-mcp-token'])expect(stored).not.toContain(secret);
 });
