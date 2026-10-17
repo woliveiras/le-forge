@@ -611,3 +611,37 @@ administrator approval/build, and prepares the approved sandbox before commands
 continue with the same workspace. Existing repository definitions take priority.
 Timeout/restart semantics follow the turn and persisted proposal lifecycle; no
 in-memory call restoration or arbitrary graph targeting is implied.
+
+## UX Reorganization — Incremental Delivery
+
+The reviewed three-screen prototype establishes the direction for agent configuration,
+MCP connection detail and execution inspection. It is a design reference with fictional
+data, not an implementation or vendor-validation claim.
+
+Preserve graph ownership, whole-document draft/version semantics, explicit per-agent
+permissions, OAuth gates, redacted history, read-only workspace inspection and API role
+checks. Keep Graphs as the product entity; first-class projects/tasks and dynamic delegation
+remain separate planned work. All interface copy remains in English.
+
+1. Separate installation destinations: Connections, Models and Administration, with
+   stable global navigation. Administration separates health, network policies, shared
+   resources, retention and the built-in tool catalogue. Existing integration/template/
+   OAuth URLs remain compatible. Mount only the selected area; navigation must not test
+   providers, grant tools, or mutate settings. Delivered as the first implementation slice, with route, real-client component and disposable-backend browser coverage. Existing MCP/provider forms remain unchanged within their new destinations; installation activation is not part of this evidence.
+2. Replace graph tabs in global navigation with a scalable graph selector; preserve
+   deep links, history and unsaved drafts. Add a list alternative to the canvas.
+3. Build connection list/detail routes with Overview, Tools, Usage & history and Settings;
+   show connection creation only on request, preserve manual/DCR/CIMD and uncertain states.
+4. Give agents a dedicated configuration page: General, Instructions, Tools & permissions
+   and Advanced. Keep effective isolation/grants visible; review the complete graph draft
+   before saving. Keep operational controls separate from editing.
+5. Introduce Runs list/detail navigation over existing execution records. Show results and
+   actionable blockers first, with timeline, calls, messages and diagnostics on demand.
+   Do not infer task completion, percentage progress or record relationships.
+6. Consolidate typography, spacing, contextual help, focus and responsive behavior, then
+   implement optional resumable onboarding. Prototype/user research does not establish
+   usability success: validate with developers before claiming the proposed task-time goals.
+
+Each slice requires unit tests, real-client/component integration tests and disposable-
+backend browser coverage for success, error recovery, permissions, deep links and relevant
+narrow-window interactions. Installation activation is a separate approved operation.

@@ -19,7 +19,7 @@ async function read(page: Page, path: string) {
 
 async function configure(page: Page, name: string, model: string) {
   const fixture = await read(page, '/fixture');
-  await page.goto('/#/integrations');
+  await page.goto('/#/models');
   await page.getByRole('button', { name: 'Add provider', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel(/^Name/).fill(name);

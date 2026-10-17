@@ -5,7 +5,7 @@ import { ApprovalsView } from './components/ApprovalsView';
 import { Badge, Btn, ErrorBox, Modal } from './components/common';
 import { GraphList } from './components/GraphList';
 import { GraphWorkspace, type GraphTab } from './components/GraphWorkspace';
-import { IntegrationsView } from './components/IntegrationsView';
+import { AdministrationPage, administrationSections, ConnectionsPage, ModelsPage, type AdministrationSection } from './components/InstallationPages';
 import { SkillsView } from './components/SkillsView';
 import { useAsync, useThrottled } from './hooks/useData';
 import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
@@ -13,22 +13,27 @@ import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
 /**
  * Routes live in the hash so a reload (or a shared link) returns to the same
  * place without server-side routing:
- *   #/graphs            #/approvals            #/integrations
+ *   #/graphs  #/approvals  #/connections  #/models  #/administration/<section>
+ * Legacy #/integrations links remain MCP aliases, including OAuth returns.
  *   #/g/<id>/<tab>[?c=<correlation id>]
  */
 type Route =
   | { view: 'graphs' }
   | { view: 'approvals' }
-  | { view: 'integrations'; connectQuery?: string; oauthQuery?: string }
+  | { view: 'connections'; connectQuery?: string; oauthQuery?: string }
+  | { view: 'models' }
+  | { view: 'administration'; section: AdministrationSection }
   | { view: 'skills' }
   | { view: 'graph'; id: string; tab: GraphTab; correlationId?: string };
 
-function parseRoute(hash: string): Route {
+export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
   const parts = path.split('/').filter(Boolean);
   if (parts[0] === 'approvals') return { view: 'approvals' };
   if (parts[0] === 'skills') return { view: 'skills' };
-  if (parts[0] === 'integrations') return { view: 'integrations', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined, oauthQuery: parts[1] === 'oauth' ? (qs ?? '') : undefined };
+  if (parts[0] === 'models') return { view: 'models' };
+  if (parts[0] === 'administration') return { view: 'administration', section: administrationSections.includes(parts[1] as AdministrationSection) ? parts[1] as AdministrationSection : 'health' };
+  if (parts[0] === 'integrations' || parts[0] === 'connections') return { view: 'connections', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined, oauthQuery: parts[1] === 'oauth' ? (qs ?? '') : undefined };
   if (parts[0] === 'g' && parts[1]) {
     const tab = (['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
       ? (parts[2] as GraphTab)
@@ -39,10 +44,12 @@ function parseRoute(hash: string): Route {
   return { view: 'graphs' };
 }
 
-function routeHash(r: Route): string {
+export function routeHash(r: Route): string {
   if (r.view === 'approvals') return '#/approvals';
   if (r.view === 'skills') return '#/skills';
-  if (r.view === 'integrations') return '#/integrations';
+  if (r.view === 'connections') return '#/connections';
+  if (r.view === 'models') return '#/models';
+  if (r.view === 'administration') return `#/administration/${r.section}`;
   if (r.view === 'graph')
     return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
   return '#/graphs';
@@ -119,9 +126,6 @@ function Shell() {
           ))}
         </nav>
         <span className="spacer" />
-        <button type="button" className={`approvals-btn ${route.view === 'skills' ? 'on' : ''}`} onClick={() => go({ view: 'skills' })}>
-          Skills & steering
-        </button>
         {info.data && (
           <span className="infra" title={`instance ${info.data.instance} · version ${info.data.version}`}>
             <span className="infra-meta">{info.data.queue} · {info.data.storage}</span>
@@ -131,57 +135,69 @@ function Shell() {
         <span className={`conn ${connected ? 'on' : ''}`} title="Event stream">
           {connected ? '● live' : '○ offline'}
         </span>
-        <button
-          type="button"
-          className={`approvals-btn ${route.view === 'integrations' ? 'on' : ''}`}
-          onClick={() => go({ view: 'integrations' })}
-        >
-          Integrations
-        </button>
-        <button
-          type="button"
-          className={`approvals-btn ${route.view === 'approvals' ? 'on' : ''}`}
-          onClick={() => go({ view: 'approvals' })}
-        >
-          Approvals {pending > 0 && <span className="count">{pending}</span>}
-        </button>
         {info.data?.grafanaUrl && (
           <a href={info.data.grafanaUrl} target="_blank" rel="noreferrer" className="small">
             Grafana ↗
           </a>
         )}
       </header>
-      <main>
-        <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
-        {route.view === 'graphs' && (
-          <GraphList
-            graphs={list}
-            error={graphs.error}
-            onOpen={(id) => go({ view: 'graph', id, tab: 'canvas' })}
-            onChanged={() => void graphs.reload()}
-          />
-        )}
-        {route.view === 'skills' && <SkillsView role={info.data?.identity?.role} onChanged={() => void graphs.reload()} />}
-        {route.view === 'approvals' && <ApprovalsView onChanged={() => void approvals.reload()} />}
-        {route.view === 'integrations' && <IntegrationsView info={info.data} infoError={info.error} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
-        {route.view === 'graph' &&
-          (current ? (
-            <GraphWorkspace
-              key={current.graph.metadata.id}
-              summary={current}
-              info={info.data}
-              tab={route.tab}
-              onTab={(tab) => go({ ...route, tab })}
-              onSaved={onSaved}
-              correlationId={route.correlationId}
-              onCorrelation={(c) => go({ ...route, tab: 'messages', correlationId: c })}
+      <div className="workspace-shell">
+        <nav className="primary-navigation" aria-label="Main navigation">
+          <button type="button" className={`approvals-btn ${route.view === 'graphs' || route.view === 'graph' ? 'on' : ''}`} onClick={() => go({ view: 'graphs' })}>Graphs</button>
+          <button
+            type="button"
+            className={`approvals-btn ${route.view === 'connections' ? 'on' : ''}`} aria-current={route.view === 'connections' ? 'page' : undefined}
+            onClick={() => go({ view: 'connections' })}
+          >
+            Connections
+          </button>
+          <button type="button" className={`approvals-btn ${route.view === 'models' ? 'on' : ''}`} aria-current={route.view === 'models' ? 'page' : undefined} onClick={() => go({ view: 'models' })}>Models</button>
+          <button type="button" className={`approvals-btn ${route.view === 'administration' ? 'on' : ''}`} aria-current={route.view === 'administration' ? 'page' : undefined} onClick={() => go({ view: 'administration', section: 'health' })}>Administration</button>
+          <button
+            type="button"
+            className={`approvals-btn ${route.view === 'approvals' ? 'on' : ''}`} aria-current={route.view === 'approvals' ? 'page' : undefined}
+            onClick={() => go({ view: 'approvals' })}
+          >
+            Approvals {pending > 0 && <span className="count">{pending}</span>}
+          </button>
+          <button type="button" className={`approvals-btn ${route.view === 'skills' ? 'on' : ''}`} aria-current={route.view === 'skills' ? 'page' : undefined} onClick={() => go({ view: 'skills' })}>
+            Skills & steering
+          </button>
+        </nav>
+        <main>
+          <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
+          {route.view === 'graphs' && (
+            <GraphList
+              graphs={list}
+              error={graphs.error}
+              onOpen={(id) => go({ view: 'graph', id, tab: 'canvas' })}
+              onChanged={() => void graphs.reload()}
             />
-          ) : graphs.loading ? (
-            <p className="muted page">Loading…</p>
-          ) : (
-            <ErrorBox error={graphs.error ?? `Graph “${route.id}” not found.`} />
-          ))}
-      </main>
+          )}
+          {route.view === 'skills' && <SkillsView role={info.data?.identity?.role} onChanged={() => void graphs.reload()} />}
+          {route.view === 'approvals' && <ApprovalsView onChanged={() => void approvals.reload()} />}
+          {route.view === 'connections' && <ConnectionsPage info={info.data} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
+          {route.view === 'models' && <ModelsPage info={info.data} />}
+          {route.view === 'administration' && <AdministrationPage info={info.data} infoError={info.error} section={route.section} />}
+          {route.view === 'graph' &&
+            (current ? (
+              <GraphWorkspace
+                key={current.graph.metadata.id}
+                summary={current}
+                info={info.data}
+                tab={route.tab}
+                onTab={(tab) => go({ ...route, tab })}
+                onSaved={onSaved}
+                correlationId={route.correlationId}
+                onCorrelation={(c) => go({ ...route, tab: 'messages', correlationId: c })}
+              />
+            ) : graphs.loading ? (
+              <p className="muted page">Loading…</p>
+            ) : (
+              <ErrorBox error={graphs.error ?? `Graph “${route.id}” not found.`} />
+            ))}
+        </main>
+      </div>
     </div>
   );
 }

@@ -496,3 +496,14 @@ Start only after Release 1 is complete and stable.
 - [ ] Add documentation and end-to-end tests for the reuse workflow.
 
 **Done when:** Components can be created, versioned, shared, and reused through the interface without manual copying or loss of local configuration.
+
+## UX Reorganization — Approved Direction
+
+- [x] Deliver separate Connections, Models and Administration destinations with stable navigation, scoped loading, compatible legacy MCP/template/OAuth links and unchanged role gates. — Route unit tests and real-client component integration cover destination isolation, viewer controls and health failure/recovery; disposable-backend Chromium covers navigation, reload/back, legacy links and narrow viewer access. The complete standard and hosted-CIMD browser suites pass. This first slice retains existing forms; no installation activation is implied.
+- [ ] Add a scalable graph selector and agent list alongside the canvas, preserving links and draft state.
+- [ ] Deliver MCP connection list/detail screens (Overview, Tools, Usage & history, Settings), explicit creation, authorization/revocation/error recovery and grant visibility.
+- [ ] Deliver dedicated agent configuration sections with effective permission/isolation summaries and a whole-graph change review before save.
+- [ ] Deliver Runs list/detail screens over existing execution records, highlighting blockers and distinguishing execution outcome from individual tool outcomes.
+- [ ] Consolidate typography, spacing, button hierarchy, contextual help and accessible responsive components across the remaining screens.
+- [ ] Validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets.
+- [ ] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams.

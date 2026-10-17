@@ -1,13 +1,7 @@
-import { MCPSection } from './MCPSection';
-import { useRef, useState } from 'react';
 import { api } from '../api/client';
-import type { Info, ToolInfo } from '../api/types';
+import type { Info } from '../api/types';
 import { useAsync } from '../hooks/useData';
-import { Badge, Btn, ErrorBox } from './common';
-import { HistoryRetentionSection } from './HistoryRetentionSection';
-import { NetworkPolicySection } from './NetworkPolicySection';
-import { SharedEnvironmentsSection } from './SharedEnvironmentsSection';
-import { ProvidersSection, type ProvidersHandle } from './ProvidersSection';
+import { Badge, Btn } from './common';
 
 type ProbeState = 'checking' | 'ok' | 'warning' | 'error';
 
@@ -27,36 +21,21 @@ function Status({
   return <Badge tone="bad">Unavailable</Badge>;
 }
 
-export function IntegrationsView({ info, infoError, connectQuery, oauthQuery }: { info?: Info; infoError?: string; connectQuery?: string; oauthQuery?: string }) {
+export function IntegrationsView({ info, infoError }: { info?: Info; infoError?: string }) {
   const health = useAsync(api.health, []);
-  const tools = useAsync(api.tools, []);
   const readiness = useAsync(api.ready, []);
-  const providersRef = useRef<ProvidersHandle>(null);
-  const [testAll, setTestAll] = useState(false);
-  const role = info?.identity?.role;
-
-  const runAllChecks = async () => {
-    setTestAll(true);
-    await Promise.all([health.reload(), readiness.reload(), tools.reload(), providersRef.current?.testAll()]);
-    setTestAll(false);
-  };
-
   const checks = readiness.error ? undefined : readiness.data;
   const dependenciesOk = checks && checks.storage === 'ok' && checks.queue === 'ok';
-  const toolCount = tools.data?.length ?? 0;
 
   return (
     <div className="page integrations-page">
       <div className="page-head integrations-head">
         <div>
-          <h1>Integrations</h1>
+          <h2>System health</h2>
           <p className="muted">
-            Configure model providers and check the services LeForge needs to run. Tests run from the LeForge server.
+            Check the services this installation needs to run. These checks do not invoke model providers.
           </p>
         </div>
-        <Btn tone="primary" onClick={() => void runAllChecks()} disabled={testAll}>
-          {testAll ? 'Testing integrations…' : 'Test all'}
-        </Btn>
       </div>
 
       <section className="integration-section">
@@ -67,7 +46,7 @@ export function IntegrationsView({ info, infoError, connectQuery, oauthQuery }: 
               Basic API availability, the storage and queue readiness checks, and the sandbox runtime used by docker-isolated agents.
             </p>
           </div>
-          <Btn small onClick={() => void readiness.reload()} disabled={readiness.loading}>
+          <Btn small onClick={() => void Promise.all([health.reload(), readiness.reload()])} disabled={readiness.loading || health.loading}>
             {readiness.loading ? 'Checking…' : 'Check services'}
           </Btn>
         </div>
@@ -141,44 +120,6 @@ export function IntegrationsView({ info, infoError, connectQuery, oauthQuery }: 
         )}
       </section>
 
-      <NetworkPolicySection canManage={role === 'admin'} />
-      <HistoryRetentionSection canManage={role === 'admin'} />
-
-      <SharedEnvironmentsSection canManage={role === 'admin'} />
-
-      <MCPSection key={connectQuery ?? "manual"} role={role} connectQuery={connectQuery} oauthQuery={oauthQuery} />
-      <ProvidersSection ref={providersRef} canEdit={role === 'admin'} canTest={role === 'admin' || role === 'operator'} />
-
-      <section className="integration-section">
-        <div className="section-head">
-          <div>
-            <h2>Tool catalog</h2>
-            <p className="muted small">Tools currently registered in LeForge and available for agent permissions.</p>
-          </div>
-          <Status
-            state={tools.data ? (toolCount > 0 ? 'ok' : 'warning') : tools.error ? 'error' : undefined}
-            idleLabel={tools.loading ? 'Checking' : 'Not checked'}
-            successLabel="Catalog loaded"
-          />
-        </div>
-        {tools.error && <ErrorBox error={`Could not load tool catalog: ${tools.error}`} />}
-        {tools.data && (
-          <>
-            <p className="integration-result">{toolCount} tools registered</p>
-            <div className="integration-tools">
-              {tools.data.map((tool: ToolInfo) => (
-                <article className="integration-tool" key={tool.name} title={tool.description}>
-                  <strong>{tool.name}</strong>
-                  {tool.capability !== tool.name && <span className="muted small">{tool.capability}</span>}
-                </article>
-              ))}
-            </div>
-            <p className="muted small integration-footnote">
-              MCP connections are managed above. Discovered MCP tools run through the gateway when explicitly granted to an agent.
-            </p>
-          </>
-        )}
-      </section>
     </div>
   );
 }
