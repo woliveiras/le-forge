@@ -109,10 +109,9 @@ fetched, and media is not rendered as native model attachments. The remote serve
 validates tool-specific input schemas; LeForge validates the object envelope and
 size. Credentials and upstream error payloads are not exposed as transport errors.
 
-Pending increments include aggregate per-connection quotas, live automatic-registration qualification,
+Pending increments include live automatic-registration qualification,
 private-network deployment policy, persistent SSE cursor resumption,
-vendor-specific setup/scopes, call-history
-UI, and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
+vendor-specific setup/scopes and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
 metadata, not a vendor adapter or proof that a vendor supports this transport.
 
 Validation: unit tests cover input/network rules, credential handling, catalogue
@@ -512,3 +511,47 @@ See [Atlassian-supported domains](https://support.atlassian.com/security-and-acc
 and [MCP permissions](https://support.atlassian.com/security-and-access-policies/docs/configure-atlassian-mcp-server-permissions/)
 (reviewed 2026-10-17). Real Atlassian registration and consent remain externally
 unvalidated; fixture coverage is not vendor certification.
+
+
+## Connection quotas and call history
+
+Administrators configure **Connection calls per minute** on each connection.
+`callsPerMinute` accepts integers from 0 to 60,000; omitted/0 means unlimited.
+The quota counts tool invocations across all agents, tools and replicas using
+that connection, in fixed UTC-minute windows. It is not a sliding window: calls
+on either side of a minute boundary can form a burst. One atomic compare-and-swap
+counter per connection persists in shared installation storage, so controller
+restart does not reset usage. Controllers must use synchronized clocks and shared
+storage to enforce one installation-wide limit. Backwards clock movement does not
+reset a window. Changing a limit does not reset recorded consumption.
+
+Admission occurs after authorization, argument/host checks, human approval and
+credential readiness, immediately before remote dispatch. Rejected approvals and
+unauthorized calls do not consume the connection quota. Admitted failures and
+cancellations are charged; no automatic wait or retry is introduced. Discovery,
+OAuth and session initialization are not separate billable calls. Existing
+per-agent tool rate limits still apply independently. Exhaustion returns the
+gateway rate-limit refusal and records `tool.denied` with `rate_limited`; no MCP
+tool request is sent. Storage failure/corruption fails closed. The existing
+15-second operation deadline and response bounds remain unchanged. Concurrent
+in-flight limits and provider-specific daily/billing quotas are not implemented.
+
+**Integrations → MCP call history** queries persisted tool and approval events,
+newest first, filtered by connection ID, graph, agent, exact qualified tool,
+event type, outcome and time range. Apply filters explicitly; older-page requests
+use the last applied filters. Results are safe summaries and correlation IDs,
+not raw model/tool content, arguments, approval comments or upstream errors.
+History remains queryable for deleted connections and follows event-store
+retention. The page reports failures without replacing previous results with an
+apparently successful empty list.
+
+`GET /api/v1/mcp/history` is viewer-readable. Filters are `connection`, `graph`,
+`node`, `tool`, `type`, `outcome`, `since`/`until` (RFC3339, inclusive), `before`
+(exclusive event sequence), and `limit` (1–100, default 50). Responses include
+`entries`, `hasMore` and `nextBefore`. Each request scans at most 500 eligible
+stored events. Sparse filters may produce an empty page with `hasMore: true`;
+continue with `before=nextBefore`. Newer incoming events do not shift an older
+page's cursor. Historical event payloads are projected through an allowlist;
+legacy raw fields are never forwarded by this endpoint. New MCP tool audit errors
+also use platform-owned summaries. Approval review itself retains its existing
+protected detail contract.

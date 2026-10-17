@@ -265,6 +265,21 @@ available according to policy, without requiring a managed preview or a PR.
 
 ### 6. Add MCP Configuration
 
+**Connection quotas and history:** Configurable `callsPerMinute` (0/unset is
+unlimited, maximum 60,000) uses persisted CAS admission in fixed UTC-minute
+windows, shared across agents and controllers using the same storage. It is
+charged after approval and validation, before dispatch; admitted failures count,
+refusals do not. Restart and limit edits do not reset stored usage. This is a
+rate quota, not an in-flight concurrency or billing limit. Existing timeouts and
+payload limits remain. The console offers a viewer-readable, newest-first MCP
+history filtered by connection, graph, agent, tool, type, outcome and time, with
+exclusive sequence cursors and bounded scans. Tool/approval events are projected
+to safe summaries without raw arguments/results/comments. Deleted connection
+history remains available. Automated coverage uses disposable stores and TLS
+fixtures. `make test` (179 frontend tests), lint/build, 32 Chromium E2E cases
+and targeted Go race checks passed. This increment does not deploy or modify
+live connections.
+
 **Installed GitHub acceptance (2026-10-17):** A dedicated manually registered
 GitHub OAuth App completed browser consent, backend callback and encrypted
 connection persistence. Discovery succeeded. An agent with only `get_me` and
@@ -302,7 +317,7 @@ connection state, including revalidation after approval waits. Existing per-agen
 grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
 no replay of dispatched tool calls, redacted audit metadata and capped runtime results. Unit,
 real TLS/API integration and Chromium cover success, denial and connection disable.
-Aggregate per-connection quotas, private-network policy and full live
+Private-network policy and full live
 vendor-specific acceptance remain pending; service names are metadata.
 See [MCP scope and limits](../docs/mcp.md).
 

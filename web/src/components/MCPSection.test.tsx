@@ -88,3 +88,11 @@ it('blocks deletion while enabled and presents stale deletion failures without h
  await userEvent.click(await screen.findByRole('button',{name:'Delete Team'}));await userEvent.type(screen.getByLabelText('Type connection ID to confirm'),'team');await userEvent.click(screen.getByRole('button',{name:'Confirm deletion'}));
  expect(await screen.findByText('Connection changed; reload')).toBeTruthy();expect(screen.getByRole('article',{name:'MCP Team'})).toBeTruthy();
 });
+it('persists and edits a connection quota without exposing credentials',async()=>{
+ let saved:MCPConnection={...connection,callsPerMinute:12};
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[saved],'PUT /api/v1/mcp/connections/team':call=>{saved={...saved,...call.body as object};return saved;}});
+ render(<MCPSection role="admin"/>);await userEvent.click(await screen.findByRole('button',{name:'Edit Team'}));
+ expect((screen.getByLabelText('Connection calls per minute') as HTMLInputElement).value).toBe('12');
+ await userEvent.clear(screen.getByLabelText('Connection calls per minute'));await userEvent.type(screen.getByLabelText('Connection calls per minute'),'5');await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(await screen.findByText('Connection quota: 5 calls per UTC minute')).toBeTruthy();expect(backend.find('PUT','/api/v1/mcp/connections/team')[0].body).toMatchObject({callsPerMinute:5});
+});

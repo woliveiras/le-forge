@@ -37,13 +37,16 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
-	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
+	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") || strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {
 				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "MCP execution: " + m.Content}, StopReason: "stop"}, nil
 			}
 		}
 		toolName := "mcp.runtime.search"
+		if strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") {
+			toolName = "mcp.quota-browser.search"
+		}
 		if strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") {
 			toolName = "mcp.recover-browser.search"
 		}
@@ -133,6 +136,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	quotaTime := time.Now()
+	a.MCP.QuotaNow = func() time.Time { return quotaTime }
 	fixtureRecovery := mcptest.NewRecovering()
 	defer fixtureRecovery.Close()
 	fixtureMCP := mcptest.New()

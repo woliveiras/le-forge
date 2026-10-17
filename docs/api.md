@@ -369,6 +369,21 @@ browser cookie, never a platform bearer token as preview authentication.
 browser handshake; application paths are otherwise preserved. See
 [preview operations](sandbox-runtime.md#human-review-and-application-previews).
 
+## MCP quotas and history
+
+Connection create/update accepts `callsPerMinute` (integer 0–60,000, omitted/0
+unlimited). Usage is a persisted fixed UTC-minute aggregate across agents and
+controllers sharing storage. Exhausted admission is denied before remote dispatch.
+
+Viewer-readable `GET /api/v1/mcp/history` accepts `connection`, `graph`, `node`,
+`tool`, `type`, `outcome`, `since`, `until`, `before`, `limit`; see
+[MCP history semantics](mcp.md#connection-quotas-and-call-history). RFC3339 time
+bounds are inclusive; `before` is an exclusive event sequence. The response is
+`{entries, hasMore, nextBefore?}`; sparse pages may be empty and still have more.
+Entries contain only safe metadata/outcomes, never raw arguments/results/comments.
+Invalid syntax, duplicates and unknown filters return 400; invalid ranges/enums
+return 422. Storage failures are errors, not empty success.
+
 ## MCP registration and discovery
 
 See [MCP scope](mcp.md) for the supported transport, authentication and limits.

@@ -110,6 +110,7 @@ func (s *Server) routes() {
 	routes := []route{
 		{"GET /api/v1/mcp/connections", R, s.mcpList},
 		{"GET /api/v1/mcp/templates", R, s.mcpTemplates},
+		{"GET /api/v1/mcp/history", R, s.mcpHistory},
 		{"POST /api/v1/mcp/connections/{connection}/oauth/start", A, s.mcpOAuthStart},
 		{"POST /api/v1/mcp/connections/{connection}/oauth/revoke", A, s.mcpOAuthRevoke},
 		{"GET /api/v1/mcp/oauth/callback", "", s.mcpOAuthCallback},

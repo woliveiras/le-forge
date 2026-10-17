@@ -298,6 +298,16 @@ func testEvents(t *testing.T, s storage.Store) {
 		t.Fatalf("default order must be newest first with limit, got %d events", len(desc))
 	}
 
+	older, err := s.ListEvents(ctx, storage.EventFilter{BeforeSeq: desc[4].Seq, Limit: 3})
+	must(t, err)
+	if len(older) != 3 || older[0].Seq != asc[25].Seq || older[2].Seq != asc[23].Seq {
+		t.Fatal("exclusive before cursor broken", older)
+	}
+	bounded, err := s.ListEvents(ctx, storage.EventFilter{BeforeSeq: asc[10].Seq, AfterSeq: asc[7].Seq, Ascending: true})
+	must(t, err)
+	if len(bounded) != 2 || bounded[0].Seq != asc[8].Seq {
+		t.Fatal("combined sequence bounds broken", bounded)
+	}
 	g1, err := s.ListEvents(ctx, storage.EventFilter{GraphID: "g1", Ascending: true})
 	must(t, err)
 	if len(g1) != 15 {

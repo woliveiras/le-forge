@@ -1311,6 +1311,53 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
 
+  /api/v1/mcp/history:
+    get:
+      tags: [mcp]
+      operationId: getMCPHistory
+      summary: Filter safe persisted MCP tool and approval outcomes
+      x-leforge-role: viewer
+      description: Newest first; at most 500 eligible events scanned per page. An empty page can still have hasMore. No raw arguments, responses, comments or upstream errors.
+      parameters:
+        - in: query
+          name: connection
+          schema: {type: string}
+        - in: query
+          name: graph
+          schema: {type: string}
+        - in: query
+          name: node
+          schema: {type: string}
+        - in: query
+          name: tool
+          schema: {type: string}
+        - in: query
+          name: type
+          schema: {type: string, enum: [tool.invoked, tool.completed, tool.denied, approval.requested, approval.decided]}
+        - in: query
+          name: outcome
+          schema: {type: string, enum: [started, ok, error, denied, unknown, rate_limited, rejected, pending, approved, expired]}
+        - in: query
+          name: since
+          schema: {type: string, format: date-time}
+        - in: query
+          name: until
+          schema: {type: string, format: date-time}
+        - in: query
+          name: before
+          schema: {type: integer, minimum: 0}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        "200":
+          description: Safe page; continue using before=nextBefore while hasMore is true
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MCPHistoryPage"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "422":
+          description: Invalid filter bounds or enum
   /api/v1/mcp/connections:
     get:
       tags: [mcp]
@@ -1571,11 +1618,35 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    MCPHistoryPage:
+      type: object
+      required: [entries, hasMore]
+      properties:
+        hasMore: {type: boolean}
+        nextBefore: {type: integer, description: Exclusive cursor for the next older page}
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              seq: {type: integer}
+              time: {type: string, format: date-time}
+              type: {type: string}
+              connection: {type: string}
+              graph: {type: string}
+              node: {type: string}
+              execution: {type: string}
+              tool: {type: string}
+              outcome: {type: string}
+              durationMs: {type: integer}
+              approval: {type: string}
+              summary: {type: string, description: Platform-owned safe summary}
     MCPConnectionInput:
       type: object
       additionalProperties: false
       required: [id, name, service, endpoint, enabled]
       properties:
+        callsPerMinute: {type: integer, minimum: 0, maximum: 60000, default: 0, description: "Shared fixed UTC-minute tool-call quota; zero is unlimited. Persisted across restart."}
         id: {type: string, pattern: "^[a-z][a-z0-9_-]{0,63}$"}
         name: {type: string, minLength: 1, maxLength: 120}
         service: {type: string, enum: [generic, github, bitbucket, jira, confluence]}
@@ -1591,6 +1662,7 @@ components:
     MCPConnection:
       type: object
       properties:
+        callsPerMinute: {type: integer, minimum: 0, maximum: 60000, default: 0, description: "Shared fixed UTC-minute tool-call quota; zero is unlimited. Persisted across restart."}
         id: {type: string}
         name: {type: string}
         service: {type: string}

@@ -97,3 +97,22 @@ test('recovers an expired session during discovery and before gateway dispatch',
  await expect.poll(async()=>{const r=await page.request.get('/api/v1/graphs/mcp-recovery/events',{headers});return(await r.json()).some((e:{type:string;data:{tool?:string;outcome?:string}})=>e.type==='tool.completed'&&e.data.tool==='mcp.recover-browser.search'&&e.data.outcome==='ok');}).toBe(true);
  await page.getByRole('tab',{name:'Activity',exact:true}).click();await expect(page.getByRole('region',{name:'Executions and results',exact:true})).toContainText('Completed');
 });
+
+test('enforces a shared connection quota and filters approval and result history',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/integrations');const section=page.getByRole('region',{name:'MCP connections',exact:true});
+ await section.getByLabel('Connection ID',{exact:true}).fill('quota-browser');await section.getByLabel('Connection name',{exact:true}).fill('Quota browser');await section.getByLabel('MCP endpoint',{exact:true}).fill('https://mcp.fixture.invalid/mcp');await section.getByLabel('Bearer token',{exact:true}).fill('fixture-mcp-token');await section.getByLabel('Connection calls per minute',{exact:true}).fill('1');await section.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ const card=section.getByRole('article',{name:'MCP Quota browser',exact:true});await expect(card).toContainText('1 calls per UTC minute');await card.getByRole('button',{name:'Refresh tools for Quota browser',exact:true}).click();await expect(card).toContainText('mcp.quota-browser.search');
+ for(const id of ['quota-approved','quota-limited']){
+  const created=await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:id},spec:{nodes:[{id:'worker',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},isolation:{mode:'process'},loop:{mode:'once'},prompt:'mcp-quota-fixture',tools:[{name:'mcp.quota-browser.search',requiresApproval:id==='quota-approved'}]}]}}});expect(created.status(),await created.text()).toBe(201);
+  await page.goto(`/#/g/${id}/activity`);await page.getByRole('button',{name:'Run all',exact:true}).click();
+  if(id==='quota-approved'){await page.getByRole('region',{name:'Task approvals',exact:true}).getByRole('button',{name:'Approve',exact:true}).click();await expect(page.getByRole('region',{name:'Executions and results',exact:true})).toContainText('MCP fixture search completed');}
+  else {await expect.poll(async()=>{const r=await page.request.get(`/api/v1/graphs/${id}/events`,{headers});return(await r.json()).some((e:{type:string;data:{outcome?:string}})=>e.type==='tool.denied'&&e.data.outcome==='rate_limited');}).toBe(true);}
+ }
+ await page.goto('/#/integrations');const history=page.getByRole('region',{name:'MCP call history',exact:true});
+ await history.getByLabel('History connection ID').fill('quota-browser');await history.getByLabel('History outcome').selectOption('rate_limited');await history.getByRole('button',{name:'Apply history filters'}).click();await expect(history.getByRole('table')).toContainText('Call quota exceeded');await expect(history.getByRole('table')).toContainText('quota-limited');await expect(history.getByRole('table')).not.toContainText('quota-approved');
+ await history.getByLabel('History outcome').selectOption('approved');await history.getByLabel('History event type').selectOption('approval.decided');await history.getByRole('button',{name:'Apply history filters'}).click();await expect(history.getByRole('table')).toContainText('Approval granted');
+ await history.getByLabel('History outcome').selectOption('ok');await history.getByLabel('History event type').selectOption('tool.completed');await history.getByRole('button',{name:'Apply history filters'}).click();await expect(history.getByRole('table')).toContainText('Call completed successfully');await expect(history).not.toContainText('fixture-mcp-token');
+ await page.route('**/api/v1/mcp/history?**',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'History unavailable',code:'unavailable'})}));await history.getByRole('button',{name:'Apply history filters'}).click();await expect(history).toContainText('History unavailable');await expect(history.getByRole('table')).toContainText('Call completed successfully');await page.unroute('**/api/v1/mcp/history?**');
+ await history.getByRole('button',{name:'Apply history filters'}).click();await expect(history).not.toContainText('History unavailable');
+});

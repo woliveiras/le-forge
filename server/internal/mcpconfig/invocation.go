@@ -97,6 +97,9 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if err != nil || current.Revision != r.Revision || !current.Enabled || current.Status != "ready" {
 		return nil, fmt.Errorf("%w: MCP connection changed", tools.ErrDenied)
 	}
+	if err = t.m.admitCall(ctx, current); err != nil {
+		return nil, err
+	}
 	callctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	raw, err := t.m.Call(callctx, r.Endpoint, token, t.tool.Name, inv.Args)

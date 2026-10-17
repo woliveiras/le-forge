@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/storage"
@@ -121,5 +123,54 @@ func (s *Server) mcpDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+func (s *Server) mcpHistory(w http.ResponseWriter, r *http.Request) error {
+	if s.MCP == nil {
+		return storage.ErrNotFound
+	}
+	q := r.URL.Query()
+	for key, values := range q {
+		switch key {
+		case "connection", "graph", "node", "tool", "outcome", "type", "since", "until", "before", "limit":
+		default:
+			return badRequest("unknown MCP history filter")
+		}
+		if len(values) != 1 {
+			return badRequest("duplicate MCP history filter")
+		}
+	}
+	f := mcpconfig.HistoryFilter{Connection: q.Get("connection"), Graph: q.Get("graph"), Node: q.Get("node"), Tool: q.Get("tool"), Outcome: q.Get("outcome"), Type: q.Get("type"), Limit: 50}
+	var err error
+	if q.Has("before") {
+		f.Before, err = strconv.ParseInt(q.Get("before"), 10, 64)
+		if err != nil {
+			return badRequest("invalid history cursor")
+		}
+	}
+	if q.Has("limit") {
+		f.Limit, err = strconv.Atoi(q.Get("limit"))
+		if err != nil {
+			return badRequest("invalid history limit")
+		}
+	}
+	if q.Get("since") != "" {
+		f.Since, err = time.Parse(time.RFC3339, q.Get("since"))
+		if err != nil {
+			return badRequest("invalid history start time")
+		}
+	}
+	if q.Get("until") != "" {
+		f.Until, err = time.Parse(time.RFC3339, q.Get("until"))
+		if err != nil {
+			return badRequest("invalid history end time")
+		}
+	}
+	page, err := s.MCP.History(r.Context(), f)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 200, page)
 	return nil
 }

@@ -159,9 +159,12 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 	}
 	res, terr := g.safeInvoke(ctx, t, inv)
 	if terr != nil {
-		if errors.Is(terr, ErrDenied) {
+		if errors.Is(terr, ErrDenied) || errors.Is(terr, ErrRateLimited) {
 			// Constraint violation detected inside the tool (paths, commands, hosts).
 			outcome = "denied"
+			if errors.Is(terr, ErrRateLimited) {
+				outcome = "rate_limited"
+			}
 			g.audit(ctx, p, domain.EvToolDenied, name, args, outcome, time.Since(start), terr)
 			return nil, terr
 		}
@@ -252,6 +255,9 @@ func (g *Gateway) audit(ctx context.Context, p *Principal, typ domain.EventType,
 	}
 	if err != nil {
 		data["error"] = err.Error()
+		if strings.HasPrefix(name, "mcp.") {
+			data["error"] = "MCP invocation " + outcome
+		}
 	}
 	ev := domain.NewEvent(typ, p.GraphID, data).
 		WithNode(p.NodeID, p.Replica).

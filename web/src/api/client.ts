@@ -1,4 +1,4 @@
-import type { MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
+import type { MCPHistoryPage, MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
 import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
 import type {
   Approval,
@@ -167,6 +167,7 @@ export const api = {
   revokeMCPOAuth: (id: string) => request<MCPConnection>(`${V1}/mcp/connections/${enc(id)}/oauth/revoke`, {method:'POST'}),
   mcpTemplates: () => request<MCPTemplate[]>(`${V1}/mcp/templates`),
   deleteMCP: (id: string, revision: number) => request<void>(`${V1}/mcp/connections/${enc(id)}`, {method:'DELETE', headers:{'If-Match':String(revision)}}),
+  mcpHistory: (query: string) => request<MCPHistoryPage>(`${V1}/mcp/history${query ? `?${query}` : ""}`),
   mcpConnections: () => request<MCPConnection[]>(`${V1}/mcp/connections`),
   mcpTools: () => request<ToolInfo[]>(`${V1}/mcp/tools`),
   saveMCP: (input: MCPConnectionInput, revision?: number) => request<MCPConnection>(`${V1}/mcp/connections${revision ? '/'+enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', headers: revision ? {'If-Match': String(revision)} : undefined, body:input}),

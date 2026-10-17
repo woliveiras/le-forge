@@ -250,6 +250,15 @@ does not satisfy this milestone.
 
 ### 6. Integrate User-Configurable MCPs
 
+**Quota/history validation:** `make test` (179 frontend tests plus Go/Python),
+`make lint`, `make build`, and `make test-e2e` (31 standard Chromium cases plus
+1 hosted CIMD case) passed. Race-enabled Go tests passed for MCP, gateway, API
+and storage. Coverage includes concurrent shared admission, restart persistence,
+minute/clock boundaries, approval refusal accounting, storage failures, SQL/TLS
+API integration, sparse cursor pages, safe projection and browser quota/history
+filters with failure/retry. No deployment or live-connection quota changes were
+performed for this increment.
+
 **Lifecycle/recovery validation:** `make test` (176 frontend tests plus Go/Python),
 `make lint`, `make build` and `make test-e2e` (30 standard Chromium cases plus
 1 hosted CIMD case) passed. Targeted Go race tests passed. Deletion/recovery
@@ -281,7 +290,7 @@ evidence. These checks do not complete the vendor acceptance items below.
 - [x] Encrypt tokens/secrets at rest and ensure they never appear in read responses, logs, prompts, or events. — Bearer credentials use the installation secret box; safe views and lifecycle events omit values/ciphertext; no runtime exposure.
 - [x] Implement assignment of connections and allowed tools to specific agents. — Exact discovered grants saved in node tools; validation rejects disabled/unknown/wildcard MCP names. The shared gateway enforces these grants on each call.
 - [x] Enforce authorization at the gateway for every invocation, regardless of what the agent/model requests. — Exact MCP grants only; wildcard/cross-connection requests denied.
-- [ ] Add per-connection/agent rate limits, timeouts, and response-size limits. — Agent/tool grant rate limits, operation deadlines and payload/result bounds are implemented; aggregate connection quotas remain pending.
+- [x] Add per-connection/agent rate limits, timeouts, and response-size limits. — Persistent fixed-minute connection quotas aggregate agents/replicas using shared storage; admin configuration, atomic admission, restart persistence, fail-closed storage failures and rate-limit audit outcomes are covered. Per-agent grants, deadlines and payload bounds remain independent. In-flight concurrency and provider billing quotas are outside this increment.
 - [x] Allow human approval to be configured for selected tools. — Existing requiresApproval grants use the shared approval flow, with revision revalidation before dispatch.
 - [x] Audit invocations with agent, connection, tool, result, duration, and error, removing or masking sensitive data. — Qualified tool name encodes connection; events contain outcome, not raw arguments/results; metrics aggregate MCP names.
 - [x] Ensure an agent cannot select another connection, escape its grants, or read credentials. — Trusted execution principal and registered endpoint/credential only; exact names, no wildcard authority.
@@ -294,7 +303,7 @@ evidence. These checks do not complete the vendor acceptance items below.
 - [x] Show connection status, last validation, discovered tools, and errors without revealing secrets.
 - [x] Allow connections to be enabled/disabled and discovered tools to be refreshed.
 - [x] Allow available connections/tools to be selected for each agent. — Dedicated selector, persisted graph edits and removal of unavailable grants.
-- [ ] Show a filterable history of calls, approvals, results, and errors.
+- [x] Show a filterable history of calls, approvals, results, and errors. — Viewer-readable persisted history filters connection/graph/agent/tool/event/outcome/time, with newest-first exclusive cursors and bounded sparse scans. Results are safe outcome summaries; raw arguments, results, approval comments and upstream errors are omitted. Deleted connection history remains queryable.
 - [x] Add interface tests for connection setup, validation, agent authorization, and revocation. — Components and Chromium cover setup, saved grants, successful agent execution, wildcard denial and connection disable against a real TLS fixture.
 - [ ] Add end-to-end tests for each priority integration using appropriate test credentials.
 

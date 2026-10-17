@@ -72,6 +72,7 @@ connections for the same service. The API contract is listed below; the delivere
 
 | Method and path | Minimum role | Contract |
 |---|---|---|
+| `GET /api/v1/mcp/history` | viewer | Filter persisted tool/approval metadata and safe outcomes; bounded scan and exclusive sequence pagination. No raw arguments/results/comments. |
 | `GET /api/v1/mcp/connections` | viewer | List connection metadata and current status; never return credentials or ciphertext. |
 | `POST /api/v1/mcp/connections` | admin | Create a connection; credential fields are write-only. Return `201` and the safe connection view. |
 | `GET /api/v1/mcp/connections/{connectionId}` | viewer | Read the safe connection view. |
@@ -80,7 +81,7 @@ connections for the same service. The API contract is listed below; the delivere
 | `POST /api/v1/mcp/connections/{connectionId}/test` | operator | Test reachability/authentication and report a redacted result. |
 | `POST /api/v1/mcp/connections/{connectionId}/tools/refresh` | operator | Discover and persist the current tool catalogue; return the new catalogue revision. |
 
-Connection metadata includes `id`, `service`, display name, endpoint/transport
+Connection metadata includes `callsPerMinute` (0/unset unlimited, fixed UTC-minute aggregate quota, up to 60,000), `id`, `service`, display name, endpoint/transport
 metadata, `status`, `credentialConfigured`, `lastTest`, `toolsRevision`,
 `createdAt`, `updatedAt`, and `updatedBy`. Credential values, authorization
 headers, refresh tokens, and ciphertext are never part of a read model.

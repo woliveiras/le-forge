@@ -70,6 +70,9 @@ func (s *Store) ListEvents(ctx context.Context, f storage.EventFilter) ([]*domai
 	if f.AfterSeq > 0 {
 		w.add("seq > ?", f.AfterSeq)
 	}
+	if f.BeforeSeq > 0 {
+		w.add("seq < ?", f.BeforeSeq)
+	}
 	order := "DESC"
 	if f.Ascending {
 		order = "ASC"

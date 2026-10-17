@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
@@ -245,5 +246,64 @@ func TestMCPDeletionAPIAndGateway(t *testing.T) {
 	body, _ := json.Marshal(in)
 	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 409 {
 		t.Fatal("deleted id reused", code)
+	}
+}
+
+func TestMCPQuotaAndSafeHistoryAPI(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	upstream := mcptest.New()
+	defer upstream.Close()
+	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		return mcpconfig.DiscoverWithClient(ctx, endpoint, token, upstream.Client())
+	}
+	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		return mcpconfig.CallWithClient(ctx, endpoint, token, name, args, upstream.Client())
+	}
+	now := time.Now()
+	a.MCP.QuotaNow = func() time.Time { return now }
+	in := mcpconfig.Input{ID: "quota", Name: "Quota", Service: "generic", Endpoint: upstream.URL, Enabled: true, CallsPerMinute: 1, Credential: &mcpconfig.Credential{Value: "fixture-mcp-token"}}
+	body, _ := json.Marshal(in)
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 201 {
+		t.Fatal(code)
+	}
+	if _, err := a.MCP.Refresh(t.Context(), in.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	p := &tools.Principal{GraphID: "quota-graph", NodeID: "first", Grants: []domain.ToolGrant{{Name: "mcp.quota.search"}}}
+	if result, err := a.Gateway.Invoke(t.Context(), p, "mcp.quota.search", json.RawMessage(`{}`)); err != nil || result.IsError {
+		t.Fatal(result, err)
+	}
+	// A fresh manager over the same SQL store cannot reset the aggregate quota.
+	restarted := mcpconfig.New(a.MCP.Store, a.MCP.Box, nil)
+	restarted.Call = a.MCP.Call
+	restarted.QuotaNow = a.MCP.QuotaNow
+	a.Gateway.ResolveTool = restarted.Resolve
+	p.NodeID = "second"
+	if _, err := a.Gateway.Invoke(t.Context(), p, "mcp.quota.search", json.RawMessage(`{}`)); !errors.Is(err, tools.ErrRateLimited) {
+		t.Fatal(err)
+	}
+	approval := domain.NewEvent(domain.EvApprovalDone, p.GraphID, map[string]any{"id": "approval-one", "status": "approved", "detail": map[string]any{"tool": "mcp.quota.search", "args": "private-argument"}, "comment": "private-comment"}).WithNode(p.NodeID, 0)
+	if err := a.Store.AppendEvent(t.Context(), approval); err != nil {
+		t.Fatal(err)
+	}
+	var page mcpconfig.HistoryPage
+	path := "/api/v1/mcp/history?connection=quota&graph=quota-graph&node=second&type=approval.decided&outcome=approved&limit=1"
+	if code := call(t, srv, "GET", path, viewerTok, "", "", &page); code != 200 || len(page.Entries) != 1 || page.Entries[0].Approval != "approval-one" {
+		t.Fatal(code, page)
+	}
+	safe, _ := json.Marshal(page)
+	for _, secret := range []string{"private-comment", "private-argument", "fixture-mcp-token"} {
+		if strings.Contains(string(safe), secret) {
+			t.Fatal("history exposed private data")
+		}
+	}
+	for _, query := range []string{"limit=0", "before=-1", "type=log", "outcome=bad", "since=not-a-date", "unknown=1", "connection=x&connection=y"} {
+		code := call(t, srv, "GET", "/api/v1/mcp/history?"+query, viewerTok, "", "", nil)
+		if code != 400 && code != 422 {
+			t.Fatal(query, code)
+		}
+	}
+	if code := call(t, srv, "GET", "/api/v1/mcp/history", "", "", "", nil); code != 401 {
+		t.Fatal(code)
 	}
 }

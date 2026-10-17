@@ -31,6 +31,7 @@ type Credential struct {
 	Clear bool   `json:"clear,omitempty"`
 }
 type Input struct {
+	CallsPerMinute    int          `json:"callsPerMinute,omitempty"`
 	OAuth             *OAuthConfig `json:"oauth,omitempty"`
 	OAuthClientSecret *Credential  `json:"oauthClientSecret,omitempty"`
 	Template          *TemplateRef `json:"template,omitempty"`
@@ -47,6 +48,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	CallsPerMinute       int          `json:"callsPerMinute,omitempty"`
 	OAuth                *OAuthView   `json:"oauth,omitempty"`
 	Template             *TemplateRef `json:"template,omitempty"`
 	ID                   string       `json:"id"`
@@ -75,7 +77,8 @@ type record struct {
 	Sealed string `json:"sealed,omitempty"`
 }
 type Manager struct {
-	OAuthClient *http.Client // trusted test/platform injection, never user-supplied
+	QuotaNow    func() time.Time // trusted clock injection for deterministic quota tests
+	OAuthClient *http.Client     // trusted test/platform injection, never user-supplied
 	oauthMu     sync.Mutex
 	pending     map[string]oauthPending
 	Store       storage.Store
@@ -89,6 +92,9 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if in.CallsPerMinute < 0 || in.CallsPerMinute > 60000 {
+		return fmt.Errorf("%w: callsPerMinute must be between 0 and 60000", ErrInvalid)
+	}
 	if err := validateOAuth(in.OAuth); err != nil {
 		return err
 	}
@@ -250,6 +256,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 		}
 	}
 	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.CallsPerMinute = in.CallsPerMinute
 	r.Template = in.Template
 	r.Name = in.Name
 	r.Service = in.Service

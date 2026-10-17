@@ -275,7 +275,7 @@ func (s *Store) ListEvents(ctx context.Context, f storage.EventFilter) ([]*domai
 		return (f.GraphID == "" || e.GraphID == f.GraphID) &&
 			(f.NodeID == "" || e.NodeID == f.NodeID) &&
 			(len(types) == 0 || types[e.Type]) &&
-			e.Seq > f.AfterSeq
+			e.Seq > f.AfterSeq && (f.BeforeSeq == 0 || e.Seq < f.BeforeSeq)
 	}
 	out := []*domain.Event{}
 	if f.Ascending {

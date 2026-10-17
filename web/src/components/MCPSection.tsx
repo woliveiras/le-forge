@@ -1,3 +1,4 @@
+import { MCPHistory } from './MCPHistory';
 import { MCPServiceGuide } from './MCPServiceGuide';
 import { oauthDefaults, serviceOptions } from './mcpServices';
 import { MCPOAuthReturn, MCPOAuthActions, MCPOAuthCallbackURL } from './MCPOAuth';
@@ -22,7 +23,7 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   async function discover(id:string,action:'test'|'tools/refresh'){setBusy(true);setError(undefined);try{await api.refreshMCP(id,action);await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
@@ -49,6 +50,8 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
       <h3>{revision?'Edit connection':'New connection'}</h3>
       {input.template&&<p>Template: {input.template.id} v{input.template.version}. Review the fields, then save. <Btn onClick={()=>setInput({...input,template:undefined})}>Customize without template</Btn></p>}
       <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={input.id} disabled={!!revision||busy} onChange={e=>setInput({...input,id:e.target.value})}/></label>
+      <label>Connection calls per minute<input type="number" min={0} max={60000} step={1} value={input.callsPerMinute??0} onChange={e=>setInput({...input,callsPerMinute:Number(e.target.value)})}/></label>
+      <p>0 means unlimited. A fixed UTC-minute quota is shared by all agents and replicas using this connection. Admitted calls count even if they fail; approval refusals do not consume it.</p>
       <label>Connection name<input required maxLength={120} value={input.name} onChange={e=>setInput({...input,name:e.target.value})}/></label>
       <label>Service<select disabled={!!input.template} value={input.service} onChange={e=>setInput({...input,service:e.target.value})}>{serviceOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <MCPServiceGuide service={input.service}/>
@@ -80,6 +83,7 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
     <div className="cards">{(list.data??[]).map(c=><article className="card" key={c.id} aria-label={`MCP ${c.name}`}>
       <h3>{c.name} <Badge>{c.status}</Badge></h3><p>{c.service} · {c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
       <p>{c.credentialConfigured?'Credential configured':'No credential'} · revision {c.revision} · catalogue {c.toolsRevision}</p>
+      <p>Connection quota: {c.callsPerMinute?`${c.callsPerMinute} calls per UTC minute`:'Unlimited'}</p>
       {c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
       {c.lastTest&&<p>Last discovery: {fmtDateTime(c.lastTest)}</p>}<ErrorBox error={c.error}/>
       <div className="btn-row">{admin&&<Btn disabled={busy} onClick={()=>edit(c)}>Edit {c.name}</Btn>}{operator&&<><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'test')}>Test {c.name}</Btn><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'tools/refresh')}>Refresh tools for {c.name}</Btn></>}</div>
@@ -87,5 +91,6 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
       <ul>{c.tools.map(t=><li key={t.name}><code>mcp.{c.id}.{t.name}</code><p>{t.description}</p><JsonView label="Input schema" value={t.inputSchema}/></li>)}</ul>
       {c.status==='ready'&&!c.tools.length&&<p>The server returned no tools.</p>}
     </article>)}</div>
+    <MCPHistory/>
   </section>;
 }

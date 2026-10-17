@@ -147,7 +147,8 @@ type EventFilter struct {
 	NodeID    string
 	Types     []domain.EventType
 	AfterSeq  int64
-	Limit     int // default 200, max 5000
+	BeforeSeq int64 // exclusive cursor for newest-first pages
+	Limit     int   // default 200, max 5000
 	Ascending bool
 }
 
