@@ -89,3 +89,8 @@ limits and concurrent updates; API integration tests use SQLite and a real TLS
 MCP fixture; Chromium covers registration, discovery, graph grant persistence,
 disable/removal, authentication failure, successful agent invocation and denied calls. Fixture credentials are synthetic;
 no live vendor credentials are used by these tests.
+
+Vendor setup is being specified in [priority integration contracts](mcp-integrations.md).
+The [template candidate catalogue](mcp-templates.md) distinguishes proposed
+configurations from verified compatibility. Both are planning documents; the
+current runtime limits described above remain unchanged.

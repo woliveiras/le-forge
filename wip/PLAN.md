@@ -291,7 +291,68 @@ Users must be able to add multiple connections for each service, edit, test, dis
 
 Use connections and transports that can be reached securely from the Docker environment. Store tokens and credentials encrypted, hide them after saving, and allow revocation/rotation. Calls go through the LeForge gateway, with per-agent authorization, call/error auditing, limits, and approvals when configured. Do not execute arbitrary user commands in the main process to start local MCP servers.
 
-**Acceptance criterion:** Users can connect the four priority integrations through the interface, test connections, grant tools to specific agents, and inspect calls and their results.
+**Contract survey (2026-10-17):** [Priority vendor contracts](../docs/mcp-integrations.md)
+record official endpoints, authentication, scopes and remaining compatibility
+qualifications. This is documentary evidence, not live vendor acceptance.
+[Additional template candidates](../docs/mcp-templates.md) cover software, data,
+ML and AI engineering; they do not expand Release 1 acceptance automatically.
+
+Deliver the next increments in this order:
+
+1. **Versioned templates and GitHub:** reviewed endpoint/credential/profile fields,
+   exact grants, github.com PAT setup and read-only validation; map selected tools
+   to minimum token permissions. Add GitHub OAuth with host-owned app registration.
+2. **Shared Atlassian foundation:** qualify v2 Streamable HTTP and flat paginated
+   discovery with a narrowly validated `tools=all` setting. Add OAuth and encrypted
+   Basic credentials alongside service-account Bearer support. Prevent dispatcher
+   tools from bypassing per-operation grants; validate site context and catalogue
+   bounds without silently changing network or authorization policy.
+3. **Bitbucket Cloud:** organization-linked workspace and repository selection,
+   read/write scope guidance, repository/PR tests and cross-workspace denials.
+4. **Jira Cloud:** site/project selection, read/search/write profiles, issue/JQL and
+   approved mutation tests; keep delete/manage out of initial defaults.
+5. **Confluence Cloud:** site/space selection, read/search/write profiles, content
+   access/restriction tests and approved updates including version conflicts.
+6. **Operational completion:** token renewal/reauthorization, deletion, aggregate
+   connection quotas and filterable call/approval/outcome history. For each vendor,
+   require unit, real-boundary integration, browser E2E and authorized live tests.
+
+**Planned browser-link and OAuth journey:** A link to the user's LeForge
+installation opens a reviewed template in the connection screen, preserving the
+pending selection through LeForge login. Links contain only public template
+identifiers/version and validated configuration; opening one never creates a
+connection, starts a server or grants agent permissions. Support configured local
+and hosted installation URLs, with a registered backend OAuth callback separate
+from the frontend hash route.
+
+After reviewing the endpoint and requested scopes, the authorized operator starts
+OAuth, consents at the provider and returns to the same LeForge connection flow.
+The backend validates a short-lived, single-use state bound to the initiating
+user/session, installation and connection, verifies PKCE/issuer/callback, exchanges
+the code and stores tokens encrypted. Access/refresh tokens never enter shared
+links, frontend storage, model context or logs; callback codes are redacted and
+removed from the visible URL after handling. Test/discovery follows successful
+authorization, then the operator explicitly assigns tools to agents. Show denied,
+cancelled, expired and failed authorization without claiming a working connection.
+
+Renew tokens server-side when the provider supports refresh, serialize concurrent
+refresh and persist rotated credentials atomically. If renewal is unavailable or
+fails permanently, require reauthorization without expanding grants or replaying
+an ambiguous remote mutation. Revocation blocks subsequent calls locally,
+invalidates pending authorization/refresh work and removes locally stored tokens;
+request provider-side revocation when supported and show its result separately.
+If remote revocation fails or is unavailable, explain the remaining provider-side
+action. Already dispatched calls cannot be rolled back. Unit, integration and
+browser E2E must cover the complete journey, callbacks/replay, renewal races and
+revocation, plus opt-in live-provider validation.
+
+The additional template backlog can reuse the registry: DeepWiki, Context7, Hugging
+Face and W&B first; Sentry, dbt, LangSmith and Databricks after their authentication
+and header prerequisites; BigQuery/Snowflake after protocol qualification;
+Playwright/MLflow/Qdrant after isolated MCP hosting design. Discover current tools
+and require explicit grants; installing a template must never authorize an agent.
+
+**Acceptance criterion:** Users can open a template by browser link, review and connect the four priority integrations through the interface, complete OAuth authorization and return where supported, renew or reauthorize credentials, revoke access, test connections, grant tools to specific agents, and inspect calls and their results. Credential modes remain provider-specific; the complete browser journey requires automated and live-provider acceptance.
 
 ### 7. Add Skills and Steering
 

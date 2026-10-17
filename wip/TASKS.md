@@ -252,7 +252,7 @@ does not satisfy this milestone.
 
 #### Connectivity and Integrations
 
-- [ ] Confirm contracts, authentication methods, scopes, and supported transports for Bitbucket, GitHub, Confluence, and Jira.
+- [x] Document the official endpoint, transport, authentication and scope contracts for GitHub, Bitbucket Cloud, Jira Cloud and Confluence Cloud. — [Source survey, 2026-10-17](../docs/mcp-integrations.md); documentary verification only. Runtime OAuth qualifications, per-tool permission mappings and live acceptance remain below.
 - [x] Choose an initial transport compatible with Docker and implement connections without running arbitrary commands in the main process. — Remote HTTPS Streamable HTTP discovery, protocol 2025-06-18, JSON/SSE, public-IP-only dialing, no redirects or subprocesses; see [MCP scope](../docs/mcp.md).
 - [x] Design a generic MCP connection registry, with no artificial connection limit and support for multiple connections per service. — Revisioned per-connection settings with stable IDs and safe read models.
 - [ ] Implement the connection lifecycle: create, edit, test, disable, re-enable, revoke, and delete. — Partial: create/edit/test/disable/re-enable and credential replacement/clear are delivered; subsequent calls are denied after disable; deletion remains pending.
@@ -283,7 +283,46 @@ does not satisfy this milestone.
 - [x] Add interface tests for connection setup, validation, agent authorization, and revocation. — Components and Chromium cover setup, saved grants, successful agent execution, wildcard denial and connection disable against a real TLS fixture.
 - [ ] Add end-to-end tests for each priority integration using appropriate test credentials.
 
-**Done when:** Connections for each priority integration can be created through the interface, tested, assigned to agents, and audited; unauthorized calls are denied.
+#### Vendor Delivery Checklist
+
+All behavior changes below require unit and real-boundary integration tests;
+complete each product with browser E2E and an opt-in live test using authorized
+credentials/resources. Fixture coverage alone does not complete live acceptance.
+
+- [ ] Implement versioned templates with endpoint parameters, credential modes, source/review date, scope guidance, validation status and explicit tool grants; preview template upgrades without silently expanding access.
+- [ ] GitHub: add the github.com PAT template, read-only/toolset profiles and a tested per-tool fine-grained permission matrix; distinguish repository defaults from enforced credential restrictions.
+- [ ] GitHub: implement host-owned OAuth app registration/configuration and guided consent; test expiry, organization/SSO restrictions and insufficient permissions.
+- [ ] GitHub: validate repository/issue/PR reads, an approved test mutation, inaccessible repository denial and revocation in browser and live-service acceptance.
+- [ ] Atlassian foundation: qualify v2 protocol, tool schemas and catalogue bounds; support the exact reviewed `tools=all` query option while rejecting unknown/secret query parameters; test pagination and catalogue drift.
+- [ ] Atlassian foundation: implement OAuth and encrypted Basic email/token credentials, retain service-account Bearer support, and explain admin enablement, site consent and IP/domain restrictions.
+- [ ] Atlassian foundation: use flat per-operation discovery and product-specific selection; prevent `executeRead`/`executeWrite`/`executeDestructive` dispatcher grants from bypassing exact authorization; resolve site context and test cross-product denials.
+- [ ] Bitbucket Cloud: guide organization-linked workspace/repository selection and read/write MCP scopes; test unlinked workspaces, cross-workspace denial, PR reads and an approved test mutation; pipelines/merge are separate grants.
+- [ ] Jira Cloud: guide site/project selection and read/search/write MCP scopes; test JQL/issue reads, missing scope/project access, field/transition failures and approved test writes; exclude delete/manage from initial defaults.
+- [ ] Confluence Cloud: guide site/space selection and read/search/write MCP scopes; test restricted content, page/search reads, approved updates, version conflicts and permission failures; do not fetch returned attachment links automatically.
+#### Browser-Link Connection and OAuth Lifecycle (Planned)
+
+- [ ] Add shareable links to a template/version on the configured local or hosted LeForge installation; validate public parameters, reject credentials/unknown templates and preserve selection through login. Opening a link only prepares a review screen, never creates a connection or grants tools.
+- [ ] Add endpoint/scope review and an explicit authorize action for permitted operators; retain protected API-key/PAT entry for providers without OAuth. Never include secrets in connection links.
+- [ ] Qualify provider authorization metadata and client registration; configure an exact backend callback URL independent of the frontend hash route and validate issuer/authorization endpoints under the network policy.
+- [ ] Implement authorization-code flow with PKCE and expiring, single-use state bound to the initiating user/session, installation and connection; reject forged, mismatched, replayed or expired callbacks and untrusted return destinations.
+- [ ] Return to the originating LeForge connection screen after consent; exchange the code on the backend, encrypt tokens and run test/discovery before showing success. Redact callback codes and clean the visible URL; keep tokens out of frontend storage, logs and model context. Handle denial, cancellation, lost login session, provider failure and discovery failure explicitly.
+- [ ] Require explicit per-agent tool assignment after connection; OAuth consent or a template link never grants agent authority or silently expands existing grants on re-consent.
+- [ ] Implement server-side renewal where supported, with serialized concurrent refresh, atomic rotated-token persistence and bounded failure handling; show reauthorization required when refresh is unavailable, expired or revoked. Never retry ambiguous remote writes automatically.
+- [ ] Implement revocation that immediately blocks subsequent local calls, invalidates pending callbacks/refreshes and removes stored tokens; request upstream revocation where supported and report remote failure/unsupported revocation separately with provider-side instructions. Prevent stale callbacks/refreshes from restoring a revoked connection; distinguish revocation from temporary disable and from connection deletion.
+- [ ] Add unit tests for link validation, callback/state/PKCE handling, credential redaction, expiry, renewal and revocation races; retain the documented boundary that already dispatched calls cannot be rolled back.
+- [ ] Add integration tests across API, encrypted persistence, gateway and a real TLS OAuth/MCP fixture: code exchange, discovery, concurrent refresh, rotation, revocation, dependency failures and denial after revocation.
+- [ ] Add browser E2E for link → LeForge login/review → provider authorization → callback → discovery → explicit agent grants → execution; include denied/cancelled consent, invalid/replayed callback, renewal, reauthorization and revocation. Validate each supported OAuth provider with opt-in live credentials and authorized test resources before marking its journey complete.
+
+
+#### Additional Template Backlog
+
+- [x] Survey additional official MCP servers for software, data, ML and AI engineering. — [13 candidates and delivery order](../docs/mcp-templates.md), reviewed 2026-10-17; this does not certify compatibility or add all candidates to Release 1.
+- [ ] First wave: ship DeepWiki, Context7, Hugging Face and W&B templates with protocol qualification, unit/integration/browser coverage and opt-in live smoke tests; only DeepWiki has prior installed-flow evidence.
+- [ ] Add typed, encrypted custom-header support and bounded non-secret metadata headers for dbt/LangSmith; qualify per-tool auth requirements; add Sentry OAuth and Databricks workspace/service authentication profiles.
+- [ ] Qualify BigQuery stateless protocol and Snowflake lifecycle differences before implementing compatibility profiles, IAM/role guidance and data-query cost controls.
+- [ ] Design isolated managed MCP hosting for Playwright, MLflow and Qdrant, including inbound TLS/auth, upstream credentials, process lifecycle, resource limits and explicit private-network policy; never run arbitrary server commands in the main process.
+
+**Done when:** Connections for each priority integration can be opened from a browser template link, reviewed, created, tested, assigned to agents and audited; supported OAuth flows authorize and return to LeForge, renew or request reauthorization, and revoke access with clear local/upstream outcomes. Unauthorized calls are denied, and browser/live-provider acceptance is recorded separately from fixture coverage.
 
 ### 7. Add Skills and Steering
 
