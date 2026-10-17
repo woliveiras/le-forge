@@ -632,6 +632,11 @@ remain separate planned work. All interface copy remains in English.
    deep links, history and unsaved drafts. Add a list alternative to the canvas.
 3. Build connection list/detail routes with Overview, Tools, Usage & history and Settings;
    show connection creation only on request, preserve manual/DCR/CIMD and uncertain states.
+   Delivered with searchable/filterable connections, searchable tools, scoped history and
+   saved graph grant visibility. Existing setup handlers and legacy OAuth links remain
+   compatible. Unit, real-client component integration and disposable-backend Chromium
+   coverage verify creation, discovery, editing, missing records, errors and role gates.
+   No installation activation or additional external provider validation is implied.
 4. Give agents a dedicated configuration page: General, Instructions, Tools & permissions
    and Advanced. Keep effective isolation/grants visible; review the complete graph draft
    before saving. Keep operational controls separate from editing.

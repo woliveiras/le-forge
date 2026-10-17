@@ -3,8 +3,8 @@ import { api, errorMessage } from '../api/client';
 import type { MCPHistoryPage } from '../api/types';
 import { Btn, ErrorBox, fmtDateTime } from './common';
 const initial={connection:'',graph:'',node:'',tool:'',outcome:'',type:'',since:'',until:''};
-export function MCPHistory(){
- const [filters,setFilters]=useState(initial);
+export function MCPHistory({connectionID}:{connectionID?:string} = {}){
+ const [filters,setFilters]=useState({...initial,connection:connectionID??''});
  const [page,setPage]=useState<MCPHistoryPage>();
  const [applied,setApplied]=useState('');
  const [busy,setBusy]=useState(false);
@@ -27,14 +27,14 @@ export function MCPHistory(){
   <p>Newest events first. Results show outcomes, not raw arguments, responses or approval comments. History follows installation event retention and includes deleted connections.</p>
   <form className="form" onSubmit={e=>{e.preventDefault();void load();}}>
    <fieldset disabled={busy}><legend>History filters</legend>
-    {(['connection','graph','node','tool'] as const).map(key=><label key={key}>{({connection:'History connection ID',graph:'History graph ID',node:'History agent ID',tool:'History tool name'})[key]}<input value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})}/></label>)}
+    {(['connection','graph','node','tool'] as const).map(key=><label key={key}>{({connection:'History connection ID',graph:'History graph ID',node:'History agent ID',tool:'History tool name'})[key]}<input readOnly={key==='connection'&&connectionID!==undefined} value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})}/></label>)}
     <label>History outcome<select value={filters.outcome} onChange={e=>setFilters({...filters,outcome:e.target.value})}><option value="">All outcomes</option>{['started','ok','error','denied','unknown','rate_limited','rejected','pending','approved','expired'].map(x=><option key={x} value={x}>{x}</option>)}</select></label>
     <label>History event type<select value={filters.type} onChange={e=>setFilters({...filters,type:e.target.value})}><option value="">All event types</option>{['tool.invoked','tool.completed','tool.denied','approval.requested','approval.decided'].map(x=><option key={x} value={x}>{x}</option>)}</select></label>
     <label>History since<input type="datetime-local" value={filters.since} onChange={e=>setFilters({...filters,since:e.target.value})}/></label>
     <label>History until<input type="datetime-local" value={filters.until} onChange={e=>setFilters({...filters,until:e.target.value})}/></label>
    </fieldset>
    <Btn type="submit" disabled={busy}>Apply history filters</Btn>
-   <Btn disabled={busy} onClick={()=>{setFilters(initial);setPage(undefined);setApplied('');setError(undefined);}}>Clear history filters</Btn>
+   <Btn disabled={busy} onClick={()=>{setFilters({...initial,connection:connectionID??''});setPage(undefined);setApplied('');setError(undefined);}}>Clear history filters</Btn>
   </form>
   <ErrorBox error={error}/>
   {busy&&<p role="status">Loading MCP history…</p>}

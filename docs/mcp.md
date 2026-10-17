@@ -1,10 +1,14 @@
 # MCP connections and agent permissions
 
+The connection list opens dedicated Overview, Tools, Usage & history and Settings
+pages. Use Settings to edit an existing connection and Overview for OAuth actions.
+See [Console navigation](interface-navigation.md) for routes and legacy compatibility.
+
 MCP supports registration, discovery and remote tool invocation through the gateway.
 Native agents and external runtime callbacks use the same authorization boundary.
 Models receive only the currently available tools explicitly granted to their agent.
 
-In **Integrations → MCP connections**, an administrator can create or edit multiple
+In **Connections → Add connection**, an administrator can create or edit multiple
 connections, set a bearer credential, and disable/re-enable a connection. IDs are
 stable; edits require the current revision. A blank credential preserves the
 stored value; explicit clear removes it. Changing the endpoint requires replacing
@@ -270,7 +274,7 @@ For an initial OAuth App connection (no private repository access):
    Enter the secret directly into LeForge's protected field, never into chat,
    connection URLs, source files or screenshots. The browser's existing GitHub
    session is used for login; it does not replace this application registration.
-3. In **Integrations → MCP connections**, create a connection with service `github`,
+3. In **Connections → Add connection**, create a connection with service `github`,
    endpoint `https://api.githubcopilot.com/mcp/`, **Use browser OAuth** checked,
    issuer `https://github.com/login/oauth`, and that client ID/secret. For this
    initial check, request `read:user offline_access`. The latter requests expiring
@@ -304,7 +308,7 @@ Sources: [GitHub MCP host integration](https://github.com/github/github-mcp-serv
 
 ## Service setup and independent connections
 
-In **Integrations**, choose **GitHub**, **Atlassian**, **GitLab** or **Custom**.
+In **Connections → Add connection**, choose **GitHub**, **Atlassian**, **GitLab** or **Custom**.
 Existing Jira, Confluence and Bitbucket service labels remain readable/editable.
 Choose **Use OAuth defaults** to prepare the fields; review them before saving.
 Applying defaults clears client-registration fields in the form. It does not
@@ -536,7 +540,7 @@ tool request is sent. Storage failure/corruption fails closed. The existing
 15-second operation deadline and response bounds remain unchanged. Concurrent
 in-flight limits and provider-specific daily/billing quotas are not implemented.
 
-**Integrations → MCP call history** queries persisted tool and approval events,
+**Connections → View history across connections** queries persisted tool and approval events,
 newest first, filtered by connection ID, graph, agent, exact qualified tool,
 event type, outcome and time range. Apply filters explicitly; older-page requests
 use the last applied filters. Results are safe summaries and correlation IDs,

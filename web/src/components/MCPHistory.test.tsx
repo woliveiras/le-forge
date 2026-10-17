@@ -23,3 +23,12 @@ it('reports failures while keeping the last successful page and permits retry',a
  fail=true;await userEvent.click(screen.getByRole('button',{name:'Apply history filters'}));expect(await screen.findByText('History unavailable')).toBeTruthy();expect(within(screen.getByRole('table',{name:'MCP events'})).getByText('Call quota exceeded')).toBeTruthy();
  fail=false;await userEvent.click(screen.getByRole('button',{name:'Apply history filters'}));expect(screen.queryByText('History unavailable')).toBeNull();
 });
+it('keeps detail history bound to its connection when filters are cleared', async()=>{
+ const backend=fakeApi({'GET /api/v1/mcp/history':()=>({entries:[],hasMore:false})});
+ render(<MCPHistory connectionID="team"/>);
+ expect(screen.getByLabelText('History connection ID').hasAttribute('readonly')).toBe(true);
+ await userEvent.click(screen.getByRole('button',{name:'Clear history filters'}));
+ expect(screen.getByLabelText('History connection ID')).toHaveProperty('value','team');
+ await userEvent.click(screen.getByRole('button',{name:'Apply history filters'}));
+ expect(backend.fetch.mock.calls.map(c=>String(c[0]))[0]).toContain('connection=team');
+});

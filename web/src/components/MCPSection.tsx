@@ -1,3 +1,5 @@
+import { ConnectionGrants } from './ConnectionGrants';
+import { connectionTabs, connectionTabTitles, connectionLink, type ConnectionTab } from './mcpNavigation';
 import { MCPHistory } from './MCPHistory';
 import { MCPServiceGuide } from './MCPServiceGuide';
 import { oauthDefaults, serviceOptions } from './mcpServices';
@@ -9,8 +11,10 @@ import type { MCPConnection, MCPConnectionInput } from '../api/types';
 import { useAsync } from '../hooks/useData';
 import { Badge, Btn, ErrorBox, JsonView, fmtDateTime } from './common';
 const empty: MCPConnectionInput = {id:'',name:'',service:'generic',endpoint:'',enabled:true};
-export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQuery?:string;oauthQuery?:string}) {
+export function MCPSection({role,connectQuery,oauthQuery,presentation,connectionID,tab='overview'}:{role?:string;connectQuery?:string;oauthQuery?:string;presentation?:'create'|'detail';connectionID?:string;tab?:ConnectionTab}) {
   const list=useAsync(api.mcpConnections,[]);
+  const [editing,setEditing]=useState(presentation!=='detail');
+  const [toolSearch,setToolSearch]=useState('');
   const [input,setInput]=useState<MCPConnectionInput>(empty);
   const [revision,setRevision]=useState<number>();
   const [gitlabInstance,setGitlabInstance]=useState('https://gitlab.com');
@@ -23,17 +27,17 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
-  async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+  async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();if(presentation)location.hash=connectionLink(input.id);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   async function discover(id:string,action:'test'|'tools/refresh'){setBusy(true);setError(undefined);try{await api.refreshMCP(id,action);await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
-  async function remove(){if(!deleting||deleteID!==deleting.id)return;setBusy(true);setError(undefined);try{await api.deleteMCP(deleting.id,deleting.revision);if(input.id===deleting.id)edit();setDeleting(undefined);setDeleteID('');await list.reload();}catch(e){setError(errorMessage(e));setDeleting(undefined);setDeleteID('');await list.reload();}finally{setBusy(false);}}
+  async function remove(){if(!deleting||deleteID!==deleting.id)return;setBusy(true);setError(undefined);try{await api.deleteMCP(deleting.id,deleting.revision);if(input.id===deleting.id)edit();setDeleting(undefined);setDeleteID('');await list.reload();if(presentation)location.hash='#/connections';}catch(e){setError(errorMessage(e));setDeleting(undefined);setDeleteID('');await list.reload();}finally{setBusy(false);}}
   return <section className="integration-section" aria-label="MCP connections">
-    <h2>MCP connections</h2>
-    <p>Register remote HTTPS Streamable HTTP servers and discover their tools. Only public network destinations are supported. Credentials stay encrypted in LeForge.</p>
-    <p>Assign tools to agents in the graph editor to allow calls through the gateway. OAuth supports manual registration, DCR and CIMD with PKCE; templates provide reviewed public defaults.</p>
+    {presentation?<p><a href="#/connections">Connections</a> / {presentation==='create'?'New connection':list.data?.find(c=>c.id===connectionID)?.name??connectionID}</p>:<h2>MCP connections</h2>}
+    {presentation!=='detail'&&<><p>Register remote HTTPS Streamable HTTP servers and discover their tools. Only public network destinations are supported. Credentials stay encrypted in LeForge.</p>
+    <p>Assign tools to agents in the graph editor to allow calls through the gateway. OAuth supports manual registration, DCR and CIMD with PKCE; templates provide reviewed public defaults.</p></>}
     {oauthQuery!==undefined&&<MCPOAuthReturn key={oauthQuery} query={oauthQuery} canManage={admin} onChanged={list.reload}/> }
-    <MCPTemplates query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version}});}} />
+    {presentation!=='detail'&&<MCPTemplates connectionRoutes={!!presentation} query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version}});}} />}
     <Btn onClick={()=>void list.reload()} disabled={list.loading}>Reload MCP connections</Btn>
     <ErrorBox error={list.error}/><ErrorBox error={error}/>
     {deleting&&<section role="dialog" aria-label={`Delete MCP ${deleting.name}`}>
@@ -46,7 +50,11 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
     </section>}
     {list.loading&&<p role="status">Loading connections…</p>}
     {!list.loading&&!list.error&&!list.data?.length&&<p>No MCP connections configured.</p>}
-    {admin&&<form className="form" onSubmit={e=>{e.preventDefault();void save();}}>
+    {presentation==='detail'&&!list.loading&&!list.error&&!list.data?.some(c=>c.id===connectionID)&&<p role="alert">Connection not found. It may have been deleted.</p>}
+    {presentation==='detail'&&list.data?.filter(c=>c.id===connectionID).map(c=><header className="connection-heading" key={c.id}><h1>{c.name}</h1><p><Badge>{c.status}</Badge> {c.service} · Installation connection</p></header>)}
+    {presentation==='detail'&&<nav className="section-navigation" aria-label="Connection sections">{connectionTabs.map(t=><a key={t} href={connectionLink(connectionID??'',t)} aria-current={tab===t?'page':undefined}>{connectionTabTitles[t]}</a>)}</nav>}
+    {presentation==='create'&&!admin&&<p>An administrator must create this connection.</p>}
+    {admin&&editing&&(presentation!=='detail'||tab==='settings')&&<form className="form" onSubmit={e=>{e.preventDefault();void save();}}>
       <h3>{revision?'Edit connection':'New connection'}</h3>
       {input.template&&<p>Template: {input.template.id} v{input.template.version}. Review the fields, then save. <Btn onClick={()=>setInput({...input,template:undefined})}>Customize without template</Btn></p>}
       <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={input.id} disabled={!!revision||busy} onChange={e=>setInput({...input,id:e.target.value})}/></label>
@@ -78,19 +86,22 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
       <p className="muted small">Leave blank to keep the existing credential. Changing the endpoint requires replacing or clearing its credential.</p>
       <label><input type="checkbox" checked={clear} onChange={e=>{setClear(e.target.checked);setToken('');}}/>Clear stored credential</label></>}
       <label><input type="checkbox" checked={input.enabled} onChange={e=>setInput({...input,enabled:e.target.checked})}/>Connection enabled</label>
-      <div className="btn-row"><Btn type="submit" disabled={busy} tone="primary">Save MCP connection</Btn>{revision&&<Btn disabled={busy} onClick={()=>edit()}>Cancel connection edit</Btn>}</div>
+      <div className="btn-row"><Btn type="submit" disabled={busy} tone="primary">Save MCP connection</Btn>{revision&&<Btn disabled={busy} onClick={()=>edit()}>Cancel connection edit</Btn>}{presentation==='create'&&<a href="#/connections">Cancel</a>}</div>
     </form>}
-    <div className="cards">{(list.data??[]).map(c=><article className="card" key={c.id} aria-label={`MCP ${c.name}`}>
-      <h3>{c.name} <Badge>{c.status}</Badge></h3><p>{c.service} · {c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
+    <div className={presentation ? "connection-detail" : "cards"}>{(list.data??[]).filter(c=>!presentation||(presentation==='detail'&&c.id===connectionID)).map(c=><article className="card" key={c.id} aria-label={`MCP ${c.name}`}>
+      {presentation ? <h2>{tab==='settings'?'Connection settings':tab==='overview'?'Connection overview':connectionTabTitles[tab]}</h2> : <h3>{c.name} <Badge>{c.status}</Badge></h3>}<p>{c.service} · {c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
       <p>{c.credentialConfigured?'Credential configured':'No credential'} · revision {c.revision} · catalogue {c.toolsRevision}</p>
       <p>Connection quota: {c.callsPerMinute?`${c.callsPerMinute} calls per UTC minute`:'Unlimited'}</p>
-      {c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
+      {(!presentation||tab==='overview')&&c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
       {c.lastTest&&<p>Last discovery: {fmtDateTime(c.lastTest)}</p>}<ErrorBox error={c.error}/>
-      <div className="btn-row">{admin&&<Btn disabled={busy} onClick={()=>edit(c)}>Edit {c.name}</Btn>}{operator&&<><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'test')}>Test {c.name}</Btn><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'tools/refresh')}>Refresh tools for {c.name}</Btn></>}</div>
-      {admin&&<><p>To delete, disable the connection and revoke OAuth access first. Deleted IDs cannot be reused.</p><Btn disabled={busy||c.enabled||!!(c.oauth&&(c.oauth.status!=='revoked'||c.oauth.revocation==='pending'))} onClick={()=>{setDeleting(c);setDeleteID('');setError(undefined);}}>Delete {c.name}</Btn></>}
-      <ul>{c.tools.map(t=><li key={t.name}><code>mcp.{c.id}.{t.name}</code><p>{t.description}</p><JsonView label="Input schema" value={t.inputSchema}/></li>)}</ul>
-      {c.status==='ready'&&!c.tools.length&&<p>The server returned no tools.</p>}
+      <div className="btn-row">{admin&&(!presentation||tab==='settings')&&<Btn disabled={busy} onClick={()=>edit(c)}>Edit {c.name}</Btn>}{operator&&(!presentation||tab==='overview'||tab==='tools')&&<><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'test')}>Test {c.name}</Btn><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'tools/refresh')}>Refresh tools for {c.name}</Btn></>}</div>
+      {admin&&(!presentation||tab==='settings')&&<><p>To delete, disable the connection and revoke OAuth access first. Deleted IDs cannot be reused.</p><Btn disabled={busy||c.enabled||!!(c.oauth&&(c.oauth.status!=='revoked'||c.oauth.revocation==='pending'))} onClick={()=>{setDeleting(c);setDeleteID('');setError(undefined);}}>Delete {c.name}</Btn></>}
+      {(!presentation||tab==='tools')&&<><label>Search tools<input type="search" value={toolSearch} onChange={e=>setToolSearch(e.target.value)}/></label><ul>{c.tools.filter(t=>[t.name,t.description].some(value=>(value??'').toLowerCase().includes(toolSearch.toLowerCase()))).map(t=><li key={t.name}><code>mcp.{c.id}.{t.name}</code><p>{t.description}</p><JsonView label="Input schema" value={t.inputSchema}/></li>)}</ul>
+      {c.status==='ready'&&!c.tools.length&&<p>The server returned no tools.</p>}{!!c.tools.length&&!c.tools.some(t=>[t.name,t.description].some(value=>(value??'').toLowerCase().includes(toolSearch.toLowerCase())))&&<p>No tools match this search.</p>}</>}
+      {presentation&&tab==='overview'&&<ConnectionGrants connectionID={c.id}/>}
+      {presentation&&tab==='history'&&<MCPHistory key={c.id} connectionID={c.id}/>}
+      {presentation&&tab==='settings'&&!admin&&<p>Only administrators can edit connection settings.</p>}
     </article>)}</div>
-    <MCPHistory/>
+    {!presentation&&<MCPHistory/>}
   </section>;
 }

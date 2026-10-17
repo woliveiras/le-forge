@@ -6,6 +6,7 @@ import { Badge, Btn, ErrorBox, Modal } from './components/common';
 import { GraphList } from './components/GraphList';
 import { GraphWorkspace, type GraphTab } from './components/GraphWorkspace';
 import { AdministrationPage, administrationSections, ConnectionsPage, ModelsPage, type AdministrationSection } from './components/InstallationPages';
+import { connectionTabs, type ConnectionTab } from './components/mcpNavigation';
 import { SkillsView } from './components/SkillsView';
 import { useAsync, useThrottled } from './hooks/useData';
 import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
@@ -20,7 +21,7 @@ import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
 type Route =
   | { view: 'graphs' }
   | { view: 'approvals' }
-  | { view: 'connections'; connectQuery?: string; oauthQuery?: string }
+  | { view: 'connections'; connectionID?: string; connectionTab?: ConnectionTab; create?: boolean; history?: boolean; connectQuery?: string; oauthQuery?: string }
   | { view: 'models' }
   | { view: 'administration'; section: AdministrationSection }
   | { view: 'skills' }
@@ -33,6 +34,9 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'skills') return { view: 'skills' };
   if (parts[0] === 'models') return { view: 'models' };
   if (parts[0] === 'administration') return { view: 'administration', section: administrationSections.includes(parts[1] as AdministrationSection) ? parts[1] as AdministrationSection : 'health' };
+  if (parts[0] === 'connections' && parts[1] === 'c') return { view: 'connections', connectionID: parts[2] ?? '', connectionTab: connectionTabs.includes(parts[3] as ConnectionTab) ? parts[3] as ConnectionTab : 'overview' };
+  if (parts[0] === 'connections' && parts[1] === 'new') return { view: 'connections', create: true };
+  if (parts[0] === 'connections' && parts[1] === 'history') return { view: 'connections', history: true };
   if (parts[0] === 'integrations' || parts[0] === 'connections') return { view: 'connections', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined, oauthQuery: parts[1] === 'oauth' ? (qs ?? '') : undefined };
   if (parts[0] === 'g' && parts[1]) {
     const tab = (['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
@@ -47,7 +51,14 @@ export function parseRoute(hash: string): Route {
 export function routeHash(r: Route): string {
   if (r.view === 'approvals') return '#/approvals';
   if (r.view === 'skills') return '#/skills';
-  if (r.view === 'connections') return '#/connections';
+  if (r.view === 'connections') {
+    if (r.connectionID !== undefined) return `#/connections/c/${encodeURIComponent(r.connectionID)}/${r.connectionTab ?? 'overview'}`;
+    if (r.create) return '#/connections/new';
+    if (r.history) return '#/connections/history';
+    if (r.connectQuery !== undefined) return `#/connections/connect?${r.connectQuery}`;
+    if (r.oauthQuery !== undefined) return `#/connections/oauth?${r.oauthQuery}`;
+    return '#/connections';
+  }
   if (r.view === 'models') return '#/models';
   if (r.view === 'administration') return `#/administration/${r.section}`;
   if (r.view === 'graph')
@@ -176,7 +187,7 @@ function Shell() {
           )}
           {route.view === 'skills' && <SkillsView role={info.data?.identity?.role} onChanged={() => void graphs.reload()} />}
           {route.view === 'approvals' && <ApprovalsView onChanged={() => void approvals.reload()} />}
-          {route.view === 'connections' && <ConnectionsPage info={info.data} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
+          {route.view === 'connections' && <ConnectionsPage info={info.data} connectionID={route.connectionID} connectionTab={route.connectionTab} create={route.create} history={route.history} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
           {route.view === 'models' && <ModelsPage info={info.data} />}
           {route.view === 'administration' && <AdministrationPage info={info.data} infoError={info.error} section={route.section} />}
           {route.view === 'graph' &&

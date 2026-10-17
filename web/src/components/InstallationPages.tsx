@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 import { Btn } from './common';
 import type { Info } from '../api/types';
+import { ConnectionsList } from './ConnectionsList';
+import { MCPHistory } from './MCPHistory';
+import type { ConnectionTab } from './mcpNavigation';
 import { MCPSection } from './MCPSection';
 import { ProvidersSection, type ProvidersHandle } from './ProvidersSection';
 import { IntegrationsView } from './IntegrationsView';
@@ -16,10 +19,14 @@ const titles: Record<AdministrationSection, string> = {
   retention: 'History retention', tools: 'Tool catalog',
 };
 
-export function ConnectionsPage({ info, connectQuery, oauthQuery }: { info?: Info; connectQuery?: string; oauthQuery?: string }) {
-  return <div className="page installation-page"><header className="page-head"><div><h1>Connections</h1>
+export function ConnectionsPage({ info, connectionID, connectionTab = 'overview', create, history, connectQuery, oauthQuery }: { info?: Info; connectionID?: string; connectionTab?: ConnectionTab; create?: boolean; history?: boolean; connectQuery?: string; oauthQuery?: string }) {
+  // Legacy integration and OAuth/template links retain their reviewed setup flow.
+  const legacy = location.hash.startsWith('#/integrations') || oauthQuery !== undefined;
+  return <div className="page installation-page"><header className="page-head" hidden={connectionID !== undefined}><div><h1>Connections</h1>
     <p className="muted">Manage installation MCP connections. Agent tool permissions are granted separately.</p></div></header>
-    <MCPSection key={connectQuery ?? 'manual'} role={info?.identity?.role} connectQuery={connectQuery} oauthQuery={oauthQuery} />
+    {history ? <><a href="#/connections">Back to connections</a><MCPHistory /></> : legacy || create || connectQuery !== undefined || connectionID !== undefined
+      ? <MCPSection key={connectionID ?? connectQuery ?? (create ? 'new' : 'manual')} role={info?.identity?.role} connectQuery={connectQuery} oauthQuery={oauthQuery} presentation={legacy ? undefined : create || connectQuery !== undefined ? 'create' : 'detail'} connectionID={connectionID} tab={connectionTab} />
+      : <ConnectionsList role={info?.identity?.role} />}
   </div>;
 }
 

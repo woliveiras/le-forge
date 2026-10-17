@@ -21,3 +21,7 @@ describe('installation destination routes', () => {
     expect(routeHash(route)).toBe('#/g/example/messages?c=sample');
   });
 });
+it('round-trips connection destinations and falls back from unknown sections', () => {
+ for (const hash of ['#/connections/new', '#/connections/history', '#/connections/c/team/tools', '#/connections/c/team/settings']) expect(routeHash(parseRoute(hash))).toBe(hash);
+ expect(parseRoute('#/connections/c/team/unknown')).toMatchObject({connectionID:'team',connectionTab:'overview'});
+});
