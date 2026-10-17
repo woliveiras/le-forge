@@ -164,6 +164,7 @@ func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event st
 		r.OAuth.ClientSecretConfigured = r.OAuthClientSealed != ""
 		if r.Registration != nil {
 			r.OAuth.RegistrationStatus = r.Registration.Status
+			r.OAuth.RegistrationDiagnostic = r.Registration.Diagnostic
 			r.OAuth.EffectiveRegistrationMode = r.Registration.Mode
 		}
 	}

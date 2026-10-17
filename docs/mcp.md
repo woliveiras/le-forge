@@ -418,8 +418,12 @@ registrations survive backend restarts. A failed or interrupted registration is
 shown as uncertain/pending and is not retried automatically: inspect the provider
 for a possibly created client before deliberately changing registration settings
 or using manual setup. Registration credentials remain encrypted and are never
-returned by the API. The UI exposes only the effective mode and registration
-status. Updating issuer, mode, scopes or endpoint clears incompatible local state;
+returned by the API. The UI exposes the effective mode, registration status and a safe diagnostic
+category with the provider HTTP status when a response was received. Upstream
+bodies, descriptions, headers and credentials are never retained in diagnostics.
+The diagnostic survives reloads and restarts; historical failures without it
+cannot be reconstructed. A failed start clears the stale confirmation and reloads
+the saved connection, without repeating the registration POST. Updating issuer, mode, scopes or endpoint clears incompatible local state;
 changing the configured callback blocks reuse until the operator reviews and
 changes the connection configuration. Such changes never delete remote clients.
 
@@ -455,3 +459,25 @@ TLS proxy in the disposable test harness. `make test-e2e` runs both the ordinary
 browser suite and `playwright.oauth-cimd.config.ts`. No production transport bypass
 is introduced. Live GitLab/Atlassian registration and corporate approvals remain
 pending and require separately authorized test accounts/resources.
+
+
+### Diagnosing an uncertain DCR registration
+
+Do not create another connection, reset registration state, or change the issuer,
+scopes or callback just to retry an uncertain registration. First establish with
+the provider whether the original attempt created a client. LeForge does not
+currently implement remote registration reconciliation or client deletion. A
+historical uncertain record without diagnostic details must remain blocked until
+external evidence allows a deliberate recovery; an HTTP error reported by the
+browser alone does not establish the upstream result.
+
+A provider HTTP 403 points to refusal of the registration request. It does not by
+itself prove a localhost incompatibility or prove that no remote client exists.
+Atlassian lists HTTP `localhost` and `127.0.0.1` among its supported MCP client
+domains; an organization can still block those domains. Review the exact callback
+and organization policy with its administrator before changing settings. This is
+separate from CIMD, which needs provider-reachable public HTTPS metadata.
+See [Atlassian-supported domains](https://support.atlassian.com/security-and-access-policies/docs/available-atlassian-mcp-server-domains/)
+and [MCP permissions](https://support.atlassian.com/security-and-access-policies/docs/configure-atlassian-mcp-server-permissions/)
+(reviewed 2026-10-17). Real Atlassian registration and consent remain externally
+unvalidated; fixture coverage is not vendor certification.

@@ -395,6 +395,13 @@ reuse after restart, serialize concurrent registration, and avoid blindly retryi
 an ambiguous registration POST. Explain denied registration, invalid metadata,
 rate limits and unsupported client methods without leaking provider payloads.
 
+DCR failure diagnostics retain only locally authored categories and the provider
+HTTP status, survive reloads/restarts, and do not permit automatic retries.
+Historical uncertain attempts without diagnostics require external reconciliation;
+HTTP localhost is supported by Atlassian's documented domain policy, subject to
+organization restrictions. Neither a browser 403 nor an uncertain marker proves
+whether a remote client was created. See the recovery guidance in `docs/mcp.md`.
+
 CIMD identifies the client through a stable public HTTPS JSON document; it does
 not create an application by POST. Publish only non-secret client metadata,
 including an exact matching URL-form client ID and approved callback URIs derived

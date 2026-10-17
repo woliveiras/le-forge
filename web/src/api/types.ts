@@ -645,7 +645,7 @@ export interface HumanReview {
 export interface MCPTemplateRef { id: string; version: number }
 export interface MCPTemplate extends MCPTemplateRef { name: string; service: string; endpoint: string; authentication: string; guidance: string; source: string; reviewedAt: string; validation: string }
 export interface MCPOAuthConfig { registrationMode?: string; issuer: string; clientId: string; scopes: string[] }
-export interface MCPOAuth extends MCPOAuthConfig { registrationStatus?: string; effectiveRegistrationMode?: string; status: string; expiresAt?: string; grantedScopes?: string[]; clientSecretConfigured: boolean; revocation?: string }
+export interface MCPOAuth extends MCPOAuthConfig { registrationStatus?: string; registrationDiagnostic?: {code: string; httpStatus?: number}; effectiveRegistrationMode?: string; status: string; expiresAt?: string; grantedScopes?: string[]; clientSecretConfigured: boolean; revocation?: string }
 export interface MCPConnection {
   oauth?: MCPOAuth;
   template?: MCPTemplateRef;

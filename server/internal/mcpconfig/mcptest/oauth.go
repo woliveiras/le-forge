@@ -18,14 +18,15 @@ import (
 // It validates the PKCE verifier, redirect URI and resource at code exchange.
 type OAuthServer struct {
 	*httptest.Server
-	mu               sync.Mutex
-	codes            map[string]url.Values
-	hosts            []string
-	Registrations    atomic.Int32
-	FailRegistration atomic.Bool
-	ClientDocument   func(string) bool
-	Refreshes        atomic.Int32
-	Revocations      atomic.Int32
+	mu                        sync.Mutex
+	codes                     map[string]url.Values
+	hosts                     []string
+	Registrations             atomic.Int32
+	FailRegistration          atomic.Bool
+	RegistrationFailureStatus atomic.Int32
+	ClientDocument            func(string) bool
+	Refreshes                 atomic.Int32
+	Revocations               atomic.Int32
 }
 
 func NewOAuth(resource string) *OAuthServer { return newOAuth(resource, "generic") }
@@ -97,7 +98,11 @@ func newOAuth(resource string, service string) *OAuthServer {
 		case "/register":
 			registrationNumber := f.Registrations.Add(1)
 			if f.FailRegistration.Load() {
-				http.Error(w, "synthetic-registration-secret", 503)
+				status := int(f.RegistrationFailureStatus.Load())
+				if status == 0 {
+					status = 503
+				}
+				http.Error(w, "synthetic-registration-secret", status)
 				return
 			}
 			var in map[string]any

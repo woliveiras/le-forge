@@ -17,12 +17,21 @@ import (
 )
 
 type clientRegistration struct {
-	Mode     string `json:"mode"`
-	Status   string `json:"status"`
-	ClientID string `json:"clientId"`
-	Redirect string `json:"redirect"`
-	Method   string `json:"method"`
+	Mode       string                  `json:"mode"`
+	Status     string                  `json:"status"`
+	ClientID   string                  `json:"clientId"`
+	Redirect   string                  `json:"redirect"`
+	Method     string                  `json:"method"`
+	Diagnostic *RegistrationDiagnostic `json:"diagnostic,omitempty"`
 }
+
+// RegistrationDiagnostic contains only locally authored categories and HTTP status.
+// Never retain upstream descriptions, response bodies, headers or credentials.
+type RegistrationDiagnostic struct {
+	Code       string `json:"code"`
+	HTTPStatus int    `json:"httpStatus,omitempty"`
+}
+
 type RegistrationPlan struct {
 	Mode   string `json:"mode"`
 	Reason string `json:"reason"`
@@ -135,6 +144,9 @@ func (m *Manager) prepareRegistration(ctx context.Context, r record, meta oauthM
 	}
 	if err != nil {
 		r.Registration.Status = "uncertain"
+		if r.Registration.Diagnostic == nil {
+			r.Registration.Diagnostic = &RegistrationDiagnostic{Code: "local_setup_failed"}
+		}
 		_, saveErr := m.save(context.WithoutCancel(ctx), r, r.Revision, auditActor, "mcp.oauth.registration_failed")
 		if saveErr != nil {
 			return r, saveErr
@@ -147,6 +159,8 @@ func (m *Manager) prepareRegistration(ctx context.Context, r record, meta oauthM
 	return r, err
 }
 func (m *Manager) registerClient(ctx context.Context, r *record, meta oauthMetadata, redirect string) error {
+	r.Registration.Diagnostic = &RegistrationDiagnostic{Code: "request_setup_failed"}
+	diagnostic := r.Registration.Diagnostic
 	method := "none"
 	// GitLab's DCR contract is public; the returned method must explicitly agree.
 	if !slices.Contains(meta.Methods, "none") && r.Service != "gitlab" {
@@ -172,20 +186,25 @@ func (m *Manager) registerClient(ctx context.Context, r *record, meta oauthMetad
 	req.Header.Set("Accept", "application/json")
 	client, close := m.oauthHTTP()
 	defer close()
+	diagnostic.Code = "transport_outcome_unknown"
 	res, err := client.Do(req)
 	if err != nil {
 		return oauthError("Registration outcome uncertain; inspect provider registration before retrying")
 	}
 	defer res.Body.Close()
+	diagnostic.HTTPStatus = res.StatusCode
+	diagnostic.Code = "response_unreadable"
 	data, err := io.ReadAll(io.LimitReader(res.Body, 65537))
 	if err != nil || len(data) > 65536 {
 		return oauthError("Registration response exceeds limits")
 	}
+	diagnostic.Code = "provider_error"
 	if err = oauthProviderError(data); err != nil {
 		return err
 	}
 	if res.StatusCode != 201 && res.StatusCode != 200 {
-		return oauthError("Registration rejected or unavailable; review provider policy or use manual registration")
+		diagnostic.Code = "http_rejected"
+		return oauthError(fmt.Sprintf("Registration rejected or unavailable (provider HTTP %d); review provider policy or use manual registration", res.StatusCode))
 	}
 	var out struct {
 		ClientID  string   `json:"client_id"`
@@ -195,15 +214,18 @@ func (m *Manager) registerClient(ctx context.Context, r *record, meta oauthMetad
 		Scope     string   `json:"scope"`
 		Expires   int64    `json:"client_secret_expires_at"`
 	}
+	diagnostic.Code = "response_incompatible"
 	if json.Unmarshal(data, &out) != nil || strings.TrimSpace(out.ClientID) == "" || len(out.ClientID) > 256 || len(out.Secret) > 16384 || out.Method != method || len(out.Redirects) != 1 || out.Redirects[0] != redirect || (method == "none" && out.Secret != "") || (method != "none" && out.Secret == "") || out.Expires != 0 {
 		return oauthError("Registration response incompatible; use a supported pre-registered client")
 	}
 	for _, scope := range strings.Fields(out.Scope) {
 		if !slices.Contains(r.OAuth.Scopes, scope) {
+			diagnostic.Code = "scope_expansion"
 			return oauthError("Registration scope expansion rejected")
 		}
 	}
 	if out.Secret != "" {
+		diagnostic.Code = "credential_storage_failed"
 		r.OAuthClientSealed, err = m.Box.Seal([]byte(out.Secret), prefix+r.ID+"/oauth-client")
 		if err != nil {
 			return err
@@ -211,5 +233,6 @@ func (m *Manager) registerClient(ctx context.Context, r *record, meta oauthMetad
 	}
 	r.Registration.ClientID = out.ClientID
 	r.Registration.Method = method
+	r.Registration.Diagnostic = nil
 	return nil
 }

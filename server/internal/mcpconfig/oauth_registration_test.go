@@ -2,6 +2,7 @@ package mcpconfig
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,12 +51,14 @@ func TestRegistrationSelection(t *testing.T) {
 	}
 }
 func TestDCRPersistenceConcurrencyAndFailure(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(map[bool]string{false: "reuse", true: "uncertain"}[fail], func(t *testing.T) {
+	for _, status := range []int{0, 403, 503} {
+		fail := status != 0
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			m := testManager(t)
 			f := mcptest.NewOAuth("")
 			defer f.Close()
 			f.FailRegistration.Store(fail)
+			f.RegistrationFailureStatus.Store(int32(status))
 			m.OAuthClient = f.Client()
 			in := input()
 			in.Service = "generic"
@@ -101,6 +104,15 @@ func TestDCRPersistenceConcurrencyAndFailure(t *testing.T) {
 				t.Fatal("changed callback reused")
 			}
 			v, _ := m.Get(t.Context(), in.ID)
+			if fail {
+				if v.OAuth.RegistrationDiagnostic == nil || v.OAuth.RegistrationDiagnostic.HTTPStatus != status || v.OAuth.RegistrationDiagnostic.Code != "http_rejected" {
+					t.Fatal("diagnostic not persisted across restart", v.OAuth)
+				}
+				v, err = restarted.Get(t.Context(), in.ID)
+				if err != nil || v.OAuth.RegistrationDiagnostic == nil || v.OAuth.RegistrationDiagnostic.HTTPStatus != status {
+					t.Fatal("restart lost diagnosis", err)
+				}
+			}
 			raw, _ := json.Marshal(v)
 			if strings.Contains(string(raw), "registered-fixture-client") {
 				t.Fatal("internal registration leaked")
@@ -109,7 +121,7 @@ func TestDCRPersistenceConcurrencyAndFailure(t *testing.T) {
 	}
 }
 func TestDCRResponseValidationAndSecretStorage(t *testing.T) {
-	for _, variant := range []string{"valid", "wrong-callback", "method", "scope", "expiry", "oversize", "failure", "malformed"} {
+	for _, variant := range []string{"valid", "wrong-callback", "method", "scope", "expiry", "oversize", "failure", "forbidden", "malformed"} {
 		t.Run(variant, func(t *testing.T) {
 			m := testManager(t)
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +144,10 @@ func TestDCRResponseValidationAndSecretStorage(t *testing.T) {
 					out["client_secret_expires_at"] = 1
 				case "oversize":
 					out["client_id"] = strings.Repeat("x", 70000)
+				case "forbidden":
+					w.WriteHeader(403)
+					w.Write([]byte(`{"error":"access_denied","error_description":"synthetic-registration-secret"}`))
+					return
 				case "failure":
 					w.WriteHeader(503)
 				case "malformed":
@@ -157,6 +173,22 @@ func TestDCRResponseValidationAndSecretStorage(t *testing.T) {
 				}
 			} else if err == nil || strings.Contains(err.Error(), "synthetic-registration-secret") {
 				t.Fatal("unsafe error", err)
+			}
+			if variant == "forbidden" && (r.Registration.Diagnostic == nil || r.Registration.Diagnostic.HTTPStatus != 403 || r.Registration.Diagnostic.Code != "provider_error") {
+				t.Fatal("missing safe provider diagnosis")
+			}
+			if variant != "valid" {
+				diagnostic, marshalErr := json.Marshal(r.Registration.Diagnostic)
+				if marshalErr != nil || strings.Contains(string(diagnostic), "synthetic-registration-secret") {
+					t.Fatal("unsafe persisted diagnostic")
+				}
+				want := map[string]string{"wrong-callback": "response_incompatible", "method": "response_incompatible", "scope": "scope_expansion", "expiry": "response_incompatible", "oversize": "response_unreadable", "failure": "http_rejected", "forbidden": "provider_error", "malformed": "response_incompatible"}[variant]
+				if r.Registration.Diagnostic == nil || r.Registration.Diagnostic.Code != want {
+					t.Fatal("wrong failure category", variant)
+				}
+			}
+			if variant == "valid" && r.Registration.Diagnostic != nil {
+				t.Fatal("successful registration retained failure")
 			}
 		})
 	}

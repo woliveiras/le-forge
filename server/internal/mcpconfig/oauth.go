@@ -33,8 +33,9 @@ type OAuthConfig struct {
 	Scopes           []string `json:"scopes"`
 }
 type OAuthView struct {
-	RegistrationStatus        string `json:"registrationStatus,omitempty"`
-	EffectiveRegistrationMode string `json:"effectiveRegistrationMode,omitempty"`
+	RegistrationDiagnostic    *RegistrationDiagnostic `json:"registrationDiagnostic,omitempty"`
+	RegistrationStatus        string                  `json:"registrationStatus,omitempty"`
+	EffectiveRegistrationMode string                  `json:"effectiveRegistrationMode,omitempty"`
 	OAuthConfig
 	Status                 string     `json:"status"`
 	ExpiresAt              *time.Time `json:"expiresAt,omitempty"`

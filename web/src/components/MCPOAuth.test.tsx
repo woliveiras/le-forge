@@ -61,3 +61,35 @@ it('reports automatic setup failure with manual registration guidance',async()=>
  await userEvent.click(screen.getByRole('button',{name:'Review OAuth setup OAuth example'}));
  expect(await screen.findByText(/configure a pre-registered client manually/)).toBeTruthy();expect(screen.queryByRole('button',{name:/Confirm .* and authorize/})).toBeNull();
 });
+
+it('shows safe registration diagnostics and distinguishes missing historical evidence',()=>{
+ const oauth={...connection.oauth!,registrationMode:'dcr' as const,registrationStatus:'uncertain',registrationDiagnostic:{code:'http_rejected',httpStatus:403}};
+ const view=render(<MCPOAuthActions connection={{...connection,oauth}} canManage onChanged={async()=>{}}/>);
+ expect(screen.getByText(/Provider HTTP 403/)).toBeTruthy();
+ expect(screen.getByText(/provider refused registration/)).toBeTruthy();
+ expect(screen.queryByRole('button',{name:/Confirm dcr/})).toBeNull();
+ view.rerender(<MCPOAuthActions connection={{...connection,oauth:{...oauth,registrationDiagnostic:undefined}}} canManage onChanged={async()=>{}}/>);
+ expect(screen.getByText(/original failure details were not recorded/)).toBeTruthy();
+ expect(screen.getByText(/Do not create another connection/)).toBeTruthy();
+});
+it('reloads persisted failure and clears the stale registration confirmation after a failed start',async()=>{
+ const backend=fakeApi({
+  'GET /api/v1/mcp/connections/oauth/oauth/preview':()=>({mode:'dcr',reason:'Review registration'}),
+  'POST /api/v1/mcp/connections/oauth/oauth/start':()=>apiError(502,'Registration rejected','oauth'),
+ });
+ const changed=vi.fn(async()=>{});
+ render(<MCPOAuthActions connection={{...connection,oauth:{...connection.oauth!,registrationMode:'dcr'}}} canManage onChanged={changed}/>);
+ await userEvent.click(screen.getByRole('button',{name:'Review OAuth setup OAuth example'}));
+ await userEvent.click(await screen.findByRole('button',{name:'Confirm dcr and authorize OAuth example'}));
+ expect(await screen.findByText('Registration rejected')).toBeTruthy();
+ expect(changed).toHaveBeenCalledOnce();
+ expect(screen.queryByRole('button',{name:'Confirm dcr and authorize OAuth example'})).toBeNull();
+ expect(backend.calls.filter(c=>c.method==='POST')).toHaveLength(1);
+});
+
+it('reports a failed connection reload after a registration failure',async()=>{
+ fakeApi({'POST /api/v1/mcp/connections/oauth/oauth/start':()=>apiError(502,'Registration rejected','oauth')});
+ render(<MCPOAuthActions connection={connection} canManage onChanged={async()=>{throw new Error('Unavailable');}}/>);
+ await userEvent.click(screen.getByRole('button',{name:'Reauthorize OAuth example'}));
+ expect(await screen.findByText(/Registration rejected Connection reload failed: Unavailable/)).toBeTruthy();
+});
