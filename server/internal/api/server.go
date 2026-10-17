@@ -110,6 +110,11 @@ func (s *Server) routes() {
 	routes := []route{
 		{"GET /api/v1/mcp/connections", R, s.mcpList},
 		{"GET /api/v1/mcp/templates", R, s.mcpTemplates},
+		{"POST /api/v1/mcp/connections/{connection}/oauth/start", A, s.mcpOAuthStart},
+		{"POST /api/v1/mcp/connections/{connection}/oauth/revoke", A, s.mcpOAuthRevoke},
+		{"GET /api/v1/mcp/oauth/callback", "", s.mcpOAuthCallback},
+		{"POST /api/v1/mcp/oauth/complete", A, s.mcpOAuthComplete},
+		{"GET /api/v1/mcp/oauth/config", R, s.mcpOAuthConfig},
 		{"GET /api/v1/mcp/tools", R, s.mcpTools},
 		{"POST /api/v1/mcp/connections", A, s.mcpPut},
 		{"GET /api/v1/mcp/connections/{connection}", R, s.mcpGet},
@@ -230,6 +235,8 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), ve.Report)
 	case errors.As(err, &pve):
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), map[string]any{"valid": false, "errors": pve.Errors})
+	case errors.Is(err, mcpconfig.ErrOAuth):
+		writeErr(w, http.StatusBadGateway, "oauth", err.Error(), nil)
 	case errors.Is(err, mcpconfig.ErrInvalid):
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), nil)
 	case errors.Is(err, secrets.ErrNoKey):

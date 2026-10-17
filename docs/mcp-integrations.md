@@ -4,7 +4,9 @@ Research date: 2026-10-17. These are source-confirmed vendor contracts and plann
 LeForge deliveries, not implemented adapters or live-service certification.
 The current [generic client](mcp.md) supports public HTTPS Streamable HTTP,
 protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries,
-redirects and private destinations; OAuth and other credential modes are pending.
+redirects and private destinations. Generic pre-registered OAuth now supports the
+browser lifecycle; see [implementation and limits](mcp.md#browser-oauth-pre-registered-clients).
+Vendor qualification and other credential modes remain pending.
 See also the [additional template survey](mcp-templates.md).
 
 ## GitHub

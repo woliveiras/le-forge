@@ -160,6 +160,10 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  mcpOAuthConfig: () => request<{callbackUrl:string}>(`${V1}/mcp/oauth/config`),
+  startMCPOAuth: (id: string) => request<{url: string; state: string}>(`${V1}/mcp/connections/${enc(id)}/oauth/start`, {method:'POST'}),
+  completeMCPOAuth: (state: string) => request<MCPConnection>(`${V1}/mcp/oauth/complete`, {method:'POST', body:{state}}),
+  revokeMCPOAuth: (id: string) => request<MCPConnection>(`${V1}/mcp/connections/${enc(id)}/oauth/revoke`, {method:'POST'}),
   mcpTemplates: () => request<MCPTemplate[]>(`${V1}/mcp/templates`),
   mcpConnections: () => request<MCPConnection[]>(`${V1}/mcp/connections`),
   mcpTools: () => request<ToolInfo[]>(`${V1}/mcp/tools`),

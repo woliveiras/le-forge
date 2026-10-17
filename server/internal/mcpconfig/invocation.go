@@ -87,18 +87,23 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if len(inv.Args) > 64<<10 || json.Unmarshal(inv.Args, &obj) != nil || obj == nil {
 		return nil, fmt.Errorf("invalid MCP arguments: bounded JSON object required")
 	}
-	token := ""
-	if r.Sealed != "" {
-		b, e := t.m.Box.Open(r.Sealed, prefix+r.ID)
-		if e != nil {
-			return nil, fmt.Errorf("MCP credential unavailable")
-		}
-		token = string(b)
+	var token string
+	r, token, err = t.m.accessToken(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	// Renewal may have advanced the revision; recheck local revocation before dispatch.
+	current, err := t.m.load(ctx, r.ID)
+	if err != nil || current.Revision != r.Revision || !current.Enabled || current.Status != "ready" {
+		return nil, fmt.Errorf("%w: MCP connection changed", tools.ErrDenied)
 	}
 	callctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	raw, err := t.m.Call(callctx, r.Endpoint, token, t.tool.Name, inv.Args)
 	if err != nil {
+		if saveErr := t.m.noteOAuthUnauthorized(ctx, r, err); saveErr != nil {
+			return nil, saveErr
+		}
 		return nil, fmt.Errorf("MCP call failed; remote outcome may be unknown; no automatic retry")
 	}
 	if len(raw) > maxBody || containsCredential(raw, token) {

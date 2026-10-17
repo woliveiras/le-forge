@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
@@ -28,13 +31,15 @@ type Credential struct {
 	Clear bool   `json:"clear,omitempty"`
 }
 type Input struct {
-	Template   *TemplateRef `json:"template,omitempty"`
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Service    string       `json:"service"`
-	Endpoint   string       `json:"endpoint"`
-	Enabled    bool         `json:"enabled"`
-	Credential *Credential  `json:"credential,omitempty"`
+	OAuth             *OAuthConfig `json:"oauth,omitempty"`
+	OAuthClientSecret *Credential  `json:"oauthClientSecret,omitempty"`
+	Template          *TemplateRef `json:"template,omitempty"`
+	ID                string       `json:"id"`
+	Name              string       `json:"name"`
+	Service           string       `json:"service"`
+	Endpoint          string       `json:"endpoint"`
+	Enabled           bool         `json:"enabled"`
+	Credential        *Credential  `json:"credential,omitempty"`
 }
 type Tool struct {
 	Name        string          `json:"name"`
@@ -42,6 +47,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	OAuth                *OAuthView   `json:"oauth,omitempty"`
 	Template             *TemplateRef `json:"template,omitempty"`
 	ID                   string       `json:"id"`
 	Name                 string       `json:"name"`
@@ -60,21 +66,36 @@ type View struct {
 	UpdatedBy            string       `json:"updatedBy"`
 }
 type record struct {
+	OAuthClientSealed  string        `json:"oauthClientSealed,omitempty"`
+	OAuthRefreshSealed string        `json:"oauthRefreshSealed,omitempty"`
+	OAuthMeta          oauthMetadata `json:"oauthMetadata,omitempty"`
 	View
 	Sealed string `json:"sealed,omitempty"`
 }
 type Manager struct {
-	Store    storage.Store
-	Box      *secrets.Box
-	Bus      *events.Bus
-	Discover func(context.Context, string, string) ([]Tool, error)
-	Call     func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error)
+	OAuthClient *http.Client // trusted test/platform injection, never user-supplied
+	oauthMu     sync.Mutex
+	pending     map[string]oauthPending
+	Store       storage.Store
+	Box         *secrets.Box
+	Bus         *events.Bus
+	Discover    func(context.Context, string, string) ([]Tool, error)
+	Call        func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error)
 }
 
 func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateOAuth(in.OAuth); err != nil {
+		return err
+	}
+	if in.OAuth != nil && in.Credential != nil {
+		return fmt.Errorf("%w: OAuth cannot be combined with a bearer credential", ErrInvalid)
+	}
+	if in.OAuthClientSecret != nil && (in.OAuth == nil || len(in.OAuthClientSecret.Value) > 16384 || in.OAuthClientSecret.Clear && in.OAuthClientSecret.Value != "") {
+		return fmt.Errorf("%w: invalid OAuth client credential", ErrInvalid)
+	}
 	if err := validateTemplate(in); err != nil {
 		return err
 	}
@@ -132,6 +153,9 @@ func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event st
 	r.UpdatedAt = time.Now().UTC()
 	r.UpdatedBy = actor
 	r.CredentialConfigured = r.Sealed != ""
+	if r.OAuth != nil {
+		r.OAuth.ClientSecretConfigured = r.OAuthClientSealed != ""
+	}
 	b, e := json.Marshal(r)
 	if e != nil {
 		return View{}, e
@@ -166,10 +190,40 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			return View{}, storage.ErrConflict
 		}
 	}
-	if r.Endpoint != "" && r.Endpoint != in.Endpoint && r.Sealed != "" && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
+	if r.Endpoint != "" && r.Endpoint != in.Endpoint && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
 		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint", ErrInvalid)
 	}
-	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled
+	var oldOAuth *OAuthConfig
+	if r.OAuth != nil {
+		oldOAuth = &r.OAuth.OAuthConfig
+	}
+	oauthChanged := !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
+	if oauthChanged {
+		r.OAuthRefreshSealed = ""
+		r.OAuthMeta = oauthMetadata{}
+		if oldOAuth != nil || in.OAuth != nil {
+			r.Sealed = ""
+		}
+		// A different issuer/client must never inherit the previous client secret.
+		if in.OAuth == nil || oldOAuth == nil || oldOAuth.Issuer != in.OAuth.Issuer || oldOAuth.ClientID != in.OAuth.ClientID {
+			r.OAuthClientSealed = ""
+		}
+		r.OAuth = nil
+		if in.OAuth != nil {
+			r.OAuth = &OAuthView{OAuthConfig: *in.OAuth, Status: "authorization_required"}
+		}
+	}
+	if in.OAuthClientSecret != nil {
+		if in.OAuthClientSecret.Clear {
+			r.OAuthClientSealed = ""
+		} else if in.OAuthClientSecret.Value != "" {
+			r.OAuthClientSealed, e = m.Box.Seal([]byte(in.OAuthClientSecret.Value), prefix+in.ID+"/oauth-client")
+			if e != nil {
+				return View{}, e
+			}
+		}
+	}
+	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
 	r.Template = in.Template
 	r.Name = in.Name
 	r.Service = in.Service
@@ -205,18 +259,21 @@ func (m *Manager) Refresh(ctx context.Context, id, actor string) (View, error) {
 	if !r.Enabled {
 		return View{}, fmt.Errorf("%w: connection disabled", ErrInvalid)
 	}
-	token := ""
-	if r.Sealed != "" {
-		b, e := m.Box.Open(r.Sealed, prefix+id)
-		if e != nil {
-			return View{}, errors.New("MCP credential cannot be decrypted")
-		}
-		token = string(b)
+	var token string
+	r, token, e = m.accessToken(ctx, r)
+	if e != nil {
+		return View{}, e
 	}
 	opctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	started := time.Now()
 	catalog, discoverErr := m.Discover(opctx, r.Endpoint, token)
+	if r.OAuth != nil {
+		var detail *DiscoveryError
+		if errors.As(discoverErr, &detail) && detail.Reason == "MCP HTTP status 401" {
+			return m.requireAuthorization(context.WithoutCancel(ctx), r)
+		}
+	}
 	now := time.Now().UTC()
 	r.LastTest = &now
 	r.ToolsRevision++

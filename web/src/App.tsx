@@ -19,7 +19,7 @@ import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
 type Route =
   | { view: 'graphs' }
   | { view: 'approvals' }
-  | { view: 'integrations'; connectQuery?: string }
+  | { view: 'integrations'; connectQuery?: string; oauthQuery?: string }
   | { view: 'skills' }
   | { view: 'graph'; id: string; tab: GraphTab; correlationId?: string };
 
@@ -28,7 +28,7 @@ function parseRoute(hash: string): Route {
   const parts = path.split('/').filter(Boolean);
   if (parts[0] === 'approvals') return { view: 'approvals' };
   if (parts[0] === 'skills') return { view: 'skills' };
-  if (parts[0] === 'integrations') return { view: 'integrations', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined };
+  if (parts[0] === 'integrations') return { view: 'integrations', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined, oauthQuery: parts[1] === 'oauth' ? (qs ?? '') : undefined };
   if (parts[0] === 'g' && parts[1]) {
     const tab = (['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
       ? (parts[2] as GraphTab)
@@ -163,7 +163,7 @@ function Shell() {
         )}
         {route.view === 'skills' && <SkillsView role={info.data?.identity?.role} onChanged={() => void graphs.reload()} />}
         {route.view === 'approvals' && <ApprovalsView onChanged={() => void approvals.reload()} />}
-        {route.view === 'integrations' && <IntegrationsView info={info.data} infoError={info.error} connectQuery={route.connectQuery} />}
+        {route.view === 'integrations' && <IntegrationsView info={info.data} infoError={info.error} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
         {route.view === 'graph' &&
           (current ? (
             <GraphWorkspace

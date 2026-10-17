@@ -32,13 +32,17 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
-	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "mcp-call-fixture") {
+	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {
 				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "MCP execution: " + m.Content}, StopReason: "stop"}, nil
 			}
 		}
-		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: "mcp.runtime.search", Arguments: json.RawMessage(`{"query":"issue"}`)}}}, StopReason: "tool_calls"}, nil
+		toolName := "mcp.runtime.search"
+		if strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture") {
+			toolName = "mcp.oauth-browser.search"
+		}
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: toolName, Arguments: json.RawMessage(`{"query":"issue"}`)}}}, StopReason: "tool_calls"}, nil
 	}
 	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "git-inspect-fixture") {
 		return gitInspectionResponse(r), nil
@@ -80,6 +84,7 @@ func run() error {
 		return err
 	}
 	cfg.Server.Addr = addr
+	cfg.Server.PublicURL = "http://" + addr
 	cfg.Server.InternalAddr = ""
 	cfg.Server.WebDir = "../web/dist"
 	cfg.Storage = config.Storage{Type: "sqlite", Dir: filepath.Join(root, "store")}
@@ -104,14 +109,20 @@ func run() error {
 	}
 	fixtureMCP := mcptest.New()
 	defer fixtureMCP.Close()
+	fixtureOAuth := mcptest.NewOAuth("")
+	defer fixtureOAuth.Close()
+	a.MCP.OAuthClient = fixtureOAuth.Client()
+	if _, err := a.MCP.Put(ctx, mcpconfig.Input{ID: "oauth-fixture-config", Name: "OAuth fixture config", Service: "generic", Endpoint: fixtureOAuth.URL + "/mcp", Enabled: false, OAuth: &mcpconfig.OAuthConfig{Issuer: fixtureOAuth.URL, ClientID: "fixture-client", Scopes: []string{"read"}}}, 0, "fixture"); err != nil {
+		return err
+	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
-		if endpoint != "https://mcp.fixture.invalid/mcp" {
+		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
-		if endpoint != "https://mcp.fixture.invalid/mcp" {
+		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.CallWithClient(ctx, fixtureMCP.URL, token, name, args, fixtureMCP.Client())

@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP OAuth/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP dynamic OAuth registration/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -275,7 +275,7 @@ does not satisfy this milestone.
 #### Interface
 
 - [x] Add a screen for registering multiple Bitbucket, GitHub, Confluence, and Jira connections. — Generic remote MCP form with service labels; vendor-specific authentication/scopes and live-service acceptance remain pending.
-- [ ] Guide operators through authentication and explain required scopes and granted access.
+- [ ] Complete vendor-specific authentication/scope guidance. — Generic pre-registered OAuth configuration, requested/granted scope display and explicit authorization are delivered; provider qualification remains pending.
 - [x] Show connection status, last validation, discovered tools, and errors without revealing secrets.
 - [x] Allow connections to be enabled/disabled and discovered tools to be refreshed.
 - [x] Allow available connections/tools to be selected for each agent. — Dedicated selector, persisted graph edits and removal of unavailable grants.
@@ -303,16 +303,19 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 #### Browser-Link Connection and OAuth Lifecycle
 
 - [x] Add shareable links to a template/version on the local or hosted LeForge installation; validate public parameters, reject extra parameters/unknown templates and preserve selection through login. — Hash route, review screen, explicit admin save, unit and Chromium tests; opening a link never creates a connection or grants tools.
-- [ ] Add endpoint/scope review and an explicit authorize action for permitted operators; retain protected API-key/PAT entry for providers without OAuth. Never include secrets in connection links.
-- [ ] Qualify provider authorization metadata and client registration; configure an exact backend callback URL independent of the frontend hash route and validate issuer/authorization endpoints under the network policy.
-- [ ] Implement authorization-code flow with PKCE and expiring, single-use state bound to the initiating user/session, installation and connection; reject forged, mismatched, replayed or expired callbacks and untrusted return destinations.
-- [ ] Return to the originating LeForge connection screen after consent; exchange the code on the backend, encrypt tokens and run test/discovery before showing success. Redact callback codes and clean the visible URL; keep tokens out of frontend storage, logs and model context. Handle denial, cancellation, lost login session, provider failure and discovery failure explicitly.
-- [ ] Require explicit per-agent tool assignment after connection; OAuth consent or a template link never grants agent authority or silently expands existing grants on re-consent.
-- [ ] Implement server-side renewal where supported, with serialized concurrent refresh, atomic rotated-token persistence and bounded failure handling; show reauthorization required when refresh is unavailable, expired or revoked. Never retry ambiguous remote writes automatically.
-- [ ] Implement revocation that immediately blocks subsequent local calls, invalidates pending callbacks/refreshes and removes stored tokens; request upstream revocation where supported and report remote failure/unsupported revocation separately with provider-side instructions. Prevent stale callbacks/refreshes from restoring a revoked connection; distinguish revocation from temporary disable and from connection deletion.
-- [ ] Add unit tests for link validation, callback/state/PKCE handling, credential redaction, expiry, renewal and revocation races; retain the documented boundary that already dispatched calls cannot be rolled back.
-- [ ] Add integration tests across API, encrypted persistence, gateway and a real TLS OAuth/MCP fixture: code exchange, discovery, concurrent refresh, rotation, revocation, dependency failures and denial after revocation.
-- [ ] Add browser E2E for link → LeForge login/review → provider authorization → callback → discovery → explicit agent grants → execution; include denied/cancelled consent, invalid/replayed callback, renewal, reauthorization and revocation. Validate each supported OAuth provider with opt-in live credentials and authorized test resources before marking its journey complete.
+- [x] Add endpoint/scope review and an explicit authorize action for administrators; retain protected API-key/PAT entry for providers without OAuth. Never include secrets in connection links.
+- [x] Implement resource/issuer metadata validation and a configured backend callback independent of the frontend hash route for pre-registered public or client_secret_basic clients; preserve the public-only HTTPS policy. — Generic TLS fixture coverage; see [runtime limits](../docs/mcp.md#browser-oauth-pre-registered-clients).
+- [ ] Qualify each vendor's metadata/resource URI, client registration, scopes and refresh/revocation behavior with live credentials; implement dynamic registration and provider-specific compatibility where required.
+- [ ] Add distributed pending OAuth transaction storage for multi-instance routing. — Current pending flows are bounded, expire in ten minutes, require sticky routing and restart after backend restart; completed credentials persist.
+- [x] Implement authorization-code flow with PKCE and expiring, single-use state bound to the initiating user/session, installation and connection; reject forged, mismatched, replayed or expired callbacks and untrusted return destinations.
+- [x] Return to the originating LeForge connection screen after consent; exchange the code on the backend, encrypt tokens and run test/discovery before showing success. Redact callback codes and clean the visible URL; keep tokens out of frontend storage, logs and model context. Handle denial, cancellation, lost login session, provider failure and discovery failure explicitly.
+- [x] Require explicit per-agent tool assignment after connection; OAuth consent or a template link never grants agent authority or silently expands existing grants on re-consent.
+- [x] Implement server-side renewal where supported, with serialized concurrent refresh, atomic rotated-token persistence and bounded failure handling; show reauthorization required when refresh is unavailable, expired or revoked. Never retry ambiguous remote writes automatically.
+- [x] Implement revocation that immediately blocks subsequent local calls, invalidates pending callbacks/refreshes and removes stored tokens; request upstream revocation where supported and report remote failure/unsupported revocation separately with provider-side instructions. Prevent stale callbacks/refreshes from restoring a revoked connection; distinguish revocation from temporary disable and from connection deletion.
+- [x] Add unit tests for link validation, callback/state/PKCE handling, credential redaction, expiry, renewal and revocation races; retain the documented boundary that already dispatched calls cannot be rolled back.
+- [x] Add integration tests across API, encrypted persistence, gateway and a real TLS OAuth/MCP fixture: code exchange, discovery, concurrent refresh, rotation, revocation, dependency failures and denial after revocation.
+- [x] Add browser E2E for template link/review → provider consent → callback → discovery → explicit agent grants → execution → revocation; cover denied consent, invalid return, renewal failure and failed upstream revocation. — Existing template E2E covers login preservation; replay/session mismatch and races have API/unit coverage.
+- [ ] Validate each supported OAuth provider with opt-in live credentials and authorized test resources before marking its vendor journey complete.
 
 
 #### Additional Template Backlog

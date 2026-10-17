@@ -78,7 +78,7 @@ fetched, and media is not rendered as native model attachments. The remote serve
 validates tool-specific input schemas; LeForge validates the object envelope and
 size. Credentials and upstream error payloads are not exposed as transport errors.
 
-Pending increments include aggregate per-connection quotas, OAuth,
+Pending increments include aggregate per-connection quotas, dynamic OAuth client registration,
 private-network deployment policy, automatic
 session renewal, connection deletion, vendor-specific setup/scopes, call-history
 UI, and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
@@ -121,5 +121,94 @@ unknown reference or a service/endpoint that differs from the pinned version.
 **Customize without template** detaches that reference before manual configuration;
 existing endpoint-change credential protections still apply. Editing a pinned
 connection in the console preserves its version. There is no automatic upgrade or
-upgrade-preview workflow yet. OAuth consent/callback/renewal/revocation and live
-vendor qualification remain planned.
+upgrade-preview workflow yet. OAuth is available for pre-registered clients as described below; live vendor
+qualification remains planned.
+
+## Browser OAuth (pre-registered clients)
+
+Administrators can select **Use browser OAuth** when saving a connection and
+configure its issuer, client ID, requested scopes and optional client secret.
+Public clients use token endpoint authentication `none`; confidential clients use
+`client_secret_basic`. This is a generic implementation tested with a TLS fixture,
+not certification of GitHub or Atlassian OAuth. Automatic client registration,
+provider-specific adapters and other client authentication methods remain pending.
+Historical v1 template guidance describes their original Bearer/no-auth presets;
+OAuth settings are configured separately and do not come from a shared link.
+
+Set `server.publicUrl` or `LEFORGE_PUBLIC_URL` to the browser-facing installation
+origin. The default is `http://localhost:8080`. Hosted installations require HTTPS;
+HTTP is allowed only for localhost/loopback. Paths, credentials, query strings and
+fragments are rejected. The OAuth form displays the configured callback via authenticated
+`GET /api/v1/mcp/oauth/config`. Register that exact backend callback with the provider:
+
+```text
+https://your-forge.example/api/v1/mcp/oauth/callback
+```
+
+The callback is derived from this configuration, never the request Host or forwarded
+headers. The browser must use that same origin so its binding cookie returns.
+This delivery does not change any running installation's configuration.
+
+After saving, review the issuer/scopes and choose **Authorize**. LeForge probes the
+MCP resource without credentials, reads `resource_metadata` from its authentication
+challenge (or the path-specific well-known location), and verifies that the
+configured issuer is advertised for the exact MCP endpoint. Issuer metadata must
+match exactly and advertise PKCE S256 and the selected client authentication
+method. Metadata/token/revocation requests use the existing public-only HTTPS
+transport, no redirects, a 15-second bound and 64 KiB response limits. Other resource
+URI canonicalization/metadata fallback variants need separate compatibility work.
+These mechanisms follow the [MCP authorization contract](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
+
+The browser goes to provider consent and returns to the backend callback. A
+10-minute, single-use transaction binds the connection revision, issuer, callback,
+initiating LeForge identity/session and an HttpOnly SameSite=Lax cookie (Secure
+on HTTPS). The callback holds the code in bounded server memory and redirects to
+a frontend route containing only an opaque transaction handle. **Complete OAuth
+connection** requires the original authenticated admin session plus the binding
+cookie before exchanging the code with PKCE and a resource indicator. Denial,
+expiry, replay, identity mismatch and stale connection revisions fail explicitly.
+No access/refresh token or client secret is sent to the frontend. Discovery follows
+the exchange; failure remains visible and does not mark the connection ready.
+OAuth consent never grants an agent tools.
+
+Transactions are limited to 128 pending entries per manager and expire after ten
+minutes; a backend restart loses unfinished authorizations, which must be restarted.
+Multi-instance deployments need sticky routing for this in-memory authorization
+transaction; distributed pending-transaction storage remains future work. Completed
+credentials and issuer endpoints are encrypted/persisted as appropriate and survive
+restart: access tokens, refresh tokens and client secrets are encrypted separately
+and bound to the connection; issuer endpoint metadata is public configuration.
+
+Before discovery or invocation, a token within five seconds of expiry is renewed
+when a refresh token is available. A persisted compare-and-swap claim serializes
+renewal; rotated credentials are saved atomically. Waiters have a 15-second bound;
+a refresh left interrupted for 45 seconds requires reauthorization. Missing expiry
+means the provider did not supply a schedule; an HTTP 401 requires authorization
+again. Renewal failure also requires reauthorization, with no replay of a possibly
+completed mutation. Requested scopes cannot expand through a token response, and
+renewal cannot expand the previously granted scopes. Read the new connection
+revision after a renewal; requests already waiting on older revisions can be denied.
+
+**Revoke OAuth** requires confirmation and clears local access/refresh tokens and
+the tool catalogue before contacting the provider. A late callback/refresh cannot
+restore revoked credentials. The client registration/secret remains for deliberate
+reauthorization; changing issuer/client clears the previous client secret. Temporary
+disable retains credentials and is distinct from revocation or deletion. Provider
+revocation is reported separately as pending, requested, unsupported or failed;
+requested means the token revocation endpoint accepted the request, not proof that
+an entire provider consent grant was removed. Use the provider's account settings
+when necessary, including an ambiguous network failure. In-flight remote actions
+cannot be undone. Concurrent discarded token responses trigger bounded upstream
+cleanup and an audit outcome; they never restore local access.
+
+OAuth lifecycle events (`mcp.oauth.exchanging`, `authorized`, `refreshing`, `renewed`,
+`reauthorization_required`, `revoked`, `revocation_result`, and `cleanup`, all under
+`mcp.oauth.`) contain state/outcome metadata, never codes or tokens. API latency and
+outcomes use existing route metrics. Any external reverse proxy must also redact
+callback query strings; LeForge logs/traces record route paths, not callback queries.
+
+Validation includes unit tests for metadata/configuration and callback boundaries,
+TLS/API/persistence integration, concurrent refresh/revocation under Go's race
+detector, and Chromium consent/return/renewal/revocation and failure journeys.
+Live-provider credentials, provider-specific scopes and production activation are
+not covered by these fixture tests.

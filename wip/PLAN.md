@@ -276,7 +276,7 @@ connection state, including revalidation after approval waits. Existing per-agen
 grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
 no transport retry, redacted audit metadata and capped runtime results. Unit,
 real TLS/API integration and Chromium cover success, denial and connection disable.
-OAuth, aggregate per-connection quotas, private-network policy, deletion and live
+Dynamic OAuth registration, aggregate per-connection quotas, private-network policy, deletion and live
 vendor-specific acceptance remain pending; service names are metadata.
 See [MCP scope and limits](../docs/mcp.md).
 
@@ -324,9 +324,18 @@ an administrator fills and saves the connection. The persisted reference is
 validated against endpoint/service; custom endpoints require detachment. Invalid
 links/versions fail explicitly. Opening a link does not create, discover or grant.
 Unit/API integration and Chromium cover this increment; live vendor acceptance,
-template upgrade previews and the OAuth lifecycle remain pending.
+template upgrade previews and provider-specific OAuth qualification remain pending.
 
-**Planned browser-link and OAuth journey:** A link to the user's LeForge
+**Delivered generic OAuth increment:** Pre-registered public or confidential clients
+can authorize through the browser, return to a configured backend callback,
+complete with their original LeForge admin session, discover tools and renew/revoke
+credentials. PKCE, cookie/session binding, encrypted token persistence, serialized
+refresh and revocation races are covered by unit/TLS integration tests and the race
+detector. Chromium covers consent, renewal, explicit agent execution and revocation,
+including provider failures. Dynamic client registration, distributed pending-flow
+storage and real-vendor qualification remain pending. See [OAuth scope](../docs/mcp.md#browser-oauth-pre-registered-clients).
+
+**Browser-link and OAuth journey:** A link to the user's LeForge
 installation opens a reviewed template in the connection screen, preserving the
 pending selection through LeForge login. Links contain only public template
 identifiers/version and validated configuration; opening one never creates a

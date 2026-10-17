@@ -51,7 +51,8 @@ type Preview struct {
 }
 
 type Server struct {
-	Addr string `yaml:"addr"`
+	PublicURL string `yaml:"publicUrl"`
+	Addr      string `yaml:"addr"`
 	// InternalURL is how runtimes reach the callback API (http://forged:8080).
 	InternalURL string `yaml:"internalUrl"`
 	// InternalAddr, when set (":8081"), serves the runtime callback API
@@ -217,6 +218,7 @@ func Default() *Config {
 		Instance: host,
 		Server: Server{
 			Addr:         ":8080",
+			PublicURL:    "http://localhost:8080",
 			InternalURL:  "http://127.0.0.1:8080",
 			MaxBodyBytes: 8 << 20,
 		},
@@ -270,6 +272,7 @@ func applyEnv(c *Config) {
 		}
 	}
 	str("LEFORGE_INSTANCE", &c.Instance)
+	str("LEFORGE_PUBLIC_URL", &c.Server.PublicURL)
 	str("LEFORGE_PREVIEW_ADDR", &c.Preview.Addr)
 	str("LEFORGE_PREVIEW_BASE_URL", &c.Preview.BaseURL)
 	str("LEFORGE_PREVIEW_RELAY", &c.Preview.RelayBinary)

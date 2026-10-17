@@ -1,0 +1,53 @@
+import { expect,test } from '@playwright/test';
+const headers={Authorization:'Bearer e2e-admin-token'};
+// Only the disposable OAuth provider uses a self-signed TLS certificate.
+test.use({ignoreHTTPSErrors:true});
+test('connects from a template link through OAuth consent, renewal and revocation',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ const config=await (await page.request.get('/api/v1/mcp/connections/oauth-fixture-config',{headers})).json();
+ await page.goto('/#/integrations/connect?template=deepwiki&version=1');
+ await page.getByRole('button',{name:'Use template defaults'}).click();
+ await page.getByRole('button',{name:'Customize without template'}).click();
+ await page.getByLabel('Connection ID',{exact:true}).fill('oauth-browser');await page.getByLabel('Connection name',{exact:true}).fill('Browser OAuth');
+ await page.getByLabel('MCP endpoint',{exact:true}).fill(config.endpoint);
+ await page.getByLabel('Use browser OAuth').check();
+ await page.getByLabel('OAuth issuer',{exact:true}).fill(config.oauth.issuer);await page.getByLabel('OAuth client ID',{exact:true}).fill('fixture-client');await page.getByLabel('OAuth scopes (space separated)',{exact:true}).fill('read');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await page.getByRole('button',{name:'Authorize Browser OAuth',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Fixture OAuth consent'})).toBeVisible();
+ await page.getByRole('button',{name:'Allow fixture access'}).click();
+ await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);expect(page.url()).not.toContain('code=');
+ await page.getByRole('button',{name:'Complete OAuth connection'}).click();
+ await expect(page.getByRole('status')).toContainText('OAuth connected.');
+ const card=page.getByRole('article',{name:'MCP Browser OAuth',exact:true});await expect(card).toContainText('mcp.oauth-browser.search');await expect(card).toContainText('OAuth: authorized');
+ const stats=await (await page.request.get(config.oauth.issuer+'/stats')).json();expect(stats.refreshes).toBeGreaterThan(0);
+ const saved=await page.request.get('/api/v1/mcp/connections/oauth-browser',{headers});const raw=await saved.text();expect(raw).not.toContain('fixture-mcp-token');expect(raw).not.toContain('fixture-refresh-token');
+ const graphID='oauth-browser-execution';
+ const graph=await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id:graphID,name:graphID},spec:{nodes:[{id:'worker',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},isolation:{mode:'process'},loop:{mode:'once'},prompt:'mcp-oauth-call-fixture',tools:[]}]}}});expect(graph.status()).toBe(201);
+ await page.goto(`/#/g/${graphID}/canvas?sel=node:worker`);
+ const grants=page.getByRole('region',{name:'MCP permissions',exact:true});
+ const permission=grants.getByRole('checkbox',{name:'mcp.oauth-browser.search',exact:true});await expect(permission).not.toBeChecked();await permission.check();
+ await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/v1/graphs/'+graphID)&&r.request().method()==='PUT'&&r.status()===200),page.getByRole('button',{name:'Save graph',exact:true}).click()]);
+ await expect(page.getByRole('button',{name:'Save graph',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Run all',exact:true}).click();
+ await expect.poll(async()=>{const events=await (await page.request.get(`/api/v1/graphs/${graphID}/events`,{headers})).json();return events.some((e:{type:string;data:{tool?:string;outcome?:string}})=>e.type==='tool.completed'&&e.data.tool==='mcp.oauth-browser.search'&&e.data.outcome==='ok');}).toBe(true);
+ await page.goto('/#/integrations');
+ await card.getByRole('button',{name:'Revoke OAuth Browser OAuth',exact:true}).click();
+ await card.getByRole('button',{name:'Confirm revoke Browser OAuth',exact:true}).click();await expect(card).toContainText('OAuth: revoked');await expect(card).toContainText('Provider revocation: requested');await expect(card).not.toContainText('mcp.oauth-browser.search');
+ await page.reload();await expect(card).toContainText('OAuth: revoked');
+ await page.goto(`/#/g/${graphID}/canvas`);await page.getByRole('button',{name:'Stop all',exact:true}).click();await expect(page.getByRole('button',{name:'Run all',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Run all',exact:true}).click();
+ await expect.poll(async()=>{const events=await (await page.request.get(`/api/v1/graphs/${graphID}/events`,{headers})).json();return events.some((e:{type:string;data:{tool?:string}})=>e.type==='tool.denied'&&e.data.tool==='mcp.oauth-browser.search');}).toBe(true);
+});
+test('handles denied consent, renewal failure and unsuccessful upstream revocation',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ const config=await (await page.request.get('/api/v1/mcp/connections/oauth-fixture-config',{headers})).json();
+ for(const [id,client] of [['oauth-denied','fixture-client'],['oauth-renew-failed','fail-refresh'],['oauth-revoke-failed','fail-revoke']]){
+  const created=await page.request.post('/api/v1/mcp/connections',{headers,data:{id,name:id,service:'generic',enabled:true,endpoint:config.endpoint,oauth:{...config.oauth,clientId:client,status:undefined,clientSecretConfigured:undefined}}});expect(created.status()).toBe(201);
+  await page.goto('/#/integrations');await page.reload();await page.getByRole('button',{name:'Authorize '+id,exact:true}).click();
+  await page.getByRole('button',{name:id==='oauth-denied'?'Deny fixture access':'Allow fixture access'}).click();
+  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
+  if(id==='oauth-denied'){await expect(page.getByText(/authorization cancelled or denied by provider/)).toBeVisible();}
+  else if(id==='oauth-renew-failed'){await expect(page.getByText(/OAuth request rejected/)).toBeVisible();await page.reload();await expect(page.getByRole('article',{name:'MCP '+id,exact:true})).toContainText('reauthorization_required');}
+  else{await expect(page.getByRole('status')).toContainText('OAuth connected.');const card=page.getByRole('article',{name:'MCP '+id,exact:true});await card.getByRole('button',{name:'Revoke OAuth '+id,exact:true}).click();await card.getByRole('button',{name:'Confirm revoke '+id,exact:true}).click();await expect(card).toContainText('Provider revocation: failed');await expect(card).toContainText('OAuth: revoked');}
+ }
+ await page.goto('/api/v1/mcp/oauth/callback?state=invalid&code=synthetic');await expect(page.getByText(/Invalid OAuth return/)).toBeVisible();
+});
