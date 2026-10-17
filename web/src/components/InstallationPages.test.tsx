@@ -47,3 +47,18 @@ describe('installation pages through the real API client', () => {
     expect(screen.getByRole('link', { name: 'Tool catalog' }).getAttribute('aria-current')).toBe('page');
   });
 });
+
+it('opens provider guidance without testing providers or exposing viewer actions', async () => {
+ const fixture=fakeApi({
+  'GET /api/v1/providers':()=>[],
+  'GET /api/v1/provider-settings':()=>({revision:1,default:'',types:[],secrets:{enabled:true}}),
+ });
+ render(<ModelsPage info={info('viewer')}/>);
+ await screen.findByText(/No model providers yet/);
+ const help=screen.getByText('What a provider test does');
+ await userEvent.click(help);
+ expect(help.closest('details')?.open).toBe(true);
+ expect(screen.getByText(/may incur usage charges/)).toBeTruthy();
+ expect(fixture.calls.every(c=>c.method==='GET')).toBe(true);
+ expect(screen.queryByRole('button',{name:'Add provider'})).toBeNull();
+});

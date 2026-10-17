@@ -135,3 +135,20 @@ local editor and display an error instead of silently discarding edits.
 Drafts are not persisted in browser storage and do not survive closing or reloading
 the page. A browser leave warning is registered while graph drafts are dirty.
 Existing role gates, server validation and optimistic concurrency remain in force.
+
+
+## Shared presentation
+
+Console pages share a heading scale, section spacing, bounded form widths and
+responsive cards. Primary actions use the accent button; utility actions remain
+neutral and destructive actions retain their danger treatment. Skills uses the
+same button component without changing its disabled fieldsets or permissions.
+Keyboard focus is visible on links, buttons, inputs and disclosure summaries.
+Reduced-motion preferences disable decorative transitions.
+
+Optional provider-test guidance, instruction precedence and canvas gestures use
+native expandable help next to the relevant controls. Opening help does not call
+an API or change a draft. Security notices, validation failures and permission
+boundaries remain visible. Browser coverage checks keyboard disclosure, narrow
+layouts and viewer restrictions; this is not a full accessibility certification
+or a claim of developer usability acceptance.

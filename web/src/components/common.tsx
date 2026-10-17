@@ -206,3 +206,13 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     </div>
   );
 }
+
+
+/** Optional guidance stays beside the control it explains, without hiding warnings. */
+export function ContextHelp({title, children}: {title: string; children: ReactNode}) {
+  return <details className="context-help"><summary>{title}</summary><div>{children}</div></details>;
+}
+
+export function PageHeading({title, description, children}: {title: string; description: string; children?: ReactNode}) {
+  return <header className="page-head"><div><h1>{title}</h1><p className="muted">{description}</p></div>{children}</header>;
+}

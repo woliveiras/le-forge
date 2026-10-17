@@ -7,7 +7,7 @@ import type {
 } from "../api/instructions";
 import type { Graph } from "../api/types";
 import { useAsync } from "../hooks/useData";
-import { ErrorBox } from "./common";
+import { Btn, ContextHelp, ErrorBox, PageHeading } from "./common";
 
 const blank: SkillInput = {
   id: "",
@@ -71,18 +71,16 @@ export function SkillsView({
   const refs = graph?.spec.instructions ?? {};
   const available = skills.data ?? [];
   return (
-    <div className="page">
-      <h1>Skills & steering</h1>
-      <p>
-        Guidance never grants tools, credentials or permissions. Later scopes
-        take precedence: installation → graph → project → agent → task.
-      </p>
+    <div className="page skills-page">
+      <PageHeading title="Skills & steering" description="Manage reusable guidance and its graph and agent associations."/>
+      <p className="security-note">Guidance never grants tools, credentials or permissions.</p>
+      <ContextHelp title="How instruction precedence works"><p>Later scopes take precedence: installation → graph → project → agent → task.</p></ContextHelp>
       <ErrorBox error={error ?? skills.error ?? graphs.error} />
       <section className="form" aria-label="Skill administration">
         <h2>Installation skills</h2>
-        <button type="button" disabled={busy} onClick={() => choose()}>
+        <Btn type="button" disabled={busy} onClick={() => choose()}>
           New skill
-        </button>
+        </Btn>
         <label>
           Existing skill
           <select
@@ -153,7 +151,7 @@ export function SkillsView({
             />
             Installation default (graphs must opt in)
           </label>
-          <button
+          <Btn tone="primary"
             type="button"
             onClick={() =>
               void run(async () => {
@@ -164,9 +162,9 @@ export function SkillsView({
             }
           >
             Save skill
-          </button>
+          </Btn>
           {selected && (
-            <button
+            <Btn tone="danger"
               type="button"
               onClick={() =>
                 void run(async () => {
@@ -176,7 +174,7 @@ export function SkillsView({
               }
             >
               Delete skill (keep history)
-            </button>
+            </Btn>
           )}
         </fieldset>
         <p>
@@ -354,7 +352,7 @@ export function SkillsView({
                     ))}
                 </fieldset>
               ))}
-              <button
+              <Btn
                 type="button"
                 onClick={() =>
                   void run(async () => {
@@ -370,7 +368,7 @@ export function SkillsView({
                 }
               >
                 Save associations
-              </button>
+              </Btn>
             </fieldset>
             <h3>Inspect saved configuration and executions</h3>
             <label>
@@ -389,7 +387,7 @@ export function SkillsView({
                 ))}
               </select>
             </label>
-            <button
+            <Btn
               disabled={busy}
               type="button"
               onClick={() =>
@@ -399,8 +397,8 @@ export function SkillsView({
               }
             >
               Inspect saved instructions
-            </button>
-            <button
+            </Btn>
+            <Btn
               disabled={busy}
               type="button"
               onClick={() =>
@@ -410,9 +408,9 @@ export function SkillsView({
               }
             >
               Load executions
-            </button>
+            </Btn>
             {executions.map((x) => (
-              <button
+              <Btn
                 disabled={busy}
                 key={x.id}
                 type="button"
@@ -423,7 +421,7 @@ export function SkillsView({
                 }
               >
                 Inspect {x.nodeId} · {x.id}
-              </button>
+              </Btn>
             ))}
           </>
         )}

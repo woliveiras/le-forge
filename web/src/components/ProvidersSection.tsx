@@ -1,3 +1,4 @@
+import { ContextHelp } from './common';
 import { useImperativeHandle, useState, type Ref } from 'react';
 import { ApiError, api, errorMessage } from '../api/client';
 import type { ProviderInfo, ProviderSettings, ProviderTestResult } from '../api/types';
@@ -89,8 +90,8 @@ export function ProvidersSection({ canEdit, canTest, ref }: Props) {
           <h2 id="providers-heading">Model providers</h2>
           <p className="muted small">
             Agents call models only through LeForge; credentials stay on the server and are never shown again after saving.
-            A test lists models and sends one short prompt.
           </p>
+          <ContextHelp title="What a provider test does"><p>A test lists models and sends one short prompt. It uses the configured provider and may incur usage charges.</p></ContextHelp>
         </div>
         <div className="integration-card-status">
           <Badge>{list.length} configured</Badge>

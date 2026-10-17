@@ -666,3 +666,32 @@ remain separate planned work. All interface copy remains in English.
 Each slice requires unit tests, real-client/component integration tests and disposable-
 backend browser coverage for success, error recovery, permissions, deep links and relevant
 narrow-window interactions. Installation activation is a separate approved operation.
+
+
+### Installation validation of the navigation baseline
+
+On 2026-10-17, commit b0f7670 and the preceding navigation, connection, agent and
+Runs slices were activated on the local Compose installation. Only forged was
+rebuilt and recreated with --no-deps and --wait; the existing data, workspace,
+journal and certificate volumes were reused. Health returned ok. The three graphs
+and nine saved versions remained present; the execution history continued growing.
+Authenticated browser checks covered connection/tool search, agent sections,
+independent in-memory drafts, review/discard without saving, saved run results,
+Models and Administration health. This updates the earlier slice-local activation
+disclaimers; it does not establish usability acceptance or activate later changes.
+
+### Visual consolidation
+
+The remaining pages now share heading, spacing, form, card, button and focus
+styles, including Skills, Approvals, Models, Administration and canvas controls.
+Optional guidance uses native disclosures; security/error context stays visible.
+Existing handlers, role checks and draft semantics are retained. Developer journey
+validation and optional resumable onboarding remain pending. This visual slice
+requires a separate approved installation activation.
+
+
+Validation: make test, make lint, make build and make test-e2e pass, including
+229 frontend tests and 46 browser scenarios. The new keyboard/disclosure and
+viewer journeys use the real disposable backend. An earlier canvas reload scenario
+failed to render edges once; the isolated repeat and final full suite passed with
+the original assertions. No claim of resolving an intermittent canvas issue is made.

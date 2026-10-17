@@ -4,7 +4,7 @@ import { api, errorMessage } from '../api/client';
 import type { Approval, ApprovalStatus } from '../api/types';
 import { useAsync, useThrottled } from '../hooks/useData';
 import { useEventStream } from '../hooks/useEventStream';
-import { Badge, Btn, Empty, ErrorBox, JsonView, fmtDateTime } from './common';
+import { Badge, Btn, PageHeading, Empty, ErrorBox, JsonView, fmtDateTime } from './common';
 
 const KIND_HELP: Record<string, string> = {
   environment: 'Review the proposed environment and rationale. Admin approval saves the definition and starts its build. Tasks remain blocked until ready.',
@@ -21,9 +21,8 @@ export function ApprovalsView({ onChanged }: { onChanged: () => void }) {
   useEventStream({ prefixes: ['approval.'] }, reload);
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h1>Approvals</h1>
+    <div className="page approvals-page">
+      <PageHeading title="Approvals" description="Review pending decisions and inspect previous outcomes.">
         <label>
           Show{' '}
           <select value={status} onChange={(e) => setStatus(e.target.value as ApprovalStatus | '')}>
@@ -34,7 +33,7 @@ export function ApprovalsView({ onChanged }: { onChanged: () => void }) {
             <option value="">all</option>
           </select>
         </label>
-      </div>
+      </PageHeading>
       <ReviewsView />
       <ErrorBox error={list.error} />
       {(list.data ?? []).length === 0 && !list.loading && <Empty>Nothing waiting for a human.</Empty>}

@@ -1,3 +1,4 @@
+import { ContextHelp } from '../common';
 import {
   Background,
   Controls,
@@ -131,9 +132,7 @@ function Canvas({
           >
             Add agent
           </Btn>
-          <span className="muted small">
-            Drag between agent handles to add a channel · select (Shift-click or drag for several) and press Delete to remove
-          </span>
+          <ContextHelp title="Canvas controls"><p>Drag between agent handles to add a channel. Select an item, or Shift-click or drag to select several. Press Delete to review removal before confirming.</p></ContextHelp>
         </div>
       )}
       <ReactFlow
