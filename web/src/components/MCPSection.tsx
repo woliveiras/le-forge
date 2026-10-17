@@ -1,3 +1,4 @@
+import { canDiscover, saveAndDiscover } from './mcpDiscovery';
 import { ConnectionGrants } from './ConnectionGrants';
 import { connectionTabs, connectionTabTitles, connectionLink, type ConnectionTab } from './mcpNavigation';
 import { MCPHistory } from './MCPHistory';
@@ -24,12 +25,32 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [clear,setClear]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string>();
+  const [saveProgress,setSaveProgress]=useState<string>();
+  const [savedID,setSavedID]=useState<string>();
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
   const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
-  async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();if(presentation)location.hash=connectionLink(input.id);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+  async function save(){
+    setBusy(true);setError(undefined);setSavedID(undefined);setSaveProgress('Saving connection…');
+    try {
+      const result=await saveAndDiscover({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision,c=>{
+        setToken('');setClientSecret('');setSavedID(c.id);setEditing(false);
+        setSaveProgress(canDiscover(c)?'Connection saved. Discovering tools…':c.enabled?'Connection saved. Authorization required before tool discovery.':'Connection saved. Disabled connections are not tested.');
+      });
+      await list.reload();
+      if(result.discoveryError){
+        setSaveProgress('Connection saved. Tool discovery could not finish. Open the connection to retry.');
+        setError(result.discoveryError);
+      } else {
+        edit();
+        setSaveProgress(undefined);
+        if(presentation)location.hash=connectionLink(result.connection.id);
+      }
+    }catch(e){setSaveProgress(undefined);setError(errorMessage(e));}
+    finally{setBusy(false);}
+  }
   async function discover(id:string,action:'test'|'tools/refresh'){setBusy(true);setError(undefined);try{await api.refreshMCP(id,action);await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   async function remove(){if(!deleting||deleteID!==deleting.id)return;setBusy(true);setError(undefined);try{await api.deleteMCP(deleting.id,deleting.revision);if(input.id===deleting.id)edit();setDeleting(undefined);setDeleteID('');await list.reload();if(presentation)location.hash='#/connections';}catch(e){setError(errorMessage(e));setDeleting(undefined);setDeleteID('');await list.reload();}finally{setBusy(false);}}
   return <section className="integration-section" aria-label="MCP connections">
@@ -40,6 +61,8 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
     {presentation!=='detail'&&<MCPTemplates connectionRoutes={!!presentation} query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version}});}} />}
     <Btn onClick={()=>void list.reload()} disabled={list.loading}>Reload MCP connections</Btn>
     <ErrorBox error={list.error}/><ErrorBox error={error}/>
+    {saveProgress&&<p role="status">{saveProgress}</p>}
+    {savedID&&!busy&&saveProgress&&<a href={connectionLink(savedID)}>Open saved connection</a>}
     {deleting&&<section role="dialog" aria-label={`Delete MCP ${deleting.name}`}>
       <h3>Delete {deleting.name}?</h3>
       <p>This permanently removes the local connection, catalogue and stored credentials. The ID remains reserved so old agent grants cannot authorize another connection. Graph definitions and audit history are preserved; remove obsolete grants in the graph editor.</p>
@@ -93,6 +116,14 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
       <p>{c.credentialConfigured?'Credential configured':'No credential'} · revision {c.revision} · catalogue {c.toolsRevision}</p>
       <p>Connection quota: {c.callsPerMinute?`${c.callsPerMinute} calls per UTC minute`:'Unlimited'}</p>
       {(!presentation||tab==='overview')&&c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
+      {(!presentation||tab==='overview'||tab==='tools')&&<section aria-label="Connection readiness">
+        <p>Connection checks discover available tools. No agent is needed and no tool is executed.</p>
+        {c.status==='ready'?<p role="status">{c.tools.length} tools discovered. Grant access to agents before they can use them.</p>:
+         !c.enabled?<p>Connection disabled. Discovery is paused.</p>:
+         c.oauth&&c.oauth.status!=='authorized'?<p>Authorize this connection to discover its tools.</p>:
+         <p>Tools are not ready. Test the connection or refresh tools to retry discovery.</p>}
+        {presentation&&tab==='overview'&&<a href={connectionLink(c.id,'tools')}>View discovered tools</a>}
+      </section>}
       {c.lastTest&&<p>Last discovery: {fmtDateTime(c.lastTest)}</p>}<ErrorBox error={c.error}/>
       <div className="btn-row">{admin&&(!presentation||tab==='settings')&&<Btn disabled={busy} onClick={()=>edit(c)}>Edit {c.name}</Btn>}{operator&&(!presentation||tab==='overview'||tab==='tools')&&<><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'test')}>Test {c.name}</Btn><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'tools/refresh')}>Refresh tools for {c.name}</Btn></>}</div>
       {admin&&(!presentation||tab==='settings')&&<><p>To delete, disable the connection and revoke OAuth access first. Deleted IDs cannot be reused.</p><Btn disabled={busy||c.enabled||!!(c.oauth&&(c.oauth.status!=='revoked'||c.oauth.revocation==='pending'))} onClick={()=>{setDeleting(c);setDeleteID('');setError(undefined);}}>Delete {c.name}</Btn></>}

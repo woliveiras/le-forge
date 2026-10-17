@@ -142,7 +142,8 @@ type TurnResult struct {
 	Broadcast string    `json:"broadcast,omitempty"`
 	Signal    Signal    `json:"signal,omitempty"`
 	Usage     llm.Usage `json:"usage"`
-	ToolCalls int       `json:"toolCalls"`
+	// ToolCalls counts runtime-local calls only; TurnEnv.InvokeTool calls are counted by the engine.
+	ToolCalls int `json:"toolCalls"`
 	// Retry asks the engine to nack the inputs instead of acking them
 	// (the agent could not handle them now, e.g. a dependency is down).
 	Retry bool `json:"retry,omitempty"`

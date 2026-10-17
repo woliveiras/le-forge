@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it } from 'vitest';
 import { fakeApi, apiError } from '../test/fakeApi';
@@ -72,4 +72,33 @@ it('retains OAuth consent gates on detail and does not authorize operators impli
  expect(screen.getByRole('button',{name:'Confirm revoke Team'})).toBeTruthy();
  await userEvent.click(screen.getByRole('button',{name:'Cancel revocation'}));
  expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
+});
+
+it('automatically discovers after saving, distinguishes pending discovery and never grants tools',async()=>{
+ let saved=false;let finish!:(value:unknown)=>void;
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>saved?[connection]:[],
+  'GET /api/v1/mcp/templates':()=>[],
+  'POST /api/v1/mcp/connections':()=>{saved=true;return connection;},
+  'POST /api/v1/mcp/connections/team/tools/refresh':()=>new Promise(resolve=>{finish=resolve;})});
+ render(<MCPSection role="admin" presentation="create"/>);
+ await userEvent.type(screen.getByLabelText('Connection ID'),'team');
+ await userEvent.type(screen.getByLabelText('Connection name'),'Team');
+ await userEvent.type(screen.getByLabelText('MCP endpoint'),'https://example.com/mcp');
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(await screen.findByText('Connection saved. Discovering tools…')).toBeTruthy();
+ await act(async()=>finish(connection));
+ await waitFor(()=>expect(location.hash).toBe('#/connections/c/team/overview'));
+ expect(backend.calls.filter(c=>c.method==='POST').map(c=>c.path)).toEqual(['/api/v1/mcp/connections','/api/v1/mcp/connections/team/tools/refresh']);
+});
+
+it('keeps a saved connection recoverable when discovery fails without submitting it again',async()=>{
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[connection],
+ 'PUT /api/v1/mcp/connections/team':()=>connection,
+ 'POST /api/v1/mcp/connections/team/tools/refresh':()=>apiError(503,'Discovery unavailable','unavailable')});
+ render(<MCPSection role="admin" presentation="detail" connectionID="team" tab="settings"/>);
+ await userEvent.click(await screen.findByRole('button',{name:'Edit Team'}));
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(await screen.findByText('Connection saved. Tool discovery could not finish. Open the connection to retry.')).toBeTruthy();
+ expect(screen.getByRole('link',{name:'Open saved connection'}).getAttribute('href')).toBe('#/connections/c/team/overview');
+ expect(backend.find('PUT','/api/v1/mcp/connections/team')).toHaveLength(1);
 });

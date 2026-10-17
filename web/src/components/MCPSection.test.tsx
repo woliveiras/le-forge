@@ -17,7 +17,7 @@ it('creates, discovers and edits with write-only credentials and optimistic conc
  render(<MCPSection role="admin"/>);
  await userEvent.type(screen.getByLabelText('Connection ID'),'team');await userEvent.type(screen.getByLabelText('Connection name'),'Team');await userEvent.type(screen.getByLabelText('MCP endpoint'),'https://example.com/mcp');await userEvent.type(screen.getByLabelText('Bearer token'),'synthetic-token');
  await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
- expect(await screen.findByText('Credential configured · revision 1 · catalogue 0')).toBeTruthy();
+ expect(await screen.findByText('Credential configured · revision 2 · catalogue 0')).toBeTruthy();
  expect((screen.getByLabelText('Bearer token') as HTMLInputElement).value).toBe('');
  await userEvent.click(screen.getByRole('button',{name:'Refresh tools for Team'}));expect(await screen.findByText('mcp.team.search')).toBeTruthy();
  await userEvent.click(screen.getByRole('button',{name:'Edit Team'}));expect((screen.getByLabelText('Bearer token') as HTMLInputElement).value).toBe('');
@@ -55,7 +55,7 @@ it('prepares known services explicitly, validates GitLab domains and saves publi
  expect(body).not.toHaveProperty('oauthClientSecret');expect(body).not.toHaveProperty('credential');
 });
 it('keeps automatic setup credential-free and preserves the manual alternative',async()=>{
- const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[], 'GET /api/v1/mcp/oauth/config':()=>({callbackUrl:'http://localhost:8080/api/v1/mcp/oauth/callback'}),'POST /api/v1/mcp/connections':()=>connection});
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[], 'GET /api/v1/mcp/oauth/config':()=>({callbackUrl:'http://localhost:8080/api/v1/mcp/oauth/callback'}),'POST /api/v1/mcp/connections':()=>({...connection,oauth:{issuer:'https://issuer.example',clientId:'',scopes:[],status:'authorization_required',clientSecretConfigured:false}})});
  render(<MCPSection role="admin"/>);
  await userEvent.type(screen.getByLabelText('Connection ID'),'automatic');await userEvent.type(screen.getByLabelText('Connection name'),'Automatic');await userEvent.type(screen.getByLabelText('MCP endpoint'),'https://example.com/mcp');
  await userEvent.click(screen.getByLabelText('Use browser OAuth'));

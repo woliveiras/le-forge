@@ -188,3 +188,11 @@ func TestDurableToolYieldEndsModelTurn(t *testing.T) {
 		t.Fatalf("continued after yield: tools=%v calls=%d", env.tools, len(env.asked))
 	}
 }
+
+func TestGatewayCallsAreNotReportedAgain(t *testing.T) {
+	env := &scriptedEnv{replies: []*llm.ChatResponse{toolCall("git.branch", `{}`), toolCall("shell.exec", `{}`), text("Done")}}
+	res, err := turn(t, env, nil)
+	if err != nil || len(env.tools) != 2 || res.ToolCalls != 0 {
+		t.Fatalf("gateway owns the count: result=%+v calls=%v err=%v", res, env.tools, err)
+	}
+}

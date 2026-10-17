@@ -527,3 +527,108 @@ keyboard-opened help, Skills guidance, Approvals, Administration health and canv
 guidance. Software Factory rendered its ten edges before and after reload;
 Save graph remained disabled. No configuration, grant or credential edits were
 submitted. Developer usability acceptance and resumable onboarding remain pending.
+
+
+**Developer usability round (2026-10-17, in progress):** The first task asks the
+developer to locate reader in MCP installation validation and identify its model
+and grants without saving changes. Feedback is pending; MCP connection and
+execution-tracking tasks have not started. Keep the usability checkbox open.
+Record confirmed adjustments after developer observations; do not treat the
+previous assistant-operated installation checks as developer acceptance.
+
+**First-round feedback:** The developer described the Graphs screen as outdated and supplied a screenshot with the new navigation and graph selector. The served HTML references the activated visual build assets, matching the running container. Whether the concern is visual fidelity, graph data, or task instructions remains unconfirmed; clarification is pending. Do not classify this as a cache defect or accept the agent journey yet.
+
+
+- [x] UX-01: Make graph cards clickable and agent discovery explicit. — Card
+  surfaces open the graph through the accessible title button; action controls
+  stay independent. Named Configure links open agent settings. Unit and browser
+  tests cover navigation, keyboard activation, independent Start and retained
+  drafts. Developer revalidation in the installation remains pending.
+
+
+**Agent journey progress:** Developer screenshots confirm General and Instructions
+were reached with assistance; ollama-local / llama3.2:latest is visible. Exact tool
+grants are not yet demonstrated. An execution start is visible in Events, but its
+outcome is not established. Continue with the existing run rather than starting
+another. MCP connection journey and overall usability acceptance remain pending.
+
+- [x] UX-02: Prevent long event types from overlapping actors. — Grid tracks
+  and children allow wrapping; narrow layouts stack event details. Component and
+  real-browser tests cover long names, separate actor bounds and expandable data
+  at 1280 and 580 pixels. Developer revalidation remains pending.
+
+
+**Developer round evidence update (19:28 local time):** The developer explicitly
+confirmed that GitHub get_me and get_file_contents are selected in Tools &
+permissions. Agent model and grant identification is complete with navigation
+assistance; independent discoverability is not yet accepted. Subsequent screenshots
+show the existing reader execution (graph version 7, started 19:23:57) as Completed,
+with completion at 19:25:15 in Diagnostics. Tool calls shows one invoked/completed
+pair each for get_me (2010 ms) and get_file_contents (1712 ms). Result, Timeline,
+Tool calls, Messages and Diagnostics were reached. Messages reports no linked
+messages in the recent window; this alone is not a failure. Screenshots establish
+the displayed outcomes, not an inspection of raw MCP responses. The developer's
+assessment of clarity and the MCP connection journey remain pending.
+
+**UX-03 — tool-call count clarity:** Result says “4 tool calls recorded”, whereas
+Tool calls displays four lifecycle events for two calls. Investigate the counting
+source before implementation; distinguish actual calls from lifecycle events and
+make summary/detail counts consistent. Preserve separate execution and tool
+outcomes, including partial histories and failures. This is a screenshot-confirmed
+presentation discrepancy; its implementation cause has not been established.
+
+- [x] UX-03: Reconcile recorded tool attempts and lifecycle records. — Native
+  runtimes no longer report gateway-counted calls a second time. Unit and engine
+  integration tests cover counting, including failed attempts; browser coverage
+  checks a real native/gateway execution and its summary. Runs distinguishes
+  observed invocation events from lifecycle events and explains partial history
+  and preserved historical totals.
+
+
+**Confirmed finding UX-04 — connection validation versus agent execution:** The
+developer explicitly reported losing context between Connections / Personal GitHub
+and Graph, and had not understood that reader belongs to the dedicated MCP
+installation validation graph. The guided round mixed connection setup validation
+with an agent execution check without explaining their different purposes. The
+existing connection Test and Refresh tools actions do not require creating an
+agent. The dedicated validation agent was configured during the earlier assisted
+gateway validation; it is not an automatic consequence of connecting an MCP.
+
+Proposed adjustment: keep connection health/discovery checks and their results in
+connection detail; explain separately that using tools requires explicit grants to
+an agent. Make optional end-to-end agent checks clearly labeled, with the target
+graph/agent and a return path to the connection. Do not create agents or grant tools
+automatically. Retest whether the developer can distinguish connection readiness
+from successful agent tool execution without facilitator explanations. This finding
+also concerns the validation instructions, not only the product navigation.
+
+- [x] UX-04: Clarify connection checks versus optional agent execution. —
+  Connection detail explains discovery without agents and separate explicit
+  grants. Agent-access links name the graph and open Tools & permissions, with
+  a return banner retained across tabs and reloads. Unit/API-client integration
+  and browser tests verify context, unchanged grants and no automatic execution.
+  Developer usability acceptance remains pending.
+
+
+- [x] UX-05: Automatically discover tools after saving in the console. — Enabled
+  token-based and unauthenticated connections attempt discovery; pending OAuth
+  waits for consent and authorized OAuth can refresh. Disabled connections stay
+  inactive. Save and discovery states are distinct; saved connections survive
+  discovery failures, with retry and explicit agent-grant guidance. Unit and
+  API-client integration cover eligibility, empty catalogues, failures and no
+  implicit grants; real-backend browser journeys cover automatic discovery,
+  authentication failure, recovery, OAuth and disabled connections. API clients
+  retain separate save and refresh endpoints.
+
+**UX-01–UX-05 verification (2026-10-17):** make test passed (Go unit/integration,
+Python and 241 frontend tests), make lint passed, make build passed, and
+make test-e2e passed (48 standard Chromium scenarios plus one hosted CIMD case).
+Desktop graph cards and narrow Events screenshots were inspected. Earlier targeted
+runs exposed outdated test expectations for automatic discovery and missing test
+setup; these were corrected with assertions retained. The existing sandbox journal
+supervision test failed in the first full run and one isolated repeat, then passed
+in a diagnostic run and the final full run without source or assertion changes.
+Treat that intermittent test behavior as unresolved; it is not an established UX
+regression or a claimed fix. No installation rebuild/restart, deployment, secret
+change, data migration or commit was performed. Activation and another developer
+usability round remain pending; the overall usability checkbox stays open.

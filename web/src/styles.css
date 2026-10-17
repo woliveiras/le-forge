@@ -979,7 +979,7 @@ section {
 }
 .tl-row {
   display: grid;
-  grid-template-columns: 80px 190px 140px 1fr;
+  grid-template-columns: 80px minmax(0, 190px) minmax(0, 140px) minmax(0, 1fr);
   gap: 8px;
   padding: 3px 8px;
   border-bottom: 1px solid var(--line);
@@ -1852,4 +1852,17 @@ button, summary, a { touch-action: manipulation; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
+}
+
+/* Stretch only the navigation button; sibling controls remain independent. */
+.graph-card { position: relative; }
+.graph-card-open::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.graph-card-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 3px; }
+.graph-card:has(.graph-card-open:hover) { border-color: var(--accent); }
+.graph-card-agents button, .graph-card-actions button { position: relative; z-index: 1; }
+.graph-card-agents ul { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; list-style: none; }
+.tl-row > * { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .tl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .tl-text { grid-column: 1 / -1; }
 }

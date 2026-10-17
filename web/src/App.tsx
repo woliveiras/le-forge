@@ -28,7 +28,7 @@ type Route =
   | { view: 'models' }
   | { view: 'administration'; section: AdministrationSection }
   | { view: 'skills' }
-  | { view: 'graph'; id: string; tab: GraphTab; selectionKey?: string; agentId?: string; agentSection?: AgentSection; executionId?: string; runSection?: RunSection; correlationId?: string };
+  | { view: 'graph'; id: string; tab: GraphTab; selectionKey?: string; agentId?: string; agentSection?: AgentSection; executionId?: string; runSection?: RunSection; correlationId?: string; connectionOrigin?: string };
 
 export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
@@ -46,7 +46,7 @@ export function parseRoute(hash: string): Route {
       ? (parts[2] as GraphTab)
       : 'canvas';
     const c = new URLSearchParams(qs ?? '').get('c') ?? undefined;
-    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c, ...(new URLSearchParams(qs ?? '').has('sel') ? {selectionKey:new URLSearchParams(qs ?? '').get('sel')!} : {}), ...(tab === 'runs' ? {executionId:new URLSearchParams(qs ?? '').get('execution') ?? undefined, runSection:runSection(new URLSearchParams(qs ?? '').get('section'))} : {}), ...(tab === 'agent' ? {agentId: new URLSearchParams(qs ?? '').get('agent') ?? '', agentSection: agentSection(new URLSearchParams(qs ?? '').get('section'))} : {}) };
+    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c, ...(new URLSearchParams(qs ?? '').has('connection') ? {connectionOrigin:new URLSearchParams(qs ?? '').get('connection')!} : {}), ...(new URLSearchParams(qs ?? '').has('sel') ? {selectionKey:new URLSearchParams(qs ?? '').get('sel')!} : {}), ...(tab === 'runs' ? {executionId:new URLSearchParams(qs ?? '').get('execution') ?? undefined, runSection:runSection(new URLSearchParams(qs ?? '').get('section'))} : {}), ...(tab === 'agent' ? {agentId: new URLSearchParams(qs ?? '').get('agent') ?? '', agentSection: agentSection(new URLSearchParams(qs ?? '').get('section'))} : {}) };
   }
   return { view: 'graphs' };
 }
@@ -64,8 +64,10 @@ export function routeHash(r: Route): string {
   }
   if (r.view === 'models') return '#/models';
   if (r.view === 'administration') return `#/administration/${r.section}`;
-  if (r.view === 'graph')
-    return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.tab === 'runs' ? (r.executionId ? `?execution=${encodeURIComponent(r.executionId)}&section=${r.runSection ?? 'result'}` : '') : r.tab === 'agent' ? `?agent=${encodeURIComponent(r.agentId ?? '')}&section=${r.agentSection ?? 'general'}` : r.tab === 'canvas' && r.selectionKey ? `?sel=${encodeURIComponent(r.selectionKey)}` : r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
+  if (r.view === 'graph') {
+    const path = `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.tab === 'runs' ? (r.executionId ? `?execution=${encodeURIComponent(r.executionId)}&section=${r.runSection ?? 'result'}` : '') : r.tab === 'agent' ? `?agent=${encodeURIComponent(r.agentId ?? '')}&section=${r.agentSection ?? 'general'}` : r.tab === 'canvas' && r.selectionKey ? `?sel=${encodeURIComponent(r.selectionKey)}` : r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
+    return r.connectionOrigin ? `${path}${path.includes('?') ? '&' : '?'}connection=${encodeURIComponent(r.connectionOrigin)}` : path;
+  }
   return '#/graphs';
 }
 
@@ -94,10 +96,18 @@ export function App() {
 function Shell() {
   const [route, setRoute] = useState<Route>(() => parseRoute(location.hash));
   useEffect(() => {
-    const f = () => setRoute(parseRoute(location.hash));
+    const f = () => {
+      const previous = route;
+      const next = parseRoute(location.hash);
+      if (next.view === 'graph' && previous.view === 'graph' && next.id === previous.id && !next.connectionOrigin && previous.connectionOrigin) {
+        next.connectionOrigin = previous.connectionOrigin;
+        history.replaceState(null, '', routeHash(next));
+      }
+      setRoute(next);
+    };
     window.addEventListener('hashchange', f);
     return () => window.removeEventListener('hashchange', f);
-  }, []);
+  }, [route]);
   const go = useCallback((r: Route) => {
     location.hash = routeHash(r);
   }, []);
@@ -194,6 +204,7 @@ function Shell() {
               graphs={list}
               error={graphs.error}
               onOpen={(id) => go({ view: 'graph', id, tab: 'canvas' })}
+              onAgent={(id, agentId) => go({ view: 'graph', id, tab: 'agent', agentId, agentSection: 'general' })}
               onChanged={() => void graphs.reload()}
             />
           )}
@@ -208,6 +219,7 @@ function Shell() {
             const summary = list.find(g => g.graph.metadata.id === id) ?? session.summary;
             return <Activity key={id} mode={active ? 'visible' : 'hidden'}>
               {active && !current && <ErrorBox error={graphs.error ?? 'Graph unavailable. Your local draft is retained; reload graphs before saving.'}/>}
+              {workspaceRoute.connectionOrigin && <aside className="card" aria-label="Connection context"><a href={`#/connections/c/${encodeURIComponent(workspaceRoute.connectionOrigin)}/overview`}>Back to connection {workspaceRoute.connectionOrigin}</a><p>You are viewing agents and runs in graph {summary.graph.metadata.name || id}. Connection setup is separate; opening this graph does not validate or run its agents.</p></aside>}
               <GraphWorkspace summary={summary} info={info.data} tab={workspaceRoute.tab} selectionKey={workspaceRoute.selectionKey}
                 executionId={workspaceRoute.executionId} runSection={workspaceRoute.runSection}
                 agentId={workspaceRoute.agentId} agentSection={workspaceRoute.agentSection}

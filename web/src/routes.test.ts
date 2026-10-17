@@ -41,3 +41,8 @@ it('preserves canvas selection links',()=>{
  expect(route).toMatchObject({selectionKey:'node:reviewer'});
  expect(routeHash(route)).toBe('#/g/example/canvas?sel=node%3Areviewer');
 });
+it('retains a scoped connection return destination without accepting an external redirect',()=>{
+ const route=parseRoute('#/g/g/agent?agent=reader&section=tools&connection=team');
+ expect(routeHash(route)).toBe('#/g/g/agent?agent=reader&section=tools&connection=team');
+ expect(routeHash({...route,view:'graph',id:'g',tab:'runs'})).toBe('#/g/g/runs?connection=team');
+});

@@ -62,3 +62,10 @@ it('surfaces blocked calls on Result without changing the persisted outcome',asy
  expect(await screen.findByText('1 blocked tool calls in this window. The execution status remains Completed.')).toBeTruthy();
  expect(screen.getByText('Completed inspection')).toBeTruthy();expect(screen.getByRole('link',{name:'Inspect tool calls'}).getAttribute('href')).toBe('#/g/g/runs?execution=e&section=tools');
 });
+
+it('counts invocation events separately from completion events and retained attempt totals',async()=>{
+ const events=['tool.invoked','tool.completed','tool.invoked','tool.failed'].map((type,i)=>({...event,id:String(i),seq:i,type}));
+ fakeApi({...routes(),'GET /api/v1/graphs/g/events':()=>events});
+ render(<RunsView graphId="g" executionId="e" section="tools"/>);
+ expect(await screen.findByText('2 tool invocations observed · 4 tool lifecycle events in this window. These are not additional calls.')).toBeTruthy();
+});

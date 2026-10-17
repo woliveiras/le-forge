@@ -10,7 +10,7 @@ test('creates a connection and navigates scoped tools, history and settings', as
  await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
  await expect(page).toHaveURL(/connections\/c\/pages\/overview$/);
  await expect(page.getByRole('region',{name:'Connection agent grants'})).toContainText('No saved agent grants');
- await page.getByRole('button',{name:'Refresh tools for Pages fixture',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Connection readiness'})).toContainText('tools discovered');
  await page.getByRole('link',{name:'Tools',exact:true}).click();
  await expect(page.getByText('mcp.pages.search',{exact:true})).toBeVisible();
  await page.getByLabel('Search tools',{exact:true}).fill('read_issue');

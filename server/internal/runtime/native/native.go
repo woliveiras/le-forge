@@ -193,7 +193,7 @@ func (r *Runtime) call(ctx context.Context, env runtime.TurnEnv, res *runtime.Tu
 		res.Broadcast = a.Broadcast
 		return "turn finished", true
 	}
-	res.ToolCalls++
+	// InvokeTool records this attempt in the engine; do not report it twice.
 	env.Output(ctx, "→ "+call.Name+" "+truncate(string(args), 300))
 	out, err := env.InvokeTool(ctx, call.Name, args)
 	switch {

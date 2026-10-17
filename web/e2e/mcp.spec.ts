@@ -31,6 +31,23 @@ test('executes MCP through the agent gateway and denies ungranted and disabled t
   await expect.poll(async()=>{const res=await page.request.get(`/api/v1/graphs/${id}/events`,{headers});return (await res.json()).some((e:{type:string;data:{tool?:string;outcome?:string}})=>e.type===(id==='mcp-allowed'?'tool.completed':'tool.denied')&&e.data.tool==='mcp.runtime.search'&&e.data.outcome===(id==='mcp-allowed'?'ok':'denied'));}).toBe(true);
  }
  await expect.poll(async()=>{const res=await page.request.get('/api/v1/graphs/mcp-allowed/executions',{headers});return (await res.json()).some((x:{status:string})=>x.status==='succeeded');}).toBe(true);
+ const execution=(await (await page.request.get('/api/v1/graphs/mcp-allowed/executions',{headers})).json())[0];
+ expect(execution.toolCalls).toBe(1);
+ await page.goto(`/#/g/mcp-allowed/runs?execution=${execution.id}&section=result`);
+ await expect(page.getByText(/1 tool attempts recorded/)).toBeVisible();
+ await expect(page.getByRole('region',{name:'Run tool outcomes'})).toContainText('1 tool invocations observed · 2 tool lifecycle events');
+ await page.goto('/#/g/mcp-allowed/events');
+ for(const width of [1280,580]){
+  await page.setViewportSize({width,height:900});
+  const row=page.locator('.tl-row').filter({has:page.locator('.tl-type').filter({hasText:'execution.instructions.loaded'})}).first();
+  await expect(row).toBeVisible();
+  const type=await row.locator('.tl-type').boundingBox(),who=await row.locator('.tl-who').boundingBox();
+  expect(type).toBeTruthy();expect(who).toBeTruthy();
+  expect(type!.x+type!.width<=who!.x || type!.y+type!.height<=who!.y).toBe(true);
+  const details=row.getByRole('button',{name:/data/});if(await details.getAttribute('aria-expanded')!=='true')await details.click();await expect(row.locator('pre')).toBeVisible();
+  await page.screenshot({path:`/tmp/leforge-ux-events-${width}.png`,fullPage:true});
+ }
+ await page.setViewportSize({width:1280,height:900});
  const disabled=await page.request.put('/api/v1/mcp/connections/runtime',{headers:{...headers,'If-Match':String(connection.revision)},data:{id:'runtime',name:'Runtime',service:'generic',endpoint:'https://mcp.fixture.invalid/mcp',enabled:false}});expect(disabled.ok()).toBeTruthy();
  await page.goto('/#/g/mcp-allowed/canvas');await page.getByRole('button',{name:'Stop all',exact:true}).click();await expect(page.getByRole('button',{name:'Run all',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Run all',exact:true}).click();
  await expect.poll(async()=>{const res=await page.request.get('/api/v1/graphs/mcp-allowed/events',{headers});return (await res.json()).some((e:{type:string;data:{tool?:string}})=>e.type==='tool.denied'&&e.data.tool==='mcp.runtime.search');}).toBe(true);
@@ -50,7 +67,7 @@ test('opens a pinned template through login and saves only after review',async({
  await expect(section.getByLabel('MCP endpoint',{exact:true})).toHaveValue('https://mcp.deepwiki.com/mcp');
  await section.getByRole('button',{name:'Save MCP connection',exact:true}).click();
  const card=section.getByRole('article',{name:'MCP DeepWiki',exact:true});
- await expect(card).toContainText('Template: deepwiki v1');await expect(card).toContainText('untested');
+ await expect(card).toContainText('Template: deepwiki v1');await expect(card).toContainText('unavailable');await expect(card).toContainText('Discovery failed');
  const saved=await page.request.get('/api/v1/mcp/connections/deepwiki',{headers});
  expect(await saved.json()).toMatchObject({template:{id:'deepwiki',version:1},tools:[],credentialConfigured:false});
  await page.reload();await expect(card).toContainText('Template: deepwiki v1');

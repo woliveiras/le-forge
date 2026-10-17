@@ -29,6 +29,14 @@ never assigns tools to agents. Credentials remain managed by the existing server
 `#/connections` lists installation connections with name/service/ID search and a
 status filter. Administrators start creation with **Add connection** at
 `#/connections/new`; template links use `#/connections/connect?...`.
+Saving an enabled connection automatically discovers tools when authentication is
+available. OAuth connections awaiting consent require authorization first, then
+perform discovery. Disabled connections remain inactive. Saving and discovery have
+separate progress and error states: a discovery failure preserves the saved
+connection, with Test / Refresh tools available for retry. No agent is created and
+no tool grants are added. API clients still use the separate save and refresh
+endpoints; this automatic sequence belongs to the console save flow.
+
 Saving opens `#/connections/c/<id>/overview`. The detail sections are:
 
 - **Overview**: discovery state, OAuth authorization/revocation and saved agent grants.
@@ -49,8 +57,12 @@ Editing preserves revision checks, blank-credential semantics, role restrictions
 DCR uncertainty handling and explicit OAuth consent. Missing connections and API
 failures are shown explicitly; navigation never registers or authorizes a client.
 
-A scalable graph selector is still planned in `wip/PLAN.md` and `wip/TASKS.md`. Developer usability validation and
-installation activation are separate from automated test coverage.
+Agent-access links explicitly open configuration in the named graph. A connection
+context banner provides a return link, retained across graph tabs and run details.
+Connection readiness checks do not execute tools. Agent execution is a separate,
+optional end-to-end check using explicit grants and the selected model.
+Developer usability validation and installation activation remain separate from
+automated test coverage.
 
 ## Agent configuration
 
@@ -152,3 +164,20 @@ an API or change a draft. Security notices, validation failures and permission
 boundaries remain visible. Browser coverage checks keyboard disclosure, narrow
 layouts and viewer restrictions; this is not a full accessibility certification
 or a claim of developer usability acceptance.
+
+
+## Usability follow-ups
+
+Graph cards open from their main surface or focused title button (Enter/Space).
+Action buttons and agent configuration links remain independent. Cards list agents
+with explicit Configure links, preserving existing graph drafts when revisited.
+Events wrap long event types and actors, switching to a stacked layout on narrow
+screens to avoid column overlap.
+
+Run results identify the summary as agent-generated and distinguish recorded tool
+attempts from invocation and lifecycle events observed in the bounded history.
+Native runtime calls through the gateway are counted once in new records, including
+failed attempts. Historical stored totals are preserved and may include the earlier
+duplicate count; the count disclosure explains this limitation. Missing events are
+not inferred to be zero attempts, and execution completion does not imply that
+every tool succeeded.

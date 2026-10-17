@@ -28,11 +28,13 @@ export function GraphList({
   error,
   onOpen,
   onChanged,
+  onAgent,
 }: {
   graphs: GraphSummary[];
   error?: string;
   onOpen: (id: string) => void;
   onChanged: () => void;
+  onAgent?: (graph: string, agent: string) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string>();
@@ -75,7 +77,7 @@ export function GraphList({
             <article key={g.metadata.id} className={`card graph-card st-${st}`}>
               <header>
                 <StateDot state={st === 'running' ? 'running' : st === 'paused' ? 'paused' : st === 'failed' ? 'failed' : 'stopped'} />
-                <button type="button" className="link title" onClick={() => onOpen(g.metadata.id)}>
+                <button type="button" className="link title graph-card-open" onClick={() => onOpen(g.metadata.id)}>
                   {g.metadata.name || g.metadata.id}
                 </button>
                 <Badge>v{s.record.version}</Badge>
@@ -86,7 +88,13 @@ export function GraphList({
                 {g.spec.nodes.length} agents · {g.spec.channels?.length ?? 0} channels
                 {s.record.startedAt ? ` · started ${fmtDateTime(s.record.startedAt)}` : ''}
               </p>
-              <div className="btn-row">
+              <div className="graph-card-agents" aria-label={`Agents in ${g.metadata.name || g.metadata.id}`}>
+                <strong>Agents</strong>
+                {g.spec.nodes.length ? <ul>{g.spec.nodes.map(node => <li key={node.id}>
+                  <button type="button" className="link" onClick={() => onAgent ? onAgent(g.metadata.id, node.id) : onOpen(g.metadata.id)}>Configure {node.name || node.id}</button>
+                </li>)}</ul> : <p>No agents configured.</p>}
+              </div>
+              <div className="btn-row graph-card-actions">
                 {st === 'stopped' || st === 'failed' ? (
                   <Btn small tone="primary" onClick={() => act(g.metadata.id, 'start')}>
                     <Icon name="play" /> Start

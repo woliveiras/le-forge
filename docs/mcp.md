@@ -147,7 +147,11 @@ The review screen displays the endpoint and authentication guidance. An administ
 must choose **Use template defaults**, review/edit the connection ID and name, enter
 any credential in the protected field, and explicitly save. Opening a link performs
 no discovery, writes or grants. The saved connection records `template: {id, version}`
-and starts untested with no tools. Existing discovery and per-agent authorization
+and initially starts untested with no tools. The console then automatically
+requests discovery for enabled connections with available authentication; pending
+OAuth requires consent first. Discovery failure preserves the saved connection and
+can be retried with Test or Refresh tools. Direct API clients retain the separate
+save/refresh contract. Discovery never grants tools to agents. Existing discovery and per-agent authorization
 remain separate actions. Duplicate connection IDs fail rather than overwrite.
 
 Template versions are immutable source-controlled defaults. The API rejects an
