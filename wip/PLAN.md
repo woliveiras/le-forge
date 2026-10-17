@@ -647,7 +647,12 @@ remain separate planned work. All interface copy remains in English.
    installation activation or runtime permission changes are implied.
 5. Introduce Runs list/detail navigation over existing execution records. Show results and
    actionable blockers first, with timeline, calls, messages and diagnostics on demand.
-   Do not infer task completion, percentage progress or record relationships.
+   Do not infer task completion, percentage progress or record relationships. Delivered
+   as Runs list/detail routes over existing APIs with explicit recent-window limits,
+   persisted execution/message links, independent error recovery and existing approval
+   role gates. Results distinguish execution status from blocked tool calls; workspace
+   links explicitly refer to current graph files. Full-history pagination and replay
+   are outside this interface slice.
 6. Consolidate typography, spacing, contextual help, focus and responsive behavior, then
    implement optional resumable onboarding. Prototype/user research does not establish
    usability success: validate with developers before claiming the proposed task-time goals.

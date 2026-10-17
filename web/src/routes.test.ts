@@ -31,3 +31,8 @@ it('round-trips agent configuration deep links and rejects unknown sections',()=
  expect(routeHash(route)).toBe('#/g/example/agent?agent=reviewer&section=tools');
  expect(parseRoute('#/g/example/agent?agent=reviewer&section=unknown')).toMatchObject({agentSection:'general'});
 });
+it('preserves execution and section deep links',()=>{
+ const hash='#/g/example/runs?execution=exec-1&section=timeline';expect(routeHash(parseRoute(hash))).toBe(hash);
+ expect(parseRoute('#/g/example/runs?execution=exec-1&section=unknown')).toMatchObject({tab:'runs',executionId:'exec-1',runSection:'result'});
+ expect(routeHash(parseRoute('#/g/example/runs'))).toBe('#/g/example/runs');
+});

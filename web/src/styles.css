@@ -1762,3 +1762,9 @@ section {
 .agent-fields .node-editor h3 { font-size:1.1rem; letter-spacing:normal; text-transform:none; }
 .agent-fields .node-editor fieldset:not([hidden]) { padding:16px; margin-top:16px; }
 .agent-configuration-page .section-navigation button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.run-detail .card { margin-block:20px; }
+.run-detail h1 { font-size:1.8rem; letter-spacing:-.04em; }
+.run-detail h2 { font-size:1.2rem; text-transform:none; letter-spacing:normal; }
+.run-detail li { margin-block:16px; }
+.run-detail dd, .run-detail .run-summary { overflow-wrap:anywhere; white-space:pre-wrap; }
+.run-detail nav { margin-top:20px; }

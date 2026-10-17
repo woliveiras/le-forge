@@ -1,3 +1,5 @@
+import { RunsView } from './RunsView';
+import type { RunSection } from './runPresentation';
 import { AgentConfiguration } from './AgentConfiguration';
 import { changedGraphFields, type AgentSection } from './agentSettingsModel';
 import { useEffect, useMemo, useState } from 'react';
@@ -29,7 +31,7 @@ import { NodePanel } from './NodePanel';
 import { TaskActivity } from './TaskActivity';
 import { YamlEditor } from './YamlEditor';
 
-export type GraphTab = 'canvas' | 'agent' | 'activity' | 'files' | 'events' | 'messages' | 'yaml';
+export type GraphTab = 'canvas' | 'agent' | 'runs' | 'activity' | 'files' | 'events' | 'messages' | 'yaml';
 
 /** A validation result and the draft it was computed for (paths are indices into that draft). */
 interface Validation {
@@ -46,6 +48,8 @@ export function GraphWorkspace({
   summary,
   info,
   tab,
+  executionId,
+  runSection,
   agentId,
   agentSection = 'general',
   onAgent,
@@ -57,6 +61,8 @@ export function GraphWorkspace({
   summary: GraphSummary;
   info?: Info;
   tab: GraphTab;
+  executionId?: string;
+  runSection?: RunSection;
   agentId?: string;
   agentSection?: AgentSection;
   onAgent?: (id:string,section:AgentSection)=>void;
@@ -259,7 +265,7 @@ export function GraphWorkspace({
     <div className="workspace">
       <div className="toolbar">
         <div className="tabs" role="tablist">
-          {(['canvas', 'agent', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
+          {(['canvas', 'agent', 'runs', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -271,6 +277,7 @@ export function GraphWorkspace({
               {t === 'canvas'
                 ? 'Graph'
                 : t === 'agent' ? 'Agent configuration'
+                : t === 'runs' ? 'Runs'
                 : t === 'activity'
                   ? 'Activity'
                   : t === 'files'
@@ -327,7 +334,7 @@ export function GraphWorkspace({
               </Btn>
             </>
           )}
-          <div className="toolbar-run-controls" hidden={tab === 'agent'}>
+          <div className="toolbar-run-controls" hidden={tab === 'agent' || tab === 'runs'}>
             <Badge tone={state === 'running' ? 'ok' : state === 'failed' ? 'bad' : state === 'paused' ? 'warn' : undefined}>
               {state}
             </Badge>
@@ -487,6 +494,7 @@ export function GraphWorkspace({
         <Btn tone="primary" disabled={saving || !canEditAgent} onClick={() => {setReviewOpen(false); void saveGraph();}}>Save graph draft</Btn>
         <Btn disabled={saving} onClick={() => setReviewOpen(false)}>Continue editing</Btn>
       </Modal>}
+      {tab === 'runs' && <RunsView key={gid} graphId={gid} executionId={executionId} section={runSection} role={info?.identity?.role}/>}
       {tab === 'activity' && <TaskActivity key={gid} graphId={gid} role={info?.identity?.role} />}
       {tab === 'events' && <EventsView graph={summary.graph} info={info} />}
       {tab === 'files' && <FilesView summary={summary} status={status} />}

@@ -1,3 +1,4 @@
+import { runLink } from './runPresentation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api, errorMessage } from '../api/client';
 import type { Approval, Execution, GraphStatus, HumanReview, LeForgeEvent, MessageRecord } from '../api/types';
@@ -76,7 +77,7 @@ export function TaskActivity({ graphId, role }: { graphId: string; role?: string
       <label>Execution <select value={selected} onChange={e => setSelected(e.target.value)}><option value="">All recent executions</option>{executions.map(e => <option key={e.id} value={e.id}>{e.nodeId} · {executionProgress(e)} · {e.id}</option>)}</select></label>
       {selected && !execution && <p>The selected execution is outside the recent window or unavailable. Select all executions to continue.</p>}
       {(selected ? executions.filter(e => e.id === selected) : executions).map(e => <article className="card" key={e.id}>
-        <h4>{e.nodeId} · {executionProgress(e)}</h4><p><code>{e.id}</code> · replica {e.replica} · {fmtDateTime(e.startedAt)}</p>
+        <h4>{e.nodeId} · {executionProgress(e)}</h4><a href={runLink(graphId,e.id)}>Open run details</a><p><code>{e.id}</code> · replica {e.replica} · {fmtDateTime(e.startedAt)}</p>
         <p>{e.toolCalls} tool calls · {e.usage?.inputTokens ?? 0} input / {e.usage?.outputTokens ?? 0} output tokens</p>
         {e.summary && <p>{e.summary}</p>}{e.error && <ErrorBox error={e.error} />}
         {!e.summary && <p>No result summary recorded.</p>}

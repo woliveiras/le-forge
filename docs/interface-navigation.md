@@ -49,7 +49,7 @@ Editing preserves revision checks, blank-credential semantics, role restrictions
 DCR uncertainty handling and explicit OAuth consent. Missing connections and API
 failures are shown explicitly; navigation never registers or authorizes a client.
 
-A scalable graph selector and Runs pages are still planned in `wip/PLAN.md` and `wip/TASKS.md`. Developer usability validation and
+A scalable graph selector is still planned in `wip/PLAN.md` and `wip/TASKS.md`. Developer usability validation and
 installation activation are separate from automated test coverage.
 
 ## Agent configuration
@@ -82,3 +82,34 @@ agent. Execution controls remain on the graph's operational views. The existing
 canvas inspector and Definition editor remain available for compatibility, including
 fields not represented by dedicated form controls. No schema or runtime permission
 contract changes are introduced by this organization.
+
+## Runs
+
+Open **Runs** in a graph to search/filter its latest 100 execution records.
+`#/g/<graph>/runs?execution=<id>&section=<result|timeline|tools|messages|diagnostics>`
+opens a dedicated detail, even when that execution is outside the list window.
+The detail verifies the returned execution belongs to the selected graph before
+showing its contents or loading associated records. A missing execution and a
+failed request are explicit error states with retry controls.
+
+- **Result** shows the persisted summary/error, execution outcome, recent blocked
+  tool calls, linked approvals and a link to the current graph workspace.
+- **Timeline** and **Tool calls** show exact execution-ID matches within the latest
+  300 events for that agent, ordered by sequence. Tool denial does not overwrite
+  the persisted execution status. This window is not a complete execution trace.
+- **Messages** shows explicit execution/input/output ID matches within the latest
+  100 graph messages; a shared agent or timestamp never establishes attribution.
+- **Diagnostics** shows recorded identifiers, version, replica, iteration and trace
+  context. Its agent link opens current configuration, which can differ from the
+  execution's graph version.
+
+Loaded sections refresh every five seconds and offer manual retry. Failed requests
+are not presented as fresh data or successful empty results. Approval controls reuse
+the existing role gates (environment decisions remain admin-only); opening a run
+never starts an agent or grants permissions. Graph execution controls remain in the
+operational views. Workspace links inspect current files, not historical snapshots
+attributed to a run. Activity remains available and links to the new detail.
+
+These pages use existing authorized APIs. Full historical pagination, inferred task
+progress, replay/retry controls and execution-specific workspace snapshots are not
+introduced by this interface change.
