@@ -687,7 +687,7 @@ styles, including Skills, Approvals, Models, Administration and canvas controls.
 Optional guidance uses native disclosures; security/error context stays visible.
 Existing handlers, role checks and draft semantics are retained. Developer journey
 validation and optional resumable onboarding remain pending. This visual slice
-requires a separate approved installation activation.
+was subsequently activated with approval; see the evidence below.
 
 
 Validation: make test, make lint, make build and make test-e2e pass, including
@@ -695,3 +695,15 @@ Validation: make test, make lint, make build and make test-e2e pass, including
 viewer journeys use the real disposable backend. An earlier canvas reload scenario
 failed to render edges once; the isolated repeat and final full suite passed with
 the original assertions. No claim of resolving an intermittent canvas issue is made.
+
+
+### Visual consolidation installation validation
+
+Commit 7ef1178 was activated on the local Compose installation on 2026-10-17.
+Only forged was rebuilt and recreated; existing data/workspace/journal/certificate
+volumes were reused. The service became healthy, with three graphs and nine saved
+versions retained. Authenticated browser validation covered Models, contextual
+keyboard help, Skills, Approvals, Administration and canvas navigation. The saved
+Software Factory canvas displayed ten edges both before and after reload without
+dirtying the graph. No configuration, credential or grant changes were submitted.
+This is installation smoke-test evidence, not developer usability acceptance.
