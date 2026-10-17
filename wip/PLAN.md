@@ -276,7 +276,7 @@ connection state, including revalidation after approval waits. Existing per-agen
 grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
 no transport retry, redacted audit metadata and capped runtime results. Unit,
 real TLS/API integration and Chromium cover success, denial and connection disable.
-Dynamic OAuth registration, aggregate per-connection quotas, private-network policy, deletion and live
+Automatic OAuth client setup (DCR/CIMD), aggregate per-connection quotas, private-network policy, deletion and live
 vendor-specific acceptance remain pending; service names are metadata.
 See [MCP scope and limits](../docs/mcp.md).
 
@@ -332,7 +332,7 @@ complete with their original LeForge admin session, discover tools and renew/rev
 credentials. PKCE, cookie/session binding, encrypted token persistence, serialized
 refresh and revocation races are covered by unit/TLS integration tests and the race
 detector. Chromium covers consent, renewal, explicit agent execution and revocation,
-including provider failures. Dynamic client registration, distributed pending-flow
+including provider failures. DCR/CIMD client setup, distributed pending-flow
 storage and real-vendor qualification remain pending. See [OAuth scope](../docs/mcp.md#browser-oauth-pre-registered-clients).
 
 **GitHub.com OAuth compatibility:** A pinned issuer/endpoint profile supports the documented confidential POST exchange and renewal despite omitted authentication-method metadata, normalizes comma-separated scopes, and rejects OAuth errors without leaking upstream payloads. Unit, TLS API integration and browser fixtures cover this contract; live GitHub consent, repository permissions and organization/SSO acceptance remain pending. Manual registration is documented in `docs/mcp.md`.
@@ -347,6 +347,56 @@ fixtures cover concurrent pending authorizations, independent revocation and
 explicit agent grants. Live Atlassian registration/corporate approval and GitLab
 instance qualification remain pending; see `docs/mcp.md`. This increment does not
 deploy itself or change external OAuth applications.
+
+**Planned automatic OAuth client setup (DCR/CIMD; not implemented):** Keep
+pre-registered clients as an explicit, always available alternative. Reuse an
+existing registration first; otherwise prefer CIMD when advertised and usable,
+then DCR when advertised, then guided manual setup. Show the selected mechanism
+and reason before the administrator starts it. Opening a template or inspecting
+metadata must not register an application. Registration does not replace provider
+consent or explicit per-agent tool grants.
+
+**Capability verification, 2026-10-17:** Public documentation and read-only metadata
+GETs establish the following advertised capabilities, not end-to-end acceptance:
+
+| Provider | Evidence | Planned behavior |
+| --- | --- | --- |
+| GitLab.com / chosen GitLab instance | [Official MCP guide](https://docs.gitlab.com/user/model_context_protocol/mcp_server/#reuse-a-single-oauth-application) documents DCR and administrator disablement. [GitLab.com metadata](https://gitlab.com/.well-known/oauth-authorization-server) advertises `https://gitlab.com/oauth/register`; it does not advertise CIMD. | Discover each instance independently; support DCR with `mcp` scope when enabled. Keep pre-registration when disabled or unavailable. Do not infer CIMD support from DCR or general MCP support. |
+| Atlassian Cloud MCP v2 | [Resource metadata](https://mcp.atlassian.com/.well-known/oauth-protected-resource/v2/mcp) identifies the issuer `https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3`. Its [authorization metadata](https://auth.atlassian.com/.well-known/oauth-authorization-server/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3) advertises `client_id_metadata_document_supported: true` and `https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3/dcr/register`. | Prefer usable CIMD; offer DCR and compatible pre-registration. Qualify callback/domain/site/IP policies and real consent separately; do not substitute REST 3LO registration. |
+| GitHub remote MCP | [Official host guide](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) states that DCR is unsupported. | Preserve the existing dedicated, pre-registered application flow; do not promise automatic registration. |
+
+Implement capability-driven selection following the
+[MCP registration approaches](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#client-registration-approaches),
+with the supported specification revision recorded during implementation. DCR
+runs on the backend against a validated advertised registration endpoint, sends
+reviewed client metadata and the exact configured callback, and validates the
+returned registration/authentication method before use. Persist registration
+identity and encrypted credentials per installation-owned connection and issuer;
+reuse after restart, serialize concurrent registration, and avoid blindly retrying
+an ambiguous registration POST. Explain denied registration, invalid metadata,
+rate limits and unsupported client methods without leaking provider payloads.
+
+CIMD identifies the client through a stable public HTTPS JSON document; it does
+not create an application by POST. Publish only non-secret client metadata,
+including an exact matching URL-form client ID and approved callback URIs derived
+from `server.publicUrl`/`LEFORGE_PUBLIC_URL`. The provider must be able to retrieve
+that document. The current `http://localhost:8080` installation cannot itself host
+a usable public HTTPS CIMD document: offer DCR/manual setup and explain the
+prerequisite, without opening a tunnel or changing installation configuration.
+Do not silently change mechanism after a failed authorization or overwrite an
+existing manual registration. Changing issuer, callback or registration mode
+requires explicit review and must invalidate incompatible pending flows.
+
+Preserve public-only transport, resource/issuer binding, PKCE S256, state/cookie
+protection, encrypted token storage and independent renewal/revocation. Separate
+local connection revocation from provider grant revocation and remote client
+registration deletion; never delete a shared remote registration implicitly.
+Report bounded registration outcomes through existing audit mechanisms without
+secrets or unbounded labels. Add unit, real TLS/API/storage integration and browser
+E2E coverage for both automatic paths, manual alternatives, failures, concurrency,
+restart and isolation between connections. Require separately authorized live
+GitLab and Atlassian registration/consent checks before claiming vendor acceptance;
+no external registration was performed in this survey.
 
 **Browser-link and OAuth journey:** A link to the user's LeForge
 installation opens a reviewed template in the connection screen, preserving the
