@@ -1,7 +1,7 @@
 import type { AgentSection } from './agentSettingsModel';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { Activity, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Graph, GraphSummary, Info, ValidationResult } from '../api/types';
 import { EventStreamProvider } from '../hooks/useEventStream';
@@ -529,4 +529,32 @@ it('returns to the canvas without inventing a selection when no agent is configu
  expect(screen.getByText('Select an agent from this graph. The requested agent may have been removed.')).toBeTruthy();
  await user.click(screen.getByRole('tab',{name:'Graph'}));
  expect(screen.queryByRole('complementary',{name:'Details'})).toBeNull();
+});
+
+it('retains the draft base revision when refreshed metadata arrives before save', async () => {
+ const {state,puts}=backend();
+ const props={info:{identity:{name:'admin',role:'admin'}} as Info,tab:'agent' as const,agentId:'dev',onTab:vi.fn(),onSaved:vi.fn(),onCorrelation:vi.fn()};
+ const view=render(<EventStreamProvider token="t"><GraphWorkspace {...props} summary={initial()}/></EventStreamProvider>);
+ fireEvent.change(within(agentEditor()).getByLabelText('Name'),{target:{value:'Local draft'}});
+ state.current={...initial(),record:{...initial().record,version:2}};
+ view.rerender(<EventStreamProvider token="t"><GraphWorkspace {...props} summary={state.current}/></EventStreamProvider>);
+ fireEvent.click(screen.getByRole('button',{name:'Review & save'}));
+ fireEvent.click(screen.getByRole('button',{name:'Save graph draft'}));
+ await waitFor(()=>expect(puts()).toHaveLength(1));
+ expect(puts()[0].headers['If-Match']).toBe('1');
+ expect(await screen.findByText(/conflict: graph was modified/)).toBeTruthy();
+ expect(within(agentEditor()).getByLabelText('Name')).toHaveProperty('value','Local draft');
+});
+
+
+it('preserves locally selected agents when a cached workspace becomes visible again', async () => {
+ backend();
+ const props={summary:initial(),tab:'canvas' as const,selectionKey:'node:dev',onTab:vi.fn(),onSaved:vi.fn(),onCorrelation:vi.fn()};
+ const content=(visible:boolean)=><EventStreamProvider token="t"><Activity mode={visible?'visible':'hidden'}><GraphWorkspace {...props}/></Activity></EventStreamProvider>;
+ const view=render(content(true));
+ const agents=()=>within(screen.getByRole('complementary',{name:'Agents'}));
+ fireEvent.click(agents().getByRole('button',{name:/^Reviewer.*rev/}));
+ expect(agents().getByRole('button',{name:/^Reviewer.*rev/}).getAttribute('aria-current')).toBe('true');
+ view.rerender(content(false));view.rerender(content(true));
+ await waitFor(()=>expect(agents().getByRole('button',{name:/^Reviewer.*rev/}).getAttribute('aria-current')).toBe('true'));
 });

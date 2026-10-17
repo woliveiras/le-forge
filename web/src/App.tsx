@@ -1,10 +1,11 @@
 import { runSection, type RunSection } from './components/runPresentation';
 import { agentSection, type AgentSection } from './components/agentSettingsModel';
-import { useCallback, useEffect, useState } from 'react';
+import { Activity, useCallback, useEffect, useState } from 'react';
 import { api, errorMessage, getToken, MOCK, onUnauthorized, setToken } from './api/client';
 import type { GraphSummary } from './api/types';
 import { ApprovalsView } from './components/ApprovalsView';
 import { Badge, Btn, ErrorBox, Modal } from './components/common';
+import { GraphSelector } from './components/GraphSelector';
 import { GraphList } from './components/GraphList';
 import { GraphWorkspace, type GraphTab } from './components/GraphWorkspace';
 import { AdministrationPage, administrationSections, ConnectionsPage, ModelsPage, type AdministrationSection } from './components/InstallationPages';
@@ -27,7 +28,7 @@ type Route =
   | { view: 'models' }
   | { view: 'administration'; section: AdministrationSection }
   | { view: 'skills' }
-  | { view: 'graph'; id: string; tab: GraphTab; agentId?: string; agentSection?: AgentSection; executionId?: string; runSection?: RunSection; correlationId?: string };
+  | { view: 'graph'; id: string; tab: GraphTab; selectionKey?: string; agentId?: string; agentSection?: AgentSection; executionId?: string; runSection?: RunSection; correlationId?: string };
 
 export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
@@ -45,7 +46,7 @@ export function parseRoute(hash: string): Route {
       ? (parts[2] as GraphTab)
       : 'canvas';
     const c = new URLSearchParams(qs ?? '').get('c') ?? undefined;
-    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c, ...(tab === 'runs' ? {executionId:new URLSearchParams(qs ?? '').get('execution') ?? undefined, runSection:runSection(new URLSearchParams(qs ?? '').get('section'))} : {}), ...(tab === 'agent' ? {agentId: new URLSearchParams(qs ?? '').get('agent') ?? '', agentSection: agentSection(new URLSearchParams(qs ?? '').get('section'))} : {}) };
+    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c, ...(new URLSearchParams(qs ?? '').has('sel') ? {selectionKey:new URLSearchParams(qs ?? '').get('sel')!} : {}), ...(tab === 'runs' ? {executionId:new URLSearchParams(qs ?? '').get('execution') ?? undefined, runSection:runSection(new URLSearchParams(qs ?? '').get('section'))} : {}), ...(tab === 'agent' ? {agentId: new URLSearchParams(qs ?? '').get('agent') ?? '', agentSection: agentSection(new URLSearchParams(qs ?? '').get('section'))} : {}) };
   }
   return { view: 'graphs' };
 }
@@ -64,7 +65,7 @@ export function routeHash(r: Route): string {
   if (r.view === 'models') return '#/models';
   if (r.view === 'administration') return `#/administration/${r.section}`;
   if (r.view === 'graph')
-    return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.tab === 'runs' ? (r.executionId ? `?execution=${encodeURIComponent(r.executionId)}&section=${r.runSection ?? 'result'}` : '') : r.tab === 'agent' ? `?agent=${encodeURIComponent(r.agentId ?? '')}&section=${r.agentSection ?? 'general'}` : r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
+    return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.tab === 'runs' ? (r.executionId ? `?execution=${encodeURIComponent(r.executionId)}&section=${r.runSection ?? 'result'}` : '') : r.tab === 'agent' ? `?agent=${encodeURIComponent(r.agentId ?? '')}&section=${r.agentSection ?? 'general'}` : r.tab === 'canvas' && r.selectionKey ? `?sel=${encodeURIComponent(r.selectionKey)}` : r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
   return '#/graphs';
 }
 
@@ -113,9 +114,29 @@ function Shell() {
   const list = graphs.data ?? [];
   const current = route.view === 'graph' ? list.find((g) => g.graph.metadata.id === route.id) : undefined;
   const pending = approvals.data?.length ?? 0;
+  type GraphRoute = Extract<Route, {view: 'graph'}>;
+  const [sessions, setSessions] = useState<Record<string, {route: GraphRoute; summary: GraphSummary}>>({});
+  const [dirty, setDirty] = useState<Record<string, boolean>>({});
+  const onDirtyChange = useCallback((id: string, value: boolean) => {
+    setDirty(previous => previous[id] === value ? previous : {...previous, [id]: value});
+  }, []);
+  useEffect(() => {
+    if (route.view === 'graph' && current) {
+      setSessions(previous => ({...previous, [route.id]: {route, summary: current}}));
+    }
+  }, [route, current]);
+  useEffect(() => {
+    if (!Object.values(dirty).some(Boolean)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const visibleSessions = {...sessions};
+  if (route.view === 'graph' && current) visibleSessions[route.id] = {route, summary: current};
+
 
   const onSaved = (s: GraphSummary) => {
-    graphs.setData(list.map((g) => (g.graph.metadata.id === s.graph.metadata.id ? s : g)));
+    graphs.setData(previous => (previous ?? []).map((g) => (g.graph.metadata.id === s.graph.metadata.id ? s : g)));
   };
 
   return (
@@ -124,20 +145,9 @@ function Shell() {
         <button type="button" className="brand" onClick={() => go({ view: 'graphs' })}>
           <img src="/favicon.svg?v=2" alt="" width={22} height={22} /> LeForge
         </button>
-        <nav className="graph-tabs" aria-label="Graphs">
-          {list.map((g) => (
-            <button
-              key={g.graph.metadata.id}
-              type="button"
-              className={route.view === 'graph' && route.id === g.graph.metadata.id ? 'on' : ''}
-              onClick={() => go({ view: 'graph', id: g.graph.metadata.id, tab: route.view === 'graph' ? route.tab : 'canvas' })}
-              title={g.graph.metadata.description}
-            >
-              {g.record.state === 'running' && <span className="run-dot" aria-label="running" />}
-              {g.graph.metadata.name || g.graph.metadata.id}
-            </button>
-          ))}
-        </nav>
+        <GraphSelector graphs={list} currentId={route.view === 'graph' ? route.id : undefined} dirty={dirty} loading={graphs.loading} error={graphs.error}
+          onReload={() => void graphs.reload()}
+          onSelect={id => go(sessions[id]?.route ?? {view: 'graph', id, tab: 'canvas'})}/>
         <span className="spacer" />
         {info.data && (
           <span className="infra" title={`instance ${info.data.instance} · version ${info.data.version}`}>
@@ -192,28 +202,25 @@ function Shell() {
           {route.view === 'connections' && <ConnectionsPage info={info.data} connectionID={route.connectionID} connectionTab={route.connectionTab} create={route.create} history={route.history} connectQuery={route.connectQuery} oauthQuery={route.oauthQuery} />}
           {route.view === 'models' && <ModelsPage info={info.data} />}
           {route.view === 'administration' && <AdministrationPage info={info.data} infoError={info.error} section={route.section} />}
-          {route.view === 'graph' &&
-            (current ? (
-              <GraphWorkspace
-                key={current.graph.metadata.id}
-                summary={current}
-                info={info.data}
-                tab={route.tab}
-                executionId={route.executionId}
-                runSection={route.runSection}
-                agentId={route.agentId}
-                agentSection={route.agentSection}
-                onAgent={(agentId, agentSection) => go({...route, tab: 'agent', agentId, agentSection})}
-                onTab={(tab) => go({ ...route, tab })}
-                onSaved={onSaved}
-                correlationId={route.correlationId}
-                onCorrelation={(c) => go({ ...route, tab: 'messages', correlationId: c })}
-              />
-            ) : graphs.loading ? (
-              <p className="muted page">Loading…</p>
-            ) : (
-              <ErrorBox error={graphs.error ?? `Graph “${route.id}” not found.`} />
-            ))}
+          {Object.entries(visibleSessions).map(([id, session]) => {
+            const active = route.view === 'graph' && route.id === id;
+            const workspaceRoute = active ? route : session.route;
+            const summary = list.find(g => g.graph.metadata.id === id) ?? session.summary;
+            return <Activity key={id} mode={active ? 'visible' : 'hidden'}>
+              {active && !current && <ErrorBox error={graphs.error ?? 'Graph unavailable. Your local draft is retained; reload graphs before saving.'}/>}
+              <GraphWorkspace summary={summary} info={info.data} tab={workspaceRoute.tab} selectionKey={workspaceRoute.selectionKey}
+                executionId={workspaceRoute.executionId} runSection={workspaceRoute.runSection}
+                agentId={workspaceRoute.agentId} agentSection={workspaceRoute.agentSection}
+                onAgent={(agentId, agentSection) => go({...workspaceRoute, tab: 'agent', agentId, agentSection})}
+                onTab={tab => go({...workspaceRoute, tab})} onSaved={onSaved} onDirtyChange={onDirtyChange}
+                correlationId={workspaceRoute.correlationId}
+                onCorrelation={c => go({...workspaceRoute, tab: 'messages', correlationId: c})}/>
+            </Activity>;
+          })}
+          {route.view === 'graph' && !visibleSessions[route.id] && (graphs.loading
+            ? <p className="muted page">Loading…</p>
+            : <ErrorBox error={graphs.error ?? `Graph “${route.id}” not found.`}/>)}
+
         </main>
       </div>
     </div>

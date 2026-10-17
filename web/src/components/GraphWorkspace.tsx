@@ -1,8 +1,9 @@
+import { AgentList } from './AgentList';
 import { RunsView } from './RunsView';
 import type { RunSection } from './runPresentation';
 import { AgentConfiguration } from './AgentConfiguration';
 import { changedGraphFields, type AgentSection } from './agentSettingsModel';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api, errorMessage } from '../api/client';
 import type { Graph, GraphAction, GraphSummary, Info, ValidationResult } from '../api/types';
 import { useGraphStatus } from '../hooks/useData';
@@ -48,6 +49,7 @@ export function GraphWorkspace({
   summary,
   info,
   tab,
+  selectionKey,
   executionId,
   runSection,
   agentId,
@@ -55,12 +57,14 @@ export function GraphWorkspace({
   onAgent,
   onTab,
   onSaved,
+  onDirtyChange,
   correlationId,
   onCorrelation,
 }: {
   summary: GraphSummary;
   info?: Info;
   tab: GraphTab;
+  selectionKey?: string;
   executionId?: string;
   runSection?: RunSection;
   agentId?: string;
@@ -68,6 +72,7 @@ export function GraphWorkspace({
   onAgent?: (id:string,section:AgentSection)=>void;
   onTab: (t: GraphTab) => void;
   onSaved: (s: GraphSummary) => void;
+  onDirtyChange?: (id:string,dirty:boolean)=>void;
   correlationId?: string;
   onCorrelation: (c: string | undefined) => void;
 }) {
@@ -75,6 +80,8 @@ export function GraphWorkspace({
   const { status, error: statusError, setStatus } = useGraphStatus(gid);
   const [draftGraph, setDraftGraph] = useState<Graph>(summary.graph);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [draftBase, setDraftBase] = useState(summary);
+  useEffect(()=>{onDirtyChange?.(gid,draftDirty);},[gid,draftDirty,onDirtyChange]);
   // Deep link: #/g/<id>/canvas?sel=node:<id> or ?sel=channel:<id>
   const [selection, setSelection] = useState<Selection>(() => {
     const sel = new URLSearchParams(location.hash.split('?')[1] ?? '').get('sel');
@@ -92,6 +99,18 @@ export function GraphWorkspace({
   const [envBlock, setEnvBlock] = useState<string>();
   // Graph settings show in the side panel while no agent or channel is selected.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const appliedSelectionKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (appliedSelectionKey.current === selectionKey) return;
+    appliedSelectionKey.current = selectionKey;
+    if (!selectionKey) return;
+    const separator = selectionKey.indexOf(':');
+    const kind = selectionKey.slice(0, separator), id = selectionKey.slice(separator + 1);
+    if ((kind === 'node' || kind === 'channel') && id) {
+      setSelection({kind, id}); setSettingsOpen(false); setPanelOpen(true);
+    }
+  }, [selectionKey]);
+
   const openSettings = () => {
     setSelection(null);
     setSettingsOpen(true);
@@ -102,7 +121,7 @@ export function GraphWorkspace({
     if (onAgent) onAgent(id,section); else onTab('agent');
   };
   const configuredId = agentId ?? (selection?.kind === 'node' ? selection.id : '');
-  const currentSummary = draftDirty ? { ...summary, graph: draftGraph } : summary;
+  const currentSummary = draftDirty ? { ...draftBase, graph: draftGraph } : summary;
   const issues = useMemo(
     () => validation && indexIssues(validation.graph, validation.result.errors ?? [], validation.result.warnings ?? []),
     [validation],
@@ -135,6 +154,7 @@ export function GraphWorkspace({
   }, [draftGraph, hasErrors, validation]);
 
   const changeGraph = (update: (graph: Graph) => Graph) => {
+    if (!draftDirty) setDraftBase(summary);
     setDraftGraph((current) => update(current));
     setDraftDirty(true);
     setError(undefined);
@@ -162,7 +182,7 @@ export function GraphWorkspace({
   };
 
   /** Saves the draft over `version` (the version the draft was based on, or the latest when overwriting). */
-  const saveGraph = async (version = summary.record.version) => {
+  const saveGraph = async (version = draftDirty ? draftBase.record.version : summary.record.version) => {
     const candidate = draftGraph;
     setSaving(true);
     try {
@@ -401,6 +421,8 @@ export function GraphWorkspace({
       )}
       {tab === 'canvas' && (
         <div className={`floor ${(selection || settingsOpen) && panelOpen ? 'with-panel' : ''}`}>
+          <AgentList graph={draftGraph} status={status} statusError={statusError} selected={selection?.kind==='node'?selection.id:undefined}
+            onSelect={id=>{setSelection({kind:'node',id});setSettingsOpen(false);setPanelOpen(true);}} onConfigure={id=>configureAgent(id)}/>
           <GraphCanvas
             graph={draftGraph}
             status={status}
@@ -487,9 +509,9 @@ export function GraphWorkspace({
         onUpdateNode={canEditAgent ? (id,patch) => changeGraph(graph => updateNode(graph,id,patch)) : undefined}
         issues={issues?.nodes.get(configuredId)} dirty={draftDirty}/>}
       {reviewOpen && <Modal title="Review graph changes" onClose={() => !saving && setReviewOpen(false)}>
-        <p>Save the entire graph draft based on version {summary.record.version}, including other agents, channels and graph settings.</p>
+        <p>Save the entire graph draft based on version {draftBase.record.version}, including other agents, channels and graph settings.</p>
         <p>Changed fields are listed below without copying their values. Review the relevant sections or Definition for their contents.</p>
-        <ul className="graph-change-list">{changedGraphFields(summary.graph,draftGraph).map(path => <li key={path}><code>{path}</code></li>)}</ul>
+        <ul className="graph-change-list">{changedGraphFields(draftBase.graph,draftGraph).map(path => <li key={path}><code>{path}</code></li>)}</ul>
         <p>Server validation and version conflict checks run before saving. Tool grants remain explicit; OAuth consent does not grant tools.</p>
         <Btn tone="primary" disabled={saving || !canEditAgent} onClick={() => {setReviewOpen(false); void saveGraph();}}>Save graph draft</Btn>
         <Btn disabled={saving} onClick={() => setReviewOpen(false)}>Continue editing</Btn>

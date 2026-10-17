@@ -118,7 +118,8 @@ test('creates agents, drags connections, validates, cancels and confirms Delete,
   expect((await saved(page, id)).graph.spec).toEqual(connected.graph.spec);
   await save(page);
   await page.goto('/#/');
-  await page.getByRole('navigation', { name: 'Graphs' }).getByRole('button', { name: 'browser-connections', exact: true }).click();
+  await page.getByRole('button', { name: 'Select graph', exact: true }).click();
+  await page.getByRole('region', { name: 'Graph selector' }).getByRole('button', { name: /browser-connections/ }).click();
   await expect(node(page, 'source')).toBeVisible();
   await expect(node(page, 'agent-3')).toBeVisible();
   await expect(node(page, 'agent-2')).toHaveCount(0);

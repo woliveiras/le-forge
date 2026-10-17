@@ -1768,3 +1768,27 @@ section {
 .run-detail li { margin-block:16px; }
 .run-detail dd, .run-detail .run-summary { overflow-wrap:anywhere; white-space:pre-wrap; }
 .run-detail nav { margin-top:20px; }
+
+/* Graph navigation stays separate from installation navigation. */
+.graph-selector { position: relative; min-width: 0; }
+.graph-selector > button { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-selector > section { position: absolute; top: calc(100% + 8px); left: 0; width: min(360px, 85vw); z-index: 100; box-shadow: 0 12px 32px #0003; padding: 16px; }
+.graph-selector label, .canvas-agent-list label { display: grid; gap: 6px; font-size: 12px; }
+.graph-selector ul, .canvas-agent-list ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.graph-selector ul { max-height: 50vh; overflow: auto; }
+.graph-selector li > button, .canvas-agent-list li > button { width: 100%; text-align: left; border: 0; border-radius: 6px; background: transparent; padding: 10px; color: inherit; cursor: pointer; }
+.graph-selector li > button:hover, .canvas-agent-list li > button:hover,
+.graph-selector [aria-current="page"], .canvas-agent-list [aria-current="true"] { background: var(--bg-raised, #eceaf4); }
+.graph-selector li span, .canvas-agent-list li span { display: block; font-size: 11px; margin-top: 5px; overflow-wrap: anywhere; }
+.canvas-agent-list { flex: 0 0 210px; padding: 16px 12px; border-right: 1px solid var(--border, #ddd); overflow-y: auto; }
+.canvas-agent-list h2 { font-size: 14px; margin: 0 0 16px; }
+.canvas-agent-list .agent-configure-link { font-size: 11px; padding-top: 0; color: var(--accent, #6254d9); }
+@media (max-width: 900px) {
+ .floor { flex-direction: column; }
+ .floor > .canvas-wrap { height: auto; min-height: 300px; }
+ .canvas-agent-list { flex: 0 0 auto; max-height: 180px; border-right: 0; border-bottom: 1px solid var(--border, #ddd); }
+ .canvas-agent-list ul { display: flex; gap: 8px; }
+ .canvas-agent-list li { min-width: 160px; }
+ .canvas-agent-list > .small { display: none; }
+ .graph-selector > button { max-width: 180px; }
+}

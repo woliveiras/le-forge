@@ -36,3 +36,8 @@ it('preserves execution and section deep links',()=>{
  expect(parseRoute('#/g/example/runs?execution=exec-1&section=unknown')).toMatchObject({tab:'runs',executionId:'exec-1',runSection:'result'});
  expect(routeHash(parseRoute('#/g/example/runs'))).toBe('#/g/example/runs');
 });
+it('preserves canvas selection links',()=>{
+ const route=parseRoute('#/g/example/canvas?sel=node%3Areviewer');
+ expect(route).toMatchObject({selectionKey:'node:reviewer'});
+ expect(routeHash(route)).toBe('#/g/example/canvas?sel=node%3Areviewer');
+});

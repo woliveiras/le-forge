@@ -113,3 +113,25 @@ attributed to a run. Activity remains available and links to the new detail.
 These pages use existing authorized APIs. Full historical pagination, inferred task
 progress, replay/retry controls and execution-specific workspace snapshots are not
 introduced by this interface change.
+
+
+## Graph selector and agent list
+
+The header's **Select graph** control searches graph names and IDs, shows saved
+runtime state and marks unsaved graph drafts. Switching to a visited graph restores
+its last destination. The canvas has a searchable agent list: select an agent to
+inspect its panel or use **Configure** to open its dedicated configuration page.
+Names reflect the local draft; runtime state belongs to the saved graph and is
+explicitly unavailable when status loading fails. On narrow screens the list moves
+above the canvas.
+
+Visited graph editors remain in memory for the current page session. Switching
+graphs or installation destinations preserves each graph's draft, selection and
+editor state; inactive editors pause their effects. Nothing is automatically saved
+or granted. Draft saves retain their original base revision, so an external update
+still requires conflict resolution. Missing graphs and failed reloads retain the
+local editor and display an error instead of silently discarding edits.
+
+Drafts are not persisted in browser storage and do not survive closing or reloading
+the page. A browser leave warning is registered while graph drafts are dirty.
+Existing role gates, server validation and optimistic concurrency remain in force.

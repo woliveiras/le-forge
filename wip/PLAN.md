@@ -630,6 +630,12 @@ remain separate planned work. All interface copy remains in English.
    providers, grant tools, or mutate settings. Delivered as the first implementation slice, with route, real-client component and disposable-backend browser coverage. Existing MCP/provider forms remain unchanged within their new destinations; installation activation is not part of this evidence.
 2. Replace graph tabs in global navigation with a scalable graph selector; preserve
    deep links, history and unsaved drafts. Add a list alternative to the canvas.
+   Implemented with searchable graph/agent navigation and per-graph editor sessions
+   retained in memory while inactive effects pause. Drafts retain their base revision
+   across server refreshes; missing graphs retain their local editor with an error.
+   Unit/component integration and disposable-backend Chromium verify search, failures,
+   cached selection, independent drafts, revision conflicts and viewer restrictions.
+   No browser-storage draft persistence or installation activation is implied.
 3. Build connection list/detail routes with Overview, Tools, Usage & history and Settings;
    show connection creation only on request, preserve manual/DCR/CIMD and uncertain states.
    Delivered with searchable/filterable connections, searchable tools, scoped history and
