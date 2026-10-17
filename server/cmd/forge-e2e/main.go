@@ -37,13 +37,16 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
-	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
+	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {
 				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "MCP execution: " + m.Content}, StopReason: "stop"}, nil
 			}
 		}
 		toolName := "mcp.runtime.search"
+		if strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") {
+			toolName = "mcp.recover-browser.search"
+		}
 		if strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture") {
 			toolName = "mcp.oauth-browser.search"
 		}
@@ -130,6 +133,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	fixtureRecovery := mcptest.NewRecovering()
+	defer fixtureRecovery.Close()
 	fixtureMCP := mcptest.New()
 	defer fixtureMCP.Close()
 	fixtureOAuth := mcptest.NewOAuth("")
@@ -169,12 +174,18 @@ func run() error {
 		return err
 	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if endpoint == "https://recovery.fixture.invalid/mcp" {
+			return mcpconfig.DiscoverWithClient(ctx, fixtureRecovery.URL, token, fixtureRecovery.Client())
+		}
 		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" && endpoint != "https://mcp.atlassian.com/v2/mcp" && endpoint != "https://gitlab.fixture.example/api/v4/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		if endpoint == "https://recovery.fixture.invalid/mcp" {
+			return mcpconfig.CallWithClient(ctx, fixtureRecovery.URL, token, name, args, fixtureRecovery.Client())
+		}
 		if endpoint != "https://mcp.fixture.invalid/mcp" && endpoint != fixtureOAuth.URL+"/mcp" && endpoint != "https://api.githubcopilot.com/mcp/" && endpoint != "https://mcp.atlassian.com/v2/mcp" && endpoint != "https://gitlab.fixture.example/api/v4/mcp" {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}

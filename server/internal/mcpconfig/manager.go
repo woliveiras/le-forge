@@ -66,6 +66,7 @@ type View struct {
 	UpdatedBy            string       `json:"updatedBy"`
 }
 type record struct {
+	Deleted            bool                `json:"deleted,omitempty"`
 	Registration       *clientRegistration `json:"registration,omitempty"`
 	OAuthClientSealed  string              `json:"oauthClientSealed,omitempty"`
 	OAuthRefreshSealed string              `json:"oauthRefreshSealed,omitempty"`
@@ -134,6 +135,9 @@ func (m *Manager) load(ctx context.Context, id string) (record, error) {
 	}
 	e = json.Unmarshal(s.Value, &r)
 	r.Revision = s.Revision
+	if e == nil && r.Deleted {
+		return record{}, storage.ErrNotFound
+	}
 	return r, e
 }
 func (m *Manager) Get(ctx context.Context, id string) (View, error) {
@@ -150,6 +154,9 @@ func (m *Manager) List(ctx context.Context) ([]View, error) {
 		var r record
 		if e = json.Unmarshal(s.Value, &r); e != nil {
 			return nil, e
+		}
+		if r.Deleted {
+			continue
 		}
 		r.Revision = s.Revision
 		out = append(out, r.View)
@@ -169,6 +176,9 @@ func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event st
 		}
 	}
 	b, e := json.Marshal(r)
+	if r.Deleted {
+		b, e = json.Marshal(map[string]any{"id": r.ID, "deleted": true, "updatedAt": r.UpdatedAt, "updatedBy": actor})
+	}
 	if e != nil {
 		return View{}, e
 	}
@@ -349,6 +359,37 @@ func (m *Manager) ValidateGrants(ctx context.Context, g *domain.Graph) error {
 		}
 		if !found {
 			return fmt.Errorf("%w: MCP grant must name an enabled discovered tool", ErrInvalid)
+		}
+	}
+	return nil
+}
+
+// Delete removes local configuration and credentials, reserving the ID permanently
+// so historical agent grants cannot acquire authority over a replacement connection.
+// Remote grants/registrations are not deleted by this operation.
+func (m *Manager) Delete(ctx context.Context, id string, revision int64, actor string) error {
+	r, err := m.load(ctx, id)
+	if err != nil {
+		return err
+	}
+	if revision <= 0 || r.Revision != revision {
+		return storage.ErrConflict
+	}
+	if r.Enabled {
+		return fmt.Errorf("%w: disable the connection before deletion", ErrInvalid)
+	}
+	if r.OAuth != nil && (r.OAuth.Status != "revoked" || r.OAuth.Revocation == "pending") {
+		return fmt.Errorf("%w: revoke OAuth access before deletion", ErrInvalid)
+	}
+	tombstone := record{Deleted: true, View: View{ID: id, Status: "deleted"}}
+	if _, err = m.save(ctx, tombstone, revision, actor, "mcp.connection.deleted"); err != nil {
+		return err
+	}
+	m.oauthMu.Lock()
+	defer m.oauthMu.Unlock()
+	for state, pending := range m.pending {
+		if pending.ID == id {
+			delete(m.pending, state)
 		}
 	}
 	return nil

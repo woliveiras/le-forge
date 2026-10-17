@@ -121,7 +121,7 @@ func TestMCPInputAndUpstreamFailures(t *testing.T) {
 
 func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
 	_, a := setupApp(t, nil)
-	upstream := mcptest.New()
+	upstream := mcptest.NewRecovering()
 	defer upstream.Close()
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
 		return mcpconfig.DiscoverWithClient(ctx, endpoint, token, upstream.Client())
@@ -191,5 +191,59 @@ func TestMCPVersionedTemplatesPersistence(t *testing.T) {
 		if _, err := a.MCP.Get(t.Context(), bad.ID); err == nil {
 			t.Fatal("invalid template persisted")
 		}
+	}
+}
+
+func TestMCPDeletionAPIAndGateway(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	in := mcpconfig.Input{ID: "delete-me", Name: "Delete", Service: "generic", Endpoint: "https://example.com/mcp", Enabled: false, Credential: &mcpconfig.Credential{Value: "synthetic-secret"}}
+	v, err := a.MCP.Put(t.Context(), in, 0, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := in
+	other.ID = "keep-me"
+	other.Name = "Keep"
+	if _, err = a.MCP.Put(t.Context(), other, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	remove := func(token, revision string) int {
+		req, _ := http.NewRequest("DELETE", srv.URL+"/api/v1/mcp/connections/delete-me", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("If-Match", revision)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		return res.StatusCode
+	}
+	for _, tok := range []string{viewerTok, operatorTok} {
+		if code := remove(tok, fmt.Sprint(v.Revision)); code != 403 {
+			t.Fatal(code)
+		}
+	}
+	if code := remove(adminTok, ""); code != 400 {
+		t.Fatal(code)
+	}
+	if code := remove(adminTok, "999"); code != 409 {
+		t.Fatal(code)
+	}
+	if code := remove(adminTok, fmt.Sprint(v.Revision)); code != 204 {
+		t.Fatal(code)
+	}
+	if code := call(t, srv, "GET", "/api/v1/mcp/connections/delete-me", viewerTok, "", "", nil); code != 404 {
+		t.Fatal(code)
+	}
+	if _, err = a.MCP.Get(t.Context(), other.ID); err != nil {
+		t.Fatal("other connection affected", err)
+	}
+	principal := &tools.Principal{GraphID: "graph", NodeID: "worker", Grants: []domain.ToolGrant{{Name: "mcp.delete-me.search"}}}
+	if _, err = a.Gateway.Invoke(t.Context(), principal, "mcp.delete-me.search", json.RawMessage(`{}`)); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal(err)
+	}
+	body, _ := json.Marshal(in)
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 409 {
+		t.Fatal("deleted id reused", code)
 	}
 }

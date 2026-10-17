@@ -68,7 +68,7 @@ and [gateway operations](sandbox-runtime.md#human-review-and-application-preview
 ### MCP connections
 
 MCP connections are installation-scoped resources and may have multiple
-connections for the same service. The API contract is listed below; the delivered scope is described in [MCP scope](mcp.md). Connection deletion remains planned.
+connections for the same service. The API contract is listed below; the delivered scope is described in [MCP scope](mcp.md). Deletion removes local configuration and permanently reserves its ID.
 
 | Method and path | Minimum role | Contract |
 |---|---|---|
@@ -76,7 +76,7 @@ connections for the same service. The API contract is listed below; the delivere
 | `POST /api/v1/mcp/connections` | admin | Create a connection; credential fields are write-only. Return `201` and the safe connection view. |
 | `GET /api/v1/mcp/connections/{connectionId}` | viewer | Read the safe connection view. |
 | `PUT /api/v1/mcp/connections/{connectionId}` | admin | Update settings/credential with `If-Match`; omitted credential keeps the stored value, explicit clear removes it. |
-| `DELETE /api/v1/mcp/connections/{connectionId}` | admin | Revoke and remove the connection; refuse with `409` while it is in active use unless the caller first removes grants. |
+| `DELETE /api/v1/mcp/connections/{connectionId}` | admin | Remove a disabled connection after OAuth revocation, with current `If-Match`; return `204`. Retain a minimal reserved-ID tombstone and audit history. Old grants remain in graph documents but fail closed. No remote registration deletion. |
 | `POST /api/v1/mcp/connections/{connectionId}/test` | operator | Test reachability/authentication and report a redacted result. |
 | `POST /api/v1/mcp/connections/{connectionId}/tools/refresh` | operator | Discover and persist the current tool catalogue; return the new catalogue revision. |
 
@@ -95,7 +95,7 @@ only through the tool gateway under a stable connection-qualified name
 `mcp.{connectionId}.{toolName}`. A node must have an explicit matching grant
 in `spec.nodes[].tools`; existing constraints, rate limits, approvals, and
 gateway checks apply to every invocation. Removing a connection invalidates
-its grants and makes further calls fail closed (deletion is planned; disabling already denies subsequent calls).
+its grants and makes further calls fail closed. Already dispatched operations cannot be rolled back.
 
 Transport support is selected from transports reachable by `forged` inside
 Docker and implemented without executing arbitrary user commands in the

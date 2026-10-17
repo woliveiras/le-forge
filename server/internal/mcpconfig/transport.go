@@ -97,7 +97,36 @@ type rpcCall func(int, string, any) (json.RawMessage, error)
 func DiscoverWithClient(ctx context.Context, endpoint, token string, client *http.Client) ([]Tool, error) {
 	return sessionOperation(ctx, endpoint, token, client, nil)
 }
-func sessionOperation(ctx context.Context, endpoint, token string, client *http.Client, action func(rpcCall) error) (catalog []Tool, err error) {
+
+var errSessionExpired = discoveryError("MCP session expired")
+
+// Recovery is bounded to one new session within the original operation deadline.
+// Discovery can restart; dispatched tools/call requests are never replayed.
+func sessionOperation(ctx context.Context, endpoint, token string, client *http.Client, action func(rpcCall) error) ([]Tool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	dispatched := false
+	var guarded func(rpcCall) error
+	if action != nil {
+		guarded = func(call rpcCall) error {
+			if dispatched {
+				return discoveryError("MCP session expired during tool call; remote outcome unknown; no automatic retry")
+			}
+			return action(func(id int, method string, params any) (json.RawMessage, error) {
+				if method == "tools/call" {
+					dispatched = true
+				}
+				return call(id, method, params)
+			})
+		}
+	}
+	catalog, err := sessionAttempt(ctx, endpoint, token, client, guarded)
+	if errors.Is(err, errSessionExpired) && ctx.Err() == nil {
+		return sessionAttempt(ctx, endpoint, token, client, guarded)
+	}
+	return catalog, err
+}
+func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Client, action func(rpcCall) error) (catalog []Tool, err error) {
 	session := ""
 	defer func() {
 		if session == "" {
@@ -159,6 +188,10 @@ func sessionOperation(ctx context.Context, endpoint, token string, client *http.
 			return nil, discoveryError("MCP request failed; check TLS and reachability")
 		}
 		defer res.Body.Close()
+		if res.StatusCode == http.StatusNotFound && session != "" && method != "initialize" {
+			session = "" // The peer has already terminated it.
+			return nil, errSessionExpired
+		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
 			return nil, discoveryError(fmt.Sprintf("MCP HTTP status %d", res.StatusCode))
 		}

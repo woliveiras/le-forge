@@ -19,11 +19,14 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
   const [clear,setClear]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState<string>();
+  const [deleting,setDeleting]=useState<MCPConnection>();
+  const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
   const edit=(c?:MCPConnection)=>{setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){setBusy(true);setError(undefined);try{await api.saveMCP({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision);edit();await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
   async function discover(id:string,action:'test'|'tools/refresh'){setBusy(true);setError(undefined);try{await api.refreshMCP(id,action);await list.reload();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+  async function remove(){if(!deleting||deleteID!==deleting.id)return;setBusy(true);setError(undefined);try{await api.deleteMCP(deleting.id,deleting.revision);if(input.id===deleting.id)edit();setDeleting(undefined);setDeleteID('');await list.reload();}catch(e){setError(errorMessage(e));setDeleting(undefined);setDeleteID('');await list.reload();}finally{setBusy(false);}}
   return <section className="integration-section" aria-label="MCP connections">
     <h2>MCP connections</h2>
     <p>Register remote HTTPS Streamable HTTP servers and discover their tools. Only public network destinations are supported. Credentials stay encrypted in LeForge.</p>
@@ -32,6 +35,14 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
     <MCPTemplates query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version}});}} />
     <Btn onClick={()=>void list.reload()} disabled={list.loading}>Reload MCP connections</Btn>
     <ErrorBox error={list.error}/><ErrorBox error={error}/>
+    {deleting&&<section role="dialog" aria-label={`Delete MCP ${deleting.name}`}>
+      <h3>Delete {deleting.name}?</h3>
+      <p>This permanently removes the local connection, catalogue and stored credentials. The ID remains reserved so old agent grants cannot authorize another connection. Graph definitions and audit history are preserved; remove obsolete grants in the graph editor.</p>
+      <p>This does not delete the remote OAuth application or registration, or guarantee upstream revocation. Already dispatched operations cannot be rolled back.</p>
+      <label>Type connection ID to confirm<input value={deleteID} onChange={e=>setDeleteID(e.target.value)}/></label>
+      <Btn disabled={busy||deleteID!==deleting.id} onClick={()=>void remove()}>Confirm deletion</Btn>
+      <Btn disabled={busy} onClick={()=>{setDeleting(undefined);setDeleteID('');}}>Cancel deletion</Btn>
+    </section>}
     {list.loading&&<p role="status">Loading connections…</p>}
     {!list.loading&&!list.error&&!list.data?.length&&<p>No MCP connections configured.</p>}
     {admin&&<form className="form" onSubmit={e=>{e.preventDefault();void save();}}>
@@ -72,6 +83,7 @@ export function MCPSection({role,connectQuery,oauthQuery}:{role?:string;connectQ
       {c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
       {c.lastTest&&<p>Last discovery: {fmtDateTime(c.lastTest)}</p>}<ErrorBox error={c.error}/>
       <div className="btn-row">{admin&&<Btn disabled={busy} onClick={()=>edit(c)}>Edit {c.name}</Btn>}{operator&&<><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'test')}>Test {c.name}</Btn><Btn disabled={busy||!c.enabled} onClick={()=>void discover(c.id,'tools/refresh')}>Refresh tools for {c.name}</Btn></>}</div>
+      {admin&&<><p>To delete, disable the connection and revoke OAuth access first. Deleted IDs cannot be reused.</p><Btn disabled={busy||c.enabled||!!(c.oauth&&(c.oauth.status!=='revoked'||c.oauth.revocation==='pending'))} onClick={()=>{setDeleting(c);setDeleteID('');setError(undefined);}}>Delete {c.name}</Btn></>}
       <ul>{c.tools.map(t=><li key={t.name}><code>mcp.{c.id}.{t.name}</code><p>{t.description}</p><JsonView label="Input schema" value={t.inputSchema}/></li>)}</ul>
       {c.status==='ready'&&!c.tools.length&&<p>The server returned no tools.</p>}
     </article>)}</div>

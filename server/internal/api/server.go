@@ -121,6 +121,7 @@ func (s *Server) routes() {
 		{"POST /api/v1/mcp/connections", A, s.mcpPut},
 		{"GET /api/v1/mcp/connections/{connection}", R, s.mcpGet},
 		{"PUT /api/v1/mcp/connections/{connection}", A, s.mcpPut},
+		{"DELETE /api/v1/mcp/connections/{connection}", A, s.mcpDelete},
 		{"POST /api/v1/mcp/connections/{connection}/test", O, s.mcpRefresh},
 		{"POST /api/v1/mcp/connections/{connection}/tools/refresh", O, s.mcpRefresh},
 		{"GET /api/v1/reviews", O, s.listReviews},

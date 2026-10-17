@@ -380,6 +380,9 @@ both discover a fresh catalogue and return its persisted safe connection view.
 A completed discovery attempt returns 200 with `status: ready|unavailable`;
 transport success is not inferred from HTTP 200 alone. Input errors are 422,
 invalid bodies/missing revision 400, unauthorized roles 403 and stale revisions
-409. Disable/credential/endpoint changes invalidate the catalogue. DELETE remains
-pending. MCP execution uses the existing agent tool gateway/callback path; there
+409. Disable/credential/endpoint changes invalidate the catalogue. Admins can
+DELETE `/api/v1/mcp/connections/{id}` with the current `If-Match` after disabling
+the connection and revoking OAuth when configured (otherwise 422). Success is
+204; removed IDs return 404 on reads and cannot be reused (409 on create).
+Minimal ID reservations and audit history remain; remote registrations are not deleted. MCP execution uses the existing agent tool gateway/callback path; there
 is no standalone endpoint that bypasses the execution principal.

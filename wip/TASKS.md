@@ -250,15 +250,30 @@ does not satisfy this milestone.
 
 ### 6. Integrate User-Configurable MCPs
 
+**Lifecycle/recovery validation:** `make test` (176 frontend tests plus Go/Python),
+`make lint`, `make build` and `make test-e2e` (30 standard Chromium cases plus
+1 hosted CIMD case) passed. Targeted Go race tests passed. Deletion/recovery
+were exercised against disposable API/storage/TLS/browser fixtures, not deployed
+to the personal installation or tested by deleting a live vendor connection.
+
+**Live evidence (2026-10-17):** GitHub browser OAuth consent/callback and discovery
+succeeded on the local installation. Explicit `get_me`/`get_file_contents` agent
+grants were exercised through the gateway with a deterministic model and real
+Ollama `llama3.2:latest` (4,096-token context). The latter read the profile and
+`octocat/Hello-World` README and completed successfully. No writes, private
+repository access, live renewal/revocation or organization-policy tests were
+performed. Atlassian DCR remains uncertain; do not register again without external
+evidence. These checks do not complete the vendor acceptance items below.
+
 #### Connectivity and Integrations
 
 - [x] Document the official endpoint, transport, authentication and scope contracts for GitHub, Bitbucket Cloud, Jira Cloud and Confluence Cloud. — [Source survey, 2026-10-17](../docs/mcp-integrations.md); documentary verification only. Runtime OAuth qualifications, per-tool permission mappings and live acceptance remain below.
 - [x] Choose an initial transport compatible with Docker and implement connections without running arbitrary commands in the main process. — Remote HTTPS Streamable HTTP discovery, protocol 2025-06-18, JSON/SSE, public-IP-only dialing, no redirects or subprocesses; see [MCP scope](../docs/mcp.md).
 - [x] Design a generic MCP connection registry, with no artificial connection limit and support for multiple connections per service. — Revisioned per-connection settings with stable IDs and safe read models.
-- [ ] Implement the connection lifecycle: create, edit, test, disable, re-enable, revoke, and delete. — Partial: create/edit/test/disable/re-enable and credential replacement/clear are delivered; subsequent calls are denied after disable; deletion remains pending.
+- [x] Implement the connection lifecycle: create, edit, test, disable, re-enable, revoke, and delete. — Deletion requires admin, current revision, disable and prior OAuth revocation, with typed UI confirmation. Local credentials/catalogue are removed; a minimal tombstone permanently reserves the ID. Historical grants and stale callbacks/writes cannot revive it. Remote applications/registrations are not deleted.
 - [x] Implement discovery and refresh of tools offered by each connection. — Initialization, paginated tools/list, persisted catalogue revisions and visible failure state; fresh sessions per operation.
 - [x] Implement timeouts, cancellation, payload limits, and explicit handling for disconnection, errors, and invalid responses. — Discovery and calls: 15s deadline, 2 MiB response bound, 64 KiB call arguments, 20 discovery pages/500 tools, JSON/SSE validation and redacted errors.
-- [ ] Implement reconnection/session renewal as required by the selected transport.
+- [x] Implement bounded session recovery for the supported request-scoped transport. — A session-bearing HTTP 404 reinitializes once within the original deadline; discovery restarts and pre-dispatch initialization can recover. Dispatched tools/call requests are never replayed. Network/other HTTP failures remain explicit; persistent SSE cursor resumption is not supported.
 - [x] Add contract tests for connection, discovery, invocation, failures, and timeouts. — Unit and real TLS/API tests cover calls, JSON/SSE, cancellation, failures, session cleanup, payload limits and stale revisions.
 
 #### Credentials, Authorization, and Auditing
@@ -292,7 +307,7 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 - [x] Implement the initial versioned template catalogue with public endpoint/service defaults, authentication guidance, source/review date and validation status; persist and validate template references without granting tools. — Five v1 presets, unit tests, API/persistence integration and Chromium save/edit coverage.
 - [ ] Extend templates with parameterized endpoints and credential modes, and preview version upgrades without silently expanding access. — Initial presets are fixed endpoints; manual customization detaches the reference.
 - [ ] GitHub: add the github.com PAT template, read-only/toolset profiles and a tested per-tool fine-grained permission matrix; distinguish repository defaults from enforced credential restrictions.
-- [x] GitHub.com OAuth wire compatibility: handle omitted authentication methods with the pinned confidential-client profile, POST client secret, comma-separated scopes and HTTP 200 OAuth errors; unit, TLS API integration and Chromium fixture coverage. See `docs/mcp.md` for manual registration. Live account consent remains pending.
+- [x] GitHub.com OAuth wire compatibility: handle omitted authentication methods with the pinned confidential-client profile, POST client secret, comma-separated scopes and HTTP 200 OAuth errors; unit, TLS API integration and Chromium fixture coverage. See `docs/mcp.md` for manual registration. Live account consent, discovery and explicit profile/public-file reads through the gateway are verified (2026-10-17); broader vendor acceptance remains pending.
 - [ ] GitHub: implement host-owned OAuth app registration/configuration and guided consent; test expiry, organization/SSO restrictions and insufficient permissions.
 - [ ] GitHub: validate repository/issue/PR reads, an approved test mutation, inaccessible repository denial and revocation in browser and live-service acceptance.
 - [ ] Atlassian foundation: qualify v2 protocol, tool schemas and catalogue bounds; support the exact reviewed `tools=all` query option while rejecting unknown/secret query parameters; test pagination and catalogue drift.

@@ -1397,6 +1397,32 @@ paths:
         "409": {$ref: "#/components/responses/Conflict"}
         "422":
           description: Invalid connection or MCP grant
+    delete:
+      tags: [mcp]
+      operationId: deleteMCPConnection
+      summary: Remove disabled local connection and permanently reserve its ID
+      description: Requires prior OAuth revocation when configured. Removes local credentials and catalogue; preserves audit history and obsolete graph references. Does not delete remote applications or registrations or roll back dispatched calls.
+      x-leforge-role: admin
+      parameters:
+        - in: path
+          name: connection
+          required: true
+          schema: {type: string}
+        - in: header
+          name: If-Match
+          required: true
+          schema: {type: integer, minimum: 1}
+      responses:
+        "204":
+          description: Local connection deleted; ID permanently reserved
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "403":
+          description: Administrator role required
+        "404":
+          description: Connection not found or already deleted
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422":
+          description: Disable the connection and complete local OAuth revocation first
   /api/v1/mcp/connections/{connection}/test:
     post:
       tags: [mcp]

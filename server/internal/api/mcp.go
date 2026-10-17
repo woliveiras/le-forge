@@ -105,3 +105,21 @@ func (s *Server) mcpTemplates(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, http.StatusOK, mcpconfig.Templates())
 	return nil
 }
+
+func (s *Server) mcpDelete(w http.ResponseWriter, r *http.Request) error {
+	if s.MCP == nil {
+		return storage.ErrNotFound
+	}
+	revision, err := ifMatchRevision(r)
+	if err != nil {
+		return err
+	}
+	if revision <= 0 {
+		return badRequest("If-Match revision required")
+	}
+	if err = s.MCP.Delete(r.Context(), r.PathValue("connection"), revision, identityFrom(r.Context()).Name); err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}

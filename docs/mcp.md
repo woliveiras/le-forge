@@ -12,6 +12,37 @@ or clearing an existing credential so it cannot be forwarded accidentally.
 Credentials use the installation's existing AES-GCM secret box and are bound to
 the connection ID. Read responses expose only `credentialConfigured`.
 
+### Removing a connection
+
+Disable the connection first. For OAuth, revoke access and wait for the local
+revocation result before deleting. The admin-only **Delete** action reviews the
+consequences and requires typing the connection ID. The API uses
+`DELETE /api/v1/mcp/connections/{id}` with the current `If-Match` revision;
+stale requests fail with 409, missing revisions with 400, and unmet prerequisites
+with 422. Reload and review again after a conflict.
+
+Deletion removes the local configuration, catalogue and encrypted credentials.
+A minimal tombstone reserves the ID permanently, preventing old graph grants
+from authorizing a replacement connection. Use a new ID for a new connection.
+Existing graph definitions and audit history remain; obsolete grants are visible
+as unavailable and can be removed in the editor. Pending OAuth transactions are
+invalidated and stale writes cannot restore deleted settings. Already dispatched
+operations cannot be rolled back. Deletion emits `mcp.connection.deleted` with
+safe actor/revision metadata. It does not delete remote OAuth apps/registrations,
+guarantee upstream revocation, or erase historical copies in installation backups.
+
+### Session recovery
+
+A request carrying a session ID that receives HTTP 404 triggers one fresh
+initialization without the old ID, within the original 15-second operation
+budget. Discovery discards partial pages and starts again. Initialization failure
+without a session, authentication failures, other HTTP failures and ambiguous
+network/SSE disconnections are not retried. If `tools/call` was already sent,
+LeForge can reinitialize but never resends that call; the gateway reports unknown
+remote outcome and records a failed invocation. A subsequent explicit invocation
+uses a new session and checks current agent grants/connection state again.
+Persistent SSE event cursor resumption is not implemented.
+
 Operators and administrators can test or refresh a connection. In this increment,
 both actions initialize a new MCP session and refresh the tool catalogue. The
 server negotiates protocol `2025-06-18`, sends `notifications/initialized`, and
@@ -69,7 +100,7 @@ registered endpoint; filesystem path/command constraints are rejected for MCP.
 Each call initializes a fresh session and sends one `tools/call` with the unqualified
 remote name and a JSON object (maximum 64 KiB). Calls share the discovery network
 policy, a 15-second operation timeout and 2 MiB response bound; session cleanup has
-an independent 3-second bound. No transport retry is performed: after a timeout or
+an independent 3-second bound. Dispatched tool calls are never retried: after a timeout or
 lost response, a remote mutation may already have succeeded. Sessions are closed
 where supported. JSON/SSE, protocol errors and `isError` tool results are handled.
 Tool content blocks and structured content reach the runtime as JSON text, capped
@@ -79,8 +110,8 @@ validates tool-specific input schemas; LeForge validates the object envelope and
 size. Credentials and upstream error payloads are not exposed as transport errors.
 
 Pending increments include aggregate per-connection quotas, live automatic-registration qualification,
-private-network deployment policy, automatic
-session renewal, connection deletion, vendor-specific setup/scopes, call-history
+private-network deployment policy, persistent SSE cursor resumption,
+vendor-specific setup/scopes, call-history
 UI, and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
 metadata, not a vendor adapter or proof that a vendor supports this transport.
 

@@ -166,6 +166,7 @@ export const api = {
   completeMCPOAuth: (state: string) => request<MCPConnection>(`${V1}/mcp/oauth/complete`, {method:'POST', body:{state}}),
   revokeMCPOAuth: (id: string) => request<MCPConnection>(`${V1}/mcp/connections/${enc(id)}/oauth/revoke`, {method:'POST'}),
   mcpTemplates: () => request<MCPTemplate[]>(`${V1}/mcp/templates`),
+  deleteMCP: (id: string, revision: number) => request<void>(`${V1}/mcp/connections/${enc(id)}`, {method:'DELETE', headers:{'If-Match':String(revision)}}),
   mcpConnections: () => request<MCPConnection[]>(`${V1}/mcp/connections`),
   mcpTools: () => request<ToolInfo[]>(`${V1}/mcp/tools`),
   saveMCP: (input: MCPConnectionInput, revision?: number) => request<MCPConnection>(`${V1}/mcp/connections${revision ? '/'+enc(input.id) : ''}`, {method: revision ? 'PUT' : 'POST', headers: revision ? {'If-Match': String(revision)} : undefined, body:input}),

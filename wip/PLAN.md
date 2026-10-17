@@ -265,6 +265,32 @@ available according to policy, without requiring a managed preview or a PR.
 
 ### 6. Add MCP Configuration
 
+**Installed GitHub acceptance (2026-10-17):** A dedicated manually registered
+GitHub OAuth App completed browser consent, backend callback and encrypted
+connection persistence. Discovery succeeded. An agent with only `get_me` and
+`get_file_contents` grants executed both through the gateway, first with a
+controlled model and then with local Ollama `llama3.2:latest` (4,096-token
+context). The real-model run read the authenticated profile and public
+`octocat/Hello-World` README, completed successfully and was stopped afterward.
+No repository writes were performed. Private repository/issue/PR permissions,
+expiry/renewal, revocation and organization/SSO restrictions remain unqualified
+against the live GitHub service. Atlassian's historical uncertain DCR outcome
+still requires provider evidence before another registration; GitLab and live
+CIMD acceptance remain pending.
+
+**Connection removal and session recovery:** Admin deletion requires a disabled
+connection, completed local OAuth revocation when applicable, current revision
+and explicit UI confirmation. It removes local configuration/catalogue/secrets,
+retains a minimal reserved-ID tombstone and audit history, and leaves graph
+references visible but unusable. Reusing a deleted ID is prohibited. Remote
+applications/registrations are never deleted implicitly. Stale writers and OAuth
+callbacks cannot restore the connection. A session-bearing HTTP 404 triggers
+one reinitialization within the same operation deadline. Discovery restarts from
+its first page; pre-dispatch initialization can recover. A dispatched tool call
+is never replayed, even after reinitialization. Other HTTP/network failures and
+broken SSE streams remain explicit failures; persistent SSE cursor resumption
+is outside this increment.
+
 **Delivered first increment:** The console registers revisioned remote HTTPS MCP
 connections, protects bearer credentials, discovers bounded JSON/SSE tool catalogues,
 and saves exact per-agent grants in the graph editor. Discovery uses the
@@ -274,9 +300,9 @@ SQLite/real TLS integration and Chromium tests cover the supported flow.
 and invoked through the shared gateway. Each call checks agent grants and current
 connection state, including revalidation after approval waits. Existing per-agent
 grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
-no transport retry, redacted audit metadata and capped runtime results. Unit,
+no replay of dispatched tool calls, redacted audit metadata and capped runtime results. Unit,
 real TLS/API integration and Chromium cover success, denial and connection disable.
-Aggregate per-connection quotas, private-network policy, deletion and live
+Aggregate per-connection quotas, private-network policy and full live
 vendor-specific acceptance remain pending; service names are metadata.
 See [MCP scope and limits](../docs/mcp.md).
 
@@ -335,7 +361,7 @@ detector. Chromium covers consent, renewal, explicit agent execution and revocat
 including provider failures. Distributed pending-flow
 storage and real-vendor qualification remain pending. See [OAuth scope](../docs/mcp.md#browser-oauth-pre-registered-clients).
 
-**GitHub.com OAuth compatibility:** A pinned issuer/endpoint profile supports the documented confidential POST exchange and renewal despite omitted authentication-method metadata, normalizes comma-separated scopes, and rejects OAuth errors without leaking upstream payloads. Unit, TLS API integration and browser fixtures cover this contract; live GitHub consent, repository permissions and organization/SSO acceptance remain pending. Manual registration is documented in `docs/mcp.md`.
+**GitHub.com OAuth compatibility:** A pinned issuer/endpoint profile supports the documented confidential POST exchange and renewal despite omitted authentication-method metadata, normalizes comma-separated scopes, and rejects OAuth errors without leaking upstream payloads. Unit, TLS API integration and browser fixtures cover this contract; live consent and public profile/file reads are now verified as recorded above; broader repository permissions and organization/SSO acceptance remain pending. Manual registration is documented in `docs/mcp.md`.
 
 **Service setup and multiple connections:** GitHub, Atlassian Cloud MCP v2,
 GitLab instance and custom profiles prepare reviewed defaults and manual client

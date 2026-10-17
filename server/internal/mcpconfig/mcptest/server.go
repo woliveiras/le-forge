@@ -5,9 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 )
 
-func New() *httptest.Server {
+func New() *httptest.Server { return newServer(false) }
+
+// NewRecovering expires every first session before dispatch to exercise recovery.
+func NewRecovering() *httptest.Server { return newServer(true) }
+func newServer(recovering bool) *httptest.Server {
+	var sessions atomic.Int64
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer fixture-mcp-token" {
 			http.Error(w, "fixture authentication required", 401)
@@ -29,19 +36,30 @@ func New() *httptest.Server {
 		var result any
 		switch q.Method {
 		case "initialize":
-			w.Header().Set("Mcp-Session-Id", "fixture-session")
+			session := "fixture-session"
+			if recovering {
+				session = strconv.FormatInt(sessions.Add(1), 10)
+			}
+			w.Header().Set("Mcp-Session-Id", session)
 			result = map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{"tools": map[string]any{}}}
 		case "notifications/initialized":
+			if recovering {
+				n, _ := strconv.Atoi(r.Header.Get("Mcp-Session-Id"))
+				if n%2 == 1 {
+					w.WriteHeader(404)
+					return
+				}
+			}
 			w.WriteHeader(202)
 			return
 		case "tools/call":
-			if r.Header.Get("Mcp-Session-Id") != "fixture-session" || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
+			if (!recovering && r.Header.Get("Mcp-Session-Id") != "fixture-session") || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
 				w.WriteHeader(400)
 				return
 			}
 			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "MCP fixture search completed"}}}
 		case "tools/list":
-			if r.Header.Get("Mcp-Session-Id") != "fixture-session" || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
+			if (!recovering && r.Header.Get("Mcp-Session-Id") != "fixture-session") || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
 				w.WriteHeader(400)
 				return
 			}

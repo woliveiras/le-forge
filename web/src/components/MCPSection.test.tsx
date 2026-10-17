@@ -65,3 +65,26 @@ it('keeps automatic setup credential-free and preserves the manual alternative',
  const body=backend.find('POST','/api/v1/mcp/connections')[0].body;expect(body).toMatchObject({oauth:{registrationMode:'auto',clientId:''},oauthClientSecret:{clear:true}});expect(JSON.stringify(body)).not.toContain('synthetic-manual-secret');
  await userEvent.click(screen.getByLabelText('Use browser OAuth'));expect(screen.getByLabelText('OAuth client ID')).toBeTruthy();
 });
+it('requires disabled connections, explicit ID confirmation and a current revision for deletion',async()=>{
+ let present=true;
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>present?[{...connection,enabled:false,status:'disabled'}]:[],
+ 'DELETE /api/v1/mcp/connections/team':()=>{present=false;return new Response(null,{status:204});}});
+ render(<MCPSection role="admin"/>);
+ await userEvent.click(await screen.findByRole('button',{name:'Delete Team'}));
+ expect(screen.getByRole('button',{name:'Confirm deletion'}).hasAttribute('disabled')).toBe(true);
+ await userEvent.click(screen.getByRole('button',{name:'Cancel deletion'}));expect(backend.find('DELETE','/api/v1/mcp/connections/team')).toHaveLength(0);
+ await userEvent.click(screen.getByRole('button',{name:'Delete Team'}));
+ await userEvent.type(screen.getByLabelText('Type connection ID to confirm'),'team');await userEvent.click(screen.getByRole('button',{name:'Confirm deletion'}));
+ expect(await screen.findByText('No MCP connections configured.')).toBeTruthy();
+ expect(backend.find('DELETE','/api/v1/mcp/connections/team')[0].headers['If-Match']).toBe('1');
+});
+it('blocks deletion while enabled and presents stale deletion failures without hiding the connection',async()=>{
+ let enabled=true;
+ fakeApi({'GET /api/v1/mcp/connections':()=>[{...connection,enabled}],
+ 'DELETE /api/v1/mcp/connections/team':()=>apiError(409,'Connection changed; reload','conflict')});
+ render(<MCPSection role="admin"/>);
+ expect((await screen.findByRole('button',{name:'Delete Team'})).hasAttribute('disabled')).toBe(true);
+ enabled=false;await userEvent.click(screen.getByRole('button',{name:'Reload MCP connections'}));
+ await userEvent.click(await screen.findByRole('button',{name:'Delete Team'}));await userEvent.type(screen.getByLabelText('Type connection ID to confirm'),'team');await userEvent.click(screen.getByRole('button',{name:'Confirm deletion'}));
+ expect(await screen.findByText('Connection changed; reload')).toBeTruthy();expect(screen.getByRole('article',{name:'MCP Team'})).toBeTruthy();
+});
