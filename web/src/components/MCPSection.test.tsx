@@ -54,3 +54,14 @@ it('prepares known services explicitly, validates GitLab domains and saves publi
  expect(body).toMatchObject({id:'gitlab-work',service:'gitlab',endpoint:'https://gitlab.example/api/v4/mcp',oauth:{issuer:'https://gitlab.example',clientId:'registered-public-client',scopes:['mcp']}});
  expect(body).not.toHaveProperty('oauthClientSecret');expect(body).not.toHaveProperty('credential');
 });
+it('keeps automatic setup credential-free and preserves the manual alternative',async()=>{
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[], 'GET /api/v1/mcp/oauth/config':()=>({callbackUrl:'http://localhost:8080/api/v1/mcp/oauth/callback'}),'POST /api/v1/mcp/connections':()=>connection});
+ render(<MCPSection role="admin"/>);
+ await userEvent.type(screen.getByLabelText('Connection ID'),'automatic');await userEvent.type(screen.getByLabelText('Connection name'),'Automatic');await userEvent.type(screen.getByLabelText('MCP endpoint'),'https://example.com/mcp');
+ await userEvent.click(screen.getByLabelText('Use browser OAuth'));
+ await userEvent.type(screen.getByLabelText('OAuth client secret (optional)'),'synthetic-manual-secret');
+ await userEvent.selectOptions(screen.getByLabelText('Client registration method'),'auto');expect(screen.queryByLabelText('OAuth client ID')).toBeNull();expect(screen.queryByLabelText('OAuth client secret (optional)')).toBeNull();
+ await userEvent.type(screen.getByLabelText('OAuth issuer'),'https://issuer.example');await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ const body=backend.find('POST','/api/v1/mcp/connections')[0].body;expect(body).toMatchObject({oauth:{registrationMode:'auto',clientId:''},oauthClientSecret:{clear:true}});expect(JSON.stringify(body)).not.toContain('synthetic-manual-secret');
+ await userEvent.click(screen.getByLabelText('Use browser OAuth'));expect(screen.getByLabelText('OAuth client ID')).toBeTruthy();
+});

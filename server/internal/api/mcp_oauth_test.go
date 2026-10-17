@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig/mcptest"
 )
@@ -20,13 +21,22 @@ func TestMCPOAuthBrowserAPI(t *testing.T) {
 		if github {
 			name = "github-contract"
 		}
-		t.Run(name, func(t *testing.T) { testMCPOAuthBrowserAPI(t, github) })
+		t.Run(name, func(t *testing.T) { testMCPOAuthBrowserAPI(t, github, "") })
 	}
 }
-func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
-	srv, a := setupApp(t, nil)
+func TestMCPAutomaticOAuthBrowserAPI(t *testing.T) {
+	for _, mode := range []string{"dcr", "cimd"} {
+		t.Run(mode, func(t *testing.T) { testMCPOAuthBrowserAPI(t, false, mode) })
+	}
+}
+func testMCPOAuthBrowserAPI(t *testing.T, github bool, mode string) {
+	base := "http://localhost:8080"
+	if mode == "cimd" {
+		base = "https://forge.fixture.example"
+	}
+	srv, a := setupApp(t, func(c *config.Config) { c.Server.PublicURL = base })
 	var callbackConfig map[string]string
-	if code := call(t, srv, "GET", "/api/v1/mcp/oauth/config", viewerTok, "", "", &callbackConfig); code != 200 || callbackConfig["callbackUrl"] != "http://localhost:8080/api/v1/mcp/oauth/callback" {
+	if code := call(t, srv, "GET", "/api/v1/mcp/oauth/config", viewerTok, "", "", &callbackConfig); code != 200 || callbackConfig["callbackUrl"] != base+"/api/v1/mcp/oauth/callback" {
 		t.Fatal(code, callbackConfig)
 	}
 	var provider *mcptest.OAuthServer
@@ -52,12 +62,30 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 		in.OAuth = &mcpconfig.OAuthConfig{Issuer: "https://github.com/login/oauth", ClientID: "client", Scopes: []string{"read:user", "read:org"}}
 		in.OAuthClientSecret = &mcpconfig.Credential{Value: "fixture-client-secret"}
 	}
+	if mode != "" {
+		in.OAuth.RegistrationMode = mode
+		in.OAuth.ClientID = ""
+	}
+	provider.ClientDocument = func(raw string) bool {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return false
+		}
+		resp, err := http.Get(srv.URL + u.Path)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		var doc map[string]any
+		return resp.StatusCode == 200 && json.NewDecoder(resp.Body).Decode(&doc) == nil && doc["client_id"] == raw && doc["client_name"] == "LeForge"
+	}
 	body, _ := json.Marshal(in)
 	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 201 {
 		t.Fatal(code)
 	}
 	jar, _ := cookiejar.New(nil)
 	browser := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var bindingCookies []*http.Cookie
 	request := func(method, path, token, body string) *http.Response {
 		t.Helper()
 		r, e := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
@@ -65,6 +93,11 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 			t.Fatal(e)
 		}
 		r.Header.Set("Authorization", "Bearer "+token)
+		if mode == "cimd" {
+			for _, c := range bindingCookies {
+				r.AddCookie(c)
+			}
+		}
 		r.Header.Set("Content-Type", "application/json")
 		res, e := browser.Do(r)
 		if e != nil {
@@ -77,7 +110,17 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 	if res.StatusCode != 403 {
 		t.Fatal(res.StatusCode)
 	}
-	res = request("POST", "/api/v1/mcp/connections/oauth/oauth/start", adminTok, "")
+	if mode != "" {
+		var preview mcpconfig.RegistrationPlan
+		if code := call(t, srv, "GET", "/api/v1/mcp/connections/oauth/oauth/preview", adminTok, "", "", &preview); code != 200 || preview.Mode != mode {
+			t.Fatal(code, preview)
+		}
+		if provider.Registrations.Load() != 0 {
+			t.Fatal("preview registered a client")
+		}
+	}
+	res = request("POST", "/api/v1/mcp/connections/oauth/oauth/start?registrationMode="+mode, adminTok, "")
+	bindingCookies = res.Cookies()
 	var start mcpconfig.OAuthStart
 	if err := json.NewDecoder(res.Body).Decode(&start); err != nil {
 		t.Fatal(err)
@@ -89,7 +132,7 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 	// The configured callback is independent of Host and contains no bearer credential.
 	authorize, _ := url.Parse(start.URL)
 	q := authorize.Query()
-	if strings.Contains(start.URL, adminTok) || q.Get("redirect_uri") != "http://localhost:8080/api/v1/mcp/oauth/callback" {
+	if strings.Contains(start.URL, adminTok) || q.Get("redirect_uri") != base+"/api/v1/mcp/oauth/callback" {
 		t.Fatal("wrong callback")
 	}
 	q.Set("decision", "allow")
@@ -151,6 +194,9 @@ func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 		if connection.OAuth.Revocation != "unsupported" {
 			t.Fatal(connection)
 		}
+	}
+	if mode == "dcr" && provider.Registrations.Load() != 1 {
+		t.Fatal("registration count", provider.Registrations.Load())
 	}
 	if connection.OAuth.Status != "revoked" || connection.CredentialConfigured || provider.Revocations.Load() != wantRevocations {
 		t.Fatal(connection)

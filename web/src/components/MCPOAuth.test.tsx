@@ -45,3 +45,19 @@ it('distinguishes discovery errors from authorized tokens and labels reauthoriza
  expect(screen.getByText('Revoked')).toBeTruthy();
  expect(screen.getByRole('button',{name:'Revoke OAuth OAuth example'}).hasAttribute('disabled')).toBe(true);
 });
+it('reviews automatic setup without registering and permits cancellation',async()=>{
+ const backend=fakeApi({'GET /api/v1/mcp/connections/oauth/oauth/preview':()=>({mode:'dcr',reason:'CIMD unavailable on localhost'})});
+ render(<MCPOAuthActions connection={{...connection,oauth:{...connection.oauth!,registrationMode:'auto',clientId:''}}} canManage onChanged={async()=>{}}/>);
+ expect(screen.queryByRole('button',{name:'Authorize OAuth example'})).toBeNull();
+ await userEvent.click(screen.getByRole('button',{name:'Review OAuth setup OAuth example'}));
+ expect(await screen.findByText(/Selected mechanism: dcr/)).toBeTruthy();
+ expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
+ await userEvent.click(screen.getByRole('button',{name:'Cancel OAuth setup'}));
+ expect(screen.queryByText(/Selected mechanism/)).toBeNull();
+});
+it('reports automatic setup failure with manual registration guidance',async()=>{
+ fakeApi({'GET /api/v1/mcp/connections/oauth/oauth/preview':()=>apiError(422,'Automatic client setup unavailable; configure a pre-registered client manually','invalid')});
+ render(<MCPOAuthActions connection={{...connection,oauth:{...connection.oauth!,registrationMode:'auto',clientId:''}}} canManage onChanged={async()=>{}}/>);
+ await userEvent.click(screen.getByRole('button',{name:'Review OAuth setup OAuth example'}));
+ expect(await screen.findByText(/configure a pre-registered client manually/)).toBeTruthy();expect(screen.queryByRole('button',{name:/Confirm .* and authorize/})).toBeNull();
+});

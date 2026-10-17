@@ -34,7 +34,7 @@ func (s *Server) mcpOAuthStart(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	result, err := s.MCP.StartOAuth(r.Context(), r.PathValue("connection"), oauthActor(r), base+oauthCookiePath+"/callback")
+	result, err := s.MCP.StartOAuthReviewed(r.Context(), r.PathValue("connection"), oauthActor(r), base+oauthCookiePath+"/callback", r.URL.Query().Get("registrationMode"))
 	if err != nil {
 		return err
 	}
@@ -123,5 +123,38 @@ func (s *Server) mcpOAuthConfig(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	writeJSON(w, 200, map[string]string{"callbackUrl": base + oauthCookiePath + "/callback"})
+	return nil
+}
+
+func (s *Server) mcpOAuthPreview(w http.ResponseWriter, r *http.Request) error {
+	if s.MCP == nil {
+		return storage.ErrNotFound
+	}
+	base, err := s.oauthBase()
+	if err != nil {
+		return err
+	}
+	plan, err := s.MCP.PreviewOAuth(r.Context(), r.PathValue("connection"), base+oauthCookiePath+"/callback")
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, plan)
+	return nil
+}
+func (s *Server) mcpOAuthClientDocument(w http.ResponseWriter, r *http.Request) error {
+	if s.MCP == nil {
+		return storage.ErrNotFound
+	}
+	base, err := s.oauthBase()
+	if err != nil {
+		return err
+	}
+	doc, err := s.MCP.ClientDocument(r.Context(), r.PathValue("connection"), base+oauthCookiePath+"/callback")
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, doc)
 	return nil
 }

@@ -66,9 +66,10 @@ type View struct {
 	UpdatedBy            string       `json:"updatedBy"`
 }
 type record struct {
-	OAuthClientSealed  string        `json:"oauthClientSealed,omitempty"`
-	OAuthRefreshSealed string        `json:"oauthRefreshSealed,omitempty"`
-	OAuthMeta          oauthMetadata `json:"oauthMetadata,omitempty"`
+	Registration       *clientRegistration `json:"registration,omitempty"`
+	OAuthClientSealed  string              `json:"oauthClientSealed,omitempty"`
+	OAuthRefreshSealed string              `json:"oauthRefreshSealed,omitempty"`
+	OAuthMeta          oauthMetadata       `json:"oauthMetadata,omitempty"`
 	View
 	Sealed string `json:"sealed,omitempty"`
 }
@@ -95,6 +96,9 @@ func validate(in Input) error {
 	}
 	if in.OAuthClientSecret != nil && (in.OAuth == nil || len(in.OAuthClientSecret.Value) > 16384 || in.OAuthClientSecret.Clear && in.OAuthClientSecret.Value != "") {
 		return fmt.Errorf("%w: invalid OAuth client credential", ErrInvalid)
+	}
+	if in.OAuth != nil && !manualOAuth(in.OAuth) && in.OAuthClientSecret != nil && !in.OAuthClientSecret.Clear {
+		return fmt.Errorf("%w: automatic registration cannot accept a manual client secret", ErrInvalid)
 	}
 	if err := validateTemplate(in); err != nil {
 		return err
@@ -158,6 +162,10 @@ func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event st
 	r.CredentialConfigured = r.Sealed != ""
 	if r.OAuth != nil {
 		r.OAuth.ClientSecretConfigured = r.OAuthClientSealed != ""
+		if r.Registration != nil {
+			r.OAuth.RegistrationStatus = r.Registration.Status
+			r.OAuth.EffectiveRegistrationMode = r.Registration.Mode
+		}
 	}
 	b, e := json.Marshal(r)
 	if e != nil {
@@ -202,13 +210,17 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 	}
 	oauthChanged := r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
 	if oauthChanged {
+		r.Registration = nil
+		if in.OAuth != nil && !manualOAuth(in.OAuth) {
+			r.OAuthClientSealed = ""
+		}
 		r.OAuthRefreshSealed = ""
 		r.OAuthMeta = oauthMetadata{}
 		if oldOAuth != nil || in.OAuth != nil {
 			r.Sealed = ""
 		}
 		// A different issuer/client must never inherit the previous client secret.
-		if in.OAuth == nil || oldOAuth == nil || oldOAuth.Issuer != in.OAuth.Issuer || oldOAuth.ClientID != in.OAuth.ClientID {
+		if in.OAuth == nil || oldOAuth == nil || oldOAuth.Issuer != in.OAuth.Issuer || oldOAuth.ClientID != in.OAuth.ClientID || oldOAuth.RegistrationMode != in.OAuth.RegistrationMode {
 			r.OAuthClientSealed = ""
 		}
 		r.OAuth = nil

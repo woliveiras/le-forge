@@ -5,6 +5,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: 'mcp-cimd.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,

@@ -52,6 +52,10 @@ func TestGitLabPublicClientBoundaries(t *testing.T) {
 }
 
 func TestOAuthMultipleServiceConnectionsIntegration(t *testing.T) {
+	t.Run("manual", func(t *testing.T) { testOAuthMultipleServiceConnections(t, false) })
+	t.Run("dcr", func(t *testing.T) { testOAuthMultipleServiceConnections(t, true) })
+}
+func testOAuthMultipleServiceConnections(t *testing.T, automatic bool) {
 	m := testManager(t)
 	github := mcptest.NewGitHubOAuth()
 	defer github.Close()
@@ -79,10 +83,16 @@ func TestOAuthMultipleServiceConnectionsIntegration(t *testing.T) {
 	inputs = append(inputs, second)
 	starts := map[string]OAuthStart{}
 	for _, in := range inputs {
+		mode := ""
+		if automatic && in.Service != "github" {
+			in.OAuth.ClientID = ""
+			in.OAuth.RegistrationMode = "dcr"
+			mode = "dcr"
+		}
 		if _, err := m.Put(t.Context(), in, 0, "admin"); err != nil {
 			t.Fatal(err)
 		}
-		start, err := m.StartOAuth(t.Context(), in.ID, "admin-session", "http://localhost:8080/api/v1/mcp/oauth/callback")
+		start, err := m.StartOAuthReviewed(t.Context(), in.ID, "admin-session", "http://localhost:8080/api/v1/mcp/oauth/callback", mode)
 		if err != nil {
 			t.Fatal(in.ID, err)
 		}
@@ -166,8 +176,22 @@ func TestOAuthMultipleServiceConnectionsIntegration(t *testing.T) {
 	if github.Refreshes.Load() != 1 || gitlab.Refreshes.Load() != 1 || atlassian.Refreshes.Load() != 2 {
 		t.Fatal("refresh isolation")
 	}
+	if automatic {
+		if atlassian.Registrations.Load() != 2 || gitlab.Registrations.Load() != 1 {
+			t.Fatal("registration isolation")
+		}
+		work, _ := m.load(t.Context(), "work")
+		other, _ := m.load(t.Context(), "work-two")
+		if work.Registration.ClientID == other.Registration.ClientID {
+			t.Fatal("shared registration")
+		}
+	}
 	// Re-authorization of only the revoked connection must not alter other records.
-	if _, err = m.StartOAuth(t.Context(), "work", "admin-session", "http://localhost:8080/api/v1/mcp/oauth/callback"); err != nil {
+	mode := ""
+	if automatic {
+		mode = "dcr"
+	}
+	if _, err = m.StartOAuthReviewed(t.Context(), "work", "admin-session", "http://localhost:8080/api/v1/mcp/oauth/callback", mode); err != nil {
 		t.Fatal(err)
 	}
 }

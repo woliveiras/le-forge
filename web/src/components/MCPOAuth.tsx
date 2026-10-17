@@ -24,16 +24,21 @@ export function MCPOAuthReturn({query,canManage,onChanged}:{query:string;canMana
 }
 export function MCPOAuthActions({connection,canManage,onChanged}:{connection:MCPConnection;canManage:boolean;onChanged:()=>Promise<void>}) {
  const [busy,setBusy]=useState(false);const [error,setError]=useState<string>();const [confirm,setConfirm]=useState(false);
+ const [plan,setPlan]=useState<{mode:string;reason:string}>();
  const oauth=connection.oauth!;
- const status=error?'Error — last OAuth action failed':oauth.status==='revoked'?'Revoked':oauth.status==='reauthorization_required'||connection.status==='unavailable'?'Error — authorization or discovery needs attention':oauth.status==='authorized'?'Authorized':oauth.status==='authorization_required'?'Authorization required':'Authorization in progress';
- async function start(){setBusy(true);setError(undefined);try{const result=await api.startMCPOAuth(connection.id);window.location.assign(result.url);}catch(e){setError(errorMessage(e));setBusy(false);}}
+ const automatic=!!oauth.registrationMode&&oauth.registrationMode!=="manual";
+ const status=error||oauth.registrationStatus==='uncertain'?'Error — last OAuth action failed':oauth.status==='revoked'?'Revoked':oauth.status==='reauthorization_required'||connection.status==='unavailable'?'Error — authorization or discovery needs attention':oauth.status==='authorized'?'Authorized':oauth.status==='authorization_required'?'Authorization required':'Authorization in progress';
+ async function start(){setBusy(true);setError(undefined);try{const result=await api.startMCPOAuth(connection.id,plan?.mode);window.location.assign(result.url);}catch(e){setError(errorMessage(e));setBusy(false);}}
+ async function preview(){setBusy(true);setError(undefined);setPlan(undefined);try{setPlan(await api.previewMCPOAuth(connection.id));}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  async function revoke(){setBusy(true);setError(undefined);try{await api.revokeMCPOAuth(connection.id);setConfirm(false);await onChanged();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
  return <section aria-label={`OAuth ${connection.name}`}>
   <p>{status}</p><p>OAuth: {oauth.status} · Issuer: {oauth.issuer}</p><p>Requested scopes: {oauth.scopes.join(', ')||'Provider defaults'} · Granted: {oauth.grantedScopes?.join(', ')||'Not authorized'}</p>
+  {oauth.registrationStatus&&<p>Client setup: {oauth.effectiveRegistrationMode} · {oauth.registrationStatus}. {oauth.registrationStatus==='uncertain'&&'Inspect the provider before changing registration settings; no automatic retry was made.'}</p>}
   {oauth.expiresAt&&<p>Token expires: {oauth.expiresAt}. Renewal is attempted before use when supported.</p>}
   {oauth.revocation&&<p>Local access revoked. Provider revocation: {oauth.revocation}. {oauth.revocation!=='requested'&&'Review and revoke access in the provider account settings.'}</p>}
   <ErrorBox error={error}/>{(error||connection.error)&&<p>Check the client registration and exact callback. A 403 may indicate insufficient MCP scopes, repository/site permissions, SSO, or a corporate IP/domain policy. Correct the specific restriction before reauthorizing.</p>}
-  {canManage&&<div className="btn-row"><Btn disabled={busy||!connection.enabled} onClick={()=>void start()}>{oauth.status==='authorized'||oauth.status==='reauthorization_required'||oauth.status==='revoked'?'Reauthorize':'Authorize'} {connection.name}</Btn>
+  {canManage&&automatic&&<div><Btn disabled={busy||!connection.enabled} onClick={()=>void preview()}>Review OAuth setup {connection.name}</Btn>{plan&&<div role="status"><p>Selected mechanism: {plan.mode}. {plan.reason}</p><Btn disabled={busy} onClick={()=>void start()}>Confirm {plan.mode} and authorize {connection.name}</Btn><Btn disabled={busy} onClick={()=>setPlan(undefined)}>Cancel OAuth setup</Btn></div>}</div>}
+  {canManage&&<div className="btn-row">{!automatic&&<Btn disabled={busy||!connection.enabled} onClick={()=>void start()}>{oauth.status==='authorized'||oauth.status==='reauthorization_required'||oauth.status==='revoked'?'Reauthorize':'Authorize'} {connection.name}</Btn>}
    {confirm?<><p>Revoke this connection for all agents? Already dispatched calls cannot be undone.</p><Btn disabled={busy} onClick={()=>void revoke()}>Confirm revoke {connection.name}</Btn><Btn disabled={busy} onClick={()=>setConfirm(false)}>Cancel revocation</Btn></>:<Btn disabled={busy||oauth.status==='revoked'} onClick={()=>setConfirm(true)}>Revoke OAuth {connection.name}</Btn>}
   </div>}
  </section>;

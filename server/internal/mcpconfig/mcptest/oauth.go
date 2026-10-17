@@ -18,11 +18,14 @@ import (
 // It validates the PKCE verifier, redirect URI and resource at code exchange.
 type OAuthServer struct {
 	*httptest.Server
-	mu          sync.Mutex
-	codes       map[string]url.Values
-	hosts       []string
-	Refreshes   atomic.Int32
-	Revocations atomic.Int32
+	mu               sync.Mutex
+	codes            map[string]url.Values
+	hosts            []string
+	Registrations    atomic.Int32
+	FailRegistration atomic.Bool
+	ClientDocument   func(string) bool
+	Refreshes        atomic.Int32
+	Revocations      atomic.Int32
 }
 
 func NewOAuth(resource string) *OAuthServer { return newOAuth(resource, "generic") }
@@ -69,7 +72,7 @@ func newOAuth(resource string, service string) *OAuthServer {
 				if service == "gitlab" {
 					auth = origin + "/oauth/authorize"
 				}
-				json.NewEncoder(w).Encode(map[string]any{"issuer": issuer, "authorization_endpoint": auth, "token_endpoint": origin + "/oauth/token", "revocation_endpoint": origin + "/oauth/revoke", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": methods})
+				json.NewEncoder(w).Encode(map[string]any{"registration_endpoint": origin + "/register", "client_id_metadata_document_supported": service == "atlassian", "issuer": issuer, "authorization_endpoint": auth, "token_endpoint": origin + "/oauth/token", "revocation_endpoint": origin + "/oauth/revoke", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": methods})
 				return
 			}
 			ru, _ := url.Parse(resource)
@@ -84,6 +87,28 @@ func newOAuth(resource string, service string) *OAuthServer {
 			}
 		}
 		switch r.URL.Path {
+		case "/registration-failure":
+			if r.Method != "POST" {
+				w.WriteHeader(405)
+				return
+			}
+			f.FailRegistration.Store(r.URL.Query().Get("enabled") == "true")
+			fmt.Fprint(w, `{}`)
+		case "/register":
+			registrationNumber := f.Registrations.Add(1)
+			if f.FailRegistration.Load() {
+				http.Error(w, "synthetic-registration-secret", 503)
+				return
+			}
+			var in map[string]any
+			if r.Method != "POST" || json.NewDecoder(r.Body).Decode(&in) != nil || in["token_endpoint_auth_method"] != "none" {
+				http.Error(w, "invalid registration", 400)
+				return
+			}
+			in["client_id"] = fmt.Sprintf("registered-fixture-client-%d", registrationNumber)
+			w.WriteHeader(201)
+			json.NewEncoder(w).Encode(in)
+
 		case "/.well-known/oauth-authorization-server/login/oauth":
 			if !github {
 				w.WriteHeader(404)
@@ -91,7 +116,7 @@ func newOAuth(resource string, service string) *OAuthServer {
 			}
 			json.NewEncoder(w).Encode(map[string]any{"issuer": "https://github.com/login/oauth", "authorization_endpoint": "https://github.com/login/oauth/authorize", "token_endpoint": "https://github.com/login/oauth/access_token", "code_challenge_methods_supported": []string{"S256"}})
 		case "/.well-known/oauth-authorization-server":
-			json.NewEncoder(w).Encode(map[string]any{"issuer": f.URL, "authorization_endpoint": f.URL + "/authorize", "token_endpoint": f.URL + "/token", "revocation_endpoint": f.URL + "/revoke", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none", "client_secret_basic"}})
+			json.NewEncoder(w).Encode(map[string]any{"registration_endpoint": f.URL + "/register", "client_id_metadata_document_supported": true, "issuer": f.URL, "authorization_endpoint": f.URL + "/authorize", "token_endpoint": f.URL + "/token", "revocation_endpoint": f.URL + "/revoke", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none", "client_secret_basic"}})
 		case "/.well-known/oauth-protected-resource/mcp/":
 			json.NewEncoder(w).Encode(map[string]any{"resource": resource, "authorization_servers": []string{"https://github.com/login/oauth"}})
 		case "/.well-known/oauth-protected-resource/mcp", "/resource":
@@ -104,6 +129,10 @@ func newOAuth(resource string, service string) *OAuthServer {
 			w.WriteHeader(401)
 		case "/authorize", "/login/oauth/authorize", "/oauth/authorize":
 			q := r.URL.Query()
+			if strings.HasPrefix(q.Get("client_id"), "https://") && (f.ClientDocument == nil || !f.ClientDocument(q.Get("client_id"))) {
+				http.Error(w, "client document unavailable", 400)
+				return
+			}
 			if q.Get("code_challenge_method") != "S256" || q.Get("resource") != resource {
 				http.Error(w, "invalid authorization", 400)
 				return
@@ -205,7 +234,7 @@ func newOAuth(resource string, service string) *OAuthServer {
 			}
 			fmt.Fprint(w, `{}`)
 		case "/stats":
-			json.NewEncoder(w).Encode(map[string]int32{"refreshes": f.Refreshes.Load(), "revocations": f.Revocations.Load()})
+			json.NewEncoder(w).Encode(map[string]int32{"registrations": f.Registrations.Load(), "refreshes": f.Refreshes.Load(), "revocations": f.Revocations.Load()})
 		default:
 			w.WriteHeader(404)
 		}

@@ -115,6 +115,8 @@ func (s *Server) routes() {
 		{"GET /api/v1/mcp/oauth/callback", "", s.mcpOAuthCallback},
 		{"POST /api/v1/mcp/oauth/complete", A, s.mcpOAuthComplete},
 		{"GET /api/v1/mcp/oauth/config", R, s.mcpOAuthConfig},
+		{"GET /api/v1/mcp/connections/{connection}/oauth/preview", A, s.mcpOAuthPreview},
+		{"GET /api/v1/mcp/oauth/client/{connection}", "", s.mcpOAuthClientDocument},
 		{"GET /api/v1/mcp/tools", R, s.mcpTools},
 		{"POST /api/v1/mcp/connections", A, s.mcpPut},
 		{"GET /api/v1/mcp/connections/{connection}", R, s.mcpGet},

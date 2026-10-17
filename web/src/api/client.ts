@@ -161,7 +161,8 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 
 export const api = {
   mcpOAuthConfig: () => request<{callbackUrl:string}>(`${V1}/mcp/oauth/config`),
-  startMCPOAuth: (id: string) => request<{url: string; state: string}>(`${V1}/mcp/connections/${enc(id)}/oauth/start`, {method:'POST'}),
+  previewMCPOAuth: (id: string) => request<{mode:string;reason:string}>(`${V1}/mcp/connections/${enc(id)}/oauth/preview`),
+  startMCPOAuth: (id: string, mode?: string) => request<{url: string; state: string}>(`${V1}/mcp/connections/${enc(id)}/oauth/start${mode?`?registrationMode=${enc(mode)}`:""}`, {method:'POST'}),
   completeMCPOAuth: (state: string) => request<MCPConnection>(`${V1}/mcp/oauth/complete`, {method:'POST', body:{state}}),
   revokeMCPOAuth: (id: string) => request<MCPConnection>(`${V1}/mcp/connections/${enc(id)}/oauth/revoke`, {method:'POST'}),
   mcpTemplates: () => request<MCPTemplate[]>(`${V1}/mcp/templates`),

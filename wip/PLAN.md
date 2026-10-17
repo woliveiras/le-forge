@@ -276,7 +276,7 @@ connection state, including revalidation after approval waits. Existing per-agen
 grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
 no transport retry, redacted audit metadata and capped runtime results. Unit,
 real TLS/API integration and Chromium cover success, denial and connection disable.
-Automatic OAuth client setup (DCR/CIMD), aggregate per-connection quotas, private-network policy, deletion and live
+Aggregate per-connection quotas, private-network policy, deletion and live
 vendor-specific acceptance remain pending; service names are metadata.
 See [MCP scope and limits](../docs/mcp.md).
 
@@ -332,7 +332,7 @@ complete with their original LeForge admin session, discover tools and renew/rev
 credentials. PKCE, cookie/session binding, encrypted token persistence, serialized
 refresh and revocation races are covered by unit/TLS integration tests and the race
 detector. Chromium covers consent, renewal, explicit agent execution and revocation,
-including provider failures. DCR/CIMD client setup, distributed pending-flow
+including provider failures. Distributed pending-flow
 storage and real-vendor qualification remain pending. See [OAuth scope](../docs/mcp.md#browser-oauth-pre-registered-clients).
 
 **GitHub.com OAuth compatibility:** A pinned issuer/endpoint profile supports the documented confidential POST exchange and renewal despite omitted authentication-method metadata, normalizes comma-separated scopes, and rejects OAuth errors without leaking upstream payloads. Unit, TLS API integration and browser fixtures cover this contract; live GitHub consent, repository permissions and organization/SSO acceptance remain pending. Manual registration is documented in `docs/mcp.md`.
@@ -348,13 +348,32 @@ explicit agent grants. Live Atlassian registration/corporate approval and GitLab
 instance qualification remain pending; see `docs/mcp.md`. This increment does not
 deploy itself or change external OAuth applications.
 
-**Planned automatic OAuth client setup (DCR/CIMD; not implemented):** Keep
+**Delivered automatic OAuth client setup (DCR/CIMD; fixture-qualified):** Keep
 pre-registered clients as an explicit, always available alternative. Reuse an
 existing registration first; otherwise prefer CIMD when advertised and usable,
 then DCR when advertised, then guided manual setup. Show the selected mechanism
 and reason before the administrator starts it. Opening a template or inspecting
 metadata must not register an application. Registration does not replace provider
 consent or explicit per-agent tool grants.
+
+The UI now offers manual, automatic, DCR and CIMD modes and a read-only preview
+before explicit confirmation. Persistent CAS claims prevent duplicate concurrent
+registration and automatic replay of uncertain POST outcomes. Completed clients
+survive restart; manual clients remain the default for existing connections.
+CIMD publishes a minimal public client document only for prepared enabled
+connections. Public CIMD (`none`) and DCR `none`/basic/post clients are supported;
+expiring registration secrets, initial registration access tokens, private-key JWT
+and remote client deletion remain unsupported. See [operational limits](../docs/mcp.md#automatic-client-setup-dcr-and-cimd).
+
+Verified: unit and real TLS/filesystem tests for selection, response validation,
+secret encryption, concurrency and restart; SQLite/API tests for both mechanisms
+through consent, discovery, renewal and revoke; multiple-service DCR gateway tests
+for exact grants and independent revocation. Chromium covers DCR review, reuse,
+denial, uncertain registration/manual recovery and hosted CIMD through a real TLS
+fixture proxy. `make test`, `make lint`, `make build` and `make test-e2e` passed
+(171 frontend tests; 28 standard browser cases plus 1 hosted CIMD case). Live
+GitLab/Atlassian registration, consent and corporate acceptance remain pending.
+No production installation or external application was changed by this increment.
 
 **Capability verification, 2026-10-17:** Public documentation and read-only metadata
 GETs establish the following advertised capabilities, not end-to-end acceptance:
@@ -365,7 +384,7 @@ GETs establish the following advertised capabilities, not end-to-end acceptance:
 | Atlassian Cloud MCP v2 | [Resource metadata](https://mcp.atlassian.com/.well-known/oauth-protected-resource/v2/mcp) identifies the issuer `https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3`. Its [authorization metadata](https://auth.atlassian.com/.well-known/oauth-authorization-server/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3) advertises `client_id_metadata_document_supported: true` and `https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3/dcr/register`. | Prefer usable CIMD; offer DCR and compatible pre-registration. Qualify callback/domain/site/IP policies and real consent separately; do not substitute REST 3LO registration. |
 | GitHub remote MCP | [Official host guide](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md) states that DCR is unsupported. | Preserve the existing dedicated, pre-registered application flow; do not promise automatic registration. |
 
-Implement capability-driven selection following the
+The backend implements capability-driven selection following the
 [MCP registration approaches](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#client-registration-approaches),
 with the supported specification revision recorded during implementation. DCR
 runs on the backend against a validated advertised registration endpoint, sends

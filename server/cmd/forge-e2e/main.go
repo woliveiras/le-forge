@@ -9,6 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -85,6 +90,24 @@ func run() error {
 	}
 	cfg.Server.Addr = addr
 	cfg.Server.PublicURL = "http://" + addr
+	// Only this disposable E2E binary permits a synthetic hosted-origin fixture.
+	if os.Getenv("LEFORGE_E2E_CIMD") == "1" {
+		target, _ := url.Parse("http://" + addr)
+		proxy := httptest.NewUnstartedServer(httputil.NewSingleHostReverseProxy(target))
+		// Close the unused listener allocated by NewUnstartedServer before binding
+		// the dedicated loopback fixture port. This never touches installation ports.
+		if err := proxy.Listener.Close(); err != nil {
+			return err
+		}
+		listener, err := net.Listen("tcp", "127.0.0.1:18091")
+		if err != nil {
+			return err
+		}
+		proxy.Listener = listener
+		proxy.StartTLS()
+		defer proxy.Close()
+		cfg.Server.PublicURL = "https://forge.fixture.example:18091"
+	}
 	cfg.Server.InternalAddr = ""
 	cfg.Server.WebDir = "../web/dist"
 	cfg.Storage = config.Storage{Type: "sqlite", Dir: filepath.Join(root, "store")}
@@ -111,6 +134,19 @@ func run() error {
 	defer fixtureMCP.Close()
 	fixtureOAuth := mcptest.NewOAuth("")
 	defer fixtureOAuth.Close()
+	fixtureOAuth.ClientDocument = func(raw string) bool {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host != "forge.fixture.example:18091" {
+			return false
+		}
+		response, err := http.Get("http://" + addr + u.Path)
+		if err != nil {
+			return false
+		}
+		defer response.Body.Close()
+		var doc map[string]any
+		return response.StatusCode == 200 && json.NewDecoder(response.Body).Decode(&doc) == nil && doc["client_id"] == raw
+	}
 	githubOAuth := mcptest.NewGitHubOAuth()
 	defer githubOAuth.Close()
 	atlassianOAuth := mcptest.NewAtlassianOAuth()

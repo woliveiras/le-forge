@@ -78,7 +78,7 @@ fetched, and media is not rendered as native model attachments. The remote serve
 validates tool-specific input schemas; LeForge validates the object envelope and
 size. Credentials and upstream error payloads are not exposed as transport errors.
 
-Pending increments include aggregate per-connection quotas, dynamic OAuth client registration,
+Pending increments include aggregate per-connection quotas, live automatic-registration qualification,
 private-network deployment policy, automatic
 session renewal, connection deletion, vendor-specific setup/scopes, call-history
 UI, and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
@@ -133,7 +133,8 @@ Public clients use token endpoint authentication `none`; confidential clients us
 metadata defaults to `client_secret_basic` (RFC 8414); an explicitly empty list
 is rejected. GitHub.com and public GitLab MCP clients have narrowly scoped compatibility
 profiles below.
-Automatic client registration and live-provider qualification remain pending.
+DCR and public-client CIMD are available through explicit setup review; see
+[automatic client setup](#automatic-client-setup-dcr-and-cimd). Live-provider qualification remains pending.
 Historical v1 template guidance describes their original Bearer/no-auth presets;
 OAuth settings are configured separately and do not come from a shared link.
 
@@ -328,11 +329,12 @@ are not permission to use every discovered tool. The issuer is checked against
 resource metadata at every authorization start, so a changed provider contract
 fails visibly rather than silently redirecting credentials.
 
-A compatible pre-registered MCP client must be supplied by your administrator or
+For manual setup, a compatible pre-registered MCP client must be supplied by your administrator or
 Atlassian. Request a dedicated client with the exact callback displayed by LeForge,
 Authorization Code/PKCE S256, supported client authentication, reviewed MCP scopes
 and refresh-token access. No verified self-service manual registration portal is
-provided here. The advertised DCR endpoint is not called by LeForge. An ordinary
+provided here. Alternatively, select automatic setup: current authorization metadata
+advertises CIMD and DCR. LeForge calls DCR only after explicit review and confirmation. An ordinary
 `auth.atlassian.com` REST 3LO app is not assumed compatible. Without a matching
 registration, the real connection remains pending. Corporate admins may also need
 to allow the callback domain, site and outbound IP. These approvals must happen
@@ -381,8 +383,75 @@ storage and API views. Generic issuer mismatch, network policy and credential
 redaction tests remain applicable. This is fixture evidence, not live vendor
 certification.
 
-Pending for each real connection: administrator-supplied registration and consent;
+Pending for each real connection: accepted automatic or administrator-supplied registration and consent;
 actual discovery and a permitted read tool; expiry/renewal; provider revocation;
 insufficient-scope and corporate policy denial. GitLab also needs qualification of
-the selected instance/version. There is no DCR, installation login change, per-user
-credential ownership or external OAuth registration in this delivery.
+the selected instance/version. Installation login and per-user credential ownership
+are unchanged. No real provider registration was performed during implementation.
+
+
+## Automatic client setup (DCR and CIMD)
+
+In **Client registration method**, choose **Manual**, **Automatic**, **DCR** or
+**CIMD**. Existing connections remain manual unless explicitly edited. Automatic
+setup first reuses its persisted registration; otherwise it selects advertised
+public-client CIMD when the configured installation URL can host it, then advertised
+DCR. Manual registration is always an alternative. Saving a connection or opening
+a link performs no registration. Use **Review OAuth setup**, inspect the selected
+mechanism, then confirm to register/publish metadata and open provider consent.
+No fallback occurs silently after a failed authorization.
+
+The admin-only preview endpoint is
+`GET /api/v1/mcp/connections/{id}/oauth/preview`. Automatic start requires the
+reviewed mechanism in `POST .../oauth/start?registrationMode=dcr` (or `cimd`);
+manual start retains its existing API. Discovery validates resource/issuer binding
+and public-only HTTPS destinations before registration. DCR sends a bounded JSON
+POST to the advertised endpoint with the exact callback and reviewed scopes.
+Supported responses must agree on callback and authentication (`none`,
+`client_secret_basic` or `client_secret_post`). Expiring registration secrets,
+initial registration access tokens, private-key JWT and remote registration
+management are not supported; use a compatible manual client when required.
+
+Registration uses persistent compare-and-swap claims before sending the POST.
+Concurrent starts cannot register the same saved connection twice. Completed
+registrations survive backend restarts. A failed or interrupted registration is
+shown as uncertain/pending and is not retried automatically: inspect the provider
+for a possibly created client before deliberately changing registration settings
+or using manual setup. Registration credentials remain encrypted and are never
+returned by the API. The UI exposes only the effective mode and registration
+status. Updating issuer, mode, scopes or endpoint clears incompatible local state;
+changing the configured callback blocks reuse until the operator reviews and
+changes the connection configuration. Such changes never delete remote clients.
+
+CIMD uses `https://<installation>/api/v1/mcp/oauth/client/{id}` as the client ID.
+This unauthenticated endpoint publishes only `LeForge`, the exact client ID and
+callback, grant/response types and public authentication method. It exists only
+for an enabled, prepared CIMD connection; it exposes no tokens, scopes, private
+connection name or client secret. The provider must retrieve this document over
+public HTTPS. LeForge checks URL eligibility, not reachability from the provider.
+A local HTTP installation cannot host it: use DCR/manual setup, or separately
+configure a suitable hosted installation. LeForge never creates a tunnel or
+changes installation authentication settings automatically.
+
+GitLab.com currently advertises DCR; selected instances may disable it. CIMD must
+not be inferred where absent. Atlassian MCP v2 currently advertises both; corporate
+callback/site/IP restrictions can still prevent consent. GitHub remote MCP uses
+manual registration. See [verified metadata sources](../wip/PLAN.md#6-add-mcp-configuration).
+These capabilities are not certification of real account acceptance.
+
+OAuth still uses PKCE S256, session-bound state/cookies, encrypted tokens and
+explicit per-agent grants. Revocation blocks this connection's access and attempts
+provider token revocation; it preserves the client registration for reauthorization.
+It does not delete a remote client or affect other connections. Registration events
+use the existing `mcp.oauth.registration_started`, `registration_ready` and
+`registration_failed` audit events with connection/revision context, never payloads
+or secrets.
+
+Unit tests cover mechanism selection, malformed responses, redaction, secret
+storage, concurrent registration and restart reuse. TLS/SQLite API integration
+exercises both mechanisms through consent, discovery, refresh and revoke. Chromium
+covers DCR review/reuse/denial/failure/manual recovery and hosted CIMD with a real
+TLS proxy in the disposable test harness. `make test-e2e` runs both the ordinary
+browser suite and `playwright.oauth-cimd.config.ts`. No production transport bypass
+is introduced. Live GitLab/Atlassian registration and corporate approvals remain
+pending and require separately authorized test accounts/resources.

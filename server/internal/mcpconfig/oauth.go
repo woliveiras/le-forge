@@ -27,11 +27,14 @@ var ErrOAuth = errors.New("OAuth connection failed")
 func oauthError(message string) error { return fmt.Errorf("%w: %s", ErrOAuth, message) }
 
 type OAuthConfig struct {
-	Issuer   string   `json:"issuer"`
-	ClientID string   `json:"clientId"`
-	Scopes   []string `json:"scopes"`
+	RegistrationMode string   `json:"registrationMode,omitempty"`
+	Issuer           string   `json:"issuer"`
+	ClientID         string   `json:"clientId"`
+	Scopes           []string `json:"scopes"`
 }
 type OAuthView struct {
+	RegistrationStatus        string `json:"registrationStatus,omitempty"`
+	EffectiveRegistrationMode string `json:"effectiveRegistrationMode,omitempty"`
 	OAuthConfig
 	Status                 string     `json:"status"`
 	ExpiresAt              *time.Time `json:"expiresAt,omitempty"`
@@ -40,6 +43,8 @@ type OAuthView struct {
 	Revocation             string     `json:"revocation,omitempty"`
 }
 type oauthMetadata struct {
+	Registration  string   `json:"registration_endpoint"`
+	CIMD          bool     `json:"client_id_metadata_document_supported"`
 	Issuer        string   `json:"issuer"`
 	Authorization string   `json:"authorization_endpoint"`
 	Token         string   `json:"token_endpoint"`
@@ -77,7 +82,7 @@ func validateOAuth(c *OAuthConfig) error {
 	if err := oauthURL(c.Issuer); err != nil {
 		return err
 	}
-	if strings.TrimSpace(c.ClientID) == "" || len(c.ClientID) > 256 || len(c.Scopes) > 50 {
+	if !slices.Contains([]string{"", "manual", "auto", "dcr", "cimd"}, c.RegistrationMode) || (manualOAuth(c) && strings.TrimSpace(c.ClientID) == "") || (!manualOAuth(c) && c.ClientID != "") || len(c.ClientID) > 256 || len(c.Scopes) > 50 {
 		return fmt.Errorf("%w: invalid OAuth client or scopes", ErrInvalid)
 	}
 	seen := map[string]bool{}
@@ -247,8 +252,10 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 			return meta, err
 		}
 	}
-	if _, err := connectionClientMethod(r, meta); err != nil {
-		return meta, err
+	if manualOAuth(&r.OAuth.OAuthConfig) {
+		if _, err := connectionClientMethod(r, meta); err != nil {
+			return meta, err
+		}
 	}
 	if m.OAuthClient == nil {
 		auth, _ := url.Parse(meta.Authorization)
@@ -265,6 +272,9 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 	return meta, nil
 }
 func (m *Manager) StartOAuth(ctx context.Context, id, actor, redirect string) (OAuthStart, error) {
+	return m.StartOAuthReviewed(ctx, id, actor, redirect, "")
+}
+func (m *Manager) StartOAuthReviewed(ctx context.Context, id, actor, redirect, approvedMode string) (OAuthStart, error) {
 	r, err := m.load(ctx, id)
 	if err != nil {
 		return OAuthStart{}, err
@@ -278,9 +288,22 @@ func (m *Manager) StartOAuth(ctx context.Context, id, actor, redirect string) (O
 	if err != nil {
 		return OAuthStart{}, err
 	}
+	if !manualOAuth(&r.OAuth.OAuthConfig) {
+		plan, e := registrationPlan(r, meta, redirect)
+		if e != nil {
+			return OAuthStart{}, e
+		}
+		if approvedMode != plan.Mode {
+			return OAuthStart{}, oauthError("Review the selected registration mechanism before authorizing")
+		}
+		r, err = m.prepareRegistration(ctx, r, meta, redirect, actor, plan.Mode)
+		if err != nil {
+			return OAuthStart{}, err
+		}
+	}
 	state, binding, verifier := nonce(), nonce(), nonce()
 	hash := sha256.Sum256([]byte(verifier))
-	q := url.Values{"response_type": {"code"}, "client_id": {r.OAuth.ClientID}, "redirect_uri": {redirect}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "scope": {strings.Join(r.OAuth.Scopes, " ")}, "resource": {r.Endpoint}}
+	q := url.Values{"response_type": {"code"}, "client_id": {oauthClientID(r)}, "redirect_uri": {redirect}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "scope": {strings.Join(r.OAuth.Scopes, " ")}, "resource": {r.Endpoint}}
 	m.oauthMu.Lock()
 	defer m.oauthMu.Unlock()
 	if m.pending == nil {
@@ -333,7 +356,7 @@ func (m *Manager) tokenRequest(ctx context.Context, r record, meta oauthMetadata
 	var result oauthTokens
 	client, close := m.oauthHTTP()
 	defer close()
-	form.Set("client_id", r.OAuth.ClientID)
+	form.Set("client_id", oauthClientID(r))
 	form.Set("resource", r.Endpoint)
 	secret := ""
 	if r.OAuthClientSealed != "" {
@@ -611,7 +634,7 @@ func (m *Manager) revokeRemote(ctx context.Context, r record, t oauthTokens) (st
 		if entry.value == "" {
 			continue
 		}
-		form := url.Values{"client_id": {r.OAuth.ClientID}, "token": {entry.value}, "token_type_hint": {entry.hint}}
+		form := url.Values{"client_id": {oauthClientID(r)}, "token": {entry.value}, "token_type_hint": {entry.hint}}
 		method, err := connectionClientMethod(r, r.OAuthMeta)
 		if err != nil {
 			return "failed", err

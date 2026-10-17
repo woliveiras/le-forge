@@ -8,7 +8,7 @@ protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries,
 redirects and private destinations. Generic pre-registered OAuth now supports the
 browser lifecycle; see [implementation and limits](mcp.md#browser-oauth-pre-registered-clients).
 GitHub, Atlassian, GitLab and custom setup profiles are available for pre-registered
-clients; [registration and evidence](mcp.md#service-setup-and-independent-connections)
+clients, plus reviewed DCR/CIMD setup where advertised; [registration and evidence](mcp.md#service-setup-and-independent-connections)
 distinguish fixture coverage from pending live/corporate qualification. Other
 credential modes remain pending.
 See also the [additional template survey](mcp-templates.md).
@@ -130,6 +130,9 @@ including UI support from 19.3; legacy REST/PAT `api` permissions are not equiva
 The scoped public-PKCE metadata compatibility rule and registration instructions
 are described in [the setup guide](mcp.md#gitlab-instance-setup). Exact instance,
 version, group/instance enablement, refresh/revocation and live tool authorization
-remain external acceptance requirements. No registration is performed automatically.
+remain external acceptance requirements. DCR is available after explicit setup review;
+CIMD is selected only if the instance advertises it and the installation can host
+a public HTTPS document. Manual registration remains available. See
+[automatic setup and limits](mcp.md#automatic-client-setup-dcr-and-cimd).
 
 [Official GitLab MCP contract](https://docs.gitlab.com/user/model_context_protocol/mcp_server/).

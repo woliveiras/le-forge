@@ -18,7 +18,7 @@ test('connects from a template link through OAuth consent, renewal and revocatio
  await page.getByRole('button',{name:'Allow fixture access'}).click();
  await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);expect(page.url()).not.toContain('code=');
  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
- await expect(page.getByRole('status')).toContainText('OAuth connected.');
+ await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');
  const card=page.getByRole('article',{name:'MCP Browser OAuth',exact:true});await expect(card).toContainText('mcp.oauth-browser.search');await expect(card).toContainText('OAuth: authorized');
  const stats=await (await page.request.get(config.oauth.issuer+'/stats')).json();expect(stats.refreshes).toBeGreaterThan(0);
  const saved=await page.request.get('/api/v1/mcp/connections/oauth-browser',{headers});const raw=await saved.text();expect(raw).not.toContain('fixture-mcp-token');expect(raw).not.toContain('fixture-refresh-token');
@@ -47,7 +47,7 @@ test('handles denied consent, renewal failure and unsuccessful upstream revocati
   await page.getByRole('button',{name:'Complete OAuth connection'}).click();
   if(id==='oauth-denied'){await expect(page.getByText(/authorization cancelled or denied by provider/)).toBeVisible();}
   else if(id==='oauth-renew-failed'){await expect(page.getByText(/OAuth request rejected/)).toBeVisible();await page.reload();await expect(page.getByRole('article',{name:'MCP '+id,exact:true})).toContainText('reauthorization_required');}
-  else{await expect(page.getByRole('status')).toContainText('OAuth connected.');const card=page.getByRole('article',{name:'MCP '+id,exact:true});await card.getByRole('button',{name:'Revoke OAuth '+id,exact:true}).click();await card.getByRole('button',{name:'Confirm revoke '+id,exact:true}).click();await expect(card).toContainText('Provider revocation: failed');await expect(card).toContainText('OAuth: revoked');}
+  else{await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');const card=page.getByRole('article',{name:'MCP '+id,exact:true});await card.getByRole('button',{name:'Revoke OAuth '+id,exact:true}).click();await card.getByRole('button',{name:'Confirm revoke '+id,exact:true}).click();await expect(card).toContainText('Provider revocation: failed');await expect(card).toContainText('OAuth: revoked');}
  }
  await page.goto('/api/v1/mcp/oauth/callback?state=invalid&code=synthetic');await expect(page.getByText(/Invalid OAuth return/)).toBeVisible();
 });
@@ -86,7 +86,7 @@ test('GitHub contract: confidential consent, comma scopes, renewal, errors and l
  await page.getByRole('button',{name:'Authorize GitHub OAuth browser',exact:true}).click();
  await page.getByRole('button',{name:'Allow fixture access'}).click();
  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
- await expect(page.getByRole('status')).toContainText('OAuth connected.');
+ await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');
  const card=page.getByRole('article',{name:'MCP GitHub OAuth browser',exact:true});
  await expect(card).toContainText('mcp.github-oauth-browser.search');
  await expect(card).toContainText('read:user'); await expect(card).toContainText('read:org');
@@ -128,7 +128,7 @@ test('keeps personal, corporate and GitLab OAuth connections and agent grants in
   await page.getByRole('button',{name:'Allow fixture access'}).click();
   await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);
   await page.getByRole('button',{name:'Complete OAuth connection'}).click();
-  await expect(page.getByRole('status')).toContainText('OAuth connected.');
+  await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');
   await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText(`mcp.${id}.search`);
  }
  const before=await (await page.request.get('/api/v1/mcp/connections/personal-mcp',{headers})).json();

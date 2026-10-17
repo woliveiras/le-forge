@@ -21,6 +21,12 @@ func validateServiceOAuth(in Input) error {
 }
 
 func connectionClientMethod(r record, meta oauthMetadata) (string, error) {
+	if r.OAuth != nil && !manualOAuth(&r.OAuth.OAuthConfig) {
+		if r.Registration == nil || r.Registration.Status != "ready" {
+			return "", oauthError("Client registration required")
+		}
+		return r.Registration.Method, nil
+	}
 	// GitLab's MCP registration guide explicitly supports public, pre-registered
 	// clients with PKCE, while current metadata lists only confidential methods.
 	// Apply that contract only to the selected GitLab instance's canonical paths.
