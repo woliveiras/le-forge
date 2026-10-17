@@ -3,7 +3,9 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/tools"
 	"net/http"
 	"strings"
 	"testing"
@@ -54,7 +56,7 @@ func TestMCPRegistryDiscoveryAndPermissions(t *testing.T) {
 		t.Fatal(saved, e)
 	}
 	if _, ok := a.Tools.Get("mcp.team.search"); ok {
-		t.Fatal("discovery must not enable invocation")
+		t.Fatal("dynamic MCP tools must not be cached in the static registry")
 	}
 	in.Enabled = false
 	in.Credential = nil
@@ -114,5 +116,42 @@ func TestMCPInputAndUpstreamFailures(t *testing.T) {
 	}
 	if code := call(t, srv, "PUT", "/api/v1/mcp/connections/noauth", adminTok, "application/json", body, nil); code != 400 {
 		t.Fatal("missing revision", code)
+	}
+}
+
+func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
+	_, a := setupApp(t, nil)
+	upstream := mcptest.New()
+	defer upstream.Close()
+	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		return mcpconfig.DiscoverWithClient(ctx, endpoint, token, upstream.Client())
+	}
+	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		return mcpconfig.CallWithClient(ctx, endpoint, token, name, args, upstream.Client())
+	}
+	in := mcpconfig.Input{ID: "remote", Name: "Remote", Service: "generic", Endpoint: upstream.URL, Enabled: true, Credential: &mcpconfig.Credential{Value: "fixture-mcp-token"}}
+	if _, err := a.MCP.Put(t.Context(), in, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.MCP.Refresh(t.Context(), in.ID, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &tools.Principal{GraphID: "graph", NodeID: "allowed", Grants: []domain.ToolGrant{{Name: "mcp.remote.search"}}}
+	result, err := a.Gateway.Invoke(t.Context(), p, "mcp.remote.search", json.RawMessage(`{"query":"issue"}`))
+	if err != nil || result.IsError || !strings.Contains(result.Content, "MCP fixture search completed") {
+		t.Fatal(result, err)
+	}
+	other := &tools.Principal{GraphID: "graph", NodeID: "other", Grants: []domain.ToolGrant{{Name: "*"}}}
+	if _, err = a.Gateway.Invoke(t.Context(), other, "mcp.remote.search", nil); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal(err)
+	}
+	in.Enabled = false
+	in.Credential = nil
+	if _, err = a.MCP.Put(t.Context(), in, v.Revision, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.Gateway.Invoke(t.Context(), p, "mcp.remote.search", nil); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal(err)
 	}
 }

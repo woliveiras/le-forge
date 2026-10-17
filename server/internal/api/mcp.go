@@ -94,7 +94,7 @@ func (s *Server) mcpTools(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 		for _, t := range v.Tools {
-			out = append(out, tools.ToolInfo{Name: "mcp." + v.ID + "." + t.Name, Capability: "MCP permission (invocation pending)", Description: t.Description, Schema: t.InputSchema})
+			out = append(out, tools.ToolInfo{Name: "mcp." + v.ID + "." + t.Name, Capability: "MCP remote tool", Description: t.Description, Schema: t.InputSchema})
 		}
 	}
 	writeJSON(w, 200, out)

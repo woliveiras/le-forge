@@ -175,3 +175,18 @@ func TestSplitCommand(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestMCPMatchingRequiresExactName(t *testing.T) {
+	remote := &funcTool{name: "mcp.team.search", capability: "mcp.team.search"}
+	for _, name := range []string{"*", "mcp.*", "mcp.team.*", "mcp.other.search"} {
+		p := &Principal{Grants: []domain.ToolGrant{{Name: name}}}
+		if _, err := Authorize(p, remote); !errors.Is(err, ErrDenied) {
+			t.Fatalf("grant %q: %v", name, err)
+		}
+	}
+	p := &Principal{Grants: []domain.ToolGrant{{Name: "*"}, {Name: remote.Name(), RequiresApproval: true, RateLimit: 2}}}
+	grant, err := Authorize(p, remote)
+	if err != nil || !grant.RequiresApproval || grant.RateLimit != 2 {
+		t.Fatalf("wildcard weakened exact MCP restrictions: %+v %v", grant, err)
+	}
+}

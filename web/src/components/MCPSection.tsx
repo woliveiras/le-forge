@@ -19,7 +19,7 @@ export function MCPSection({role}:{role?:string}) {
   return <section className="integration-section" aria-label="MCP connections">
     <h2>MCP connections</h2>
     <p>Register remote HTTPS Streamable HTTP servers and discover their tools. Only public network destinations are supported. Credentials stay encrypted in LeForge.</p>
-    <p>Agent permissions can be prepared in the graph editor. Tool invocation, OAuth and service-specific setup are not available yet.</p>
+    <p>Assign tools to agents in the graph editor to allow calls through the gateway. OAuth and service-specific setup are not available yet.</p>
     <Btn onClick={()=>void list.reload()} disabled={list.loading}>Reload MCP connections</Btn>
     <ErrorBox error={list.error}/><ErrorBox error={error}/>
     {list.loading&&<p role="status">Loading connections…</p>}

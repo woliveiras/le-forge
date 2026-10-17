@@ -267,12 +267,18 @@ available according to policy, without requiring a managed preview or a PR.
 
 **Delivered first increment:** The console registers revisioned remote HTTPS MCP
 connections, protects bearer credentials, discovers bounded JSON/SSE tool catalogues,
-and prepares exact per-agent grants in the graph editor. Discovery uses the
+and saves exact per-agent grants in the graph editor. Discovery uses the
 2025-06-18 Streamable HTTP protocol and public network destinations only. Unit,
 SQLite/real TLS integration and Chromium tests cover the supported flow.
-Invocation through the gateway, runtime revocation/approvals, OAuth, private-network
-policy and live vendor-specific acceptance remain pending; service names are
-metadata. See [MCP scope and limits](../docs/mcp.md).
+**Gateway increment:** Remote tools are offered only to explicitly granted agents
+and invoked through the shared gateway. Each call checks agent grants and current
+connection state, including revalidation after approval waits. Existing per-agent
+grant rate limits and approvals apply; bounded JSON/SSE calls use fresh sessions,
+no transport retry, redacted audit metadata and capped runtime results. Unit,
+real TLS/API integration and Chromium cover success, denial and connection disable.
+OAuth, aggregate per-connection quotas, private-network policy, deletion and live
+vendor-specific acceptance remain pending; service names are metadata.
+See [MCP scope and limits](../docs/mcp.md).
 
 Implement MCP connection management in the interface, starting with the integrations used by the team:
 

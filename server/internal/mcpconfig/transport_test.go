@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -166,5 +167,91 @@ func TestDiscoveryCancellation(t *testing.T) {
 	defer cancel()
 	if _, e := DiscoverWithClient(ctx, server.URL, "", server.Client()); e == nil {
 		t.Fatal("cancelled request succeeded")
+	}
+}
+
+func TestCallTransportSuccessFailureAndCancellation(t *testing.T) {
+	for _, mode := range []string{"json", "sse", "http", "rpc", "cancel", "secret", "close"} {
+		t.Run(mode, func(t *testing.T) {
+			var calls, closed atomic.Int32
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "DELETE" {
+					closed.Add(1)
+					if mode == "close" {
+						w.WriteHeader(500)
+					} else {
+						w.WriteHeader(204)
+					}
+					return
+				}
+				var q struct {
+					ID     int                        `json:"id"`
+					Method string                     `json:"method"`
+					Params map[string]json.RawMessage `json:"params"`
+				}
+				json.NewDecoder(r.Body).Decode(&q)
+				result := json.RawMessage(`{"content":[{"type":"text","text":"ok"}]}`)
+				switch q.Method {
+				case "initialize":
+					w.Header().Set("Mcp-Session-Id", "session")
+					result = json.RawMessage(`{"protocolVersion":"2025-06-18","capabilities":{"tools":{}}}`)
+				case "notifications/initialized":
+					w.WriteHeader(202)
+					return
+				case "tools/call":
+					calls.Add(1)
+					if string(q.Params["name"]) != `"search"` || string(q.Params["arguments"]) != `{"query":"x"}` || r.Header.Get("Mcp-Session-Id") != "session" {
+						t.Error("invalid call envelope")
+					}
+					if mode == "http" {
+						w.WriteHeader(503)
+						return
+					}
+					if mode == "rpc" {
+						w.Header().Set("Content-Type", "application/json")
+						fmt.Fprint(w, `{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"upstream secret"}}`)
+						return
+					}
+					if mode == "cancel" {
+						select {
+						case <-r.Context().Done():
+						case <-time.After(150 * time.Millisecond):
+						}
+						return
+					}
+					if mode == "secret" {
+						result = json.RawMessage(`{"content":[{"type":"text","text":"synthetic-secret"}]}`)
+					}
+				default:
+					t.Error(q.Method)
+				}
+				body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": q.ID, "result": result})
+				if mode == "sse" {
+					w.Header().Set("Content-Type", "text/event-stream")
+					fmt.Fprintf(w, "data: %s\n\n", body)
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.Write(body)
+				}
+			}))
+			defer srv.Close()
+			ctx := t.Context()
+			if mode == "cancel" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+				defer cancel()
+			}
+			raw, err := CallWithClient(ctx, srv.URL, "synthetic-secret", "search", json.RawMessage(`{"query":"x"}`), srv.Client())
+			if mode == "json" || mode == "sse" {
+				if err != nil || !strings.Contains(string(raw), "ok") {
+					t.Fatal(string(raw), err)
+				}
+			} else if err == nil || strings.Contains(err.Error(), "upstream secret") {
+				t.Fatal(err)
+			}
+			if calls.Load() != 1 || closed.Load() != 1 {
+				t.Fatal("call retried or session leaked", calls.Load(), closed.Load())
+			}
+		})
 	}
 }

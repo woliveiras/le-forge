@@ -1,4 +1,4 @@
-// Package mcpconfig manages discovery and explicit grants. It does not invoke tools.
+// Package mcpconfig manages remote MCP connections, discovery and gateway tools.
 package mcpconfig
 
 import (
@@ -66,10 +66,11 @@ type Manager struct {
 	Box      *secrets.Box
 	Bus      *events.Bus
 	Discover func(context.Context, string, string) ([]Tool, error)
+	Call     func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error)
 }
 
 func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
-	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover}
+	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
 	u, e := url.Parse(in.Endpoint)

@@ -134,6 +134,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.MCP = mcpconfig.New(a.Store, box, a.Bus)
 	a.Tools = tools.Builtin(tools.BuiltinConfig{AllowPrivateNetworks: cfg.Tools.AllowPrivateNetworks})
 	a.Gateway = tools.NewGateway(a.Tools, a.Approvals, a.Bus)
+	a.Gateway.ResolveTool = a.MCP.Resolve
 
 	ws, err := workspace.NewManager(cfg.Workspaces.Root, cfg.Workspaces.HostRoot, cfg.Workspaces.AllowAbsolute)
 	if err != nil {
@@ -228,7 +229,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		ValidateToolGrants: a.MCP.ValidateGrants,
 		Reviews:            a.Reviews,
 		Instance:           cfg.Instance, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
-		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway}, Runtimes: runtimes, Workspaces: ws,
+		Models: a.Models, Tools: toolGateway{a.Tools, a.Gateway, a.MCP}, Runtimes: runtimes, Workspaces: ws,
 		Sandboxes: sandboxFactory(cfg, a.Environments, a.Store, a.Bus), Environments: a.Environments, EnvironmentProposals: a.Proposals,
 		CallbackURL: cfg.Server.InternalURL, Log: log,
 		LeaseTTL: cfg.Engine.LeaseTTL, ReconcileInterval: cfg.Engine.ReconcileInterval,
@@ -312,16 +313,39 @@ func (a *App) refreshProviders(ctx context.Context) {
 type toolGateway struct {
 	reg *tools.Registry
 	gw  *tools.Gateway
+	mcp *mcpconfig.Manager
 }
 
 func (t toolGateway) Invoke(ctx context.Context, p *tools.Principal, name string, args json.RawMessage) (*tools.Result, error) {
 	return t.gw.Invoke(ctx, p, name, args)
 }
 
-func (t toolGateway) Schemas(p *tools.Principal) []llm.ToolSchema { return t.reg.Schemas(p) }
+func (t toolGateway) Schemas(p *tools.Principal) []llm.ToolSchema {
+	out := t.reg.Schemas(p)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	available, err := t.mcp.Available(ctx)
+	if err != nil {
+		slog.Error("MCP catalogue unavailable", "error", err)
+		return out
+	}
+	for _, tool := range available {
+		if len(tools.MatchingGrants(p, tool)) > 0 {
+			out = append(out, llm.ToolSchema{Name: tool.Name(), Description: tool.Description(), Parameters: tool.Schema()})
+		}
+	}
+	return out
+}
 
 func (t toolGateway) NeedsApproval(p *tools.Principal, name string) bool {
 	tool, ok := t.reg.Get(name)
+	if !ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var err error
+		tool, err = t.mcp.Resolve(ctx, name)
+		ok = err == nil && tool != nil
+	}
 	if !ok {
 		return false
 	}

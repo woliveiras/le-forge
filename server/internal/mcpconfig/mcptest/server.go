@@ -34,6 +34,12 @@ func New() *httptest.Server {
 		case "notifications/initialized":
 			w.WriteHeader(202)
 			return
+		case "tools/call":
+			if r.Header.Get("Mcp-Session-Id") != "fixture-session" || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
+				w.WriteHeader(400)
+				return
+			}
+			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "MCP fixture search completed"}}}
 		case "tools/list":
 			if r.Header.Get("Mcp-Session-Id") != "fixture-session" || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
 				w.WriteHeader(400)

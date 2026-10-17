@@ -16,7 +16,7 @@ schemas alongside the code.
 | Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and delegation remain planned. |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, managed Docker reviews/previews, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
 | Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; no delegation request contract is sent yet. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
-| Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | MCP registration/discovery and exact grant preparation are implemented; runtime invocation and revocation remain planned. |
+| Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | MCP registration/discovery and gateway invocation enforce exact grants and current connection state; see [MCP limits](mcp.md). |
 | Workspace | `GET /api/v1/graphs/{id}/files` and `/files/content` are viewer-readable. Paths are resolved inside the graph/worktree root; `.git` is hidden, directory results are capped, file content is limited to 4 MiB and served as plain text with a deny-all CSP. | Viewer-readable `/git/status`, `/git/diff` and `/git/history` now provide bounded live inspection with private Git metadata and explicit unsafe-configuration failures. Execution/tool-operation context and bounded before/after observations of filesystem, Git-write and shell calls are persisted; a controller-lifetime monitor additionally records net changes from concurrent/background/external writers with unknown authorship and explicit coverage gaps. A dedicated-Linux-daemon kernel journal also records process PID evidence and transient events and replays them after controller downtime. Exact agent/execution attribution is not inferred; unsupported namespaces, collector downtime, overflow and unresolved paths remain gaps. Native `workspace.readOnly` denies mutation tools, shell and agent Git tools regardless of grants; Docker mounts read-only. External runtimes cannot claim this policy. See [tool permissions](tool-permissions.md#workspace-write-access-and-observations). No user-facing workspace write/delete/upload API. |
 | Persistence | `storage.Store` persists graph versions/control records, events, messages, executions, approvals, operator messages, replica status, KV, leases, and revisioned installation settings. Settings use compare-and-set revisions. Provider credentials are encrypted before storage. See [database schema](database-schema.md). | Future install-wide records should use settings or an explicitly designed store entity; graph/workspace data must remain scoped. |
 | Authorization | Current installation uses hierarchical `viewer < operator < admin` roles from static tokens or optional OIDC. Route middleware authenticates and authorizes before handlers. Per-execution callback tokens are scoped to one running turn. | There is no multi-tenant/user ownership model. A deployment is one installation security boundary; do not imply per-user data isolation that does not exist. |
@@ -68,7 +68,7 @@ and [gateway operations](sandbox-runtime.md#human-review-and-application-preview
 ### MCP connections
 
 MCP connections are installation-scoped resources and may have multiple
-connections for the same service. The API contract is listed below; the delivered discovery subset is described in [MCP scope](mcp.md). Connection deletion and runtime invocation remain planned.
+connections for the same service. The API contract is listed below; the delivered scope is described in [MCP scope](mcp.md). Connection deletion remains planned.
 
 | Method and path | Minimum role | Contract |
 |---|---|---|
@@ -89,13 +89,13 @@ revisioned settings, one setting per connection (for example,
 `mcp/connections/{connectionId}`), so updates to distinct connections do not
 overwrite each other.
 
-**Planned invocation contract:** The platform owns MCP transport sessions. Agent runtimes never receive MCP
+**Implemented invocation contract:** The platform owns MCP transport sessions. Agent runtimes never receive MCP
 credentials or connect directly to MCP servers. Discovered tools are exposed
 only through the tool gateway under a stable connection-qualified name
 `mcp.{connectionId}.{toolName}`. A node must have an explicit matching grant
 in `spec.nodes[].tools`; existing constraints, rate limits, approvals, and
 gateway checks apply to every invocation. Removing a connection invalidates
-its grants and makes further calls fail closed.
+its grants and makes further calls fail closed (deletion is planned; disabling already denies subsequent calls).
 
 Transport support is selected from transports reachable by `forged` inside
 Docker and implemented without executing arbitrary user commands in the

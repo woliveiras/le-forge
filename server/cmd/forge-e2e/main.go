@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -31,6 +32,14 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "mcp-call-fixture") {
+		for _, m := range r.Messages {
+			if m.Role == llm.RoleTool {
+				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "MCP execution: " + m.Content}, StopReason: "stop"}, nil
+			}
+		}
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: "mcp.runtime.search", Arguments: json.RawMessage(`{"query":"issue"}`)}}}, StopReason: "tool_calls"}, nil
+	}
 	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "git-inspect-fixture") {
 		return gitInspectionResponse(r), nil
 	}
@@ -100,6 +109,12 @@ func run() error {
 			return nil, fmt.Errorf("unknown fixture endpoint")
 		}
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
+	}
+	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		if endpoint != "https://mcp.fixture.invalid/mcp" {
+			return nil, fmt.Errorf("unknown fixture endpoint")
+		}
+		return mcpconfig.CallWithClient(ctx, fixtureMCP.URL, token, name, args, fixtureMCP.Client())
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
 	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture", "activity-approve", "activity-reject"} {

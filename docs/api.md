@@ -373,12 +373,13 @@ browser handshake; application paths are otherwise preserved. See
 
 See [MCP scope](mcp.md) for the supported transport, authentication and limits.
 Viewers can GET `/api/v1/mcp/connections`, `/api/v1/mcp/connections/{id}` and
-`/api/v1/mcp/tools` (permission catalogue only). Admins POST new connections and
+`/api/v1/mcp/tools` (current selectable tool catalogue). Admins POST new connections and
 PUT existing connections with their required `If-Match` revision. Operators can
 POST `/{id}/test` or `/{id}/tools/refresh` under `/api/v1/mcp/connections`;
 both discover a fresh catalogue and return its persisted safe connection view.
 A completed discovery attempt returns 200 with `status: ready|unavailable`;
 transport success is not inferred from HTTP 200 alone. Input errors are 422,
 invalid bodies/missing revision 400, unauthorized roles 403 and stale revisions
-409. Disable/credential/endpoint changes invalidate the catalogue. No DELETE or
-MCP invocation endpoint is implemented in this increment.
+409. Disable/credential/endpoint changes invalidate the catalogue. DELETE remains
+pending. MCP execution uses the existing agent tool gateway/callback path; there
+is no standalone endpoint that bypasses the execution principal.

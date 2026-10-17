@@ -1,8 +1,8 @@
 # MCP connections and agent permissions
 
-The first MCP increment provides registration, discovery and permission preparation.
-**Remote tool invocation is not implemented yet.** MCP tools are not registered in
-the runtime gateway or offered to models. Saving a grant does not enable a call.
+MCP supports registration, discovery and remote tool invocation through the gateway.
+Native agents and external runtime callbacks use the same authorization boundary.
+Models receive only the currently available tools explicitly granted to their agent.
 
 In **Integrations → MCP connections**, an administrator can create or edit multiple
 connections, set a bearer credential, and disable/re-enable a connection. IDs are
@@ -42,7 +42,8 @@ In an agent's **MCP permissions** section, select exact
 `mcp.<connectionId>.<toolName>` grants and save the graph. Validation rejects
 unknown, wildcard and disabled MCP grants. Existing non-MCP grants and their
 restrictions are preserved. The selector reads `/api/v1/mcp/tools`; this catalogue
-is deliberately separate from `/api/v1/tools`, which describes runnable tools.
+is separate from `/api/v1/tools`, which describes the static built-in registry.
+The runtime combines both catalogues when preparing model schemas.
 
 Registry changes and discovery produce `mcp.connection.changed`,
 `mcp.connection.tested` and `mcp.tools.refreshed` events with actor, connection ID,
@@ -50,8 +51,35 @@ revision/status and discovery latency, excluding credentials, endpoint payloads
 and tool arguments. Concurrent edits and refreshes use storage compare-and-swap;
 a delayed refresh cannot restore a disabled connection.
 
-Pending increments include gateway invocation and runtime revocation, per-agent
-call limits and approvals, OAuth, private-network deployment policy, automatic
+Every call requires an exact grant; `*`, capability grants and `mcp.*` do not grant
+MCP access. Authorization uses the execution's agent principal, not model-supplied
+identity. Graph edits apply to subsequent graph runs under the existing execution
+snapshot contract. Disabling a connection, changing its endpoint/credential or
+refreshing its catalogue is observed on subsequent calls, even in existing runs.
+The connection revision is checked again after any approval or preparation wait.
+Already dispatched remote operations are not rolled back by disabling a connection.
+
+The existing `requiresApproval` and `rateLimit` grant fields apply to MCP and can
+be set in the graph definition. The MCP checkbox selector preserves these fields. Approval
+requests show arguments for review; ordinary tool audit events omit MCP arguments
+and results, retaining the qualified tool name, agent/execution, outcome and latency.
+Metric tool labels aggregate MCP calls under `mcp`. Host constraints restrict the
+registered endpoint; filesystem path/command constraints are rejected for MCP.
+
+Each call initializes a fresh session and sends one `tools/call` with the unqualified
+remote name and a JSON object (maximum 64 KiB). Calls share the discovery network
+policy, a 15-second operation timeout and 2 MiB response bound; session cleanup has
+an independent 3-second bound. No transport retry is performed: after a timeout or
+lost response, a remote mutation may already have succeeded. Sessions are closed
+where supported. JSON/SSE, protocol errors and `isError` tool results are handled.
+Tool content blocks and structured content reach the runtime as JSON text, capped
+by the gateway (32 KiB by default, with a truncation marker); resource links are not
+fetched, and media is not rendered as native model attachments. The remote server
+validates tool-specific input schemas; LeForge validates the object envelope and
+size. Credentials and upstream error payloads are not exposed as transport errors.
+
+Pending increments include aggregate per-connection quotas, OAuth,
+private-network deployment policy, automatic
 session renewal, connection deletion, vendor-specific setup/scopes, call-history
 UI, and live GitHub/Bitbucket/Jira/Confluence acceptance. The service selector is
 metadata, not a vendor adapter or proof that a vendor supports this transport.
@@ -59,5 +87,5 @@ metadata, not a vendor adapter or proof that a vendor supports this transport.
 Validation: unit tests cover input/network rules, credential handling, catalogue
 limits and concurrent updates; API integration tests use SQLite and a real TLS
 MCP fixture; Chromium covers registration, discovery, graph grant persistence,
-disable/removal and authentication failure. Fixture credentials are synthetic;
+disable/removal, authentication failure, successful agent invocation and denied calls. Fixture credentials are synthetic;
 no live vendor credentials are used by these tests.

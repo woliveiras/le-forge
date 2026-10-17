@@ -36,7 +36,7 @@ func publicIP(ip netip.Addr) bool {
 	}
 	return true
 }
-func Discover(ctx context.Context, endpoint, token string) ([]Tool, error) {
+func remoteClient() (*http.Client, func()) {
 	transport := &http.Transport{DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 		host, port, e := net.SplitHostPort(address)
 		if e != nil {
@@ -56,13 +56,48 @@ func Discover(ctx context.Context, endpoint, token string) ([]Tool, error) {
 		}
 		return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
 	}, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 5 * time.Second}
-	defer transport.CloseIdleConnections()
-	return DiscoverWithClient(ctx, endpoint, token, &http.Client{Transport: transport, Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return discoveryError("MCP redirects denied") }})
+	return &http.Client{Transport: transport, Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return discoveryError("MCP redirects denied") }}, transport.CloseIdleConnections
 }
+
+func Discover(ctx context.Context, endpoint, token string) ([]Tool, error) {
+	client, close := remoteClient()
+	defer close()
+	return DiscoverWithClient(ctx, endpoint, token, client)
+}
+
+// Call never retries tools/call: a lost response may follow a committed remote mutation.
+func Call(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+	client, close := remoteClient()
+	defer close()
+	return CallWithClient(ctx, endpoint, token, name, args, client)
+}
+func CallWithClient(ctx context.Context, endpoint, token, name string, args json.RawMessage, client *http.Client) (json.RawMessage, error) {
+	var result json.RawMessage
+	_, err := sessionOperation(ctx, endpoint, token, client, func(call rpcCall) error {
+		raw, err := call(2, "tools/call", map[string]any{"name": name, "arguments": args})
+		if err != nil {
+			return err
+		}
+		if containsCredential(raw, token) {
+			return discoveryError("MCP result contains credential material")
+		}
+		result = raw
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+type rpcCall func(int, string, any) (json.RawMessage, error)
 
 // DiscoverWithClient supports trusted platform transports and in-process contract tests.
 // No HTTP client or transport can be supplied through the public API.
-func DiscoverWithClient(ctx context.Context, endpoint, token string, client *http.Client) (catalog []Tool, err error) {
+func DiscoverWithClient(ctx context.Context, endpoint, token string, client *http.Client) ([]Tool, error) {
+	return sessionOperation(ctx, endpoint, token, client, nil)
+}
+func sessionOperation(ctx context.Context, endpoint, token string, client *http.Client, action func(rpcCall) error) (catalog []Tool, err error) {
 	session := ""
 	defer func() {
 		if session == "" {
@@ -206,6 +241,9 @@ func DiscoverWithClient(ctx context.Context, endpoint, token string, client *htt
 	if _, e = call(0, "notifications/initialized", map[string]any{}); e != nil {
 		return nil, e
 	}
+	if action != nil {
+		return nil, action(call)
+	}
 	out := []Tool{}
 	cursor := ""
 	seen := map[string]bool{}
@@ -220,7 +258,7 @@ func DiscoverWithClient(ctx context.Context, endpoint, token string, client *htt
 		if e != nil {
 			return nil, e
 		}
-		if token != "" && bytes.Contains(raw, []byte(token)) {
+		if containsCredential(raw, token) {
 			return nil, discoveryError("MCP catalogue contains credential material")
 		}
 		bytesTotal += len(raw)

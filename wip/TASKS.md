@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP invocation/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP OAuth/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -255,22 +255,22 @@ does not satisfy this milestone.
 - [ ] Confirm contracts, authentication methods, scopes, and supported transports for Bitbucket, GitHub, Confluence, and Jira.
 - [x] Choose an initial transport compatible with Docker and implement connections without running arbitrary commands in the main process. — Remote HTTPS Streamable HTTP discovery, protocol 2025-06-18, JSON/SSE, public-IP-only dialing, no redirects or subprocesses; see [MCP scope](../docs/mcp.md).
 - [x] Design a generic MCP connection registry, with no artificial connection limit and support for multiple connections per service. — Revisioned per-connection settings with stable IDs and safe read models.
-- [ ] Implement the connection lifecycle: create, edit, test, disable, re-enable, revoke, and delete. — Partial: create/edit/test/disable/re-enable and credential replacement/clear are delivered; deletion and runtime revocation remain pending.
+- [ ] Implement the connection lifecycle: create, edit, test, disable, re-enable, revoke, and delete. — Partial: create/edit/test/disable/re-enable and credential replacement/clear are delivered; subsequent calls are denied after disable; deletion remains pending.
 - [x] Implement discovery and refresh of tools offered by each connection. — Initialization, paginated tools/list, persisted catalogue revisions and visible failure state; fresh sessions per operation.
-- [x] Implement timeouts, cancellation, payload limits, and explicit handling for disconnection, errors, and invalid responses. — Discovery only: 15s deadline, 2 MiB, 20 pages/500 tools, JSON/SSE validation and redacted errors.
+- [x] Implement timeouts, cancellation, payload limits, and explicit handling for disconnection, errors, and invalid responses. — Discovery and calls: 15s deadline, 2 MiB response bound, 64 KiB call arguments, 20 discovery pages/500 tools, JSON/SSE validation and redacted errors.
 - [ ] Implement reconnection/session renewal as required by the selected transport.
-- [ ] Add contract tests for connection, discovery, invocation, failures, and timeouts. — Discovery has unit and real TLS/API coverage, including failures, cancellation, limits and stale refresh conflicts; invocation remains pending.
+- [x] Add contract tests for connection, discovery, invocation, failures, and timeouts. — Unit and real TLS/API tests cover calls, JSON/SSE, cancellation, failures, session cleanup, payload limits and stale revisions.
 
 #### Credentials, Authorization, and Auditing
 
 - [x] Encrypt tokens/secrets at rest and ensure they never appear in read responses, logs, prompts, or events. — Bearer credentials use the installation secret box; safe views and lifecycle events omit values/ciphertext; no runtime exposure.
-- [x] Implement assignment of connections and allowed tools to specific agents. — Exact discovered grants saved in node tools; validation rejects disabled/unknown/wildcard MCP names. Permission preparation only; invocation remains pending.
-- [ ] Enforce authorization at the gateway for every invocation, regardless of what the agent/model requests.
-- [ ] Add per-connection/agent rate limits, timeouts, and response-size limits.
-- [ ] Allow human approval to be configured for selected tools.
-- [ ] Audit invocations with agent, connection, tool, result, duration, and error, removing or masking sensitive data.
-- [ ] Ensure an agent cannot select another connection, escape its grants, or read credentials.
-- [ ] Test effective revocation: after access is revoked, the next invocation must be denied.
+- [x] Implement assignment of connections and allowed tools to specific agents. — Exact discovered grants saved in node tools; validation rejects disabled/unknown/wildcard MCP names. The shared gateway enforces these grants on each call.
+- [x] Enforce authorization at the gateway for every invocation, regardless of what the agent/model requests. — Exact MCP grants only; wildcard/cross-connection requests denied.
+- [ ] Add per-connection/agent rate limits, timeouts, and response-size limits. — Agent/tool grant rate limits, operation deadlines and payload/result bounds are implemented; aggregate connection quotas remain pending.
+- [x] Allow human approval to be configured for selected tools. — Existing requiresApproval grants use the shared approval flow, with revision revalidation before dispatch.
+- [x] Audit invocations with agent, connection, tool, result, duration, and error, removing or masking sensitive data. — Qualified tool name encodes connection; events contain outcome, not raw arguments/results; metrics aggregate MCP names.
+- [x] Ensure an agent cannot select another connection, escape its grants, or read credentials. — Trusted execution principal and registered endpoint/credential only; exact names, no wildcard authority.
+- [x] Test effective revocation: after access is revoked, the next invocation must be denied. — Connection disable denies subsequent calls and calls waiting for approval; already dispatched operations are not rolled back. Graph grants follow the execution snapshot contract.
 
 #### Interface
 
@@ -280,7 +280,7 @@ does not satisfy this milestone.
 - [x] Allow connections to be enabled/disabled and discovered tools to be refreshed.
 - [x] Allow available connections/tools to be selected for each agent. — Dedicated selector, persisted graph edits and removal of unavailable grants.
 - [ ] Show a filterable history of calls, approvals, results, and errors.
-- [ ] Add interface tests for connection setup, validation, agent authorization, and revocation. — Component integration and Chromium cover registration/discovery, credential-safe edits, failures, persisted grants and disable/removal; runtime invocation/revocation is still pending.
+- [x] Add interface tests for connection setup, validation, agent authorization, and revocation. — Components and Chromium cover setup, saved grants, successful agent execution, wildcard denial and connection disable against a real TLS fixture.
 - [ ] Add end-to-end tests for each priority integration using appropriate test credentials.
 
 **Done when:** Connections for each priority integration can be created through the interface, tested, assigned to agents, and audited; unauthorized calls are denied.

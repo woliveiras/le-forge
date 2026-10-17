@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,8 +25,10 @@ const maxAuditArgBytes = 2 << 10
 // optionally held for human approval, executed, audited, measured and traced.
 type Gateway struct {
 	Registry *Registry
-	Approver Approver
-	Auditor  Auditor
+	// ResolveTool resolves dynamic tools; errors fail closed. Configured at startup.
+	ResolveTool func(context.Context, string) (Tool, error)
+	Approver    Approver
+	Auditor     Auditor
 	// MaxResultBytes caps Result.Content (default 32 KiB).
 	MaxResultBytes int
 	// Now is overridable for tests.
@@ -66,16 +69,29 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 		attribute.Int("leforge.replica", p.Replica),
 		attribute.String("leforge.execution", p.ExecutionID),
 	)
+	metricName := name
+	if strings.HasPrefix(name, "mcp.") {
+		metricName = "mcp"
+	}
 	start := g.now()
 	outcome := "ok"
 	defer func() {
-		observability.ToolInvocations.WithLabelValues(name, outcome).Inc()
-		observability.ToolDuration.WithLabelValues(name).Observe(time.Since(start).Seconds())
+		observability.ToolInvocations.WithLabelValues(metricName, outcome).Inc()
+		observability.ToolDuration.WithLabelValues(metricName).Observe(time.Since(start).Seconds())
 		span.SetAttributes(attribute.String("leforge.tool.outcome", outcome))
 		observability.EndSpan(span, err)
 	}()
 
 	t, ok := g.Registry.Get(name)
+	if !ok && g.ResolveTool != nil {
+		t, err = g.ResolveTool(ctx, name)
+		if err != nil {
+			outcome = "denied"
+			g.audit(ctx, p, domain.EvToolDenied, name, nil, outcome, 0, err)
+			return nil, err
+		}
+		ok = t != nil
+	}
 	if !ok {
 		outcome = "unknown"
 		err = fmt.Errorf("%w: %s", ErrUnknownTool, name)
@@ -224,6 +240,9 @@ func (g *Gateway) approve(ctx context.Context, p *Principal, name string, args j
 func (g *Gateway) audit(ctx context.Context, p *Principal, typ domain.EventType, name string, args json.RawMessage, outcome string, d time.Duration, err error) {
 	if g.Auditor == nil {
 		return
+	}
+	if strings.HasPrefix(name, "mcp.") {
+		args = nil
 	}
 	data := map[string]any{"tool": name, "outcome": outcome, "durationMs": d.Milliseconds()}
 	if len(args) > maxAuditArgBytes {

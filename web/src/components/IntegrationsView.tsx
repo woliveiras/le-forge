@@ -174,7 +174,7 @@ export function IntegrationsView({ info, infoError }: { info?: Info; infoError?:
               ))}
             </div>
             <p className="muted small integration-footnote">
-              A registered tool is not necessarily an external service connection. MCP registration and discovery are available above; MCP tool invocation remains pending.
+              MCP connections are managed above. Discovered MCP tools run through the gateway when explicitly granted to an agent.
             </p>
           </>
         )}

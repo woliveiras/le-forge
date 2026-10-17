@@ -50,6 +50,12 @@ func MatchingGrants(p *Principal, t Tool) []domain.ToolGrant {
 		if g.Name == "" {
 			continue
 		}
+		if strings.HasPrefix(t.Name(), "mcp.") {
+			if g.Name == t.Name() {
+				out = append(out, g)
+			}
+			continue
+		}
 		if domain.GlobMatch(g.Name, t.Name()) || domain.GlobMatch(g.Name, t.Capability()) {
 			out = append(out, g)
 		}

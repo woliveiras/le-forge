@@ -1443,7 +1443,7 @@ paths:
     get:
       tags: [mcp]
       operationId: listMCPPermissionTools
-      summary: List selectable MCP permissions; not runnable tools
+      summary: List currently available MCP tools for explicit agent grants
       x-leforge-role: viewer
       responses:
         "200":
