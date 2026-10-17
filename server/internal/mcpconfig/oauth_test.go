@@ -443,3 +443,79 @@ func TestOAuthConfidentialClient(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOAuthClientAuthenticationContracts(t *testing.T) {
+	github := oauthMetadata{Issuer: githubOAuthIssuer, Authorization: githubOAuthIssuer + "/authorize", Token: githubOAuthIssuer + "/access_token"}
+	for _, tc := range []struct {
+		name   string
+		meta   oauthMetadata
+		secret bool
+		want   string
+	}{
+		{"RFC omitted confidential", oauthMetadata{}, true, "client_secret_basic"},
+		{"RFC omitted public denied", oauthMetadata{}, false, ""},
+		{"empty methods denied", oauthMetadata{Methods: []string{}}, true, ""},
+		{"public explicit", oauthMetadata{Methods: []string{"none"}}, false, "none"},
+		{"post explicit", oauthMetadata{Methods: []string{"client_secret_post"}}, true, "client_secret_post"},
+		{"GitHub omitted", github, true, "client_secret_post"},
+		{"GitHub missing secret", github, false, ""},
+		{"GitHub wrong token host", oauthMetadata{Issuer: githubOAuthIssuer, Authorization: github.Authorization, Token: "https://other.example/token"}, true, ""},
+		{"GitHub wrong authorization", oauthMetadata{Issuer: githubOAuthIssuer, Authorization: "https://other.example/authorize", Token: github.Token}, true, ""},
+		{"lookalike issuer", oauthMetadata{Issuer: githubOAuthIssuer + ".evil"}, true, "client_secret_basic"},
+		{"GitHub empty methods", oauthMetadata{Issuer: github.Issuer, Authorization: github.Authorization, Token: github.Token, Methods: []string{}}, true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := oauthClientMethod(tc.meta, tc.secret)
+			if got != tc.want || (err != nil) != (tc.want == "") {
+				t.Fatalf("method=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestGitHubOAuthTokenContract(t *testing.T) {
+	for _, variant := range []string{"success", "refresh", "scope-expansion", "oauth-error", "upstream-failure", "malformed"} {
+		t.Run(variant, func(t *testing.T) {
+			m := testManager(t)
+			sealed, err := m.Box.Seal([]byte("synthetic-client-secret"), prefix+"team/oauth-client")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := record{OAuthClientSealed: sealed, View: View{ID: "team", Endpoint: "https://api.githubcopilot.com/mcp/", OAuth: &OAuthView{OAuthConfig: OAuthConfig{Issuer: githubOAuthIssuer, ClientID: "client", Scopes: []string{"read:user", "read:org"}}}}}
+			m.OAuthClient = &http.Client{Transport: oauthRoundTrip(func(req *http.Request) (*http.Response, error) {
+				if err := req.ParseForm(); err != nil {
+					t.Fatal(err)
+				}
+				if req.Header.Get("Authorization") != "" || req.Form.Get("client_secret") != "synthetic-client-secret" || req.Form.Get("client_id") != "client" || req.Form.Get("resource") != r.Endpoint {
+					t.Error("incorrect confidential token request")
+				}
+				body := `{"access_token":"synthetic-access","token_type":"bearer","scope":"read:org,read:user"}`
+				status := 200
+				switch variant {
+				case "scope-expansion":
+					body = `{"access_token":"synthetic-access","token_type":"bearer","scope":"read:org,repo"}`
+				case "oauth-error":
+					body = `{"error":"bad_verification_code","error_description":"synthetic-client-secret","access_token":"must-not-accept","token_type":"bearer"}`
+				case "upstream-failure":
+					status = 503
+					body = "synthetic-client-secret"
+				case "malformed":
+					body = "not json"
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+			})}
+			form := url.Values{"grant_type": {"authorization_code"}, "code_verifier": {"proof"}, "code": {"code"}}
+			if variant == "refresh" {
+				form = url.Values{"grant_type": {"refresh_token"}, "refresh_token": {"synthetic-refresh"}}
+			}
+			result, err := m.tokenRequest(t.Context(), r, oauthMetadata{Issuer: githubOAuthIssuer, Authorization: githubOAuthIssuer + "/authorize", Token: githubOAuthIssuer + "/access_token"}, form)
+			if variant == "success" || variant == "refresh" {
+				if err != nil || result.Scope != "read:org read:user" {
+					t.Fatal(result, err)
+				}
+			} else if err == nil || strings.Contains(err.Error(), "synthetic-client-secret") {
+				t.Fatalf("unsafe error: %v", err)
+			}
+		})
+	}
+}

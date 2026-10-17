@@ -129,9 +129,10 @@ qualification remains planned.
 Administrators can select **Use browser OAuth** when saving a connection and
 configure its issuer, client ID, requested scopes and optional client secret.
 Public clients use token endpoint authentication `none`; confidential clients use
-`client_secret_basic`. This is a generic implementation tested with a TLS fixture,
-not certification of GitHub or Atlassian OAuth. Automatic client registration,
-provider-specific adapters and other client authentication methods remain pending.
+`client_secret_basic` or advertised `client_secret_post`. Missing authentication
+metadata defaults to `client_secret_basic` (RFC 8414); an explicitly empty list
+is rejected. GitHub.com has the narrowly scoped compatibility profile below.
+Automatic client registration and live-provider qualification remain pending.
 Historical v1 template guidance describes their original Bearer/no-auth presets;
 OAuth settings are configured separately and do not come from a shared link.
 
@@ -153,8 +154,8 @@ After saving, review the issuer/scopes and choose **Authorize**. LeForge probes 
 MCP resource without credentials, reads `resource_metadata` from its authentication
 challenge (or the path-specific well-known location), and verifies that the
 configured issuer is advertised for the exact MCP endpoint. Issuer metadata must
-match exactly and advertise PKCE S256 and the selected client authentication
-method. Metadata/token/revocation requests use the existing public-only HTTPS
+match exactly and advertise PKCE S256. Client authentication follows the
+advertised methods, the RFC default, or the explicit GitHub.com profile below. Metadata/token/revocation requests use the existing public-only HTTPS
 transport, no redirects, a 15-second bound and 64 KiB response limits. Other resource
 URI canonicalization/metadata fallback variants need separate compatibility work.
 These mechanisms follow the [MCP authorization contract](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
@@ -212,3 +213,58 @@ TLS/API/persistence integration, concurrent refresh/revocation under Go's race
 detector, and Chromium consent/return/renewal/revocation and failure journeys.
 Live-provider credentials, provider-specific scopes and production activation are
 not covered by these fixture tests.
+
+
+## Registering GitHub.com OAuth for a local LeForge
+
+The GitHub.com profile requires the exact issuer `https://github.com/login/oauth`
+and its exact `/authorize` and `/access_token` endpoints. GitHub currently omits
+`token_endpoint_auth_methods_supported`; LeForge uses GitHub's documented
+`client_secret_post` with an encrypted registered client secret. Authorization
+and renewal use the same method. Comma-separated response scopes are normalized
+before scope-expansion checks. HTTP 200 responses carrying OAuth errors are
+rejected without displaying upstream descriptions or credentials. PKCE S256,
+resource/issuer/session checks, TLS and public-network restrictions still apply.
+This profile does not automatically qualify GitHub Enterprise hosts.
+
+For an initial OAuth App connection (no private repository access):
+
+1. In GitHub, open **Settings → Developer settings → OAuth Apps → New OAuth App**
+   ([registration](https://github.com/settings/applications/new)). Use a dedicated
+   app, for example `LeForge local`; homepage `http://localhost:8080`; authorization
+   callback `http://localhost:8080/api/v1/mcp/oauth/callback`. Use the callback shown
+   by your LeForge form if the installation origin differs. Device flow is not needed.
+2. Register the app yourself, copy its **Client ID**, and generate a client secret.
+   Enter the secret directly into LeForge's protected field, never into chat,
+   connection URLs, source files or screenshots. The browser's existing GitHub
+   session is used for login; it does not replace this application registration.
+3. In **Integrations → MCP connections**, create a connection with service `github`,
+   endpoint `https://api.githubcopilot.com/mcp/`, **Use browser OAuth** checked,
+   issuer `https://github.com/login/oauth`, and that client ID/secret. For this
+   initial check, request `read:user offline_access`. The latter requests expiring
+   tokens and renewal; it is not repository access. If starting from the v1 PAT
+   template, use **Customize without template** to configure this OAuth connection.
+4. Save, select **Authorize**, review GitHub's consent and authorize the dedicated
+   app. On return select **Complete OAuth connection** in the same LeForge session.
+   Check the authorized status and discovered tools, then explicitly grant only
+   the desired read tools to an agent. OAuth consent alone grants no agent tools.
+5. Use a read operation against your account or a public test repository for initial
+   acceptance. Private repository access is a separate decision: OAuth App `repo`
+   scope is broad and includes writes. For repository-specific permissions, prefer
+   a GitHub App installed only on selected repositories; its live acceptance and
+   permission matrix remain separate work. Organizations may require administrator
+   approval/SSO authorization.
+6. **Revoke OAuth** clears local access. GitHub's discovery metadata currently has
+   no standard revocation endpoint, so LeForge reports `unsupported` for provider
+   revocation. Remove the grant in GitHub **Settings → Applications → Authorized
+   OAuth Apps** as well when revoking upstream access. A refresh failure requires
+   reauthorization; do not assume every token has a refresh token.
+
+Evidence: unit contract/error tests, API integration with encrypted storage and
+real TLS OAuth/MCP fixtures, and a Chromium consent/renewal/revocation journey
+against the GitHub wire-contract fixture. This is not a successful live GitHub
+account authorization; that remains pending a user-registered app and consent.
+
+Sources: [GitHub MCP host integration](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md),
+[OAuth authorization and refresh](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps),
+[RFC 8414 metadata defaults](https://www.rfc-editor.org/rfc/rfc8414.html#section-2).

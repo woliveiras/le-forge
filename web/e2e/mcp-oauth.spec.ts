@@ -51,3 +51,50 @@ test('handles denied consent, renewal failure and unsuccessful upstream revocati
  }
  await page.goto('/api/v1/mcp/oauth/callback?state=invalid&code=synthetic');await expect(page.getByText(/Invalid OAuth return/)).toBeVisible();
 });
+
+test('GitHub contract: confidential consent, comma scopes, renewal, errors and local revocation',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ const config=await (await page.request.get('/api/v1/mcp/connections/github-oauth-fixture-config',{headers})).json();
+ // Browser consent is served by our TLS fixture, never by a real GitHub account.
+ await page.route('https://github.com/login/oauth/authorize?**',async route=>{
+  const response=await route.fetch({url:config.name+'/login/oauth/authorize'+new URL(route.request().url()).search,maxRedirects:0});
+  await route.fulfill({response});
+ });
+ await page.goto('/#/integrations');
+ await page.getByLabel('Connection ID',{exact:true}).fill('github-oauth-browser');
+ await page.getByLabel('Connection name',{exact:true}).fill('GitHub OAuth browser');
+ await page.getByRole('combobox',{name:/^Service/}).selectOption('github');
+ await page.getByLabel('MCP endpoint',{exact:true}).fill(config.endpoint);
+ await page.getByLabel('Use browser OAuth').check();
+ await page.getByLabel('OAuth issuer',{exact:true}).fill(config.oauth.issuer);
+ await page.getByLabel('OAuth client ID',{exact:true}).fill('fixture-client');
+ await page.getByLabel('OAuth scopes (space separated)',{exact:true}).fill('read:user read:org');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await page.getByRole('button',{name:'Authorize GitHub OAuth browser',exact:true}).click();
+ await expect(page.getByText(/GitHub OAuth requires a registered client secret/)).toBeVisible();
+ await page.getByRole('button',{name:'Edit GitHub OAuth browser',exact:true}).click();
+ await page.getByLabel('OAuth client secret (optional)',{exact:true}).fill('wrong-fixture-secret');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await page.getByRole('button',{name:'Authorize GitHub OAuth browser',exact:true}).click();
+ await page.getByRole('button',{name:'Allow fixture access'}).click();
+ await page.getByRole('button',{name:'Complete OAuth connection'}).click();
+ await expect(page.getByText(/OAuth token response invalid/)).toBeVisible();
+ await page.goto('/#/integrations'); await page.reload();
+ await page.getByRole('button',{name:'Edit GitHub OAuth browser',exact:true}).click();
+ await page.getByLabel('OAuth client secret (optional)',{exact:true}).fill('fixture-client-secret');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await page.getByRole('button',{name:'Authorize GitHub OAuth browser',exact:true}).click();
+ await page.getByRole('button',{name:'Allow fixture access'}).click();
+ await page.getByRole('button',{name:'Complete OAuth connection'}).click();
+ await expect(page.getByRole('status')).toContainText('OAuth connected.');
+ const card=page.getByRole('article',{name:'MCP GitHub OAuth browser',exact:true});
+ await expect(card).toContainText('mcp.github-oauth-browser.search');
+ await expect(card).toContainText('read:user'); await expect(card).toContainText('read:org');
+ const stats=await (await page.request.get(config.name+'/stats')).json(); expect(stats.refreshes).toBeGreaterThan(0);
+ const raw=await (await page.request.get('/api/v1/mcp/connections/github-oauth-browser',{headers})).text();
+ for(const secret of ['fixture-client-secret','fixture-mcp-token','fixture-refresh-token']) expect(raw).not.toContain(secret);
+ await card.getByRole('button',{name:'Revoke OAuth GitHub OAuth browser',exact:true}).click();
+ await card.getByRole('button',{name:'Confirm revoke GitHub OAuth browser',exact:true}).click();
+ await expect(card).toContainText('OAuth: revoked'); await expect(card).toContainText('Provider revocation: unsupported');
+ await expect(card).not.toContainText('mcp.github-oauth-browser.search');
+});

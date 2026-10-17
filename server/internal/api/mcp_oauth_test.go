@@ -15,20 +15,43 @@ import (
 )
 
 func TestMCPOAuthBrowserAPI(t *testing.T) {
+	for _, github := range []bool{false, true} {
+		name := "standard"
+		if github {
+			name = "github-contract"
+		}
+		t.Run(name, func(t *testing.T) { testMCPOAuthBrowserAPI(t, github) })
+	}
+}
+func testMCPOAuthBrowserAPI(t *testing.T, github bool) {
 	srv, a := setupApp(t, nil)
 	var callbackConfig map[string]string
 	if code := call(t, srv, "GET", "/api/v1/mcp/oauth/config", viewerTok, "", "", &callbackConfig); code != 200 || callbackConfig["callbackUrl"] != "http://localhost:8080/api/v1/mcp/oauth/callback" {
 		t.Fatal(code, callbackConfig)
 	}
-	provider := mcptest.NewOAuth("")
+	var provider *mcptest.OAuthServer
+	if github {
+		provider = mcptest.NewGitHubOAuth()
+	} else {
+		provider = mcptest.NewOAuth("")
+	}
 	defer provider.Close()
 	upstream := mcptest.New()
 	defer upstream.Close()
 	a.MCP.OAuthClient = provider.Client()
+	if github {
+		a.MCP.OAuthClient = provider.GitHubClient()
+	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
 		return mcpconfig.DiscoverWithClient(ctx, upstream.URL, token, upstream.Client())
 	}
 	in := mcpconfig.Input{ID: "oauth", Name: "OAuth", Service: "generic", Endpoint: provider.URL + "/mcp", Enabled: true, OAuth: &mcpconfig.OAuthConfig{Issuer: provider.URL, ClientID: "client", Scopes: []string{"read"}}}
+	if github {
+		in.Service = "github"
+		in.Endpoint = "https://api.githubcopilot.com/mcp/"
+		in.OAuth = &mcpconfig.OAuthConfig{Issuer: "https://github.com/login/oauth", ClientID: "client", Scopes: []string{"read:user", "read:org"}}
+		in.OAuthClientSecret = &mcpconfig.Credential{Value: "fixture-client-secret"}
+	}
 	body, _ := json.Marshal(in)
 	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 201 {
 		t.Fatal(code)
@@ -72,6 +95,9 @@ func TestMCPOAuthBrowserAPI(t *testing.T) {
 	q.Set("decision", "allow")
 	authorize.RawQuery = q.Encode()
 	providerClient := provider.Client()
+	if github {
+		providerClient = provider.GitHubClient()
+	}
 	providerClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	consent, e := providerClient.Get(authorize.String())
 	if e != nil {
@@ -102,7 +128,7 @@ func TestMCPOAuthBrowserAPI(t *testing.T) {
 	if connection.Status != "ready" || connection.OAuth.Status != "authorized" || provider.Refreshes.Load() != 1 {
 		t.Fatal(connection, provider.Refreshes.Load())
 	}
-	if strings.Contains(string(raw), "fixture-mcp-token") || strings.Contains(string(raw), "fixture-refresh-token") {
+	if strings.Contains(string(raw), "fixture-mcp-token") || strings.Contains(string(raw), "fixture-refresh-token") || strings.Contains(string(raw), "fixture-client-secret") {
 		t.Fatal("secret disclosure")
 	}
 	res = request("POST", "/api/v1/mcp/oauth/complete", adminTok, `{"state":"`+start.State+`"}`)
@@ -119,7 +145,14 @@ func TestMCPOAuthBrowserAPI(t *testing.T) {
 	if e = json.Unmarshal(raw, &connection); e != nil {
 		t.Fatal(e)
 	}
-	if connection.OAuth.Status != "revoked" || connection.CredentialConfigured || provider.Revocations.Load() != 2 {
+	wantRevocations := int32(2)
+	if github {
+		wantRevocations = 0
+		if connection.OAuth.Revocation != "unsupported" {
+			t.Fatal(connection)
+		}
+	}
+	if connection.OAuth.Status != "revoked" || connection.CredentialConfigured || provider.Revocations.Load() != wantRevocations {
 		t.Fatal(connection)
 	}
 }

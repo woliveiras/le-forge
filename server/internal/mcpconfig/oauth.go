@@ -138,6 +138,40 @@ func oauthJSON(ctx context.Context, client *http.Client, endpoint string, form u
 	}
 	return nil
 }
+
+// GitHub documents client_secret_post although its metadata omits auth methods.
+// Keep this interoperability rule bound to the exact GitHub.com issuer/endpoints.
+const githubOAuthIssuer = "https://github.com/login/oauth"
+
+func oauthClientMethod(meta oauthMetadata, confidential bool) (string, error) {
+	methods := meta.Methods
+	if meta.Issuer == githubOAuthIssuer {
+		if meta.Authorization != githubOAuthIssuer+"/authorize" || meta.Token != githubOAuthIssuer+"/access_token" {
+			return "", fmt.Errorf("%w: unexpected GitHub OAuth endpoints", ErrInvalid)
+		}
+		if !confidential {
+			return "", fmt.Errorf("%w: GitHub OAuth requires a registered client secret", ErrInvalid)
+		}
+		if methods == nil || slices.Contains(methods, "client_secret_post") {
+			return "client_secret_post", nil
+		}
+	}
+	// RFC 8414 defaults an omitted field to client_secret_basic, not public access.
+	if methods == nil {
+		methods = []string{"client_secret_basic"}
+	}
+	if confidential {
+		for _, method := range []string{"client_secret_basic", "client_secret_post"} {
+			if slices.Contains(methods, method) {
+				return method, nil
+			}
+		}
+	} else if slices.Contains(methods, "none") {
+		return "none", nil
+	}
+	return "", fmt.Errorf("%w: OAuth client authentication method unsupported", ErrInvalid)
+}
+
 func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error) {
 	var meta oauthMetadata
 	client, close := m.oauthHTTP()
@@ -187,12 +221,8 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 			return meta, err
 		}
 	}
-	method := "none"
-	if r.OAuthClientSealed != "" {
-		method = "client_secret_basic"
-	}
-	if !slices.Contains(meta.Methods, method) {
-		return meta, fmt.Errorf("%w: OAuth client authentication method unsupported", ErrInvalid)
+	if _, err := oauthClientMethod(meta, r.OAuthClientSealed != ""); err != nil {
+		return meta, err
 	}
 	if m.OAuthClient == nil {
 		auth, _ := url.Parse(meta.Authorization)
@@ -265,6 +295,7 @@ func (m *Manager) CaptureOAuth(state, binding, code, issuer, providerError strin
 }
 
 type oauthTokens struct {
+	Error   string `json:"error"`
 	Access  string `json:"access_token"`
 	Refresh string `json:"refresh_token"`
 	Type    string `json:"token_type"`
@@ -286,12 +317,23 @@ func (m *Manager) tokenRequest(ctx context.Context, r record, meta oauthMetadata
 		}
 		secret = string(b)
 	}
-	err := oauthJSON(ctx, client, meta.Token, form, secret, &result)
+	method, err := oauthClientMethod(meta, secret != "")
 	if err != nil {
 		return result, err
 	}
-	if result.Access == "" || len(result.Access) > 16384 || len(result.Refresh) > 16384 || !strings.EqualFold(result.Type, "Bearer") || result.Expires < 0 || result.Expires > 31536000 || strings.IndexFunc(result.Access, func(c rune) bool { return c < 33 || c > 126 }) >= 0 {
+	if method == "client_secret_post" {
+		form.Set("client_secret", secret)
+		secret = ""
+	}
+	err = oauthJSON(ctx, client, meta.Token, form, secret, &result)
+	if err != nil {
+		return result, err
+	}
+	if result.Error != "" || result.Access == "" || len(result.Access) > 16384 || len(result.Refresh) > 16384 || !strings.EqualFold(result.Type, "Bearer") || result.Expires < 0 || result.Expires > 31536000 || strings.IndexFunc(result.Access, func(c rune) bool { return c < 33 || c > 126 }) >= 0 {
 		return result, oauthError("OAuth token response invalid")
+	}
+	if meta.Issuer == githubOAuthIssuer {
+		result.Scope = strings.Join(strings.FieldsFunc(result.Scope, func(c rune) bool { return c == ',' || c == ' ' }), " ")
 	}
 	if result.Scope != "" {
 		for _, scope := range strings.Fields(result.Scope) {
@@ -543,7 +585,17 @@ func (m *Manager) revokeRemote(ctx context.Context, r record, t oauthTokens) (st
 		if entry.value == "" {
 			continue
 		}
-		err := oauthJSON(ctx, client, r.OAuthMeta.Revocation, url.Values{"client_id": {r.OAuth.ClientID}, "token": {entry.value}, "token_type_hint": {entry.hint}}, secret, nil)
+		form := url.Values{"client_id": {r.OAuth.ClientID}, "token": {entry.value}, "token_type_hint": {entry.hint}}
+		method, err := oauthClientMethod(r.OAuthMeta, secret != "")
+		if err != nil {
+			return "failed", err
+		}
+		basicSecret := secret
+		if method == "client_secret_post" {
+			form.Set("client_secret", secret)
+			basicSecret = ""
+		}
+		err = oauthJSON(ctx, client, r.OAuthMeta.Revocation, form, basicSecret, nil)
 		if err != nil {
 			return "failed", err
 		}

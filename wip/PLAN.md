@@ -335,6 +335,8 @@ detector. Chromium covers consent, renewal, explicit agent execution and revocat
 including provider failures. Dynamic client registration, distributed pending-flow
 storage and real-vendor qualification remain pending. See [OAuth scope](../docs/mcp.md#browser-oauth-pre-registered-clients).
 
+**GitHub.com OAuth compatibility:** A pinned issuer/endpoint profile supports the documented confidential POST exchange and renewal despite omitted authentication-method metadata, normalizes comma-separated scopes, and rejects OAuth errors without leaking upstream payloads. Unit, TLS API integration and browser fixtures cover this contract; live GitHub consent, repository permissions and organization/SSO acceptance remain pending. Manual registration is documented in `docs/mcp.md`.
+
 **Browser-link and OAuth journey:** A link to the user's LeForge
 installation opens a reviewed template in the connection screen, preserving the
 pending selection through LeForge login. Links contain only public template

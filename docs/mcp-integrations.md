@@ -1,7 +1,8 @@
 # Priority MCP integration contracts
 
 Research date: 2026-10-17. These are source-confirmed vendor contracts and planned
-LeForge deliveries, not implemented adapters or live-service certification.
+LeForge deliveries. Implemented compatibility is identified below; this is not
+live-service certification.
 The current [generic client](mcp.md) supports public HTTPS Streamable HTTP,
 protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries,
 redirects and private destinations. Generic pre-registered OAuth now supports the
@@ -30,7 +31,12 @@ Classic PAT scopes such as `repo` and `read:org` are broader alternatives, not t
 default minimum. Discovery cannot prove authority: fine-grained tokens do not
 support the server's classic-scope filtering. [Scope filtering](https://github.com/github/github-mcp-server/blob/main/docs/scope-filtering.md)
 
-Planned delivery: github.com template, PAT guidance and OAuth app setup; reviewed
+Implemented OAuth compatibility: the GitHub.com profile handles omitted client
+authentication metadata, confidential POST exchange/renewal, comma-separated scopes
+and OAuth errors returned with HTTP 200. Unit, TLS API integration and browser
+fixtures cover the contract. Follow the [manual app registration guide](mcp.md#registering-githubcom-oauth-for-a-local-leforge); live consent remains pending.
+
+Remaining delivery: guided OAuth app setup and PAT guidance; reviewed
 per-tool permission matrix; repository selection with an honest distinction
 between UI defaults and enforced token restrictions; discovery and read-only
 smoke test; separately approved issue/PR write tests. Diagnose token expiry,
