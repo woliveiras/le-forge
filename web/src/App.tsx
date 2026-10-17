@@ -1,3 +1,4 @@
+import { agentSection, type AgentSection } from './components/agentSettingsModel';
 import { useCallback, useEffect, useState } from 'react';
 import { api, errorMessage, getToken, MOCK, onUnauthorized, setToken } from './api/client';
 import type { GraphSummary } from './api/types';
@@ -25,7 +26,7 @@ type Route =
   | { view: 'models' }
   | { view: 'administration'; section: AdministrationSection }
   | { view: 'skills' }
-  | { view: 'graph'; id: string; tab: GraphTab; correlationId?: string };
+  | { view: 'graph'; id: string; tab: GraphTab; agentId?: string; agentSection?: AgentSection; correlationId?: string };
 
 export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
@@ -39,11 +40,11 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'connections' && parts[1] === 'history') return { view: 'connections', history: true };
   if (parts[0] === 'integrations' || parts[0] === 'connections') return { view: 'connections', connectQuery: parts[1] === 'connect' ? (hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '') : undefined, oauthQuery: parts[1] === 'oauth' ? (qs ?? '') : undefined };
   if (parts[0] === 'g' && parts[1]) {
-    const tab = (['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
+    const tab = (['canvas', 'agent', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).includes(parts[2] as GraphTab)
       ? (parts[2] as GraphTab)
       : 'canvas';
     const c = new URLSearchParams(qs ?? '').get('c') ?? undefined;
-    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c };
+    return { view: 'graph', id: decodeURIComponent(parts[1]), tab, correlationId: c, ...(tab === 'agent' ? {agentId: new URLSearchParams(qs ?? '').get('agent') ?? '', agentSection: agentSection(new URLSearchParams(qs ?? '').get('section'))} : {}) };
   }
   return { view: 'graphs' };
 }
@@ -62,7 +63,7 @@ export function routeHash(r: Route): string {
   if (r.view === 'models') return '#/models';
   if (r.view === 'administration') return `#/administration/${r.section}`;
   if (r.view === 'graph')
-    return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
+    return `#/g/${encodeURIComponent(r.id)}/${r.tab}${r.tab === 'agent' ? `?agent=${encodeURIComponent(r.agentId ?? '')}&section=${r.agentSection ?? 'general'}` : r.correlationId ? `?c=${encodeURIComponent(r.correlationId)}` : ''}`;
   return '#/graphs';
 }
 
@@ -197,6 +198,9 @@ function Shell() {
                 summary={current}
                 info={info.data}
                 tab={route.tab}
+                agentId={route.agentId}
+                agentSection={route.agentSection}
+                onAgent={(agentId, agentSection) => go({...route, tab: 'agent', agentId, agentSection})}
                 onTab={(tab) => go({ ...route, tab })}
                 onSaved={onSaved}
                 correlationId={route.correlationId}

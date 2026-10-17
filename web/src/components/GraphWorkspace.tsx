@@ -1,3 +1,5 @@
+import { AgentConfiguration } from './AgentConfiguration';
+import { changedGraphFields, type AgentSection } from './agentSettingsModel';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api, errorMessage } from '../api/client';
 import type { Graph, GraphAction, GraphSummary, Info, ValidationResult } from '../api/types';
@@ -18,7 +20,7 @@ import { GraphCanvas, type Selection } from './canvas/GraphCanvas';
 import { EnvironmentBlocker, environmentIssue } from './EnvironmentBlocker';
 import { GraphSettings } from './GraphSettings';
 import { ChannelPanel } from './ChannelPanel';
-import { Badge, Btn, ErrorBox, Icon } from './common';
+import { Badge, Btn, ErrorBox, Icon, Modal } from './common';
 import { EventsView } from './EventsView';
 import { FilesView } from './FilesView';
 import { IssueSummary } from './GraphIssues';
@@ -27,7 +29,7 @@ import { NodePanel } from './NodePanel';
 import { TaskActivity } from './TaskActivity';
 import { YamlEditor } from './YamlEditor';
 
-export type GraphTab = 'canvas' | 'activity' | 'files' | 'events' | 'messages' | 'yaml';
+export type GraphTab = 'canvas' | 'agent' | 'activity' | 'files' | 'events' | 'messages' | 'yaml';
 
 /** A validation result and the draft it was computed for (paths are indices into that draft). */
 interface Validation {
@@ -44,6 +46,9 @@ export function GraphWorkspace({
   summary,
   info,
   tab,
+  agentId,
+  agentSection = 'general',
+  onAgent,
   onTab,
   onSaved,
   correlationId,
@@ -52,6 +57,9 @@ export function GraphWorkspace({
   summary: GraphSummary;
   info?: Info;
   tab: GraphTab;
+  agentId?: string;
+  agentSection?: AgentSection;
+  onAgent?: (id:string,section:AgentSection)=>void;
   onTab: (t: GraphTab) => void;
   onSaved: (s: GraphSummary) => void;
   correlationId?: string;
@@ -69,6 +77,8 @@ export function GraphWorkspace({
   });
   const [error, setError] = useState<string>();
   const [saveConflict, setSaveConflict] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const canEditAgent = info?.identity?.role === 'admin' || info?.identity?.role === 'operator';
   const [saving, setSaving] = useState(false);
   const [validation, setValidation] = useState<Validation>();
   const [panelOpen, setPanelOpen] = useState(true);
@@ -81,6 +91,11 @@ export function GraphWorkspace({
     setSettingsOpen(true);
     setPanelOpen(true);
   };
+  const configureAgent = (id:string, section:AgentSection = 'general') => {
+    setSelection(id ? {kind:'node',id} : null);
+    if (onAgent) onAgent(id,section); else onTab('agent');
+  };
+  const configuredId = agentId ?? (selection?.kind === 'node' ? selection.id : '');
   const currentSummary = draftDirty ? { ...summary, graph: draftGraph } : summary;
   const issues = useMemo(
     () => validation && indexIssues(validation.graph, validation.result.errors ?? [], validation.result.warnings ?? []),
@@ -244,17 +259,18 @@ export function GraphWorkspace({
     <div className="workspace">
       <div className="toolbar">
         <div className="tabs" role="tablist">
-          {(['canvas', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
+          {(['canvas', 'agent', 'activity', 'files', 'events', 'messages', 'yaml'] as GraphTab[]).map((t) => (
             <button
               key={t}
               type="button"
               role="tab"
               aria-selected={tab === t}
               className={tab === t ? 'on' : ''}
-              onClick={() => onTab(t)}
+              onClick={() => t === 'agent' ? configureAgent(configuredId) : onTab(t)}
             >
               {t === 'canvas'
                 ? 'Graph'
+                : t === 'agent' ? 'Agent configuration'
                 : t === 'activity'
                   ? 'Activity'
                   : t === 'files'
@@ -268,7 +284,7 @@ export function GraphWorkspace({
           ))}
         </div>
         <div className="toolbar-actions">
-          {(tab === 'canvas' || tab === 'yaml') && (
+          {(tab === 'canvas' || tab === 'yaml' || tab === 'agent') && (
             <>
               {tab === 'canvas' && (
                 <Btn small tone="ghost" onClick={openSettings} aria-pressed={settingsOpen && !selection}>
@@ -303,15 +319,15 @@ export function GraphWorkspace({
               <Btn small tone="ghost" onClick={() => void validateDraft()} disabled={saving}>
                 Validate
               </Btn>
-              <Btn small onClick={() => void saveGraph()} disabled={!draftDirty || saving} tone="primary">
-                Save graph
+              <Btn small onClick={() => tab === 'agent' ? setReviewOpen(true) : void saveGraph()} disabled={!draftDirty || saving || (tab === 'agent' && !canEditAgent)} tone="primary">
+                {tab === 'agent' ? 'Review & save' : 'Save graph'}
               </Btn>
               <Btn small tone="ghost" disabled={!draftDirty || saving} onClick={() => resetDraft(summary.graph)}>
                 Discard
               </Btn>
             </>
           )}
-          <div className="toolbar-run-controls">
+          <div className="toolbar-run-controls" hidden={tab === 'agent'}>
             <Badge tone={state === 'running' ? 'ok' : state === 'failed' ? 'bad' : state === 'paused' ? 'warn' : undefined}>
               {state}
             </Badge>
@@ -362,7 +378,7 @@ export function GraphWorkspace({
           version, or overwrite it with yours.
         </p>
       )}
-      {issues && (tab === 'canvas' || tab === 'yaml') && (
+      {issues && (tab === 'canvas' || tab === 'yaml' || tab === 'agent') && (
         <IssueSummary
           index={issues}
           onSelect={(target) => {
@@ -432,6 +448,7 @@ export function GraphWorkspace({
                   summary={currentSummary}
                   status={status}
                   nodeId={selection.id}
+                  onConfigure={() => configureAgent(selection.id)}
                   onSaved={(saved) => {
                     setDraftGraph(saved.graph);
                     setDraftDirty(false);
@@ -458,6 +475,18 @@ export function GraphWorkspace({
           )}
         </div>
       )}
+      {tab === 'agent' && <AgentConfiguration summary={currentSummary} nodeId={configuredId} section={agentSection}
+        onSection={section => configureAgent(configuredId,section)} onSelect={id => configureAgent(id)}
+        onUpdateNode={canEditAgent ? (id,patch) => changeGraph(graph => updateNode(graph,id,patch)) : undefined}
+        issues={issues?.nodes.get(configuredId)} dirty={draftDirty}/>}
+      {reviewOpen && <Modal title="Review graph changes" onClose={() => !saving && setReviewOpen(false)}>
+        <p>Save the entire graph draft based on version {summary.record.version}, including other agents, channels and graph settings.</p>
+        <p>Changed fields are listed below without copying their values. Review the relevant sections or Definition for their contents.</p>
+        <ul className="graph-change-list">{changedGraphFields(summary.graph,draftGraph).map(path => <li key={path}><code>{path}</code></li>)}</ul>
+        <p>Server validation and version conflict checks run before saving. Tool grants remain explicit; OAuth consent does not grant tools.</p>
+        <Btn tone="primary" disabled={saving || !canEditAgent} onClick={() => {setReviewOpen(false); void saveGraph();}}>Save graph draft</Btn>
+        <Btn disabled={saving} onClick={() => setReviewOpen(false)}>Continue editing</Btn>
+      </Modal>}
       {tab === 'activity' && <TaskActivity key={gid} graphId={gid} role={info?.identity?.role} />}
       {tab === 'events' && <EventsView graph={summary.graph} info={info} />}
       {tab === 'files' && <FilesView summary={summary} status={status} />}

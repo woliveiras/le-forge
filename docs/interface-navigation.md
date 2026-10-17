@@ -49,6 +49,36 @@ Editing preserves revision checks, blank-credential semantics, role restrictions
 DCR uncertainty handling and explicit OAuth consent. Missing connections and API
 failures are shown explicitly; navigation never registers or authorizes a client.
 
-Dedicated agent configuration pages, a scalable graph selector and Runs pages are
-still planned in `wip/PLAN.md` and `wip/TASKS.md`. Developer usability validation and
+A scalable graph selector and Runs pages are still planned in `wip/PLAN.md` and `wip/TASKS.md`. Developer usability validation and
 installation activation are separate from automated test coverage.
+
+## Agent configuration
+
+Open **Agent configuration** in a graph, or **Configure agent** in its canvas
+inspector. Select an agent and use General, Instructions, Tools & permissions or
+Advanced. Deep links have the form
+`#/g/<graph>/agent?agent=<node>&section=<general|instructions|tools|advanced>`.
+Reload and browser history preserve the selected agent/section; unsaved drafts
+remain in memory and are not persisted across a page reload.
+
+General contains identity, runtime and model fields. Instructions edits the prompt
+directly in the graph draft. Tools & permissions reuses the existing grant pickers,
+approval gates and isolation fields. Advanced contains loop, replica/workspace and
+turn-limit settings. The boundary summary distinguishes default grants from agent
+overrides and shows read-only workspace access and configured isolation. It is a
+draft summary, not proof of currently effective runtime access: installation policy,
+constraints and gateway checks still apply.
+
+Section and agent changes share the existing whole-graph draft. **Review & save**
+lists all changed document paths, including other agents, channels, graph settings
+and extension fields, before **Save graph draft** runs server validation and the
+existing version check. Values are not copied into the review; inspect their editor
+sections or Definition. Validation/dependency failures and revision conflicts keep
+the draft available for correction or the existing explicit conflict workflow.
+
+Viewers inspect a read-only page; operators and administrators can edit under the
+existing backend authorization. Opening a section never grants tools or starts an
+agent. Execution controls remain on the graph's operational views. The existing
+canvas inspector and Definition editor remain available for compatibility, including
+fields not represented by dedicated form controls. No schema or runtime permission
+contract changes are introduced by this organization.

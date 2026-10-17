@@ -639,7 +639,12 @@ remain separate planned work. All interface copy remains in English.
    No installation activation or additional external provider validation is implied.
 4. Give agents a dedicated configuration page: General, Instructions, Tools & permissions
    and Advanced. Keep effective isolation/grants visible; review the complete graph draft
-   before saving. Keep operational controls separate from editing.
+   before saving. Keep operational controls separate from editing. Delivered through the
+   dedicated agent route with shared graph drafts, section/agent deep links, configured
+   permission/isolation summaries and a complete changed-field review (values stay in
+   their existing editors). Existing canvas and Definition editors remain compatible.
+   Server validation, revision conflicts and role authorization are preserved; no
+   installation activation or runtime permission changes are implied.
 5. Introduce Runs list/detail navigation over existing execution records. Show results and
    actionable blockers first, with timeline, calls, messages and diagnostics on demand.
    Do not infer task completion, percentage progress or record relationships.

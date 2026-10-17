@@ -1746,3 +1746,19 @@ section {
 .connection-heading { margin:1.5rem 0; }
 .connection-heading h1 { margin:0 0 .5rem; font-size:1.8rem; letter-spacing:-.04em; }
 .page-head[hidden] { display:none; }
+.agent-configuration-page { padding:24px; overflow:auto; }
+.agent-selector { display:flex; align-items:center; gap:12px; max-width:480px; }
+.agent-settings-layout { display:grid; grid-template-columns:minmax(0, 2fr) minmax(240px, 1fr); gap:24px; align-items:start; }
+.agent-fields { border:0; margin:0; padding:0; min-width:0; }
+.agent-fields [hidden], .toolbar-run-controls[hidden] { display:none; }
+.agent-configuration-page textarea { width:100%; resize:vertical; }
+.agent-configuration-page h1 { font-size:1.8rem; letter-spacing:-.04em; }
+.agent-configuration-page h2 { font-size:1.2rem; text-transform:none; letter-spacing:normal; }
+.section-navigation button { border:0; background:transparent; padding:10px 12px; color:var(--muted); cursor:pointer; }
+.section-navigation button[aria-current=page] { color:var(--accent); background:var(--accent-soft); border-radius:5px; font-weight:600; }
+.graph-change-list { max-height:45vh; overflow:auto; overflow-wrap:anywhere; }
+@media(max-width:850px) { .agent-settings-layout { grid-template-columns:1fr; } .agent-configuration-page { padding:16px; } }
+.agent-fields .node-editor > div:not([hidden]) { display:grid; gap:12px; }
+.agent-fields .node-editor h3 { font-size:1.1rem; letter-spacing:normal; text-transform:none; }
+.agent-fields .node-editor fieldset:not([hidden]) { padding:16px; margin-top:16px; }
+.agent-configuration-page .section-navigation button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }

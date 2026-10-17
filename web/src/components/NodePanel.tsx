@@ -45,9 +45,10 @@ interface Props {
   onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
   /** Validation findings for this agent. */
   issues?: ElementIssue[];
+  onConfigure?: () => void;
 }
 
-export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdateNode, issues }: Props) {
+export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdateNode, issues, onConfigure }: Props) {
   const graph = summary.graph;
   const gid = graph.metadata.id;
   const node = graph.spec.nodes.find((n) => n.id === nodeId);
@@ -106,6 +107,7 @@ export function NodePanel({ summary, status, nodeId, onSaved, onStatus, onUpdate
         {node.disabled && <Badge tone="muted">disabled</Badge>}
       </div>
       {node.description && <p className="muted">{node.description}</p>}
+      {onConfigure && <Btn tone="primary" onClick={onConfigure}>Configure agent</Btn>}
       <AgentEnvironment graph={graph} node={node} />
       <ElementIssues issues={issues} label="Agent validation" />
 
@@ -432,16 +434,18 @@ function grantDetail(g: ToolGrant | string): string {
   return bits.join(' · ');
 }
 
-function NodeSettings({
+export function NodeSettings({
   summary,
   nodeId,
   onUpdateNode,
   issues,
+  toolsOnly = false,
 }: {
   summary: GraphSummary;
   nodeId: string;
   onUpdateNode?: (nodeId: string, update: Partial<GraphNode>) => void;
   issues?: ElementIssue[];
+  toolsOnly?: boolean;
 }) {
   const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
   const defaults = summary.graph.spec.defaults ?? {};
@@ -577,7 +581,7 @@ function NodeSettings({
           ))}
         </ul>
       )}
-      <h3>Settings</h3>
+      {!toolsOnly && <><h3>Settings</h3>
       <dl className="kv">
         <dt>runtime</dt>
         <dd>
@@ -646,7 +650,7 @@ function NodeSettings({
             <dd>{node.subscribe.join(', ')}</dd>
           </>
         ) : null}
-      </dl>
+      </dl></>}
     </section>
   );
 }
@@ -718,16 +722,18 @@ const STOP_FIELD = {
 } as const;
 
 /** Edits an agent's document fields. Every change goes to the graph draft; nothing is saved until the toolbar Save. */
-function AgentEditor({
+export function AgentEditor({
   summary,
   nodeId,
   onUpdateNode,
   issues,
+  section,
 }: {
   summary: GraphSummary;
   nodeId: string;
   onUpdateNode: (nodeId: string, update: Partial<GraphNode>) => void;
   issues?: ElementIssue[];
+  section?: 'general' | 'tools' | 'advanced';
 }) {
   const node = summary.graph.spec.nodes.find((n) => n.id === nodeId)!;
   const defaults = summary.graph.spec.defaults ?? {};
@@ -753,6 +759,7 @@ function AgentEditor({
   return (
     <section className="form node-editor" aria-label="Agent configuration">
       <h3>Agent configuration</h3>
+      <div hidden={!!section && section !== 'general'}>
       <label>
         ID
         <input value={node.id} readOnly aria-describedby={`${nodeId}-id-hint`} />
@@ -775,7 +782,8 @@ function AgentEditor({
         />
       </label>
 
-      <fieldset>
+      </div>
+      <fieldset hidden={!!section && section !== 'general'}>
         <legend>Runtime</legend>
         <label>
           Runtime
@@ -824,7 +832,7 @@ function AgentEditor({
         <FieldIssues issues={issues} field="model" />
       </fieldset>
 
-      <fieldset>
+      <fieldset hidden={!!section && section !== 'advanced'}>
         <legend>Loop</legend>
         <label>
           Loop mode
@@ -885,7 +893,7 @@ function AgentEditor({
         {fieldIssuesExact(issues, 'loop')}
       </fieldset>
 
-      <fieldset>
+      <fieldset hidden={!!section && section !== 'advanced'}>
         <legend>Replicas</legend>
         <label>
           Scaling
@@ -946,7 +954,7 @@ function AgentEditor({
         </label>
       </fieldset>
 
-      <fieldset>
+      <fieldset hidden={!!section && section !== 'tools'}>
         <legend>Command sandbox</legend>
         <label>
           Isolation
@@ -998,7 +1006,7 @@ function AgentEditor({
             </label>
             <p className="muted tiny">
               Commands run in a container on the LeForge sandbox daemon, never on the host. The image must already exist
-              there; see Integrations → Sandbox runtime.
+              there; see Administration → System health.
             </p>
           </>
         ) : (
@@ -1012,7 +1020,7 @@ function AgentEditor({
         <FieldIssues issues={issues} field="isolation" />
       </fieldset>
 
-      <fieldset>
+      <fieldset hidden={!!section && section !== 'advanced'}>
         <legend>Limits per turn</legend>
         <p className="muted tiny">
           A turn that exceeds a limit fails and its input is redelivered. Long tasks (dependency upgrades, large
@@ -1055,7 +1063,7 @@ function AgentEditor({
         <FieldIssues issues={issues} field="limits.maxTokens" />
       </fieldset>
 
-      <fieldset>
+      <fieldset hidden={!!section && section !== 'tools'}>
         <legend>Permissions</legend>
         <p className="muted tiny">Tool grants are chosen below; these gates hold the agent for a human decision.</p>
         <label className="check">

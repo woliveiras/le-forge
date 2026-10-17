@@ -1,3 +1,4 @@
+import type { AgentSection } from './agentSettingsModel';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
@@ -106,12 +107,17 @@ function backend(validate: (graph: Graph) => ValidationResult = promptRule) {
 function Harness({ start = 'canvas' as GraphTab, role = 'admin' as 'viewer' | 'operator' | 'admin' }) {
   const [summary, setSummary] = useState(initial);
   const [tab, setTab] = useState<GraphTab>(start);
+  const [agentId, setAgentId] = useState('dev');
+  const [section, setSection] = useState<AgentSection>('general');
   return (
     <EventStreamProvider token="t">
       <GraphWorkspace
         summary={summary}
         info={{ identity: { name: role, role } } as Info}
         tab={tab}
+        agentId={tab === 'agent' ? agentId : undefined}
+        agentSection={section}
+        onAgent={(id, section) => {setAgentId(id); setSection(section); setTab('agent');}}
         onTab={setTab}
         onSaved={setSummary}
         onCorrelation={() => undefined}
@@ -460,4 +466,67 @@ describe('GraphWorkspace YAML view', () => {
     expect(body.spec.nodes[0].name).toBe('From YAML');
     expect(body['x-editor']).toEqual({ zoom: 2 });
   });
+});
+
+describe('dedicated agent configuration',()=>{
+ it('preserves edits across sections and agents and reviews the entire graph before a versioned save',async()=>{
+  const {puts}=backend();const user=userEvent.setup();render(<Harness start="agent"/>);
+  await user.type(within(await screen.findByRole('region',{name:'Agent configuration'})).getByLabelText('Name'),' updated');
+  const sections=screen.getByRole('navigation',{name:'Agent configuration sections'});
+  await user.click(within(sections).getByRole('button',{name:'Instructions'}));
+  await user.clear(screen.getByLabelText('Agent instructions'));await user.type(screen.getByLabelText('Agent instructions'),'New instructions');
+  await user.selectOptions(screen.getByLabelText('Agent',{exact:true}),'rev');
+  await user.type(within(screen.getByRole('region',{name:'Agent configuration'})).getByLabelText('Name'),' updated');
+  await user.click(toolbarButton('Review & save'));
+  const review=screen.getByRole('dialog',{name:'Review graph changes'});
+  expect(within(review).getByText('spec.nodes[0].name')).toBeTruthy();expect(within(review).getByText('spec.nodes[0].prompt')).toBeTruthy();expect(within(review).getByText('spec.nodes[1].name')).toBeTruthy();expect(puts()).toHaveLength(0);
+  await user.click(within(review).getByRole('button',{name:'Continue editing'}));expect(puts()).toHaveLength(0);
+  await user.click(toolbarButton('Review & save'));await user.click(screen.getByRole('button',{name:'Save graph draft'}));
+  await waitFor(()=>expect(puts()).toHaveLength(1));
+  expect(puts()[0].headers['If-Match']).toBe('1');
+  const body=puts()[0].body as Graph;expect(body.spec.nodes[0]).toMatchObject({name:'Developer updated',prompt:'New instructions','x-color':'blue'});expect(body.spec.nodes[1].name).toBe('Reviewer updated');expect(body.spec.channels).toEqual(initial().graph.spec.channels);
+ });
+ it('keeps invalid instructions editable and prevents persistence after validation failure',async()=>{
+  const {puts}=backend();const user=userEvent.setup();render(<Harness start="agent"/>);
+  await user.click(within(screen.getByRole('navigation',{name:'Agent configuration sections'})).getByRole('button',{name:'Instructions'}));
+  await user.clear(screen.getByLabelText('Agent instructions'));await user.click(toolbarButton('Review & save'));await user.click(screen.getByRole('button',{name:'Save graph draft'}));
+  await waitFor(()=>expect(screen.getAllByText('native agents need a prompt').length).toBeGreaterThan(0));expect(puts()).toHaveLength(0);expect(screen.getByLabelText('Agent instructions')).toHaveProperty('value','');
+ });
+ it('keeps the draft after a revision conflict',async()=>{
+  const {state,puts}=backend();const user=userEvent.setup();render(<Harness start="agent"/>);
+  await user.type(within(await screen.findByRole('region',{name:'Agent configuration'})).getByLabelText('Name'),' local');
+  state.current={...state.current,record:{...state.current.record,version:2}};
+  await user.click(toolbarButton('Review & save'));await user.click(screen.getByRole('button',{name:'Save graph draft'}));
+  expect(await screen.findByText(/Someone saved a newer version/)).toBeTruthy();expect(puts()).toHaveLength(1);expect(within(screen.getByRole('region',{name:'Agent configuration'})).getByLabelText('Name')).toHaveProperty('value','Developer local');
+ });
+ it('shows viewers a read-only configuration without operational controls',async()=>{
+  const {puts}=backend();const user=userEvent.setup();render(<Harness start="agent" role="viewer"/>);
+  const name=within(await screen.findByRole('region',{name:'Agent configuration'})).getByLabelText('Name');
+  await user.type(name,' forbidden');expect(name).toHaveProperty('value','Developer');expect(screen.queryByRole('button',{name:'Run all'})).toBeNull();
+  expect(toolbarButton('Review & save').hasAttribute('disabled')).toBe(true);expect(puts()).toHaveLength(0);
+ });
+});
+it('preserves agent edits when validation is unavailable',async()=>{
+ const {puts}=backend(()=>{throw new Error('Validation service unavailable');});const user=userEvent.setup();render(<Harness start="agent"/>);
+ await user.type(within(await screen.findByRole('region',{name:'Agent configuration'})).getByLabelText('Name'),' retained');
+ await user.click(toolbarButton('Review & save'));await user.click(screen.getByRole('button',{name:'Save graph draft'}));
+ expect(await screen.findByText('network error: Validation service unavailable')).toBeTruthy();expect(puts()).toHaveLength(0);
+ expect(within(screen.getByRole('region',{name:'Agent configuration'})).getByLabelText('Name')).toHaveProperty('value','Developer retained');
+});
+it('keeps graph-level changes in the review when opening an agent',async()=>{
+ backend();const user=userEvent.setup();renderWorkspace();
+ await user.click(toolbarButton('Graph settings'));
+ const settings=screen.getByRole('complementary',{name:'Graph settings'});
+ await user.type(within(settings).getByLabelText('Name'),' edited');
+ await user.click(screen.getByRole('tab',{name:'Agent configuration'}));
+ await user.selectOptions(screen.getByLabelText('Agent',{exact:true}),'dev');
+ await user.click(toolbarButton('Review & save'));
+ expect(within(screen.getByRole('dialog',{name:'Review graph changes'})).getByText('metadata.name')).toBeTruthy();
+});
+it('returns to the canvas without inventing a selection when no agent is configured',async()=>{
+ backend();const user=userEvent.setup();renderWorkspace();
+ await user.click(screen.getByRole('tab',{name:'Agent configuration'}));
+ expect(screen.getByText('Select an agent from this graph. The requested agent may have been removed.')).toBeTruthy();
+ await user.click(screen.getByRole('tab',{name:'Graph'}));
+ expect(screen.queryByRole('complementary',{name:'Details'})).toBeNull();
 });
