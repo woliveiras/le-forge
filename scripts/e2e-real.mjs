@@ -50,7 +50,7 @@ try {
     cwd: join(repo, 'server'), env: { ...process.env, GOOS: 'linux', GOARCH: goarch, CGO_ENABLED: '0' },
   });
   await exec('go', ['build', '-o', join(local, 'forge-preview-linux'), './cmd/forge-preview'], {cwd:join(repo,'server'),env:{...process.env,GOOS:'linux',GOARCH:goarch,CGO_ENABLED:'0'}});
-  await exec('npx',['vite','build','preview-fixture','--config','vite.config.ts','--outDir','../preview-fixture-dist'],{cwd:join(repo,'web')});
+  await exec('pnpm',['exec','vite','build','preview-fixture','--config','vite.config.ts','--outDir','../preview-fixture-dist'],{cwd:join(repo,'web')});
   await cp(join(repo,'web/preview-fixture-dist'),join(local,'preview-web'),{recursive:true});
   const candidate = await docker('exec', daemon, 'mktemp', '-d', '/tmp/leforge-browser-real.XXXXXX');
   if (!/^\/tmp\/leforge-browser-real\.[A-Za-z0-9]+$/.test(candidate)) throw new Error('Unexpected temporary path');

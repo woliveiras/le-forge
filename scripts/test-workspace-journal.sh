@@ -14,4 +14,4 @@ docker compose cp "$binary" sandbox-daemon:/leforge-workspace-journal-test
 docker compose exec -T -e LEFORGE_TEST_KERNEL_JOURNAL=1 -e LEFORGE_TEST_JOURNAL_EXPORT=/leforge-workspace-journal-e2e.jsonl sandbox-daemon /leforge-workspace-journal-test -test.v -test.run TestKernelJournalLive
 
 docker compose cp sandbox-daemon:/leforge-workspace-journal-e2e.jsonl "$journal"
-(cd web && npx tsc --project tsconfig.e2e.json && LEFORGE_WORKSPACE_JOURNAL="$journal" npx playwright test --config playwright.journal.config.ts)
+(cd web && pnpm exec tsc --project tsconfig.e2e.json && LEFORGE_WORKSPACE_JOURNAL="$journal" pnpm exec playwright test --config playwright.journal.config.ts)

@@ -328,7 +328,7 @@ not inferred. Recent execution results and message/event links remain context,
 not proof that an execution authored a current diff. No new attribution records,
 persisted snapshots, human review or preview contracts are introduced.
 
-Browser regression: `cd web && LEFORGE_E2E_PORT=18103 npx playwright test e2e/git.spec.ts`.
+Browser regression: `cd web && LEFORGE_E2E_PORT=18103 pnpm exec playwright test e2e/git.spec.ts`.
 The optional port overrides the normal 18089 disposable server. This journey
 uses real SQLite, the native tool gateway, temporary Git repositories and an
 artificial model response; no shared Docker daemon or external provider is used.

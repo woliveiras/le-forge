@@ -14,7 +14,7 @@ export default defineConfig({
   use: { actionTimeout: 15000, baseURL, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && cd ../server && go build -tags e2e -o bin/forge-e2e ./cmd/forge-e2e && exec bin/forge-e2e',
+    command: 'pnpm run build && cd ../server && go build -tags e2e -o bin/forge-e2e ./cmd/forge-e2e && exec bin/forge-e2e',
     url: `${baseURL}/healthz`,
     reuseExistingServer: false,
     timeout: 120000,

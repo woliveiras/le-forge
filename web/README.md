@@ -11,11 +11,13 @@ context and hooks.
 
 ## Develop
 
+Use pnpm 10.33.4, pinned in `package.json`. See [toolchain setup](../CONTRIBUTING.md#local-toolchain-versions).
+
 ```bash
-npm ci
-npm run dev          # http://localhost:5173, proxies /api, /healthz, /metrics to :8080
-LEFORGE_API=http://host:8080 npm run dev   # proxy somewhere else
-npm run dev:mock     # no server needed: fixture-backed fake API + simulated events
+pnpm install --frozen-lockfile
+pnpm run dev          # http://localhost:5173, proxies /api, /healthz, /metrics to :8080
+LEFORGE_API=http://host:8080 pnpm run dev   # proxy somewhere else
+pnpm run dev:mock     # no server needed: fixture-backed fake API + simulated events
 ```
 
 In mock mode (`VITE_MOCK=1`) `src/mock/server.ts` answers every API call and
@@ -26,8 +28,8 @@ production bundle's main chunk.
 ## Build
 
 ```bash
-npm run build        # tsc --noEmit && vite build  ->  dist/
-npm run typecheck
+pnpm run build        # tsc --noEmit && vite build  ->  dist/
+pnpm run typecheck
 ```
 
 `dist/` is served by the Go server at `/`. Every API path is relative
@@ -107,8 +109,8 @@ With local Go, Git and Node installed, run from the repository root:
 
 ```bash
 cd web
-npm ci
-npx playwright install chromium
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 cd ..
 make test-e2e
 ```
@@ -135,7 +137,7 @@ agents, cancels and confirms Delete for an agent and its affected channels, and
 then cancels and confirms deletion of the remaining connection. API reads and
 browser reopening verify persisted nodes, positions and channels. Only the
 starting graph is seeded via the API; no browser responses are intercepted.
-Run it alone with `LEFORGE_E2E_PORT=18101 npm run test:e2e -- graph-connections.spec.ts`
+Run it alone with `LEFORGE_E2E_PORT=18101 pnpm run test:e2e graph-connections.spec.ts`
 from `web/`. The test uses no shared Docker daemon.
 
 The suite covers discovery/review/acceptance, approval before build and automatic
@@ -152,7 +154,7 @@ one marked build exactly once; it does not enforce cgroups or execute commands.
 workspace and cache preservation on the dedicated daemon.
 
 Failed tests retain screenshots and traces in `web/test-results/`;
-`cd web && npx playwright show-report` opens the HTML report. There are no automatic
+`cd web && pnpm exec playwright show-report` opens the HTML report. There are no automatic
 retries, intercepted browser API responses or fixed sleeps.
 
 ### Browser journey with the real sandbox
@@ -161,7 +163,7 @@ With the existing dedicated `sandbox-daemon` running and `alpine:3.22` already
 available inside it, run `make test-e2e-real` from the repository root. This also
 requires local Go, Git, Node, Docker CLI and Playwright Chromium. Override the
 Compose container name with `LEFORGE_TEST_SANDBOX_CONTAINER` if necessary.
-The mise journey downloads a pinned public mise image, Node and npm packages,
+The mise journey downloads a pinned public mise image, Node and packages from the npm registry,
 so preparation also requires internet access. Project commands stay inside the
 dedicated daemon; no project toolchain is installed on the host.
 

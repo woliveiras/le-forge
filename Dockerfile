@@ -4,11 +4,12 @@
 # runtime image carries only what agents' tools need (git, python3, a shell).
 
 FROM node:22-alpine AS web
+RUN corepack enable
 WORKDIR /web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY web/ ./
-RUN npm run build
+RUN pnpm run build
 
 FROM golang:1.26-alpine AS build
 WORKDIR /src/server

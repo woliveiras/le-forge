@@ -371,7 +371,7 @@ use Go 1.26, Python 3.12 and Node 22; see the
 
 ```bash
 # console (optional)
-(cd web && npm ci && npm run build)
+(cd web && pnpm install --frozen-lockfile && pnpm run build)
 
 # control plane: SQLite + filesystem queues + mock provider, no services needed
 cd server

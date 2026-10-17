@@ -27,7 +27,7 @@ import (
 // gateway to the real Docker sandbox. Never turn a failed tool into success.
 type realProvider struct{ analysisProvider }
 
-const miseProposal = `{"environment":{"dockerfile":"FROM ghcr.io/jdx/mise:2026.10.4-debian@sha256:2fb7fa9a4120333531a8a70296d4ea152ffd3e7658dcf29ac75774a7d78dec24\nENV MISE_DATA_DIR=/home/sandbox/.local/share/mise MISE_CONFIG_DIR=/home/sandbox/.config/mise MISE_CACHE_DIR=/home/sandbox/.cache/mise\n","setup":["mise trust /workspace/mise.toml","mise install","mise exec -- npm ci --ignore-scripts"],"caches":["/home/sandbox/.npm/_cacache"],"network":{"setup":"bridge","run":"none"}},"rationale":"Pinned mise and Node toolchain; setup downloads Node and locked npm packages using bridge network. Runtime is offline. npm lifecycle scripts are disabled; toolchain installation and mutable workspace remain private to each task.","tools":["mise","node","npm"]}`
+const miseProposal = `{"environment":{"dockerfile":"FROM ghcr.io/jdx/mise:2026.10.4-debian@sha256:2fb7fa9a4120333531a8a70296d4ea152ffd3e7658dcf29ac75774a7d78dec24\nENV MISE_DATA_DIR=/home/sandbox/.local/share/mise MISE_CONFIG_DIR=/home/sandbox/.config/mise MISE_CACHE_DIR=/home/sandbox/.cache/mise\n","setup":["mise trust /workspace/mise.toml","mise install","mise exec -- pnpm install --frozen-lockfile --ignore-scripts --store-dir /home/sandbox/.local/share/pnpm/store"],"caches":["/home/sandbox/.local/share/pnpm/store"],"network":{"setup":"bridge","run":"none"}},"rationale":"Pinned mise and Node toolchain; setup downloads Node and locked pnpm packages using bridge network. Runtime is offline. pnpm lifecycle scripts are disabled; toolchain installation and mutable workspace remain private to each task.","tools":["mise","node","pnpm"]}`
 
 func (realProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
 	if r.Metadata["graph"] == "fixture-preview" {
@@ -67,7 +67,7 @@ func (realProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.ChatResp
 		command += `; printf '{"lockfileVersion":3}' > package-lock.json`
 	}
 	if strings.HasPrefix(marker, "fixture-mise-") {
-		command += `; test "$(mise exec -- node --version)" = v22.14.0; mise exec -- npm run build; mise exec -- npm test`
+		command += `; test "$(mise exec -- node --version)" = v22.14.0; test "$(mise exec -- pnpm --version)" = 10.33.4; mise exec -- pnpm run build; mise exec -- pnpm test`
 	}
 	args, err := json.Marshal(map[string]any{"argv": []string{"sh", "-ec", command}})
 	if err != nil {
@@ -135,7 +135,7 @@ func runReal() error {
 			return err
 		}
 		if strings.HasPrefix(id, "fixture-mise-") {
-			for _, name := range []string{".dockerignore", "mise.toml", "package.json", "package-lock.json", "sum.cjs", "sum.test.cjs"} {
+			for _, name := range []string{".dockerignore", "mise.toml", "package.json", "pnpm-lock.yaml", "sum.cjs", "sum.test.cjs"} {
 				data, err := os.ReadFile(filepath.Join("mise-node", name))
 				if err != nil {
 					return fmt.Errorf("mise fixture %s: %w", name, err)

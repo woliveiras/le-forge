@@ -9,7 +9,7 @@ export default defineConfig({
     trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [{ name: 'chromium-provider-langgraph', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && cd ../server && go build -tags e2e -o bin/forge-provider-e2e ./cmd/forge-provider-e2e && exec bin/forge-provider-e2e',
+    command: 'pnpm run build && cd ../server && go build -tags e2e -o bin/forge-provider-e2e ./cmd/forge-provider-e2e && exec bin/forge-provider-e2e',
     url: `http://127.0.0.1:${port}/healthz`, reuseExistingServer: false,
     timeout: 120000, gracefulShutdown: { signal: 'SIGTERM', timeout: 15000 },
   },

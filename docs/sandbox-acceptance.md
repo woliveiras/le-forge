@@ -44,11 +44,11 @@ guides; `make test` alone does not exercise all sandbox boundaries.
 | `make test-egress` | Runtime/preparation proxies, destination restrictions, diagnostics, history and retention |
 | `make test-sandbox` | Mutual TLS, dedicated-daemon placement and network isolation |
 
-The mise example pins its public image and Node version and commits its npm
+The mise example pins its public image and Node version and commits its pnpm
 lockfile. `.dockerignore` excludes installed dependencies and generated outputs.
 Generated outputs must be excluded so setup does not change the approved build
 context and block continuation.
-The second task shares the prepared image and compatible npm cache seed, not
+The second task shares the prepared image and compatible pnpm cache seed, not
 another task's writable volume, node_modules or installed toolchain. Setup reruns.
 
 ## Limits retained deliberately

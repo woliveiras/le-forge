@@ -15,8 +15,8 @@ From the repository root, with Go, Node, Git and Python 3.10+ available:
 python3 -m venv /tmp/leforge-provider-venv
 /tmp/leforge-provider-venv/bin/pip install './sdk/python[langgraph]'
 cd web
-npm ci --no-audit --no-fund
-npx playwright install chromium
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
 cd ..
 export LEFORGE_E2E_PYTHON=/tmp/leforge-provider-venv/bin/python
 make test-e2e-providers

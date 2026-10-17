@@ -1058,7 +1058,7 @@ an unprivileged command in the approved sandbox on the dedicated daemon.
 
 The supported sandbox scope and executed validation are recorded in
 [sandbox acceptance](sandbox-acceptance.md). For a repository with only
-`mise.toml` and npm manifests, use the [tested example](../examples/projects/mise-node/README.md).
+`mise.toml` and pnpm manifests, use the [tested example](../examples/projects/mise-node/README.md).
 Keep generated dependencies and outputs out of an approved Docker context with
 `.dockerignore`; otherwise setup can change that context and correctly block
 continuation until a new review. Full Compose/devcontainer compatibility,

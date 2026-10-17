@@ -8,7 +8,7 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:18090', actionTimeout: 15000, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [{ name: 'chromium-real-sandbox', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'npm run build && node ../scripts/e2e-real.mjs',
+    command: 'pnpm run build && node ../scripts/e2e-real.mjs',
     url: 'http://127.0.0.1:18090/healthz', reuseExistingServer: false,
     timeout: 180000, gracefulShutdown: { signal: 'SIGTERM', timeout: 75000 },
   },

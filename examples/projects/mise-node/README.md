@@ -1,6 +1,6 @@
 # mise sandbox example
 
-A small repository with `mise.toml`, Node 22.14.0 and one locked npm dependency.
+A small repository with `mise.toml`, Node 22.14.0, pnpm 10.33.4 and one locked dependency.
 It intentionally has no LeForge, devcontainer, Dockerfile or Compose definition.
 Copy these files into a repository used by a LeForge graph. In **Graph settings →
 Environment**, discover, analyze and review the initial proposal in **Approvals**.
@@ -21,7 +21,7 @@ Review these setup commands before approving:
 ```sh
 mise trust /workspace/mise.toml
 mise install
-mise exec -- npm ci --ignore-scripts
+mise exec -- pnpm install --frozen-lockfile --ignore-scripts --store-dir /home/sandbox/.local/share/pnpm/store
 ```
 
 Keep the supplied `.dockerignore`: it excludes installed dependencies and task
@@ -31,7 +31,7 @@ its own accepted inputs.
 Setup uses `network.setup: bridge` to download tools and packages; execution uses
 `network.run: none`. The installation must allow bridge setup. This example does
 not bypass a stricter policy or expand any host allowlist. Declare only
-`/home/sandbox/.npm/_cacache` as a reusable cache; do not cache credentials or task
+`/home/sandbox/.local/share/pnpm/store` as a reusable cache; do not cache credentials or task
 outputs. mise tool directories remain private. See the official
 [mise installation documentation](https://mise.jdx.dev/installing-mise.html).
 
@@ -39,18 +39,18 @@ After approval and build, ask the agent to run these commands with `shell.exec`
 inside its Docker sandbox:
 
 ```sh
-mise exec -- npm run build
-mise exec -- npm test
+mise exec -- pnpm run build
+mise exec -- pnpm test
 ```
 
 The build copies the module into `built.cjs`; two tests exercise its dependency
-and invalid-input handling. npm lifecycle scripts are intentionally disabled
+and invalid-input handling. pnpm lifecycle scripts are intentionally disabled
 for this example. Nothing needs to be installed on the developer's host.
 
 `make test-e2e-real` automates this journey with scripted inference but real
 approval, downloads, build, setup, execution and file checks. A second task for
-the same repository reuses the prepared image and compatible npm seed while
+the same repository reuses the prepared image and compatible pnpm seed while
 receiving a different writable cache, final setup image and workspace. Setup
 runs again in that workspace; this is not reuse of another task's node_modules
 or installed toolchain. The test requires internet access to GHCR, Node's
-release distribution and npm during preparation; execution is offline.
+release distribution, pnpm releases and the npm registry during preparation; execution is offline.

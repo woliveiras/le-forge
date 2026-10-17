@@ -40,7 +40,7 @@ test-python: ## SDK and example agent tests (stdlib unittest)
 	$(PYTHON) -m unittest discover -s scripts/tests -v
 
 test-web: ## Type-check and run the web console tests (Vitest, jsdom)
-	cd web && npm ci --no-audit --no-fund && npx tsc --noEmit && npm test
+	cd web && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm test
 
 test-compose: ## Reviewed Compose services on the dedicated daemon (cached alpine:3.22 required)
 	./scripts/test-compose-runtime.sh
@@ -87,19 +87,19 @@ clean: ## Remove build outputs
 .PHONY: test-e2e
 test-e2e: ## Chromium browser journey against a disposable backend (Go, Node, Git, Playwright Chromium required)
 	cd server && go test -tags e2e ./cmd/forge-e2e
-	cd web && npm run test:e2e
+	cd web && pnpm run test:e2e
 
 .PHONY: test-e2e-real
 test-e2e-real: ## Browser journey with shell.exec on the running dedicated sandbox daemon
 	cd server && go test -tags e2e ./cmd/forge-e2e
-	cd web && npm run test:e2e:real
+	cd web && pnpm run test:e2e:real
 
 .PHONY: test-e2e-providers
 test-e2e-providers: ## Real LangGraph + browser provider journey, no Docker (set LEFORGE_E2E_PYTHON)
 	@test -n "$(LEFORGE_E2E_PYTHON)" || (echo "Set LEFORGE_E2E_PYTHON to Python with the langgraph extra installed"; exit 1)
 	PYTHONPATH=sdk/python "$(LEFORGE_E2E_PYTHON)" -m unittest discover -s scripts/provider-e2e -v
 	cd server && go test -tags e2e ./cmd/forge-provider-e2e
-	cd web && npm run test:e2e:providers
+	cd web && pnpm run test:e2e:providers
 
 .PHONY: test-preview
 test-preview: ## Real sandbox preview gateway, HTTP client and lifecycle checks

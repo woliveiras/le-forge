@@ -134,6 +134,7 @@ test('mise proposal installs locked tools and dependencies, builds and tests off
     await page.goto('/#/approvals');
     const approval = page.locator('article.approval').filter({ hasText: id });
     await expect(approval).toContainText('mise install');
+    await expect(approval).toContainText('pnpm install --frozen-lockfile --ignore-scripts');
     await approval.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => {
       const view = await read(page, id, 'environment');
@@ -152,6 +153,7 @@ test('mise proposal installs locked tools and dependencies, builds and tests off
   expect(views[1].sharedImage).toBe(views[0].sharedImage);
   expect(views[1].image).not.toBe(views[0].image);
   expect(views[0].caches).toHaveLength(1);
+  expect(views[0].caches[0].path).toBe('/home/sandbox/.local/share/pnpm/store');
   expect(views[1].caches[0].volume).not.toBe(views[0].caches[0].volume);
   await file(page, 'fixture-mise-a');
   await expect(page.getByRole('region', { name: 'File contents' })).not.toContainText('fixture-mise-b');

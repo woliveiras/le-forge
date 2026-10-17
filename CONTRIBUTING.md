@@ -9,7 +9,7 @@ merged into core — put them behind one of the extension interfaces instead
 
 Install Git and Make. Docker with Compose is required for the container workflow:
 Go runs in a container through `scripts/go.sh`, and Compose starts the full stack.
-`make test` also requires local Python and Node.js/npm for the SDK, example agents
+`make test` also requires local Python and Node.js/pnpm for the SDK, example agents
 and console tests; these targets do not skip when the tools are missing.
 
 ### Local toolchain versions
@@ -20,8 +20,8 @@ Use the following version lines to match the project's existing containers:
 | --- | --- | --- |
 | Go | Latest patch in 1.26 | [server/go.mod](server/go.mod) requires 1.26.0; [Dockerfile](Dockerfile) and [scripts/go.sh](scripts/go.sh) use `golang:1.26-alpine`. |
 | Python | Latest patch in 3.12 | [agents/Dockerfile](agents/Dockerfile) uses `python:3.12-slim`; the [SDK](sdk/python/pyproject.toml) supports Python 3.10+. |
-| Node.js | Latest patch in 22, at least 22.22.2 | [Dockerfile](Dockerfile) uses `node:22-alpine`; dependencies in [web/package-lock.json](web/package-lock.json) require 22.22.2 or newer within Node 22. |
-| npm | Bundled with the selected Node.js | Use `npm ci` with the committed web lockfile. |
+| Node.js | Latest patch in 22, at least 22.22.2 | [Dockerfile](Dockerfile) uses `node:22-alpine`; dependencies in [web/pnpm-lock.yaml](web/pnpm-lock.yaml) require 22.22.2 or newer within Node 22. |
+| pnpm | 10.33.4 (pinned in `packageManager`) | Use `pnpm install --frozen-lockfile` with the committed web lockfile. |
 
 Choose either asdf or mise below, or install these tools directly. A version
 manager is optional. Run the setup commands from the repository root in Bash or
@@ -77,6 +77,9 @@ records exact versions in `mise.toml`. Subsequent `mise install` calls reuse
 those versions. If you have not activated mise in your shell, run commands with
 `mise exec --`, for example `mise exec -- make test-python`.
 
+Install the pinned package manager with `corepack enable && corepack install --global pnpm@10.33.4`
+(or `mise use --pin pnpm@10.33.4`).
+
 ### Verify and develop
 
 From the repository root, check that your shell resolves the selected tools:
@@ -85,7 +88,7 @@ From the repository root, check that your shell resolves the selected tools:
 go version
 python3 --version
 node --version
-npm --version
+pnpm --version
 git --version
 make --version
 docker --version
@@ -117,9 +120,9 @@ For the console development server:
 
 ```bash
 cd web
-npm ci
-npm run dev:mock  # fixture-backed UI, no backend required
-# or: npm run dev  # proxies API requests to the backend on port 8080
+pnpm install --frozen-lockfile
+pnpm run dev:mock  # fixture-backed UI, no backend required
+# or: pnpm run dev  # proxies API requests to the backend on port 8080
 ```
 
 Live broker/database suites are skipped unless their environment variables are

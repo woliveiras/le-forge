@@ -144,6 +144,6 @@ wrapper. Targeted packages are `internal/instructions`, `internal/graph`,
 trip. `SkillsView.test.tsx` tests administration, conflict retention, roles and
 inspection. The Chromium journey is included in `make test-e2e`, using the disposable
 controller and synthetic tools without the shared Docker daemon. To run only
-this journey, use `cd web && npx playwright test --config playwright.instructions.config.ts`.
+this journey, use `cd web && pnpm exec playwright test --config playwright.instructions.config.ts`.
 The shared configuration defaults to loopback port 18089; `LEFORGE_E2E_PORT`
 selects another validated port for parallel sessions.

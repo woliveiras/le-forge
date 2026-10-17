@@ -31,7 +31,7 @@ func TestRealProviderUsesShellAndPropagatesFailures(t *testing.T) {
 		if len(args.Argv) != 3 || args.Argv[0] != "sh" || args.Argv[1] != "-ec" || !strings.Contains(args.Argv[2], id) || !strings.Contains(args.Argv[2], "test ! -e result.txt") {
 			t.Fatalf("invalid shell proof: %+v", args)
 		}
-		if strings.Contains(args.Argv[2], "npm test") != strings.HasPrefix(id, "fixture-mise-") {
+		if strings.Contains(args.Argv[2], "pnpm test") != strings.HasPrefix(id, "fixture-mise-") {
 			t.Fatalf("unexpected toolchain command: %s", args.Argv[2])
 		}
 		if strings.Contains(args.Argv[2], "package-lock.json") != (id == "fixture-source-leforge") {
@@ -69,7 +69,11 @@ func TestMiseProposalUsesPrivateToolsAndApprovedSetupNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := proposal.Environment
-	if !strings.Contains(e.Dockerfile, "@sha256:") || !strings.Contains(e.Dockerfile, "MISE_DATA_DIR=/home/sandbox/") || e.Network.Setup != "bridge" || e.Network.Run != "none" || len(e.Setup) != 3 || len(e.Caches) != 1 || e.Caches[0] != "/home/sandbox/.npm/_cacache" {
+	if len(e.Setup) != 3 || e.Setup[2] != "mise exec -- pnpm install --frozen-lockfile --ignore-scripts --store-dir /home/sandbox/.local/share/pnpm/store" {
+		t.Fatalf("expected frozen pnpm installation: %v", e.Setup)
+	}
+
+	if !strings.Contains(e.Dockerfile, "@sha256:") || !strings.Contains(e.Dockerfile, "MISE_DATA_DIR=/home/sandbox/") || e.Network.Setup != "bridge" || e.Network.Run != "none" || len(e.Setup) != 3 || len(e.Caches) != 1 || e.Caches[0] != "/home/sandbox/.local/share/pnpm/store" {
 		t.Fatalf("unsafe or incomplete fixture: %+v", e)
 	}
 }
