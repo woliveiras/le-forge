@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GitView } from './GitView';
 import { api, errorMessage } from '../api/client';
 import type { FileEntry, GraphStatus, GraphSummary } from '../api/types';
 import { Btn, ErrorBox, fmtDateTime } from './common';
 
-export function FilesView({ summary, status }: { summary: GraphSummary; status?: GraphStatus }) {
+type FilesProps = { summary: GraphSummary; status?: GraphStatus };
+export function FilesView(props: FilesProps) {
+  return <WorkspaceFiles key={props.summary.graph.metadata.id} {...props} />;
+}
+function WorkspaceFiles({ summary, status }: FilesProps) {
   const graph = summary.graph;
   const graphId = graph.metadata.id;
   const worktreeNodes = graph.spec.nodes.filter((node) => node.workspace?.mode === 'worktree');
@@ -16,12 +20,16 @@ export function FilesView({ summary, status }: { summary: GraphSummary; status?:
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
+  const contentRequest = useRef(0);
   const [error, setError] = useState<string>();
   const replicaCount = Math.max(status?.nodes?.find((node) => node.nodeId === nodeId)?.desiredReplicas ?? 1, 1);
   const location = nodeId ? { node: nodeId, replica } : {};
 
   useEffect(() => {
     let cancelled = false;
+    contentRequest.current++;
+    setContentLoading(false);
+    setEntries([]);
     setLoading(true);
     setError(undefined);
     setSelected(undefined);
@@ -39,20 +47,26 @@ export function FilesView({ summary, status }: { summary: GraphSummary; status?:
       });
     return () => {
       cancelled = true;
+      contentRequest.current++;
     };
   }, [graphId, path, nodeId, replica]);
 
   const openFile = async (entry: FileEntry) => {
+    const request = ++contentRequest.current;
     setSelected(entry);
+    setContent('');
     setContentLoading(true);
     setError(undefined);
     try {
-      setContent(await api.fileContent(graphId, { path: entry.path, ...location }));
+      const value = await api.fileContent(graphId, { path: entry.path, ...location });
+      if (request === contentRequest.current) setContent(value);
     } catch (cause) {
-      setError(errorMessage(cause));
-      setContent('');
+      if (request === contentRequest.current) {
+        setError(errorMessage(cause));
+        setContent('');
+      }
     } finally {
-      setContentLoading(false);
+      if (request === contentRequest.current) setContentLoading(false);
     }
   };
 

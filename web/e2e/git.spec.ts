@@ -53,3 +53,45 @@ test('read-only agent cannot write through filesystem or shell despite its grant
  await page.getByRole('button', {name:/result.txt/}).click();
  await expect(page.getByRole('region',{name:'File contents'})).toContainText('baseline result');
 });
+
+test('late file responses cannot replace a newer selection',async({page})=>{
+ const headers={Authorization:'Bearer e2e-admin-token'};
+ expect((await page.request.post('/api/v1/graphs/git-inspect/stop',{headers})).ok()).toBe(true);
+ await expect.poll(async()=>((await (await page.request.get('/api/v1/graphs/git-inspect',{headers})).json()).record.state)).toBe('stopped');
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/g/git-inspect/canvas');
+ await page.getByRole('button',{name:'Run all',exact:true}).click();
+ await expect.poll(async()=>{
+  const response=await page.request.get('/api/v1/graphs/git-inspect/files',{headers});
+  return (await response.json()).some((file:{name:string})=>file.name==='shell.txt');
+ }).toBe(true);
+ await page.getByRole('tab',{name:'Files',exact:true}).click();
+ let release!:()=>void;
+ const gate=new Promise<void>(resolve=>release=resolve);
+ let intercepted=false;
+ let delivered=false;
+ await page.route('**/api/v1/graphs/git-inspect/files/content?*',async route=>{
+  if(new URL(route.request().url()).searchParams.get('path')!=='result.txt') return route.continue();
+  const response=await route.fetch();
+  intercepted=true;
+  await gate;
+  await route.fulfill({response});
+  delivered=true;
+ });
+ await page.getByRole('button',{name:/result.txt/}).click();
+ await expect.poll(()=>intercepted).toBe(true);
+ await page.getByRole('button',{name:/shell.txt/}).click();
+ const content=page.getByRole('region',{name:'File contents'}).locator('pre').last();
+ await expect(content).toHaveText('shell change\n');
+ release();
+ await expect.poll(()=>delivered).toBe(true);
+ await expect(content).toHaveText('shell change\n');
+ for(const method of ['POST','PUT','PATCH','DELETE']){
+  for(const endpoint of ['files','files/content','git/diff']){
+   const response=await page.request.fetch('/api/v1/graphs/git-inspect/'+endpoint,{method,headers,data:{path:'shell.txt',content:'forbidden'}});
+   expect([404,405],method+' '+endpoint).toContain(response.status());
+  }
+ }
+ const persisted=await page.request.get('/api/v1/graphs/git-inspect/files/content?path=shell.txt',{headers});
+ expect(await persisted.text()).toBe('shell change\n');
+});

@@ -1380,3 +1380,15 @@ retried by the next reconciliation; storage failures are reported without
 publishing a successful state event. Old runs do not publish running state after
 a stop, new version or new run. Storage conformance, focused engine tests, the
 repeated environment API lifecycle and browser start/stop journeys cover this fix.
+
+### Workspace inspection response isolation (2026-10-18)
+
+File inspection resets local state when switching graphs and invalidates pending
+content reads when changing directory/workspace or selecting another file. Late
+responses, failures and loading completions cannot replace the latest selection.
+Tests exercise the real API client with controlled responses; browser integration
+delays an actual backend response and verifies the newer file remains visible.
+The file/Git inspection routes are read-only for every role: POST, PUT, PATCH and
+DELETE are rejected, and the file remains unchanged. No editor or mutation action
+is offered in the inspection components. Broader graph/instruction isolation
+acceptance remains tracked separately.

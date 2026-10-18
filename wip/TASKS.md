@@ -752,10 +752,10 @@ Run the consolidated acceptance round after the remaining Release 1 implementati
 - [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled.
 - [ ] Repeat the flow with both approval-required and automatic delegation policies.
 - [ ] Validate direct first-use navigation on a clean installation, including real test MCPs and providers; the global onboarding panel has been withdrawn.
-- [ ] Verify that no interface path allows users to directly edit workspace files.
+- [x] Verify that no interface path allows users to directly edit workspace files. — File/Git inspection exposes only reads; API integration and Chromium reject POST/PUT/PATCH/DELETE even for administrators and verify unchanged contents. Component tests confirm read-only controls and GET-only requests. Agent tools remain the explicit write path.
 - [ ] Verify that no secret reaches the browser after saving, the runtime, a prompt, or logs.
 - [ ] Verify that no project toolchain, image, or container is installed or created on the host; everything runs on the LeForge Docker daemon and is removed by its reset.
-- [ ] Verify that data and instructions from one graph/workspace do not appear in another scope.
+- [ ] Verify that data and instructions from one graph/workspace do not appear in another scope. — File inspection now discards late reads/errors across selections and graph/workspace changes, with component and browser regression coverage. Broader instruction/runtime scope acceptance remains pending.
 - [ ] Run relevant backend, frontend, SDK/runtime, and Docker image tests; record known limitations.
 - [ ] Update user, operations, and troubleshooting guides to reflect delivered behavior.
 
