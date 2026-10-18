@@ -1238,3 +1238,11 @@ modified during this browser check. Only browser-local guide progress changed.
 The implementation's passing unit/integration and 51 E2E scenarios remain the
 automated evidence; this activation adds installed-browser pause/resume evidence.
 Developer usability acceptance and a fresh-install exercise remain separate.
+
+### Release 1 operations runbook (2026-10-18)
+
+The [operations runbook](../docs/operations.md) now covers the full persistence and
+key inventory, quiescence, isolated restore, version-fenced upgrades, rollback and
+failure diagnosis. Model-provider re-sealing must not be mistaken for a complete
+MCP credential migration; previous keys remain necessary. This is documentation
+verified against the implementation, not a completed restore drill or deployment.

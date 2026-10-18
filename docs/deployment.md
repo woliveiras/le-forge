@@ -136,6 +136,9 @@ backlog per group and LLM latency tell you where to scale.
 | 11434, 80 (tgi) | Ollama, TGI | forged |
 | 2376 | sandbox-daemon (Docker API, mutual TLS) | forged only, on the `sandbox` network; never published |
 
+For the complete persistence inventory, safe upgrade sequence, key-rotation
+limits and failure recovery, use the [operations runbook](operations.md).
+
 ## Backup and restore
 
 | State | Backup | Restore |
@@ -154,7 +157,8 @@ any version can be exported with `forge get <id>` / `?version=N`.
 - Storage migrations are embedded, versioned SQL (`schema_migrations` table),
   applied automatically at startup; on PostgreSQL an advisory lock ensures one
   instance migrates. Migrations are forward-only and additive within a major
-  version, so N and N+1 instances can run side by side during a rolling update.
+  version, but schema compatibility alone does not make mixed-version workers safe.
+  Follow feature-specific fencing requirements in the [operations runbook](operations.md#upgrade-and-rollback).
 - Rolling update: `maxUnavailable: 0`. A terminating instance stops its
   replicas gracefully (in-flight turns finish within the grace period —
   set `terminationGracePeriodSeconds` / `stop_grace_period` above your longest

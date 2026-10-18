@@ -705,7 +705,7 @@ and cooperative interruption for the current native scope are verified above.
 - [ ] Ensure MCP services, providers, storage, and runtimes are reachable as configured without exposing unnecessary ports.
 - [ ] Define secure initial configuration for credentials, authentication, and first-operator creation.
 - [ ] Add health checks and show dependency status in the console.
-- [ ] Document installation, upgrades, backup, restore, key rotation, and failure recovery.
+- [x] Document installation, upgrades, backup, restore, key rotation, and failure recovery. — `docs/operations.md` adds the complete recovery-set inventory, isolated restore sequence, version-fenced upgrades, rollback and failure triage. Corrected the older claim that all credentials are automatically re-sealed: MCP still needs previous keys until separately migrated. Actual restore/clean-install acceptance remains pending.
 - [ ] Ensure users can perform initial setup, connect tools, configure models, build a graph, and operate tasks without shell access, manual server-file editing, or CLI usage.
 - [ ] Run a clean-install test following only the documentation and interacting through the browser after starting the containers.
 

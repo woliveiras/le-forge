@@ -45,7 +45,7 @@ provider, duplicate provider names, invalid roles, no API credentials).
 | `secrets.keyEnv` | `LEFORGE_SECRET_KEY` (the variable it names) | `LEFORGE_SECRET_KEY` | Variable holding the installation key (32 bytes, base64 or hex) that encrypts credentials entered in the console. Wins over `keyFile`. |
 | `secrets.keyFile` | `LEFORGE_SECRET_KEY_FILE` | `data/secret.key` (image: `/var/lib/leforge/data/secret.key`) | File holding the key when the variable is empty. |
 | `secrets.generateKeyFile` | `LEFORGE_SECRET_KEY_GENERATE` | `true` | Create `keyFile` (mode 0600) with a random key on first start when no key exists. Turn off when several instances run (they must share one key). |
-| `secrets.previousKeysEnv` | `LEFORGE_SECRET_KEY_PREVIOUS` (the variable it names) | `LEFORGE_SECRET_KEY_PREVIOUS` | Comma-separated older keys that still decrypt; values are re-encrypted with the current key at startup (rotation). |
+| `secrets.previousKeysEnv` | `LEFORGE_SECRET_KEY_PREVIOUS` (the variable it names) | `LEFORGE_SECRET_KEY_PREVIOUS` | Comma-separated older keys that still decrypt. Model-provider values are re-sealed on load; MCP credentials may still require previous keys. See the rotation runbook. |
 | `runtimes.sharedSecretEnv` | — (image: `LEFORGE_RUNTIME_SECRET`) | — | Env var whose value is sent to external runtimes as `X-Leforge-Runtime-Secret`. |
 | — | `LEFORGE_RUNTIME_NETWORK` | — | Docker network for runtimes launched from `runtime.image` with docker isolation. |
 | `isolation.docker.bin` | — | `docker` | Docker CLI used by docker sandboxes and launched runtimes. |
@@ -142,7 +142,9 @@ providers (Ollama, vLLM, ...) still work.
   on every instance and set `secrets.generateKeyFile: false`.
 * **Rotation:** set the new key as `LEFORGE_SECRET_KEY`, move the old one to
   `LEFORGE_SECRET_KEY_PREVIOUS`, restart (values are re-encrypted and the log
-  reports how many), then remove the previous key.
+  reports model-provider re-sealing). Retain previous keys for MCP credentials
+  and historical backups until separately verified; see the
+  [rotation runbook](operations.md#encryption-key-rotation).
 * **Lost key:** affected providers show *Unavailable* with the reason; agents
   selecting them fail with that reason instead of using another provider.
   Re-enter the credential in the console to repair them.
