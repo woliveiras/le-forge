@@ -66,3 +66,27 @@ opt-in live smoke test with authorized test resources. Cover expired/insufficien
 credentials, timeouts, pagination, schema drift and redaction. A fixture success
 is not proof of live vendor compatibility. Live write tests need explicit approved
 test targets; no automatic production mutations or paid jobs.
+
+## Opt-in public protocol qualification
+
+On 2026-10-18 the production transport successfully initialized and discovered
+three tools from DeepWiki and four anonymous tools from Hugging Face. A separate
+DeepWiki check read the public `golang/go` documentation structure through the
+real connection manager and tool gateway; the same call was denied without its
+exact grant. Tests use temporary storage and synthetic encryption material, never
+installed connections or credentials, and make no repository/account mutations.
+Returned documentation is treated as data and is not written to the test log.
+
+With a local Go toolchain and public HTTPS access, repeat explicitly from `server`:
+
+```sh
+LEFORGE_TEST_PUBLIC_MCP=1 go test ./internal/mcpconfig -run 'TestLive(PublicTemplateDiscovery|DeepWikiReadThroughGateway)' -v -count=1
+```
+
+Normal offline tests skip these network checks. Availability and catalogue contents
+may change. This evidence does not qualify authenticated Hugging Face/Space tools,
+Context7 or W&B credentials, paid computation, private repositories or every remote
+tool. Those acceptance cases remain pending with appropriate authorized accounts.
+The [DeepWiki contract](https://docs.devin.ai/work-with-devin/deepwiki-mcp) and
+[Hugging Face server](https://github.com/huggingface/hf-mcp-server) describe the
+public endpoints used by these tests.

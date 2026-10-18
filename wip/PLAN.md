@@ -1470,3 +1470,14 @@ saved node positions are unchanged. Component integration exercises actual rende
 paths through rebuild, hide/reveal, removal and restoration. The original browser
 journey retains all assertions and uses independent IDs for repeat runs; all five
 repetitions pass after the change.
+
+### Public MCP live qualification (2026-10-18)
+
+Opt-in live tests exercise production DNS/TLS/protocol discovery against anonymous
+DeepWiki (three tools) and Hugging Face (four tools). A DeepWiki public documentation
+read uses the real manager/store/gateway, proves denial without an exact grant and
+success after explicit authorization. Tests never access installation credentials,
+create OAuth clients, mutate repositories or execute Hugging Face Space compute.
+The normal offline suite skips network checks; explicit local execution passed.
+Authenticated vendor journeys and the rest of the first-wave catalogue remain
+pending rather than inferred from public discovery.
