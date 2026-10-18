@@ -1,3 +1,4 @@
+import {MCPArgumentPolicyFields} from './MCPArgumentPolicyFields';
 import {MCPAtlassianPolicyFields} from './MCPAtlassianPolicyFields';
 import { MCPMetadataFields } from './MCPMetadataFields';
 import { canDiscover, saveAndDiscover } from './mcpDiscovery';
@@ -34,7 +35,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,transportProfile:c.transportProfile,atlassianPolicy:c.atlassianPolicy,credentialType:c.credentialType,metadataHeaders:c.metadataHeaders,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setCredentialEmail('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,transportProfile:c.transportProfile,atlassianPolicy:c.atlassianPolicy,argumentPolicy:c.argumentPolicy,credentialType:c.credentialType,metadataHeaders:c.metadataHeaders,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setCredentialEmail('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),credentialType:undefined,template:undefined,templateParameters:undefined});setToken('');setCredentialEmail('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){
     setBusy(true);setError(undefined);setSavedID(undefined);setSaveProgress('Saving connection…');
@@ -91,6 +92,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
       <label>Service<select disabled={!!input.template} value={input.service} onChange={e=>setInput({...input,service:e.target.value})}>{serviceOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <MCPServiceGuide service={input.service}/>
       <MCPAtlassianPolicyFields input={input} onChange={setInput}/>
+      <MCPArgumentPolicyFields input={input} onChange={setInput}/>
       {!input.template&&<>
         {input.service==='gitlab'&&<label>GitLab instance URL<input type="url" value={gitlabInstance} onChange={e=>setGitlabInstance(e.target.value)}/></label>}
         <p>Apply defaults to prepare OAuth fields. This clears the client registration fields in the form; review and save to change the connection.</p>
@@ -125,6 +127,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
     <div className={presentation ? "connection-detail" : "cards"}>{(list.data??[]).filter(c=>!presentation||(presentation==='detail'&&c.id===connectionID)).map(c=><article className="card" key={c.id} aria-label={`MCP ${c.name}`}>
       {presentation ? <h2>{tab==='settings'?'Connection settings':tab==='overview'?'Connection overview':connectionTabTitles[tab]}</h2> : <h3>{c.name} <Badge>{c.status}</Badge></h3>}<p>{c.service} · {c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
       <p>{c.credentialConfigured?'Credential configured':'No credential'} · revision {c.revision} · catalogue {c.toolsRevision}</p>
+      {!!c.argumentPolicy?.length&&<p>Tool argument restrictions: {c.argumentPolicy.length} rules. Only listed tools with matching arguments are eligible.</p>}
       {c.atlassianPolicy&&<p>Atlassian read boundary: {c.atlassianPolicy.products.join(', ')} · {c.atlassianPolicy.cloudIds.length} allowed sites. Exact agent grants remain required.</p>}
       <p>Connection quota: {c.callsPerMinute?`${c.callsPerMinute} calls per UTC minute`:'Unlimited'}</p>
       {(!presentation||tab==='overview')&&c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}

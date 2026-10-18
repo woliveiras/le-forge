@@ -90,6 +90,19 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if len(inv.Args) > 64<<10 || json.Unmarshal(inv.Args, &obj) != nil || obj == nil {
 		return nil, fmt.Errorf("invalid MCP arguments: bounded JSON object required")
 	}
+	if !argumentPolicyAllows(r.ArgumentPolicy, t.tool, obj) {
+		return nil, fmt.Errorf("%w: arguments are outside the connection policy", tools.ErrDenied)
+	}
+	if len(r.ArgumentPolicy) > 0 {
+		// Forward exactly the object checked above, including duplicate-key normalization.
+		normalized, err := json.Marshal(obj)
+		if err != nil {
+			return nil, err
+		}
+		copy := *inv
+		copy.Args = normalized
+		inv = &copy
+	}
 	if !atlassianPolicyArguments(r.View, t.tool, obj) {
 		return nil, fmt.Errorf("%w: operation or cloud ID is outside the connection policy", tools.ErrDenied)
 	}

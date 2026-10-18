@@ -88,13 +88,16 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "delegate", Name: "delegation.request", Arguments: args}}}}, nil
 	}
 
-	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") || strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
+	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-argument-policy-fixture") || strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") || strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {
 				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "MCP execution: " + m.Content}, StopReason: "stop"}, nil
 			}
 		}
 		toolName := "mcp.runtime.search"
+		if strings.Contains(r.Messages[0].Content, "mcp-argument-policy-fixture") {
+			toolName = "mcp.argument-policy.search"
+		}
 		if strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") {
 			toolName = "mcp.quota-browser.search"
 		}

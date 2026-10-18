@@ -1859,6 +1859,18 @@ components:
       additionalProperties: false
       required: [id, name, service, endpoint, enabled]
       properties:
+        argumentPolicy:
+          type: array
+          maxItems: 64
+          description: "Exact case-sensitive top-level string rules. Rules for a tool are ANDed; unlisted tools are excluded. Empty means no additional restrictions. Values are non-secret metadata, not content filters."
+          items:
+            type: object
+            additionalProperties: false
+            required: [tool, argument, values]
+            properties:
+              tool: {type: string, pattern: "^[a-zA-Z0-9_-]{1,128}$"}
+              argument: {type: string, pattern: "^[a-zA-Z0-9_-]{1,128}$"}
+              values: {type: array, minItems: 1, maxItems: 32, uniqueItems: true, items: {type: string, minLength: 1, maxLength: 256}}
         atlassianPolicy:
           type: object
           additionalProperties: false
@@ -1883,6 +1895,18 @@ components:
     MCPConnection:
       type: object
       properties:
+        argumentPolicy:
+          type: array
+          maxItems: 64
+          description: "Exact case-sensitive top-level string rules. Rules for a tool are ANDed; unlisted tools are excluded. Empty means no additional restrictions. Values are non-secret metadata, not content filters."
+          items:
+            type: object
+            additionalProperties: false
+            required: [tool, argument, values]
+            properties:
+              tool: {type: string, pattern: "^[a-zA-Z0-9_-]{1,128}$"}
+              argument: {type: string, pattern: "^[a-zA-Z0-9_-]{1,128}$"}
+              values: {type: array, minItems: 1, maxItems: 32, uniqueItems: true, items: {type: string, minLength: 1, maxLength: 256}}
         atlassianPolicy:
           type: object
           additionalProperties: false

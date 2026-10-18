@@ -783,3 +783,35 @@ JQL is not rewritten or treated as a project boundary. Returned attachment links
 are not fetched. Other provider resource constraints and live corporate acceptance
 remain pending. Existing connections retain their behavior unless this optional
 policy is explicitly configured.
+
+## Exact tool argument restrictions
+
+Connection administrators can expand **Tool argument restrictions** when creating
+or editing a connection. Add the remote tool name (without the `mcp.<connection>.`
+prefix), a top-level argument name and allowed non-secret values, one per line.
+Values are exact and case-sensitive. Empty values, surrounding whitespace,
+control characters, duplicate tool/argument pairs and duplicate values are
+rejected. The bounds are 64 rules, 32 values per rule and 256 bytes per value.
+
+Once any rule is configured, unlisted tools are excluded. All rules for a listed
+tool must match, and each constrained argument must be explicitly supplied as a
+string. Discovery excludes tools whose schema does not declare those arguments
+as strings. Each call checks the current connection revision and policy before
+credential access and remote dispatch. Policy edits clear discovery and invalidate
+stale references. Existing agent grants, host restrictions and approvals still
+apply. Removing all rules removes this additional boundary; review that change
+as carefully as adding a grant.
+
+For a reviewed tool with `workspace` and `repo` string arguments, one rule can
+allow workspace `team-a` and another can allow repository `project-one`. Use
+separate connections for different workspace/repository pairs: multiple values
+form independent allowed sets, not paired tuples. Values are visible connection
+metadata, so never put credentials in them.
+
+These are request constraints, not vendor authorization or a semantic content
+filter. Do not infer Jira project membership from an issue-key prefix, Confluence
+space membership from a page ID, or SQL safety from an allowed project argument.
+Review tools that accept alternate URLs, aliases or query expressions separately.
+Returned links/content are not constrained by these rules. Repository IAM, site
+permissions and query-cost controls remain necessary. Vendor-specific resource
+qualification remains pending; the generic boundary is tested with local fixtures.

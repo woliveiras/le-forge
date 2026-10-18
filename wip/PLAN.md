@@ -1646,3 +1646,27 @@ credential qualification, approved external writes and corporate consent require
 authorized external targets. Human UX acceptance and rootless remain deferred.
 Release 2, installation services, authentication configuration and remote Git
 state were not changed. Checklist entries retain their actual partial status.
+
+### Release 1 exact MCP argument restrictions (2026-10-18)
+
+Optional admin-managed connection rules constrain top-level string arguments to
+explicit case-sensitive values. Nonempty policies also exclude unlisted tools.
+Multiple fields for a tool must all match; discovery excludes incompatible
+schemas. Policy edits clear the catalogue and stale references are denied.
+The gateway checks arguments before accessing credentials or dispatching a call,
+and forwards the normalized checked object to avoid duplicate-key ambiguity.
+Existing exact agent grants, approvals and host restrictions remain mandatory.
+The editor supports independent rule addition/removal and preserves saved rules.
+
+This is a generic request boundary, not a claim that resource identifiers prove
+Jira project/Confluence space ownership, that independent lists represent paired
+tuples, or that query costs are limited. External vendor validation remains for
+the final acceptance phase. No installed configuration or external account changed.
+
+Checks: `make test` passed (55 frontend files / 293 tests plus Go, Python and
+script suites), `make lint` and `make build` passed. The targeted Chromium
+journey passed with real backend/store/gateway and TLS MCP fixtures, covering
+save/reopen, discovery filtering, denied and allowed execution, invalid policy
+and viewer rejection. Unit tests cover rule validation, combined fields and
+schema matching; manager/store/gateway integration covers pre-dispatch denial,
+normalization, persisted policy, stale revisions and failed discovery.

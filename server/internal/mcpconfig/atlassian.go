@@ -45,12 +45,12 @@ func blockedDispatcher(v View, name string) bool {
 	return false
 }
 func operationCatalogue(v View) View {
-	if !atlassianConnection(v) {
+	if !atlassianConnection(v) && len(v.ArgumentPolicy) == 0 {
 		return v
 	}
 	filtered := make([]Tool, 0, len(v.Tools))
 	for _, tool := range v.Tools {
-		if !blockedDispatcher(v, tool.Name) && atlassianPolicyTool(v, tool) {
+		if !blockedDispatcher(v, tool.Name) && atlassianPolicyTool(v, tool) && argumentPolicyTool(v.ArgumentPolicy, tool) {
 			filtered = append(filtered, tool)
 		}
 	}

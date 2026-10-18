@@ -31,6 +31,7 @@ type Credential struct {
 	Clear    bool   `json:"clear,omitempty"`
 }
 type Input struct {
+	ArgumentPolicy     []ArgumentRule    `json:"argumentPolicy,omitempty"`
 	AtlassianPolicy    *AtlassianPolicy  `json:"atlassianPolicy,omitempty"`
 	TransportProfile   string            `json:"transportProfile,omitempty"`
 	MetadataHeaders    map[string]string `json:"metadataHeaders,omitempty"`
@@ -53,6 +54,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	ArgumentPolicy       []ArgumentRule    `json:"argumentPolicy,omitempty"`
 	AtlassianPolicy      *AtlassianPolicy  `json:"atlassianPolicy,omitempty"`
 	TransportProfile     string            `json:"transportProfile,omitempty"`
 	MetadataHeaders      map[string]string `json:"metadataHeaders,omitempty"`
@@ -100,6 +102,9 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateArgumentPolicy(in.ArgumentPolicy); err != nil {
+		return err
+	}
 	if err := validateAtlassianPolicy(in); err != nil {
 		return err
 	}
@@ -279,7 +284,8 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			}
 		}
 	}
-	changed := !reflect.DeepEqual(r.AtlassianPolicy, in.AtlassianPolicy) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	changed := !reflect.DeepEqual(r.ArgumentPolicy, in.ArgumentPolicy) || !reflect.DeepEqual(r.AtlassianPolicy, in.AtlassianPolicy) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.ArgumentPolicy = in.ArgumentPolicy
 	r.AtlassianPolicy = in.AtlassianPolicy
 	r.TransportProfile = in.TransportProfile
 	r.MetadataHeaders = in.MetadataHeaders
