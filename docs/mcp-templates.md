@@ -80,13 +80,20 @@ Returned documentation is treated as data and is not written to the test log.
 With a local Go toolchain and public HTTPS access, repeat explicitly from `server`:
 
 ```sh
-LEFORGE_TEST_PUBLIC_MCP=1 go test ./internal/mcpconfig -run 'TestLive(PublicTemplateDiscovery|DeepWikiReadThroughGateway)' -v -count=1
+LEFORGE_TEST_PUBLIC_MCP=1 go test ./internal/mcpconfig -run 'TestLive(PublicTemplateDiscovery|DeepWikiReadThroughGateway|Context7ReadThroughGateway)' -v -count=1
 ```
 
 Normal offline tests skip these network checks. Availability and catalogue contents
 may change. This evidence does not qualify authenticated Hugging Face/Space tools,
 Context7 or W&B credentials, paid computation, private repositories or every remote
 tool. Those acceptance cases remain pending with appropriate authorized accounts.
+An anonymous Context7 `resolve-library-id` lookup for React also passed through
+the production gateway on 2026-10-18, including denial without an exact grant.
+No key was supplied; documentation content was omitted from logs. This qualifies
+that lookup only, not `query-docs`, authenticated modes or private libraries.
+[Context7 tools and anonymous limits](https://context7.com/docs/resources/all-clients)
+describe the reviewed contract.
+
 The [DeepWiki contract](https://docs.devin.ai/work-with-devin/deepwiki-mcp) and
 [Hugging Face server](https://github.com/huggingface/hf-mcp-server) describe the
 public endpoints used by these tests.

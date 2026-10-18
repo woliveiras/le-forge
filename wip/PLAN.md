@@ -1595,3 +1595,13 @@ credentials or persistent workspaces were changed.
 Checks for this journey commit: `make test` passed (54 frontend files / 292 tests
 plus backend, SDK and script suites), `make lint` and `make build` passed, and
 `go test -tags e2e ./cmd/forge-e2e` passed. Both targeted Chromium journeys passed.
+
+### Context7 public lookup acceptance (2026-10-18)
+
+An opt-in live integration test discovers the pinned Context7 template and invokes
+`resolve-library-id` for public React documentation through the production manager
+and gateway. Missing exact grants are denied before the permitted lookup. The
+live test passed; response content is not logged and no credential, account,
+installed connection or repository is changed. This is test-only work; existing
+transport/grant units remain unchanged. `query-docs`, authenticated access and
+private library qualification remain pending.
