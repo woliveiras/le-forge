@@ -450,8 +450,36 @@ recursive capability or external runtimes are added.
 
 This is conservative token admission, not a provider tokenizer or monetary cap.
 Crash-held reservations remain held; automatic reconciliation and ledger retention
-are pending. Installation activation and real-provider qualification are not
-claimed for this increment. See [delegation](../docs/delegation.md#cumulative-tree-token-budget).
+are pending. Installation validation with local Ollama is recorded below;
+broader provider qualification remains pending. See [delegation](../docs/delegation.md#cumulative-tree-token-budget).
+
+**Tree-token installation activation (2026-10-18):** Activated code commit
+`b516e34` with `docker compose build forged` and
+`docker compose up -d --no-deps --no-build --force-recreate forged`. Only the
+application was recreated; its four existing named volume mounts were preserved,
+PostgreSQL migrations remained 1–3, and all four existing graph versions stayed
+unchanged. The application is healthy. A rollback image was retained locally.
+No credentials, MCP connections, global approval policy or existing grants changed.
+
+Installed Chrome validation used local Ollama `llama3.2:latest` and PostgreSQL:
+- Root `exe_mvdd8sd60e4739a0459e18136e6c` reserved 4,966 tokens, then settled
+  904 reported tokens. Its child reserved 2,020 while awaiting approval. Stopping
+  that child released the entire child reservation without charging it; the root
+  succeeded, with 904 charged and zero reserved. The saved ledger agrees with UI.
+- A separate `tree-token-budget-limit` graph with parent `maxTokens: 1` rejected
+  execution `exe_mvddasa69b022c641bea74834408` with tree-budget exhaustion before
+  model dispatch: zero usage, no child, no approval and no persisted reservation.
+- Stopping the entire tree during root inference
+  (`exe_mvddb2to3970ef76e1626003a006`) produced cancelled status and zero reserved.
+  Unknown post-dispatch consumption correctly retained 4,966 estimated charges,
+  rather than refunding possibly consumed tokens. The first tree stayed unchanged.
+
+Both validation graphs were left stopped with their history preserved; delegation
+capacity leases returned to zero. These checks qualify reservation, admission and
+cancellation on the installed local provider, not provider billing accuracy or
+crash reconciliation. The existing unit/integration, race and 58 browser scenarios
+below passed before activation; the deployment additionally rebuilt the web and
+server images successfully. No behavior changes were needed during activation.
 
 **Tree-token verification:** `make test` passed (Go/Python suites and 274
 frontend tests), as did `make lint`, `make build` and `make test-e2e` (57 main
