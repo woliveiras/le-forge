@@ -1615,3 +1615,34 @@ read-permission worksheet separates underlying REST requirements from live MCP
 qualification and defines positive/negative resource checks. No credential or
 external application was changed; a source review is not a tested permission
 matrix. Documentation-only change; `git diff --check` passed.
+
+### Provider browser configuration and credential acceptance (2026-10-18)
+
+A Chromium test configures a managed OpenAI-compatible provider through Models,
+saves its synthetic key and executes real backend model-list/inference HTTP
+requests against a disposable loopback server. It verifies blank credential
+fields on edit, persistence after reload, and no key in provider reads, model
+request bodies, rendered errors or browser local/session storage. An upstream
+401 deliberately echoes the synthetic key; the client-facing test response
+remains sanitized. No real provider, credential or installed configuration is used.
+
+Validation: the browser journey passed, the existing 12 provider component tests
+passed, provider API/storage integration passed and frontend type checking passed.
+This test-only addition complements existing unit and integration coverage; it
+does not prove every credential type, external runtime or log sink is isolated.
+
+### Release 1 continuation verification checkpoint (2026-10-18)
+
+`make test` passed with 54 frontend files / 292 tests plus backend, SDK and script
+suites; `make lint` and `make build` passed. The complete `make test-e2e` run
+passed 77 standard scenarios plus one hosted-CIMD scenario. The subsequently
+added provider browser journey passed separately. Opt-in Context7 public lookup
+and BigQuery stateless discovery also passed without credentials or paid jobs.
+
+Release 1 is not complete. Remaining implementation includes broader vendor
+resource boundaries, warehouse data/cost enforcement and a hard monetary
+ceiling; integrated clean-install/real-sandbox acceptance is also open. Live
+credential qualification, approved external writes and corporate consent require
+authorized external targets. Human UX acceptance and rootless remain deferred.
+Release 2, installation services, authentication configuration and remote Git
+state were not changed. Checklist entries retain their actual partial status.
