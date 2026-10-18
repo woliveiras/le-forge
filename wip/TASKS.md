@@ -757,7 +757,7 @@ Run the consolidated acceptance round after the remaining Release 1 implementati
 - [ ] Verify that no project toolchain, image, or container is installed or created on the host; everything runs on the LeForge Docker daemon and is removed by its reset.
 - [ ] Verify that data and instructions from one graph/workspace do not appear in another scope. — File inspection now discards late reads/errors across selections and graph/workspace changes, with component and browser regression coverage. A real engine/store/gateway integration now runs two graphs with identical node IDs and distinct skills, project steering, operator tasks and files; runtime inputs and persisted instruction snapshots contain only their graph markers, and traversal, absolute cross-graph paths and symlink reads are denied. Broader Docker/external-runtime and final manual acceptance remain pending.
 - [ ] Run relevant backend, frontend, SDK/runtime, and Docker image tests; record known limitations.
-- [ ] Update user, operations, and troubleshooting guides to reflect delivered behavior.
+- [ ] Update user, operations, and troubleshooting guides to reflect delivered behavior. — Delegation contracts now distinguish delivered bounded recursion/external-parent callbacks from proposed alternate APIs; MCP warehouse qualification and operations guidance are updated. Final integrated acceptance documentation remains pending.
 
 **Done when:** Release 1 acceptance criteria in `PLAN.md` are covered by automated tests and a documented manual test.
 

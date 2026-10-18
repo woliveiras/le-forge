@@ -1505,3 +1505,11 @@ absolute sibling paths and symlink escapes are denied. Existing instruction and
 filesystem unit tests cover lower-level validation/error behavior. This adds
 integration evidence without changing behavior or making claims about arbitrary
 host processes, Docker/external-runtime acceptance or the deferred UX walkthrough.
+
+### Delegation contract reconciliation (2026-10-18)
+
+Removed stale statements that recursion/external parents were unimplemented and
+explicitly separated the proposed alternate delegation API from the delivered
+execution-scoped tools callback. Profile deletion, alternate fields and idempotent
+request keys remain proposals. This documentation-only correction adds no API,
+permission or runtime behavior; the tested delegation guide remains authoritative.
