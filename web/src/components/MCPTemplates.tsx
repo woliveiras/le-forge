@@ -17,7 +17,7 @@ export function MCPTemplates({ query, canManage, onSelect, connectionRoutes }: {
   }
   return <section aria-label="MCP templates">
     <h3>MCP templates</h3>
-    <p>Opening a link only prepares a review. Saving, discovery and agent permissions are separate steps. OAuth requires a separately registered client.</p>
+    <p>Opening a link only prepares a review. Saving, discovery and agent permissions are separate steps. OAuth client setup and consent are reviewed separately.</p>
     <ErrorBox error={error ?? templates.error} />
     {templates.loading && <p role="status">Loading templates…</p>}
     {templates.error && <Btn onClick={() => void templates.reload()}>Reload templates</Btn>}

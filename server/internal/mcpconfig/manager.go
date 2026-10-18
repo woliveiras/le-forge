@@ -30,16 +30,17 @@ type Credential struct {
 	Clear bool   `json:"clear,omitempty"`
 }
 type Input struct {
-	CallsPerMinute    int          `json:"callsPerMinute,omitempty"`
-	OAuth             *OAuthConfig `json:"oauth,omitempty"`
-	OAuthClientSecret *Credential  `json:"oauthClientSecret,omitempty"`
-	Template          *TemplateRef `json:"template,omitempty"`
-	ID                string       `json:"id"`
-	Name              string       `json:"name"`
-	Service           string       `json:"service"`
-	Endpoint          string       `json:"endpoint"`
-	Enabled           bool         `json:"enabled"`
-	Credential        *Credential  `json:"credential,omitempty"`
+	TemplateParameters map[string]string `json:"templateParameters,omitempty"`
+	CallsPerMinute     int               `json:"callsPerMinute,omitempty"`
+	OAuth              *OAuthConfig      `json:"oauth,omitempty"`
+	OAuthClientSecret  *Credential       `json:"oauthClientSecret,omitempty"`
+	Template           *TemplateRef      `json:"template,omitempty"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Service            string            `json:"service"`
+	Endpoint           string            `json:"endpoint"`
+	Enabled            bool              `json:"enabled"`
+	Credential         *Credential       `json:"credential,omitempty"`
 }
 type Tool struct {
 	Name        string          `json:"name"`
@@ -47,24 +48,25 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
-	CallsPerMinute       int          `json:"callsPerMinute,omitempty"`
-	OAuth                *OAuthView   `json:"oauth,omitempty"`
-	Template             *TemplateRef `json:"template,omitempty"`
-	ID                   string       `json:"id"`
-	Name                 string       `json:"name"`
-	Service              string       `json:"service"`
-	Endpoint             string       `json:"endpoint"`
-	Enabled              bool         `json:"enabled"`
-	Revision             int64        `json:"revision"`
-	Status               string       `json:"status"`
-	CredentialConfigured bool         `json:"credentialConfigured"`
-	Tools                []Tool       `json:"tools"`
-	ToolsRevision        int64        `json:"toolsRevision"`
-	LastTest             *time.Time   `json:"lastTest,omitempty"`
-	Error                string       `json:"error,omitempty"`
-	CreatedAt            time.Time    `json:"createdAt"`
-	UpdatedAt            time.Time    `json:"updatedAt"`
-	UpdatedBy            string       `json:"updatedBy"`
+	TemplateParameters   map[string]string `json:"templateParameters,omitempty"`
+	CallsPerMinute       int               `json:"callsPerMinute,omitempty"`
+	OAuth                *OAuthView        `json:"oauth,omitempty"`
+	Template             *TemplateRef      `json:"template,omitempty"`
+	ID                   string            `json:"id"`
+	Name                 string            `json:"name"`
+	Service              string            `json:"service"`
+	Endpoint             string            `json:"endpoint"`
+	Enabled              bool              `json:"enabled"`
+	Revision             int64             `json:"revision"`
+	Status               string            `json:"status"`
+	CredentialConfigured bool              `json:"credentialConfigured"`
+	Tools                []Tool            `json:"tools"`
+	ToolsRevision        int64             `json:"toolsRevision"`
+	LastTest             *time.Time        `json:"lastTest,omitempty"`
+	Error                string            `json:"error,omitempty"`
+	CreatedAt            time.Time         `json:"createdAt"`
+	UpdatedAt            time.Time         `json:"updatedAt"`
+	UpdatedBy            string            `json:"updatedBy"`
 }
 type record struct {
 	Deleted            bool                `json:"deleted,omitempty"`
@@ -255,6 +257,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
 	r.CallsPerMinute = in.CallsPerMinute
 	r.Template = in.Template
+	r.TemplateParameters = in.TemplateParameters
 	r.Name = in.Name
 	r.Service = in.Service
 	r.Endpoint = in.Endpoint

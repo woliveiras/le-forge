@@ -1332,3 +1332,14 @@ shared 128-entry limit and ten-minute expiry. Storage/key failures refuse progre
 expired entries are reclaimed on successful updates. A claimed exchange is never
 retried automatically after interruption. Live vendor consent remains separately
 pending; this delivery proves the protocol with TLS fixtures and durable storage.
+
+### Parameterized MCP templates and reviewed upgrades (2026-10-18)
+
+Immutable legacy templates remain available. GitHub v2 adds a bounded read-only
+toolset parameter and PAT/OAuth modes; GitLab v1 adds an HTTPS instance origin and
+OAuth configuration. Parameters are non-secret and validated against the pinned
+version. Settings show an upgrade preview, support cancellation and apply changes
+only to the draft. Explicit saving retains optimistic concurrency, endpoint-change
+credential handling and per-agent grants. Unit/API integration/browser tests cover
+resolution, invalid parameters, stale writes, preview cancellation and persisted
+updates. Live vendor/tool permission qualification remains pending.

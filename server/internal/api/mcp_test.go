@@ -160,7 +160,7 @@ func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
 func TestMCPVersionedTemplatesPersistence(t *testing.T) {
 	srv, a := setupApp(t, nil)
 	var catalogue []mcpconfig.Template
-	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 5 {
+	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 7 {
 		t.Fatal(code, catalogue)
 	}
 	template := catalogue[0]
@@ -305,5 +305,38 @@ func TestMCPQuotaAndSafeHistoryAPI(t *testing.T) {
 	}
 	if code := call(t, srv, "GET", "/api/v1/mcp/history", "", "", "", nil); code != 401 {
 		t.Fatal(code)
+	}
+}
+
+func TestMCPTemplateParametersAPI(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	in := mcpconfig.Input{ID: "template-profile", Name: "Profile", Service: "github", Endpoint: "https://api.githubcopilot.com/mcp/x/repos/readonly", Template: &mcpconfig.TemplateRef{ID: "github", Version: 2}, TemplateParameters: map[string]string{"toolset": "repos"}}
+	body, _ := json.Marshal(in)
+	if c := call(t, srv, "POST", "/api/v1/mcp/connections", viewerTok, "application/json", string(body), nil); c != 403 {
+		t.Fatal(c)
+	}
+	if c := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); c != 201 {
+		t.Fatal(c)
+	}
+	got, err := a.MCP.Get(t.Context(), in.ID)
+	if err != nil || got.TemplateParameters["toolset"] != "repos" || len(got.Tools) != 0 {
+		t.Fatal(got, err)
+	}
+	in.TemplateParameters["toolset"] = "issues"
+	body, _ = json.Marshal(in)
+	if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/mcp/connections/"+in.ID, adminTok, string(body), map[string]string{"If-Match": "1"}); c != 422 {
+		t.Fatal("parameter mismatch", c)
+	}
+	in.Endpoint = "https://api.githubcopilot.com/mcp/x/issues/readonly"
+	body, _ = json.Marshal(in)
+	if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/mcp/connections/"+in.ID, adminTok, string(body), map[string]string{"If-Match": "1"}); c != 200 {
+		t.Fatal(c)
+	}
+	got, err = a.MCP.Get(t.Context(), in.ID)
+	if err != nil || got.Revision != 2 || got.TemplateParameters["toolset"] != "issues" || len(got.Tools) != 0 {
+		t.Fatal(got, err)
+	}
+	if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/mcp/connections/"+in.ID, adminTok, string(body), map[string]string{"If-Match": "1"}); c != 409 {
+		t.Fatal("stale template update", c)
 	}
 }

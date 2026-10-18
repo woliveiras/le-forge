@@ -9,6 +9,9 @@ func TestTemplateValidation(t *testing.T) {
 	for _, template := range Templates() {
 		t.Run(template.ID, func(t *testing.T) {
 			in := Input{ID: "connection", Name: "Connection", Service: template.Service, Endpoint: template.Endpoint, Template: &template.TemplateRef}
+			if template.Service == "gitlab" {
+				in.OAuth = &OAuthConfig{Issuer: "https://gitlab.com", ClientID: "client", Scopes: []string{"mcp"}}
+			}
 			if err := validate(in); err != nil {
 				t.Fatal(err)
 			}
@@ -22,6 +25,7 @@ func TestTemplateValidation(t *testing.T) {
 				t.Fatal("changed defaults accepted")
 			}
 			in.Template = nil
+			in.OAuth = nil
 			if err := validate(in); err != nil {
 				t.Fatal("custom configuration rejected", err)
 			}
@@ -31,5 +35,49 @@ func TestTemplateValidation(t *testing.T) {
 	a[0].Name = "mutated"
 	if Templates()[0].Name == "mutated" {
 		t.Fatal("catalogue is mutable")
+	}
+}
+
+func TestParameterizedTemplateBoundaries(t *testing.T) {
+	var github, gitlab Template
+	for _, tpl := range Templates() {
+		if tpl.ID == "github" && tpl.Version == 2 {
+			github = tpl
+		}
+		if tpl.ID == "gitlab" {
+			gitlab = tpl
+		}
+	}
+	for _, tc := range []struct {
+		template Template
+		params   map[string]string
+		endpoint string
+	}{
+		{github, nil, "https://api.githubcopilot.com/mcp/readonly"},
+		{github, map[string]string{"toolset": "repos"}, "https://api.githubcopilot.com/mcp/x/repos/readonly"},
+		{gitlab, map[string]string{"instance": "https://gitlab.example/"}, "https://gitlab.example/api/v4/mcp"},
+	} {
+		got, err := templateEndpoint(tc.template, tc.params)
+		if err != nil || got != tc.endpoint {
+			t.Fatal(got, err)
+		}
+	}
+	for _, params := range []map[string]string{{"toolset": "all"}, {"token": "secret"}, {"toolset": "../write"}} {
+		if _, err := templateEndpoint(github, params); err == nil {
+			t.Fatal("unsafe parameter accepted")
+		}
+	}
+	for _, origin := range []string{"http://gitlab.example", "https://user:pass@gitlab.example", "https://gitlab.example/path", "https://gitlab.example?token=x", "https://gitlab.example?", "https://gitlab.example#", ""} {
+		if _, err := templateEndpoint(gitlab, map[string]string{"instance": origin}); err == nil {
+			t.Fatal("invalid origin", origin)
+		}
+	}
+	in := Input{ID: "fixture", Name: "Fixture", Service: "github", Endpoint: github.Endpoint, Template: &github.TemplateRef, TemplateParameters: map[string]string{"toolset": "repos"}}
+	if !errors.Is(validate(in), ErrInvalid) {
+		t.Fatal("endpoint/parameter mismatch accepted")
+	}
+	in.Template = nil
+	if !errors.Is(validate(in), ErrInvalid) {
+		t.Fatal("orphan parameters accepted")
 	}
 }

@@ -5,6 +5,7 @@ import { MCPHistory } from './MCPHistory';
 import { MCPServiceGuide } from './MCPServiceGuide';
 import { oauthDefaults, serviceOptions } from './mcpServices';
 import { MCPOAuthReturn, MCPOAuthActions, MCPOAuthCallbackURL } from './MCPOAuth';
+import { MCPTemplateSettings } from './MCPTemplateSettings';
 import { MCPTemplates } from './MCPTemplates';
 import { useState } from 'react';
 import { api, errorMessage } from '../api/client';
@@ -30,8 +31,8 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
-  function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
+  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined,templateParameters:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){
     setBusy(true);setError(undefined);setSavedID(undefined);setSaveProgress('Saving connection…');
     try {
@@ -58,7 +59,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
     {presentation!=='detail'&&<><p>Register remote HTTPS Streamable HTTP servers and discover their tools. Only public network destinations are supported. Credentials stay encrypted in LeForge.</p>
     <p>Assign tools to agents in the graph editor to allow calls through the gateway. OAuth supports manual registration, DCR and CIMD with PKCE; templates provide reviewed public defaults.</p></>}
     {oauthQuery!==undefined&&<MCPOAuthReturn key={oauthQuery} query={oauthQuery} canManage={admin} onChanged={list.reload}/> }
-    {presentation!=='detail'&&<MCPTemplates connectionRoutes={!!presentation} query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version}});}} />}
+    {presentation!=='detail'&&<MCPTemplates connectionRoutes={!!presentation} query={connectQuery} canManage={admin} onSelect={t=>{edit();setInput({id:t.id,name:t.name,service:t.service,endpoint:t.endpoint,enabled:true,template:{id:t.id,version:t.version},oauth:t.authenticationModes?.length===1&&t.authenticationModes[0]==='oauth'?oauthDefaults(t.service).oauth:undefined});}} />}
     <Btn onClick={()=>void list.reload()} disabled={list.loading}>Reload MCP connections</Btn>
     <ErrorBox error={list.error}/><ErrorBox error={error}/>
     {saveProgress&&<p role="status">{saveProgress}</p>}
@@ -79,7 +80,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
     {presentation==='create'&&!admin&&<p>An administrator must create this connection.</p>}
     {admin&&editing&&(presentation!=='detail'||tab==='settings')&&<form className="form" onSubmit={e=>{e.preventDefault();void save();}}>
       <h3>{revision?'Edit connection':'New connection'}</h3>
-      {input.template&&<p>Template: {input.template.id} v{input.template.version}. Review the fields, then save. <Btn onClick={()=>setInput({...input,template:undefined})}>Customize without template</Btn></p>}
+      {input.template&&<MCPTemplateSettings key={`${input.template.id}-${input.template.version}-${revision??'new'}`} input={input} onChange={value=>{setInput(value);setToken('');setClientSecret('');}}/>}
       <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={input.id} disabled={!!revision||busy} onChange={e=>setInput({...input,id:e.target.value})}/></label>
       <label>Connection calls per minute<input type="number" min={0} max={60000} step={1} value={input.callsPerMinute??0} onChange={e=>setInput({...input,callsPerMinute:Number(e.target.value)})}/></label>
       <p>0 means unlimited. A fixed UTC-minute quota is shared by all agents and replicas using this connection. Admitted calls count even if they fail; approval refusals do not consume it.</p>

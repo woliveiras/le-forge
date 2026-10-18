@@ -132,7 +132,8 @@ current runtime limits described above remain unchanged.
 ## Versioned templates and browser links
 
 The authenticated `GET /api/v1/mcp/templates` catalogue provides version 1 of
-DeepWiki, GitHub read-only, Context7, Hugging Face and W&B. Each template includes
+DeepWiki, GitHub read-only, Context7, Hugging Face and W&B, plus GitHub v2 and
+GitLab v1. Each template includes
 public defaults, authentication guidance, source/review date and validation status.
 These presets do not certify vendor compatibility; test each connection before use.
 
@@ -155,12 +156,31 @@ save/refresh contract. Discovery never grants tools to agents. Existing discover
 remain separate actions. Duplicate connection IDs fail rather than overwrite.
 
 Template versions are immutable source-controlled defaults. The API rejects an
-unknown reference or a service/endpoint that differs from the pinned version.
+unknown reference, unsupported parameters/authentication modes, or a service/endpoint
+that differs from the pinned version resolved with those parameters.
 **Customize without template** detaches that reference before manual configuration;
 existing endpoint-change credential protections still apply. Editing a pinned
-connection in the console preserves its version. There is no automatic upgrade or
-upgrade-preview workflow yet. OAuth is available for pre-registered clients as described below; live vendor
-qualification remains planned.
+connection in the console preserves its version. **Review template update** shows the
+proposed endpoint and authentication guidance; **Apply update to draft** changes only
+the form. Cancel leaves the draft intact. Saving still checks the connection revision,
+requires credential review for endpoint changes, and never modifies agent grants.
+There is no automatic upgrade.
+
+GitHub v2 supports Bearer PAT or browser OAuth and the documented read-only default,
+repository, issue, pull-request and Actions toolset endpoints. Select a **Read-only
+toolset**, then apply it to the form. A toolset selects offered operations, not the
+repositories a credential can access: restrict the PAT itself and review agent grants.
+The per-tool fine-grained permission matrix and live toolset qualification remain pending.
+
+GitLab v1 uses OAuth and accepts an HTTPS instance origin through **GitLab instance
+URL**. Applying another instance updates its MCP endpoint/issuer and clears the draft
+client ID; register or provision a client for that instance before authorizing.
+Parameters persist as non-secret `templateParameters` beside the pinned reference.
+Credentials must never be placed in parameters or browser links. Live instance,
+licensing and corporate-policy qualification remain separate.
+
+Endpoint sources: [GitHub remote toolsets](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md)
+and [GitLab MCP server](https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_server/).
 
 ## Browser OAuth (pre-registered clients)
 
