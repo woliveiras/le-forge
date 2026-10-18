@@ -702,3 +702,23 @@ browser journey and persistence limitations. No installation activation, externa
 OAuth changes, real model inference, fresh Docker installation, or developer
 usability acceptance is claimed. First-class tasks and delegation remain in their
 existing workstreams. Activation and the final developer usability round are pending.
+
+
+**Onboarding installation activation (2026-10-18):** Activated commit 9b8d1e8
+with docker compose build forged and docker compose up -d --no-deps
+--force-recreate --wait forged; both completed successfully. Only forged was
+recreated, without removing volumes, running migrations, or changing authentication.
+The health endpoint returns ok; forged, agents, NATS, PostgreSQL and the sandbox
+daemon are healthy. Graph/version counts remained 3/9 before and after activation.
+
+Browser validation on localhost:8080 confirmed the initially collapsed guide,
+reviewing one topic, skipping health without marking it reviewed, pausing on
+Choose a model, reloading, and resuming the same topic with 1/6 reviewed.
+Navigation to Models and back to Graphs also preserved the topic/progress.
+The health observation showed ok and the model observation showed four configured
+providers without claiming successful inference. No graph was created, no agent
+was started, and no connection, grant, credential or model configuration was
+modified during this browser check. Only browser-local guide progress changed.
+The implementation's passing unit/integration and 51 E2E scenarios remain the
+automated evidence; this activation adds installed-browser pause/resume evidence.
+Developer usability acceptance and a fresh-install exercise remain separate.
