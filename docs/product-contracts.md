@@ -454,13 +454,15 @@ be used to read another graph's workspace.
 
 **Implemented foundation:** Native parents with the exact `delegation.request`
 grant can request an installation analysis profile, follow its installation
-approval policy and receive the result. Children use the parent's model and have no tools,
-workspace, history or recursive delegation. Execution records, approval context,
+approval policy and receive the result. Children use the parent's model; the default
+analysis profile has no tools or workspace. Profiles may select an exact subset of
+parent grants with all constraints preserved, using the parent's workspace and
+gateway. Children have no parent conversation history, memory/emit or recursive delegation. Execution records, approval context,
 bounded shared-store capacity limits and parent links in Runs are implemented.
 See [delegation](delegation.md) for the precise contract and limitations.
 
 **Implemented configuration:** Policy GET/PUT and profile list/create/read/update
-APIs now support native tool-free profiles, required/automatic approval and bounded
+APIs support native profiles with optional inherited capabilities, required/automatic approval and bounded
 limits. The console provides reviewed admin-only saves with revision conflicts.
 Execution snapshots pin policy/profile revisions; pending requests revalidate them.
 See [delegation](delegation.md) for the supported fields and hard bounds.

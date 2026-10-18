@@ -61,3 +61,16 @@ it('reviews and persists the tree token ceiling through the configuration API',a
  await screen.findByText(/Delegation policy saved/);
  expect(backend.find('PUT','/api/v1/delegation-policy')[0].body).toEqual({...current.policy,maxTreeTokens:8000});
 });
+it('reviews inherited capability names while preserving the agent-grant boundary',async()=>{
+ const backend=fakeApi({'GET /api/v1/delegation-policy':()=>current,'GET /api/v1/delegation-profiles':()=>profiles,'POST /api/v1/delegation-profiles':c=>{expect(c.body).toMatchObject({tools:['filesystem.read','mcp.personal.get_me']});return {revision:1,profile:c.body};}});
+ render(<DelegationSection canManage/>);await screen.findByText('Analysis');
+ await userEvent.click(screen.getByRole('button',{name:'New delegation profile'}));
+ await userEvent.type(screen.getByLabelText('Profile ID'),'reader');await userEvent.type(screen.getByLabelText('Profile name'),'Reader');await userEvent.type(screen.getByLabelText('Profile instructions'),'Inspect supplied files');
+ await userEvent.type(screen.getByLabelText('Inherited capabilities (one per line)'),'filesystem.read\nmcp.personal.get_me');
+ await userEvent.click(screen.getByRole('button',{name:'Review delegation profile'}));
+ expect(screen.getByText('Inherited capabilities: filesystem.read, mcp.personal.get_me')).toBeTruthy();
+ expect(backend.calls.filter(c=>c.method==='POST')).toHaveLength(0);
+ await userEvent.click(screen.getByRole('button',{name:'Confirm delegation profile'}));
+ expect(await screen.findByText('Delegation profile saved. No agent permissions were changed.')).toBeTruthy();
+ expect(backend.calls.filter(c=>c.method==='POST')).toHaveLength(1);
+});

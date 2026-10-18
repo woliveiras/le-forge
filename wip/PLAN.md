@@ -1263,3 +1263,15 @@ transport authentication, upstream credential, resource admission, private-netwo
 and qualification contracts for candidate Playwright, MLflow and Qdrant profiles.
 Only the design task is complete; implementation and vendor qualification are not
 implied, and no service has been installed or launched.
+
+### Native child grant inheritance (2026-10-18)
+
+Installation profiles can select exact capabilities already explicitly granted to
+the parent. The server copies every constraint and reuses the gateway for child
+calls, including workspace restrictions, approvals, shared rate/connection limits
+and attribution. The child has no independent workspace, memory, emit, recursive
+or environment/review continuation capability. A bounded tool/model loop charges
+parent tool limits and root-tree token reservations. Profile review and execution
+audit expose the effective access. Unit/integration/browser coverage includes
+out-of-path denial, ungranted writes, bounded repeat calls and per-tool approval.
+No installation activation or live-provider qualification is claimed.

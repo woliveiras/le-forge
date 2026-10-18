@@ -620,7 +620,7 @@ and distributed-worker qualification remain outside this installation check.
 now supports reviewed admin-only edits to revisioned native analysis profiles and
 required/automatic approval policies. Viewer/operator reads remain available;
 mutations require admin and compare-and-set revisions. Profiles customize guidance
-and output allowances while retaining the parent's model and no tools/workspace.
+and output allowances while retaining the parent's model. The default profile has no tools/workspace; optional inherited capabilities are now supported below.
 Depth stays one. Child count, shared concurrency, duration, output tokens and
 objective/result sizes have finite configurable bounds. Snapshots retain policy,
 profile and objective; requests revalidate before inference. Lowered capacity
@@ -664,7 +664,7 @@ are not claimed.
 #### Verified Foundation
 
 - [x] Persist native analysis children, parent links, approval IDs, outcomes and reported usage without modifying the saved graph.
-- [x] Require an exact tool grant and operator approval under the default required policy; automatic mode remains subject to explicit grants. Children receive no tools, workspace or recursive capability.
+- [x] Require an exact tool grant and operator approval under the default required policy; automatic mode remains subject to explicit grants. Default analysis children receive no tools/workspace. Profiles can now select inherited capabilities; recursive capability remains unavailable.
 - [x] Return results or bounded failures to the parent, with finite request/count/depth/capacity/deadline/output limits; supported limits are now configurable.
 - [x] Cover success, rejection, timeout, provider/empty/partial/tool-call failures, admission budgets, wildcard denial, concurrent capacity, persistence failure and recovery with unit/integration tests.
 - [x] Cover approval/rejection, viewer denial, parent continuation and child-to-parent navigation in browser E2E tests.
@@ -679,8 +679,8 @@ and cooperative interruption for the current native scope are verified above.
 - [ ] Add a runtime capability for requesting a delegated subtask and waiting for/returning its result to the parent agent.
 - [x] Implement temporary child execution instantiation without editing the permanent graph. — Native analysis foundation; see scope above.
 - [x] Define how child configurations are selected from installation-approved templates; do not accept arbitrary configurations that could elevate privileges. — Explicit installation profile ID; guidance/output allowance only, no model/runtime/tool overrides.
-- [ ] Implement grant inheritance and guarantee that a child receives no more permissions than its parent.
-- [x] Implement a configurable global policy: approval required for every delegation or bounded automatic execution. — Implemented for native tool-free analysis profiles; richer runtimes and tool-bearing children remain separate.
+- [x] Implement grant inheritance and guarantee that a child receives no more permissions than its parent. — Native profiles select up to 32 exact parent declarations without rewriting constraints. Child calls use the existing gateway, inherited workspace restrictions, per-call approvals and shared rate/connection limits; no wildcard expansion, model override, memory/emit, recursive or environment/review continuation capability. Calls consume the parent allowance, and each model round reserves root-tree tokens. Unit, real-gateway integration, race and browser coverage validate the boundary.
+- [x] Implement a configurable global policy: approval required for every delegation or bounded automatic execution. — Implemented for native profiles, including inherited capabilities; richer runtimes remain separate.
 - [x] Implement pending-approval state and block the child execution until a human decision when required. — Native analysis foundation; see scope above.
 - [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost. — Bounded depth/count/concurrency/duration/output limits are implemented; cumulative token admission is implemented for native trees; a hard monetary ceiling remains pending.
 - [x] Account for consumption across the entire tree and stop/reject new delegations when limits are reached. — Native tree CAS reservations and exactly-once settlement; unknown usage is charged conservatively. No monetary guarantee or external-runtime support.
@@ -694,7 +694,7 @@ and cooperative interruption for the current native scope are verified above.
 - [x] Add a delegation-approval queue with enough context for an informed decision. — Native analysis foundation; see scope above.
 - [x] Show the execution tree, state, agent, duration, consumption, and parent/child relationship. — Persisted bounded trees for native delegation; usage is inclusive, not a monetary ceiling.
 - [x] Allow an operator to stop a child execution or tree according to their permissions. — Explicit confirmation, operator/admin API enforcement and durable cooperative cancellation; no hard process kill.
-- [ ] Add tests for approval/automatic policies, limits, grant inheritance, recursion, concurrency, and cancellation. — Required/automatic native analysis, empty grants, fixed depth, capacity reduction and revision invalidation are covered; native child/tree cancellation and token reservations are covered; nonempty inheritance and recursive execution remain pending.
+- [ ] Add tests for approval/automatic policies, limits, grant inheritance, recursion, concurrency, and cancellation. — Required/automatic native analysis, empty grants, fixed depth, capacity reduction and revision invalidation are covered; native child/tree cancellation and token reservations are covered; nonempty inheritance is now covered; recursive execution remains pending.
 - [x] Add end-to-end tests for delegation, returning results to the parent, and viewing the tree in the interface. — Native approve/reject and automatic profile journeys, disabled profiles, explicit grants, viewer restrictions, stale updates and child/tree interruption are covered with a real disposable backend and deterministic model.
 
 **Done when:** Agents decide when to delegate; administrators choose individual approval or bounded automation; the server enforces limits and permissions; the tree is observable and controllable through the web.

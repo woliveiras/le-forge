@@ -38,3 +38,43 @@ for(const decision of ['approve','reject'] as const) {
   expect(saved.record.version).toBe(1);expect(saved.graph.spec.nodes).toHaveLength(1);expect(saved.graph.spec.nodes[0].tools).toEqual(graph.spec.nodes[0].tools);
  });
 }
+
+test('profile-selected inherited capabilities retain per-call approval and child attribution',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/administration/delegation');
+ await page.getByRole('button',{name:'New delegation profile',exact:true}).click();
+ await page.getByLabel('Profile ID',{exact:true}).fill('browser-inherited');
+ await page.getByLabel('Profile name',{exact:true}).fill('Inherited reader');
+ await page.getByLabel('Profile instructions',{exact:true}).fill('Inspect the offered workspace tools.');
+ await page.getByLabel('Inherited capabilities (one per line)',{exact:true}).fill('filesystem.read');
+ await page.getByRole('button',{name:'Review delegation profile',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Confirm delegation profile'})).toContainText('Inherited capabilities: filesystem.read');
+ await page.getByRole('button',{name:'Confirm delegation profile',exact:true}).click();
+ await expect(page.getByText('Delegation profile saved. No agent permissions were changed.')).toBeVisible();
+ const id='delegation-inherited';
+ const grants=[{name:'delegation.request'},{name:'filesystem.read',paths:['**'],requiresApproval:true,rateLimit:4}];
+ expect((await page.request.post('/api/v1/graphs',{headers:admin,data:{metadata:{id,name:id},spec:{nodes:[{id:'parent',runtime:{kind:'native'},prompt:'delegation-fixture inherited-profile',model:{provider:'e2e',name:'fixture'},loop:{mode:'once'},tools:grants}]}}})).status()).toBe(201);
+ await page.goto('/#/g/'+id+'/canvas');await page.getByRole('button',{name:'Run all',exact:true}).click();
+ await page.getByRole('button',{name:/^Approvals/}).click();
+ const card=page.locator('.approval').filter({hasText:id});
+ await expect(card).toContainText('inherited capabilities');
+ await expect(card).toContainText('"requiresApproval": true');
+ await card.getByRole('button',{name:'Approve',exact:true}).click();
+ const toolCard=page.locator('.approval').filter({hasText:id}).filter({hasText:'filesystem.list'});
+ await expect(toolCard.getByRole('button',{name:'Approve',exact:true})).toBeVisible();
+ await toolCard.getByRole('button',{name:'Approve',exact:true}).click();
+ let child:{id:string;parentExecutionId:string;status:string;toolCalls:number;delegationAudit:{effectiveGrants:unknown[]}}|undefined;
+ await expect.poll(async()=>{
+  const xs=await (await page.request.get('/api/v1/graphs/'+id+'/executions',{headers:admin})).json();
+  child=xs.find((x:{parentExecutionId?:string})=>x.parentExecutionId);return child?.status;
+ }).toBe('succeeded');
+ expect(child!.toolCalls).toBe(1);expect(child!.delegationAudit.effectiveGrants).toEqual([grants[1]]);
+ await page.goto('/#/g/'+id+'/runs?execution='+child!.id+'&section=result');
+ await page.getByText('Delegation audit',{exact:true}).click();
+ await expect(page.getByRole('complementary',{name:'Delegation context'})).toContainText('Effective grants: filesystem.read');
+ await expect(page.getByRole('region',{name:'Run detail'})).toContainText('Delegated inherited tool completed');
+ const saved=await (await page.request.get('/api/v1/graphs/'+id,{headers:admin})).json();
+ expect(saved.graph.spec.nodes[0].tools).toEqual(grants);
+ const approvals=await (await page.request.get('/api/v1/approvals?graph='+id,{headers:admin})).json();
+ expect(approvals.filter((a:{executionId:string;status:string})=>a.executionId===child!.id&&a.status==='approved')).toHaveLength(2);
+});

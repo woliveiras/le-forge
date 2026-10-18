@@ -1,4 +1,4 @@
-// Package delegation manages installation-owned, tool-free analysis profiles.
+// Package delegation manages installation-owned delegation profiles.
 package delegation
 
 import (
@@ -56,17 +56,21 @@ func (p Policy) Validate() error {
 }
 
 type Profile struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Instructions    string `json:"instructions"`
-	Enabled         bool   `json:"enabled"`
-	MaxOutputTokens int    `json:"maxOutputTokens"`
+	Tools           []string `json:"tools,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Instructions    string   `json:"instructions"`
+	Enabled         bool     `json:"enabled"`
+	MaxOutputTokens int      `json:"maxOutputTokens"`
 }
 
 func DefaultProfile() Profile {
-	return Profile{"analysis", "Analysis", "Return a concise analysis of the supplied objective.", true, 1024}
+	return Profile{ID: "analysis", Name: "Analysis", Instructions: "Return a concise analysis of the supplied objective.", Enabled: true, MaxOutputTokens: 1024}
 }
 func (p Profile) Validate() error {
+	if err := ValidateTools(p.Tools); err != nil {
+		return err
+	}
 	if !ID.MatchString(p.ID) || strings.TrimSpace(p.Name) == "" || len(p.Name) > 120 {
 		return errors.New("profile requires a lowercase id (max 63 bytes) and name (max 120 bytes)")
 	}

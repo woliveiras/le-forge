@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -35,6 +37,26 @@ func (p *delegateProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.C
 		p.children++
 		p.request = r
 		p.mu.Unlock()
+		if strings.HasPrefix(p.mode, "inherit") {
+			for _, msg := range r.Messages {
+				if msg.Role == llm.RoleTool && p.mode != "inherit-repeat" {
+					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Read result: " + msg.Content}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+				}
+			}
+			name := "filesystem.read"
+			path := "docs/allowed.txt"
+			if p.mode == "inherit-missing" {
+				path = "docs/missing.txt"
+			}
+			if p.mode == "inherit-denied" {
+				path = "private.txt"
+			}
+			if p.mode == "inherit-write" {
+				name = "filesystem.write"
+			}
+			args, _ := json.Marshal(map[string]string{"path": path, "content": "forbidden"})
+			return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "read", Name: name, Arguments: args}}}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+		}
 		if p.mode == "failure" {
 			return nil, errors.New("upstream private diagnostic")
 		}
@@ -626,5 +648,138 @@ func TestDelegationExecutionControls(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestDelegationInheritedToolsUseRealGateway(t *testing.T) {
+	for _, mode := range []string{"inherit", "inherit-denied", "inherit-write", "inherit-repeat", "inherit-missing"} {
+		t.Run(mode, func(t *testing.T) {
+			r, p := delegationRig(t, mode)
+			p.profile = "reader"
+			manager := delegation.Manager{Store: r.store}
+			policy := delegation.DefaultPolicy()
+			policy.ApprovalMode = "automatic"
+			if _, err := manager.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+				t.Fatal(err)
+			}
+			profile := delegation.DefaultProfile()
+			profile.ID = "reader"
+			profile.Tools = []string{"filesystem.read"}
+			if _, err := manager.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+				t.Fatal(err)
+			}
+			dir := filepath.Join(r.dir, "ws", "delegation")
+			if err := os.MkdirAll(filepath.Join(dir, "docs"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "docs", "allowed.txt"), []byte("allowed content"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "private.txt"), []byte("private content"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			deployDelegation(r, `[delegation.request, {name: filesystem.read, paths: ["docs/**"]}]`, "{turnTimeout: 10s, maxToolCalls: 4}")
+			parent := finishedParent(t, r)
+			children, err := r.store.ListExecutions(r.ctx, storage.ExecutionFilter{ParentExecutionID: parent.ID})
+			if err != nil || len(children) != 1 {
+				t.Fatalf("%v %v", children, err)
+			}
+			child := children[0]
+			if child.ToolCalls < 1 || child.ToolCalls > 3 || parent.ToolCalls != child.ToolCalls+1 {
+				t.Fatalf("invalid call totals: parent=%d child=%d", parent.ToolCalls, child.ToolCalls)
+			}
+			if mode == "inherit" {
+				budget, err := manager.Budget(r.ctx, parent.ID)
+				if err != nil || budget == nil || budget.Reserved != 0 || budget.Charged != parent.Usage.InputTokens+parent.Usage.OutputTokens {
+					t.Fatalf("budget %+v parent %+v err %v", budget, parent.Usage, err)
+				}
+				if child.Status != domain.ExecSucceeded || !strings.Contains(parent.Summary, "allowed content") || child.Usage.InputTokens != 14 {
+					t.Fatalf("%+v %+v", child, parent)
+				}
+			} else if child.Status != domain.ExecFailed || strings.Contains(parent.Summary, "private content") {
+				t.Fatalf("%+v", child)
+			}
+			if child.DelegationAudit.Decision != "automatic" || len(child.DelegationAudit.EffectiveGrants) != 1 || child.DelegationAudit.EffectiveGrants[0].Paths[0] != "docs/**" {
+				t.Fatalf("%+v", child.DelegationAudit)
+			}
+			p.mu.Lock()
+			schemas := p.request.Tools
+			p.mu.Unlock()
+			for _, schema := range schemas {
+				if schema.Name == "filesystem.write" || schema.Name == "delegation.request" || schema.Name == "state_get" {
+					t.Fatal("ungranted schema", schema.Name)
+				}
+			}
+			data, err := os.ReadFile(filepath.Join(dir, "docs", "allowed.txt"))
+			if err != nil || string(data) != "allowed content" {
+				t.Fatal("workspace modified", err)
+			}
+		})
+	}
+}
+
+func TestDelegationMissingInheritedGrantRejectsBeforeChild(t *testing.T) {
+	r, p := delegationRig(t, "inherit")
+	p.profile = "reader"
+	manager := delegation.Manager{Store: r.store}
+	profile := delegation.DefaultProfile()
+	profile.ID = "reader"
+	profile.Tools = []string{"filesystem.read"}
+	if _, err := manager.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, "[delegation.request]", "{turnTimeout: 5s}")
+	parent := finishedParent(t, r)
+	if !strings.Contains(parent.Summary, "does not explicitly grant filesystem.read") {
+		t.Fatal(parent.Summary)
+	}
+	children, err := r.store.ListExecutions(r.ctx, storage.ExecutionFilter{ParentExecutionID: parent.ID})
+	if err != nil || len(children) != 0 {
+		t.Fatalf("%v %v", children, err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.children != 0 {
+		t.Fatal("ungranted child ran")
+	}
+}
+func TestDelegationInheritedToolRejectionStopsChild(t *testing.T) {
+	r, p := delegationRig(t, "inherit")
+	p.profile = "reader"
+	manager := delegation.Manager{Store: r.store}
+	policy := delegation.DefaultPolicy()
+	policy.ApprovalMode = "automatic"
+	if _, err := manager.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	profile := delegation.DefaultProfile()
+	profile.ID = "reader"
+	profile.Tools = []string{"filesystem.read"}
+	if _, err := manager.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, `[delegation.request, {name: filesystem.read, requiresApproval: true}]`, "{turnTimeout: 10s}")
+	var approval *domain.Approval
+	eventually(t, 5*time.Second, "child tool approval", func() bool {
+		rows, _ := r.store.ListApprovals(r.ctx, storage.ApprovalFilter{GraphID: "delegation", Status: domain.ApprovalPending})
+		for _, a := range rows {
+			if a.Kind == domain.ApprovalTool {
+				approval = a
+				return true
+			}
+		}
+		return false
+	})
+	child, err := r.store.GetExecution(r.ctx, approval.ExecutionID)
+	if err != nil || child.ParentExecutionID == "" {
+		t.Fatalf("%+v %v", child, err)
+	}
+	if _, err := r.apr.Decide(r.ctx, approval.ID, false, "operator", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	parent := finishedParent(t, r)
+	child, err = r.store.GetExecution(r.ctx, approval.ExecutionID)
+	if err != nil || child.Status != domain.ExecFailed || child.ToolCalls != 1 || !strings.Contains(parent.Summary, "delegated tool call failed") {
+		t.Fatalf("%+v %+v %v", child, parent, err)
 	}
 }

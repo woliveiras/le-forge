@@ -39,7 +39,12 @@ func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { retur
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
 	if strings.Contains(r.System, "temporary analysis assistant") {
 		if len(r.Tools) != 0 {
-			return nil, fmt.Errorf("child unexpectedly received tools")
+			for _, message := range r.Messages {
+				if message.Role == llm.RoleTool {
+					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Delegated inherited tool completed"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+				}
+			}
+			return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "child-list", Name: "filesystem.list", Arguments: json.RawMessage(`{}`)}}}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
 		}
 		return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Delegated fixture result"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
 	}
@@ -50,6 +55,9 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 			}
 		}
 		profile := "analysis"
+		if strings.Contains(r.Messages[0].Content, "inherited-profile") {
+			profile = "browser-inherited"
+		}
 		if strings.Contains(r.Messages[0].Content, "custom-profile") {
 			profile = "browser-review"
 		}

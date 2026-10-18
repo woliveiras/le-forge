@@ -6,7 +6,7 @@ import { Btn, ErrorBox } from './common';
 
 export function DelegationSection({canManage}: {canManage:boolean}) {
  return <section className="integration-section" aria-label="Delegation settings"><h2>Delegation</h2>
-  <p>Native analysis children use the parent model and have no tools, workspace or recursive delegation. Agents still need an explicit delegation.request grant.</p>
+  <p>Native children use the parent model and only profile-selected parent capabilities. Empty profiles have no tools or workspace; recursion remains disabled. Agents still need an explicit delegation.request grant.</p>
   {!canManage && <p>Administrator access is required to change delegation settings.</p>}
   <PolicyControls key={'policy-'+canManage} canManage={canManage}/>
   <ProfileControls key={'profiles-'+canManage} canManage={canManage}/>
@@ -63,7 +63,7 @@ function ProfileControls({canManage}: {canManage:boolean}) {
   finally{setEdit(undefined);setReview(false);await current.reload();lock.current=false;setBusy(false);}
  }
  return <section className="integration-card" aria-label="Delegation profiles"><h3>Analysis profiles</h3>
-  <p>Profiles customize guidance and reduce output allowances. They cannot choose another model, add tools or grant access. Disable a profile to block new requests without deleting execution history.</p>
+  <p>Profiles customize guidance, output allowances and a subset of explicit parent capabilities. They cannot choose another model or grant new access. Each child retains the parent constraints and tool approvals. Disable a profile to block new requests without deleting execution history.</p>
   <Btn disabled={busy||review||current.loading} onClick={()=>{setEdit(undefined);setError(undefined);void current.reload();}}>Reload delegation profiles</Btn>
   <ErrorBox error={current.error??error}/>{notice&&<p role="status">{notice}</p>}
   {!current.error&&current.data?.map(v=><article key={v.profile.id}><h4>{v.profile.name}</h4><p>{v.profile.id} · Revision {v.revision} · {v.profile.enabled?'Enabled':'Disabled'}</p>{canManage&&<Btn disabled={disabled} onClick={()=>open(v)}>Edit {v.profile.name}</Btn>}</article>)}
@@ -72,11 +72,13 @@ function ProfileControls({canManage}: {canManage:boolean}) {
    <label>Profile ID<input value={edit.profile.id} disabled={disabled||edit.revision!==undefined} onChange={e=>setEdit({...edit,profile:{...edit.profile,id:e.target.value}})}/></label>
    <label>Profile name<input value={edit.profile.name} disabled={disabled} onChange={e=>setEdit({...edit,profile:{...edit.profile,name:e.target.value}})}/></label>
    <label>Profile instructions<textarea value={edit.profile.instructions} disabled={disabled} onChange={e=>setEdit({...edit,profile:{...edit.profile,instructions:e.target.value}})}/></label>
+   <label>Inherited capabilities (one per line)<textarea value={(edit.profile.tools??[]).join('\n')} disabled={disabled} onChange={e=>setEdit({...edit,profile:{...edit.profile,tools:e.target.value ? e.target.value.split('\n').map(name=>name.trim()) : []}})}/></label>
+   <p>Optional; empty means no tools. Use exact parent grant names, including exact MCP tool names. Wildcards, recursion and environment/review control tools are unsupported. Missing parent grants reject the request.</p>
    <label>Profile output token allowance<input type="number" min={1} max={4096} value={edit.profile.maxOutputTokens} disabled={disabled} onChange={e=>setEdit({...edit,profile:{...edit.profile,maxOutputTokens:Number(e.target.value)}})}/></label>
    <label><input type="checkbox" checked={edit.profile.enabled} disabled={disabled} onChange={e=>setEdit({...edit,profile:{...edit.profile,enabled:e.target.checked}})}/>Profile enabled</label>
    <Btn disabled={disabled||!validDelegationProfile(edit.profile)} onClick={()=>setReview(true)}>Review delegation profile</Btn>
    <Btn disabled={busy} onClick={()=>{setEdit(undefined);setReview(false);}}>Cancel profile changes</Btn>
-   {review&&<section aria-label="Confirm delegation profile"><h4>Review profile changes</h4><p>{edit.profile.name} ({edit.profile.id}) · {edit.profile.enabled?'Enabled':'Disabled'} · Output allowance {edit.profile.maxOutputTokens}</p><p>{edit.profile.instructions}</p><Btn disabled={busy} onClick={()=>void save()}>Confirm delegation profile</Btn></section>}
+   {review&&<section aria-label="Confirm delegation profile"><h4>Review profile changes</h4><p>{edit.profile.name} ({edit.profile.id}) · {edit.profile.enabled?'Enabled':'Disabled'} · Output allowance {edit.profile.maxOutputTokens}</p><p>{edit.profile.instructions}</p><p>Inherited capabilities: {(edit.profile.tools??[]).join(", ") || "None"}</p><Btn disabled={busy} onClick={()=>void save()}>Confirm delegation profile</Btn></section>}
   </section>}
  </section>;
 }

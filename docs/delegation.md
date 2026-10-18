@@ -10,10 +10,11 @@ and standalone gateway calls cannot delegate.
 ```
 
 Only these two fields are accepted. The selected installation profile uses the
-parent's resolved provider/model, one inference request and no tools, workspace,
-memory, conversation history or delegation callback. It never edits the graph.
-This empty permission set is a subset of the parent's permissions. Profiles cannot
-inherit nonempty tool grants in this delivery.
+parent's resolved provider/model. The default analysis profile has no tools or
+workspace access and uses one inference request. Profiles can select an explicit
+subset of parent capabilities as described below. No profile gets durable memory,
+parent conversation history, message emission or recursive delegation. Children
+never edit the permanent graph.
 
 ## Installation profiles and policy
 
@@ -21,7 +22,8 @@ Administrators manage **Administration → Delegation**. Viewers and operators c
 read settings but cannot modify them. Saves require review in the console and
 compare-and-set revisions in storage; conflicts never retry silently.
 
-Profiles contain an ID, name, guidance, enabled flag and output allowance. The
+Profiles contain an ID, name, guidance, enabled flag, output allowance and optional
+`tools` capability names. The
 built-in `analysis` profile is available at revision zero until customized.
 Custom profiles are selected through the tool's `template` field. Mention the
 profile ID in the parent's instructions when assigning a specialization. Guidance
@@ -55,7 +57,8 @@ storage retains its existing single-instance restriction.
 In required mode, each child waits for an operator/admin decision in Approvals.
 Automatic mode skips this delegation decision only; explicit grants and any
 configured generic tool approval remain mandatory. The request shows
-its objective, parent/child IDs, model, empty effective tool set and deadline.
+its objective, parent/child IDs, model, effective capabilities and their inherited
+constraints, and deadline.
 OAuth consent and existing tool grants cannot approve delegation automatically.
 An additional generic tool approval applies if configured on the tool grant.
 
@@ -63,7 +66,7 @@ After approval, the server checks the deadline and capacity ownership again.
 The parent waits for a structured tool result containing childExecutionId,
 parentExecutionId, status, result and usage, then continues its native turn.
 Rejection, expiration, provider failure, missing/truncated/oversized results and
-attempted child tool calls return errors to the parent. No partial result is
+ungranted/failed child tool calls return errors to the parent. No partial result is
 reported as success. Provider diagnostic payloads are not returned.
 
 Children are persisted as executions with parentExecutionId, delegationTemplate,
@@ -72,6 +75,31 @@ approval/execution records and results in execution
 records, not general delegation telemetry.
 `delegation.requested`, `delegation.started` and `delegation.completed` events
 carry parent ID, template and status with normal execution/trace correlation.
+
+## Inherited capabilities
+
+An administrator may set **Inherited capabilities** in a profile (up to 32 exact
+names). Each must match an explicit parent grant. All matching declarations are
+copied with their paths, commands, hosts, per-call approval and rate limits;
+wildcards are neither accepted in profiles nor expanded from parent grants.
+Missing grants reject admission before child creation. Guidance cannot grant
+capabilities. MCP names remain exact per-tool connection names.
+
+Calls pass through the existing gateway with the child's execution ID and the
+parent's graph/node/replica identity. They retain workspace read-only restrictions,
+installation policy, sandbox, connection quotas and shared agent/tool rate limits.
+The workspace is the parent's workspace, not a new isolated worktree. Tool grants
+are not a promise of independent filesystem isolation. Every child call is recorded
+against the child; its attempts also consume the parent's remaining tool allowance.
+
+The child loop permits at most 16 calls (or the smaller remaining parent limit),
+uses a cumulative output allowance and reserves every additional model round in
+the root tree ledger. Empty, failed, truncated or oversized tool results stop the
+child rather than becoming a successful partial result. Tool-free profiles retain
+their single-call behavior. `delegation.request`, `environment.status`,
+`environment.propose` and `review.request` cannot be inherited: recursive execution
+and durable environment/review continuations need separate lifecycle support.
+Platform memory and emit operations are never available to children.
 
 ## Bounded limits and recovery
 
@@ -105,7 +133,7 @@ reported output over the limit is rejected. These are not a guaranteed monetary
 or provider-billing ceiling. Cumulative token admission is described below; hard billing ceilings require
 provider-specific enforcement and remain planned.
 
-Arbitrary tool-bearing children, other runtimes/models, external callbacks,
+Other runtimes/models, recursive children, external callbacks,
 idempotent delegation requests and enforceable monetary ceilings
 remain planned. Native cumulative token admission is implemented below.
 No installation activation or
@@ -141,7 +169,7 @@ duration and inclusive reported token usage. It is independent of the recent
 100-execution list and event-history window. Queries reject inconsistent families,
 cycles or more than 256 nodes / 16 levels rather than presenting a truncated tree.
 These read bounds do not enable recursive delegation: native children still have
-no tools and maximum delegation depth remains one.
+only profile-selected inherited capabilities and maximum delegation depth remains one.
 
 Viewers can read; operators and administrators can request interruption after
 reviewing the target and scope. Approval or OAuth consent does not grant this
