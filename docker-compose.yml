@@ -76,7 +76,7 @@ services:
     build: {context: ., dockerfile: Dockerfile}
     image: leforge/forged:dev
     environment: *forged-env
-    ports: ["8080:8080", "127.0.0.1:8082:8082"]
+    ports: ["${LEFORGE_BIND_ADDRESS:-127.0.0.1}:8080:8080", "127.0.0.1:8082:8082"]
     volumes:
       - workspaces:/var/lib/leforge/workspaces
       - forged-data:/var/lib/leforge/data
@@ -140,7 +140,7 @@ services:
       - ./deploy/observability/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ./deploy/observability/alerts.yaml:/etc/prometheus/alerts.yaml:ro
       - prom-data:/prometheus
-    ports: ["9090:9090"]
+    ports: ["${LEFORGE_BIND_ADDRESS:-127.0.0.1}:9090:9090"]
     restart: unless-stopped
 
   tempo:
@@ -169,7 +169,7 @@ services:
     volumes:
       - ./deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports: ["3000:3000"]
+    ports: ["${LEFORGE_BIND_ADDRESS:-127.0.0.1}:3000:3000"]
     depends_on: [prometheus, tempo, loki]
     restart: unless-stopped
 
@@ -178,7 +178,7 @@ services:
     profiles: [ollama]
     image: ollama/ollama:0.5.4
     volumes: [ollama-models:/root/.ollama]
-    ports: ["11434:11434"]
+    ports: ["${LEFORGE_BIND_ADDRESS:-127.0.0.1}:11434:11434"]
     restart: unless-stopped
 
   tgi:

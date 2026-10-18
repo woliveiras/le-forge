@@ -6,6 +6,26 @@ Infrastructure maintenance requires an installation administrator. Console work
 existing role checks. This guide does not introduce an onboarding wizard, user
 registration or automatic secret rotation for every credential type.
 
+## Compose review
+
+The shipped long-running services use `unless-stopped`; the one-shot sandbox
+image builder uses `no`. Store, broker, workspaces, controller key and dedicated
+Docker state use named volumes. Controller and example-runtime health checks
+come from their images; database, broker and daemon have Compose health checks.
+Controller startup waits for database, broker and runtime health. Sandbox
+readiness remains a separately reported dependency, not a global startup gate.
+Secrets are required environment substitutions, not literal defaults; they are
+still visible to a Docker administrator and are not a secret-manager boundary.
+The agents service receives only its runtime authentication secret, not provider
+or MCP credentials. Privileged Docker-in-Docker remains the explicit isolation
+tradeoff; rootless deployment is deferred. See the [port contract](deployment.md#network-and-ports)
+for default loopback publications and remote deployment implications.
+
+Configuration tests render the real Compose file with synthetic credentials and
+without loading `.env`. They verify volumes, restarts, network membership,
+publications, remote overrides and missing-credential rejection. They do not
+claim service reachability or a successful clean installation.
+
 ## Before maintenance
 
 Record the deployed source revision, image digest, Compose project name, enabled

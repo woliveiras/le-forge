@@ -701,7 +701,7 @@ and cooperative interruption for the current native scope are verified above.
 
 ### 9. Make the Docker Installation Operable Through the Interface
 
-- [ ] Review `docker-compose` for data persistence, secrets, internal networks, and restart behavior of required services.
+- [x] Review `docker-compose` for data persistence, secrets, internal networks, and restart behavior of required services. — Documented the actual volume/network/health/restart contract and remaining privileged-daemon tradeoff. Published services now default to loopback with an explicit remote interface override; preview stays local. Source and real Compose-render integration tests use only synthetic credentials and verify missing-credential rejection. No deployment or live reachability claim.
 - [ ] Ensure MCP services, providers, storage, and runtimes are reachable as configured without exposing unnecessary ports.
 - [ ] Define secure initial configuration for credentials, authentication, and first-operator creation.
 - [ ] Add health checks and show dependency status in the console.

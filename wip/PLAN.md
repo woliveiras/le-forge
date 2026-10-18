@@ -1246,3 +1246,12 @@ key inventory, quiescence, isolated restore, version-fenced upgrades, rollback a
 failure diagnosis. Model-provider re-sealing must not be mistaken for a complete
 MCP credential migration; previous keys remain necessary. This is documentation
 verified against the implementation, not a completed restore drill or deployment.
+
+### Compose installation contract (2026-10-18)
+
+Reviewed persistence, required credentials, restart behavior and network exposure.
+Published services default to loopback; `LEFORGE_BIND_ADDRESS` is the explicit
+remote-host override, while previews stay local. Real Compose-render tests use
+synthetic credentials and no `.env`, covering network/volume/restart contracts and
+missing-secret rejection. No existing installation was recreated. Live reachability
+and clean-install acceptance remain separate from configuration validation.

@@ -125,6 +125,21 @@ backlog per group and LLM latency tell you where to scale.
 
 ## Network and ports
 
+Compose publishes the console (8080), Prometheus (9090), Grafana (3000) and
+optional Ollama (11434) on `127.0.0.1` by default. Container-to-container addresses
+remain service names on the private Compose networks. A remote deployment may
+explicitly set `LEFORGE_BIND_ADDRESS` to its intended host interface; this exposes
+all four published services, so use a host firewall and authenticated TLS ingress
+appropriate to each service. Preview port 8082 remains loopback-only independently
+of that override. Existing installations adopt these defaults only on recreation.
+
+PostgreSQL, NATS, example runtimes and the sandbox Docker API have no published
+host ports. The `sandbox` Compose network is separate from `default`, but it is
+not Docker's `internal: true` network: controlled outbound access depends on the
+dedicated daemon firewall and environment policy, not that flag. The controller
+joins both networks. Do not give external runtimes the daemon client certificate.
+
+
 | Port | Service | Exposure |
 |---|---|---|
 | 8080 | forged: console, `/api/v1`, `/healthz`, `/readyz`, `/metrics`, `/internal/v1` | `/` and `/api` via TLS ingress; `/internal` only to agent runtimes; `/metrics` only to Prometheus |
