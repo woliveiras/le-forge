@@ -8,7 +8,7 @@ Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
 and must remain unchecked until performed. The UX reorganization and UX-01–UX-05 are implemented and activated. The global
 onboarding panel was removed from the application on 2026-10-18 at the user's
-request after reported layout breakage. Activation of this removal is pending;
+request after reported layout breakage. The removal was activated and browser-validated on 2026-10-18;
 earlier onboarding evidence below is historical, not current acceptance.
 
 Continue unit, integration and relevant browser regression tests with each change.
@@ -626,7 +626,7 @@ user-reported layout breakage. It is no longer a Release 1 implementation or
 acceptance requirement. Keep direct navigation and contextual help. Historical
 implementation/activation evidence below describes the previous version.
 Browser-local progress is ignored, not deleted; graphs, connections, grants,
-drafts and execution history are preserved. Installation activation is pending.
+drafts and execution history are preserved. Installation activation was validated on 2026-10-18.
 
 Removal regression coverage checks absent onboarding for fresh and existing
 browser state, direct navigation, draft preservation, explicit echo execution,
@@ -637,7 +637,20 @@ viewer restrictions, dependency failures, and narrow-screen layout.
 (onboarding removal, navigation and UX feedback). The browser suite builds the
 web application and uses the real disposable backend. Existing isolated guide
 unit tests are retained, but the guide has no application mount or production
-import. No installation activation is claimed.
+import.
+
+**Onboarding removal installation activation (2026-10-18):** Commit `a2b33b3`
+was activated as a frontend-only update over the installed `9b8d1e8` baseline.
+The web assets were rebuilt and only `forged` was recreated with existing
+volumes. The backend binary hash and volume mounts were verified unchanged;
+the service is healthy, `/healthz` succeeds, and schema versions remain 1 and 2.
+Three graphs and existing providers and MCP connections remain present, while
+background execution history continues to grow. Authenticated browser checks
+covered Models, Graphs, the reader configuration and Connections without the
+global onboarding panel. GitHub remains authorized and the reader retains its
+two tool grants. No configuration edits or live tool calls were needed. The
+previous image is retained as `leforge/forged:before-onboarding-removal` for
+rollback. This activation does not include the separate delegation changes.
 
 ## Release 2 — Reusable Components
 

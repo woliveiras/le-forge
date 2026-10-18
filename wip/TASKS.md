@@ -10,7 +10,7 @@ Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
 and must remain unchecked until performed. The UX reorganization and UX-01–UX-05 are implemented and activated. The global
 onboarding panel was removed from the application on 2026-10-18 at the user's
-request after reported layout breakage. Activation of this removal is pending;
+request after reported layout breakage. The removal was activated and browser-validated on 2026-10-18;
 earlier onboarding evidence below is historical, not current acceptance.
 
 Continue unit, integration and relevant browser regression tests with each change.
@@ -537,7 +537,7 @@ user-reported layout breakage. It is no longer a Release 1 implementation or
 acceptance requirement. Keep direct navigation and contextual help. Historical
 implementation/activation evidence below describes the previous version.
 Browser-local progress is ignored, not deleted; graphs, connections, grants,
-drafts and execution history are preserved. Installation activation is pending.
+drafts and execution history are preserved. Installation activation was validated on 2026-10-18.
 
 Removal regression coverage checks absent onboarding for fresh and existing
 browser state, direct navigation, draft preservation, explicit echo execution,
@@ -548,7 +548,20 @@ viewer restrictions, dependency failures, and narrow-screen layout.
 (onboarding removal, navigation and UX feedback). The browser suite builds the
 web application and uses the real disposable backend. Existing isolated guide
 unit tests are retained, but the guide has no application mount or production
-import. No installation activation is claimed.
+import.
+
+**Onboarding removal installation activation (2026-10-18):** Commit `a2b33b3`
+was activated as a frontend-only update over the installed `9b8d1e8` baseline.
+The web assets were rebuilt and only `forged` was recreated with existing
+volumes. The backend binary hash and volume mounts were verified unchanged;
+the service is healthy, `/healthz` succeeds, and schema versions remain 1 and 2.
+Three graphs and existing providers and MCP connections remain present, while
+background execution history continues to grow. Authenticated browser checks
+covered Models, Graphs, the reader configuration and Connections without the
+global onboarding panel. GitHub remains authorized and the reader retains its
+two tool grants. No configuration edits or live tool calls were needed. The
+previous image is retained as `leforge/forged:before-onboarding-removal` for
+rollback. This activation does not include the separate delegation changes.
 
 ### 11. Integrated Validation of Release 1
 
@@ -592,7 +605,7 @@ Start only after Release 1 is complete and stable.
 - [x] Deliver Runs list/detail screens over existing execution records, highlighting blockers and distinguishing execution outcome from individual tool outcomes. — Search/filter the latest 100 executions; Result, Timeline, Tool calls, Messages and Diagnostics use existing authorized APIs. Details verify graph identity, correlate records by persisted IDs, label bounded history and current-workspace links, and reuse approval role gates. Unit/real-client integration tests cover filters, scope, independent tool outcomes, polling, missing records, failures and recovery. Chromium covers approval-to-completion, deep links/reload/back, viewer restrictions, graph mismatch and failed-history retry. All 219 frontend tests and 42 standard/hosted-CIMD E2E scenarios pass; the six Runs/Activity scenarios were repeated after final changes. make test, make lint and make build pass. Installation activation and developer usability validation remain separate.
 - [x] Consolidate typography, spacing, button hierarchy, contextual help and accessible responsive components across the remaining screens. — Shared page/card/form styles cover Models, Administration, Approvals and Skills; canvas guidance is a native disclosure. Skills adopts shared action buttons with unchanged handlers and disabled fieldsets. Security notices and errors remain visible; focus and reduced-motion styles are explicit. Unit tests cover disclosure and disabled actions; real-client integration proves help does not invoke providers or expose viewer actions. Chromium covers keyboard disclosure, narrow layouts, viewer permissions and unchanged canvas editing. make test (229 frontend tests), make lint, make build and make test-e2e (45 standard plus one hosted-CIMD scenario) pass. A canvas-edge rendering failure after reload occurred in an earlier suite attempt; its isolated repeat and the final full suite passed without changing assertions. Preview was inspected at narrow and desktop widths. This slice was subsequently activated as commit 7ef1178 on 2026-10-17; see the activation evidence below. Developer usability acceptance remains pending.
 - [ ] Final Release 1 acceptance: validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets. — Deferred by user decision on 2026-10-18 until remaining implementation is ready; not a blocker to development.
-- [x] Remove the global onboarding panel following user-reported layout breakage; preserve direct navigation and contextual help. Activation of the removal is pending.
+- [x] Remove the global onboarding panel following user-reported layout breakage; preserve direct navigation and contextual help. The removal was activated and browser-validated on 2026-10-18.
 
 
 **Navigation baseline activation (2026-10-17):** Commit b0f7670 and preceding UX
