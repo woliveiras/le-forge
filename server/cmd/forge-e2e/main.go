@@ -65,6 +65,9 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 		}
 		return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Delegated fixture result"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
 	}
+	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "release-one-journey") {
+		return journeyResponse(r)
+	}
 	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "delegation-fixture") {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {
@@ -266,7 +269,7 @@ func run() error {
 		return mcpconfig.CallWithClient(ctx, fixtureMCP.URL, token, name, args, fixtureMCP.Client())
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
-	for _, id := range []string{"discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture", "activity-approve", "activity-reject"} {
+	for _, id := range []string{"journey-required", "journey-automatic", "discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture", "activity-approve", "activity-reject"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
@@ -283,7 +286,7 @@ func run() error {
 				return err
 			}
 		}
-		if strings.HasPrefix(id, "discover-") || id == "build-failure" || id == "retry-build" {
+		if strings.HasPrefix(id, "journey-") || strings.HasPrefix(id, "discover-") || id == "build-failure" || id == "retry-build" {
 			body := "FROM alpine:3.22\nRUN echo ready\n"
 			if id == "retry-build" {
 				body = "FROM alpine:3.22\nRUN E2E_FAIL_ONCE\n"
@@ -298,6 +301,22 @@ func run() error {
 		g := &domain.Graph{Metadata: domain.GraphMetadata{Name: id}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Loop: domain.LoopSpec{Mode: domain.LoopOnce}, Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}, Isolation: domain.IsolationSpec{Mode: domain.IsolationDocker}}}}}
 
 		node := &g.Spec.Nodes[0]
+		if strings.HasPrefix(id, "journey-") {
+			if err := os.WriteFile(filepath.Join(dir, "journey.txt"), []byte("Baseline journey\n"), 0600); err != nil {
+				return err
+			}
+			for _, args := range [][]string{{"add", "journey.txt"}, {"-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "-qm", "journey baseline"}} {
+				cmd := exec.CommandContext(ctx, "git", args...)
+				cmd.Dir = dir
+				if out, err := cmd.CombinedOutput(); err != nil {
+					return fmt.Errorf("journey baseline: %w: %s", err, out)
+				}
+			}
+			node.Runtime.Kind = domain.RuntimeNative
+			node.Model = domain.ModelRef{Provider: "e2e", Name: "fixture"}
+			node.Prompt = "release-one-journey " + id
+			node.Tools = []domain.ToolGrant{{Name: "delegation.request"}, {Name: "filesystem.write", Paths: []string{"journey.txt"}, RequiresApproval: true}}
+		}
 		if strings.HasPrefix(id, "git-inspect") || strings.HasPrefix(id, "activity-") {
 			if err := prepareGitInspectionFixture(ctx, dir, node); err != nil {
 				return err

@@ -1572,3 +1572,26 @@ reads and stale-reference rejection after a policy change. Component tests cover
 explicit opt-in and independent selections; browser/API acceptance proves
 save/reload, invalid-site rejection and viewer denial using disposable fixtures.
 No external Atlassian connection or credential was changed.
+
+### Consolidated Release 1 browser journey (2026-10-18)
+
+Two disposable-backend journeys cover login, MCP save/automatic discovery, exact
+agent grants, repository environment review/build, native execution, child
+delegation, approved file writing and read-only file/diff inspection. Required
+and automatic delegation modes both pass, with independent write approval in
+both modes. The fixture verifies tool-result order and rejects error results;
+unit tests cover both modes, invalid order, failed results and missing input.
+The test confirms that the baseline file is unchanged before approval, temporary
+children do not alter the permanent graph, existing write constraints survive,
+and connection reads do not return the synthetic credential.
+
+This uses a seeded graph/model, synthetic MCP and simulated Docker. It does not
+prove clean installation, provider registration, live vendor acceptance or real
+sandbox isolation. Those acceptance items remain open. The preceding complete
+browser checkpoint passed 75 standard scenarios plus one hosted-CIMD scenario;
+the two new consolidated journeys passed separately. No installed services,
+credentials or persistent workspaces were changed.
+
+Checks for this journey commit: `make test` passed (54 frontend files / 292 tests
+plus backend, SDK and script suites), `make lint` and `make build` passed, and
+`go test -tags e2e ./cmd/forge-e2e` passed. Both targeted Chromium journeys passed.

@@ -749,8 +749,8 @@ rollback. This activation does not include the separate delegation changes.
 
 Run the consolidated acceptance round after the remaining Release 1 implementation. Per-delivery automated tests continue throughout development. Include the deferred UX walkthrough; do not mark acceptance complete based only on automated tests.
 
-- [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled.
-- [ ] Repeat the flow with both approval-required and automatic delegation policies.
+- [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled. — A consolidated disposable-browser journey now covers login, MCP save/discovery, explicit grants, environment discovery/review/build, native execution/delegation, write approval and file/diff inspection. It uses a seeded graph/model, synthetic MCP and simulated Docker; clean installation, provider registration and real sandbox acceptance remain pending.
+- [ ] Repeat the flow with both approval-required and automatic delegation policies. — Both consolidated fixture journeys pass. Automatic delegation still requires the separately configured filesystem-write approval; the baseline file remains unchanged before approval, and temporary children do not become permanent graph nodes. Repeat against the complete clean-install flow before closing acceptance.
 - [ ] Validate direct first-use navigation on a clean installation, including real test MCPs and providers; the global onboarding panel has been withdrawn.
 - [x] Verify that no interface path allows users to directly edit workspace files. — File/Git inspection exposes only reads; API integration and Chromium reject POST/PUT/PATCH/DELETE even for administrators and verify unchanged contents. Component tests confirm read-only controls and GET-only requests. Agent tools remain the explicit write path.
 - [ ] Verify that no secret reaches the browser after saving, the runtime, a prompt, or logs.
