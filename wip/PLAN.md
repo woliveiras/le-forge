@@ -1428,3 +1428,17 @@ flows remain unchanged; there is no Sentry compatibility bypass. Unit, API/stora
 integration and browser configuration tests cover pending authorization and invalid
 Bearer template use. Live consent, dispatcher/catalogue qualification and actual
 per-tool scope requirements remain pending despite advertised DCR/CIMD support.
+
+### Databricks workspace/service configuration (2026-10-18)
+
+A versioned profile constructs the reviewed Unity Gateway MCP service path from
+an HTTPS workspace origin and bounded three-part name. Typed template parameters
+render URL and text fields appropriately. Invalid paths, query strings and service
+identifiers fail before persistence. Bearer testing and pre-registered user OAuth
+remain separate; OAuth defaults request ai-gateway/offline_access but deliberately
+leave the issuer empty until supplied from workspace MCP metadata. Workspace
+changes reset draft client/issuer identity. Existing encrypted credentials,
+resource binding and per-agent grants are preserved. Unit, API/storage and browser
+configuration tests cover valid/invalid parameters, safe persistence and pending
+consent. Live workspace acceptance, service-principal renewal, downstream provider
+consent and service-specific data/cost controls remain unproven or unimplemented.

@@ -3,6 +3,7 @@ package mcpconfig
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -13,10 +14,11 @@ type TemplateRef struct {
 	Version int    `json:"version"`
 }
 type TemplateParameter struct {
-	Name    string   `json:"name"`
-	Label   string   `json:"label"`
-	Default string   `json:"default"`
-	Options []string `json:"options,omitempty"`
+	InputType string   `json:"inputType,omitempty"`
+	Name      string   `json:"name"`
+	Label     string   `json:"label"`
+	Default   string   `json:"default"`
+	Options   []string `json:"options,omitempty"`
 }
 type Template struct {
 	Parameters          []TemplateParameter `json:"parameters,omitempty"`
@@ -43,11 +45,14 @@ func Templates() []Template {
 		{TemplateRef: TemplateRef{"github", 2}, Name: "GitHub read-only", Service: "github", Endpoint: "https://api.githubcopilot.com/mcp/readonly", Authentication: "bearer or OAuth", AuthenticationModes: []string{"bearer", "oauth"}, Parameters: []TemplateParameter{{Name: "toolset", Label: "Read-only toolset", Default: "default", Options: []string{"default", "repos", "issues", "pull_requests", "actions"}}}, Guidance: "Select a read-only toolset. A PAT must restrict repositories and permissions; OAuth requires a registered client. Endpoint defaults do not restrict which repositories a credential can access. Agent grants remain explicit.", Source: "https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md", ReviewedAt: "2026-10-18", Validation: "Protocol fixtures cover configuration; live acceptance of each toolset remains pending."},
 		{TemplateRef: TemplateRef{"gitlab", 1}, Name: "GitLab instance", Service: "gitlab", Endpoint: "https://gitlab.com/api/v4/mcp", Authentication: "OAuth", AuthenticationModes: []string{"oauth"}, Parameters: []TemplateParameter{{Name: "instance", Label: "GitLab instance URL", Default: "https://gitlab.com"}}, Guidance: "Choose your instance. Use the mcp scope and a client registered for that instance, or review advertised DCR support. Availability depends on instance version, licensing and administrator policy.", Source: "https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_server/", ReviewedAt: "2026-10-18", Validation: "Configuration and OAuth fixtures only; live instance qualification pending."},
 		{TemplateRef: TemplateRef{"sentry", 1}, Name: "Sentry", Service: "sentry", Endpoint: "https://mcp.sentry.dev/mcp", Authentication: "OAuth", AuthenticationModes: []string{"oauth"}, Guidance: "Use the advertised MCP issuer with PKCE. Review automatic DCR/CIMD setup or use a compatible registered client. Start with org:read; broader scopes and every agent tool grant require separate review. Live account acceptance remains pending.", Source: "https://mcp.sentry.dev/", ReviewedAt: "2026-10-18", Validation: "Public metadata reviewed; configuration fixtures only. Live consent and tool qualification pending."},
+		{TemplateRef: TemplateRef{"databricks", 1}, Name: "Databricks workspace service", Service: "databricks", Endpoint: "https://workspace.example/ai-gateway/mcp-services/catalog.schema.service", Authentication: "bearer or OAuth", AuthenticationModes: []string{"bearer", "oauth"}, Parameters: []TemplateParameter{{Name: "workspace", Label: "Databricks workspace URL", Default: "https://workspace.example", InputType: "url"}, {Name: "service", Label: "MCP service name", Default: "catalog.schema.service", InputType: "text"}}, Guidance: "Replace the example workspace and catalog.schema.service name. Use a PAT for testing or a registered public OAuth client with ai-gateway and offline_access. Obtain the issuer from the selected MCP metadata; no universal issuer is assumed. Service-principal client_credentials renewal is not supported.", Source: "https://docs.databricks.com/aws/en/ai-gateway/coding-agent-codex", ReviewedAt: "2026-10-18", Validation: "Configuration fixtures only. Workspace metadata, consent, service permissions and downstream login require live qualification."},
 	}
 }
 func legacyTemplate(ref TemplateRef, name, service, endpoint, auth, guidance, source, reviewed, validation string) Template {
 	return Template{TemplateRef: ref, Name: name, Service: service, Endpoint: endpoint, Authentication: auth, Guidance: guidance, Source: source, ReviewedAt: reviewed, Validation: validation}
 }
+
+var databricksServiceName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]{0,62}\.[A-Za-z_][A-Za-z0-9_-]{0,62}\.[A-Za-z_][A-Za-z0-9_-]{0,62}$`)
 
 func templateEndpoint(t Template, parameters map[string]string) (string, error) {
 	if len(parameters) > len(t.Parameters) {
@@ -74,6 +79,17 @@ func templateEndpoint(t Template, parameters map[string]string) (string, error) 
 			return t.Endpoint, nil
 		}
 		return "https://api.githubcopilot.com/mcp/x/" + values["toolset"] + "/readonly", nil
+	}
+	if t.ID == "databricks" {
+		origin := values["workspace"]
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || (u.Path != "" && u.Path != "/") || u.RawPath != "" || strings.Contains(origin, "#") {
+			return "", fmt.Errorf("%w: Databricks workspace must be an HTTPS origin without credentials, query, fragment or path", ErrInvalid)
+		}
+		if !databricksServiceName.MatchString(values["service"]) {
+			return "", fmt.Errorf("%w: use a three-part MCP service name with letters, numbers, underscores or hyphens", ErrInvalid)
+		}
+		return strings.TrimSuffix(origin, "/") + "/ai-gateway/mcp-services/" + values["service"], nil
 	}
 	if t.ID == "gitlab" {
 		origin := values["instance"]

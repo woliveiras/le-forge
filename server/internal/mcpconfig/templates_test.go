@@ -84,3 +84,30 @@ func TestParameterizedTemplateBoundaries(t *testing.T) {
 		t.Fatal("orphan parameters accepted")
 	}
 }
+
+func TestDatabricksTemplateBoundaries(t *testing.T) {
+	var tpl Template
+	for _, v := range Templates() {
+		if v.ID == "databricks" {
+			tpl = v
+		}
+	}
+	params := map[string]string{"workspace": "https://workspace.example/", "service": "team.data.github-reader"}
+	got, err := templateEndpoint(tpl, params)
+	if err != nil || got != "https://workspace.example/ai-gateway/mcp-services/team.data.github-reader" {
+		t.Fatal(got, err)
+	}
+	for _, service := range []string{"", "a.b", "a.b.c.d", "a.b/../c", "a.b.%2e", "a.b.c?token=secret", "a.b.c#x", "a.b." + string(make([]byte, 64))} {
+		params["service"] = service
+		if _, err := templateEndpoint(tpl, params); err == nil {
+			t.Fatal("invalid service accepted", service)
+		}
+	}
+	params["service"] = "a.b.c"
+	for _, origin := range []string{"http://workspace.example", "https://user:secret@workspace.example", "https://workspace.example/path", "https://workspace.example?", "https://workspace.example#"} {
+		params["workspace"] = origin
+		if _, err := templateEndpoint(tpl, params); err == nil {
+			t.Fatal("invalid origin accepted", origin)
+		}
+	}
+}

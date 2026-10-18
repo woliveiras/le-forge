@@ -128,7 +128,7 @@ func validate(in Input) error {
 		return fmt.Errorf("%w: endpoint must be HTTPS without user info or fragment; only Atlassian v2 tools=all is an allowed query", ErrInvalid)
 	}
 	switch in.Service {
-	case "sentry", "github", "atlassian", "gitlab", "bitbucket", "jira", "confluence", "generic":
+	case "databricks", "sentry", "github", "atlassian", "gitlab", "bitbucket", "jira", "confluence", "generic":
 	default:
 		return fmt.Errorf("%w: unknown service", ErrInvalid)
 	}

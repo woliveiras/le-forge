@@ -95,7 +95,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
         <Btn disabled={busy} onClick={applyDefaults}>Use OAuth defaults</Btn>
       </>}
       <label>MCP endpoint<input type="url" required placeholder="https://mcp.example.com/mcp" readOnly={!!input.template} value={input.endpoint} onChange={e=>setInput({...input,endpoint:e.target.value})}/></label>
-      <label><input type="checkbox" checked={!!input.oauth} onChange={e=>{setInput({...input,credentialType:undefined,oauth:e.target.checked?{issuer:'',clientId:'',scopes:[]}:undefined});setToken('');setCredentialEmail('');setClear(false);setClientSecret('');setClearClientSecret(false);}}/>Use browser OAuth</label>
+      <label><input type="checkbox" checked={!!input.oauth} onChange={e=>{setInput({...input,credentialType:undefined,oauth:e.target.checked?(input.service==='databricks'?oauthDefaults('databricks').oauth:{issuer:'',clientId:'',scopes:[]}):undefined});setToken('');setCredentialEmail('');setClear(false);setClientSecret('');setClearClientSecret(false);}}/>Use browser OAuth</label>
       {input.oauth?<fieldset><legend>OAuth client registration</legend>
         <MCPOAuthCallbackURL/><p>Review the issuer and scopes before saving.</p>{(!input.oauth.registrationMode||input.oauth.registrationMode==='manual')&&!input.oauth.clientId&&<p role="status">Configuration pending: enter a pre-registered OAuth client ID.</p>}
         <label>Client registration method<select value={input.oauth.registrationMode||'manual'} onChange={e=>{setInput({...input,oauth:{...input.oauth!,registrationMode:e.target.value,clientId:''}});setClientSecret('');setClearClientSecret(true);}}>

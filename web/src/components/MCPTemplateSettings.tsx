@@ -21,7 +21,7 @@ export function MCPTemplateSettings({input,onChange}:{input:MCPConnectionInput;o
     {catalogue.error&&<Btn onClick={()=>void catalogue.reload()}>Reload template settings</Btn>}
     {pinned&&<>
       <p>Authentication: {pinned.authentication}. {pinned.guidance}</p>
-      {(pinned.parameters??[]).map(parameter=><TemplateParameter key={`${pinned.id}-${pinned.version}-${parameter.name}`} label={parameter.label} value={input.templateParameters?.[parameter.name]??parameter.default} options={parameter.options} onApply={value=>apply(pinned,{...input.templateParameters,[parameter.name]:value})}/>)}
+      {(pinned.parameters??[]).map(parameter=><TemplateParameter key={`${pinned.id}-${pinned.version}-${parameter.name}`} label={parameter.label} inputType={parameter.inputType} value={input.templateParameters?.[parameter.name]??parameter.default} options={parameter.options} onApply={value=>apply(pinned,{...input.templateParameters,[parameter.name]:value})}/>)}
       {latest&&latest.version>pinned.version&&<Btn onClick={()=>{setPreview(latest);setError(undefined);}}>Review template update to v{latest.version}</Btn>}
     </>}
     {preview&&<section role="dialog" aria-label="Review template update">
@@ -34,7 +34,7 @@ export function MCPTemplateSettings({input,onChange}:{input:MCPConnectionInput;o
     <Btn onClick={()=>onChange({...input,template:undefined,templateParameters:undefined})}>Customize without template</Btn>
   </section>;
 }
-function TemplateParameter({label,value,options,onApply}:{label:string;value:string;options?:string[];onApply:(value:string)=>void}) {
+function TemplateParameter({label,value,options,inputType,onApply}:{label:string;inputType?:'url'|'text';value:string;options?:string[];onApply:(value:string)=>void}) {
   const [draft,setDraft]=useState(value);
-  return <div><label>{label}{options?<select aria-label={label} value={draft} onChange={e=>setDraft(e.target.value)}>{options.map(option=><option key={option}>{option}</option>)}</select>:<input type="url" value={draft} onChange={e=>setDraft(e.target.value)}/>}</label><Btn onClick={()=>onApply(draft)}>Apply {label}</Btn></div>;
+  return <div><label>{label}{options?<select aria-label={label} value={draft} onChange={e=>setDraft(e.target.value)}>{options.map(option=><option key={option}>{option}</option>)}</select>:<input type={inputType??"url"} value={draft} onChange={e=>setDraft(e.target.value)}/>}</label><Btn onClick={()=>onApply(draft)}>Apply {label}</Btn></div>;
 }

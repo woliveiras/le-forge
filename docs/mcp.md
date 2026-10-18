@@ -709,3 +709,28 @@ endpoints can be configured after detaching the template, but require their own
 metadata verification and permission review. Generic dispatcher tools must not
 be treated as grants to individual underlying operations. Catalogue qualification,
 live tool permissions and account acceptance remain pending.
+
+### Databricks workspace/service profile
+
+Choose **Databricks workspace service**, replace the example HTTPS workspace
+origin and enter the three-part MCP service name from Unity Gateway. The template
+builds `/ai-gateway/mcp-services/<catalog>.<schema>.<service>`. Each segment accepts
+letters, numbers, underscores and hyphens, beginning with a letter or underscore,
+up to 63 characters. Unusual identifiers need a separately reviewed custom
+connection. Query strings, credentials and paths are not workspace origins.
+
+For testing, enter a PAT in the encrypted Bearer field. For browser OAuth, have
+the administrator register a public application under account Settings → App
+connections with the exact LeForge callback and `ai-gateway` scope; request
+`ai-gateway offline_access`. Obtain the issuer from the selected MCP's metadata.
+LeForge does not guess it or bypass resource/issuer validation. Changing workspace
+clears the draft issuer/client ID for review; saved credential replacement and
+reauthorization rules still apply. Automatic registration is not presumed.
+
+The [current Databricks MCP client guide](https://docs.databricks.com/aws/en/ai-gateway/coding-agent-codex)
+was reviewed on 2026-10-18. Workspace access, service permissions, beta availability
+and downstream provider consent require separate qualification. LeForge does not
+follow tool-returned login links automatically. This profile does not implement
+service-principal `client_credentials` acquisition/renewal, legacy managed endpoint
+families, SQL cost limits or universal service scopes. Configuration fixtures do
+not establish live workspace acceptance; tool grants remain explicit per agent.

@@ -23,3 +23,13 @@ it('does not reinterpret typed credentials as Bearer during template upgrades',(
   expect(()=>templateDraft({id:'typed',name:'Typed',service:'generic',endpoint:'https://fixture.example/mcp',enabled:true,credentialType},github)).toThrow(/authentication/);
  }
 });
+it('binds Databricks service paths and requires issuer/client review when changing workspace',()=>{
+ const template:MCPTemplate={...github,id:'databricks',service:'databricks',version:1,parameters:[{name:'workspace',label:'Workspace',default:'https://workspace.example'},{name:'service',label:'Service',default:'catalog.schema.service',inputType:'text'}]};
+ const endpoint='https://workspace.example/ai-gateway/mcp-services/catalog.schema.service';
+ expect(templateEndpoint(template)).toBe(endpoint);
+ const input={id:'data',name:'Data',service:'databricks',enabled:false,endpoint,oauth:{issuer:'https://workspace.example/oidc',clientId:'old',scopes:['ai-gateway','offline_access']}};
+ expect(templateDraft(input,template,{workspace:'https://other.example'}).oauth).toEqual({...input.oauth,issuer:'',clientId:''});
+ expect(templateDraft(input,template,{service:'team.data.github-reader'}).oauth).toEqual(input.oauth);
+ for(const service of ['a.b','a.b/../c','a.b.c?token=x','a.b.%2e']) expect(()=>templateEndpoint(template,{service})).toThrow();
+ for(const workspace of ['http://host.example','https://user:secret@host.example','https://host.example/path','https://host.example?']) expect(()=>templateEndpoint(template,{workspace})).toThrow();
+});

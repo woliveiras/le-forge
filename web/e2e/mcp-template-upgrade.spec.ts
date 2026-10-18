@@ -64,3 +64,30 @@ test('Sentry template keeps consent and agent grants separate from configuration
  const response=await page.request.get('/api/v1/mcp/connections/sentry-template',{headers});expect(response.ok()).toBeTruthy();
  const saved=await response.json();expect(saved.oauth.status).toBe('authorization_required');expect(saved.oauth.scopes).toEqual(['org:read']);expect(saved.tools).toEqual([]);expect(saved.credentialConfigured).toBe(false);
 });
+
+test('Databricks template validates workspace and service without granting tools',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/connections/connect?template=databricks&version=1');
+ await page.getByRole('button',{name:'Use template defaults'}).click();
+ await page.getByLabel('Databricks workspace URL',{exact:true}).fill('https://data.fixture.example');
+ await page.getByRole('button',{name:'Apply Databricks workspace URL',exact:true}).click();
+ await page.getByLabel('MCP service name',{exact:true}).fill('team.data/../bad');
+ await page.getByRole('button',{name:'Apply MCP service name',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('three-part');
+ await page.getByLabel('MCP service name',{exact:true}).fill('team.data.reader');
+ await page.getByRole('button',{name:'Apply MCP service name',exact:true}).click();
+ await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue('https://data.fixture.example/ai-gateway/mcp-services/team.data.reader');
+ await page.getByLabel('Use browser OAuth',{exact:true}).check();
+ await expect(page.getByLabel('OAuth issuer',{exact:true})).toHaveValue('');
+ await expect(page.getByLabel('OAuth scopes (space separated)',{exact:true})).toHaveValue('ai-gateway offline_access');
+ await page.getByLabel('OAuth issuer',{exact:true}).fill('https://data.fixture.example/oidc');
+ await page.getByLabel('OAuth client ID',{exact:true}).fill('registered-client');
+ await page.getByLabel('Connection ID',{exact:true}).fill('databricks-template');
+ await page.getByLabel('Connection enabled',{exact:true}).uncheck();
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page).toHaveURL(/connections\/c\/databricks-template\/overview$/);
+ const response=await page.request.get('/api/v1/mcp/connections/databricks-template',{headers});expect(response.ok()).toBeTruthy();
+ const saved=await response.json();expect(saved.oauth.status).toBe('authorization_required');expect(saved.tools).toEqual([]);expect(saved.templateParameters).toEqual({workspace:'https://data.fixture.example',service:'team.data.reader'});
+ const invalid=await page.request.post('/api/v1/mcp/connections',{headers,data:{id:'invalid-data-template',name:'Invalid',service:'databricks',endpoint:saved.endpoint,template:saved.template,templateParameters:{...saved.templateParameters,service:'a.b/../c'}}});
+ expect(invalid.status()).toBe(422);
+});

@@ -160,7 +160,7 @@ func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
 func TestMCPVersionedTemplatesPersistence(t *testing.T) {
 	srv, a := setupApp(t, nil)
 	var catalogue []mcpconfig.Template
-	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 8 {
+	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 9 {
 		t.Fatal(code, catalogue)
 	}
 	template := catalogue[0]
@@ -365,5 +365,32 @@ func TestSentryTemplateConfigurationDoesNotAuthorize(t *testing.T) {
 	}
 	if _, err := a.MCP.Get(t.Context(), in.ID); err == nil {
 		t.Fatal("invalid template persisted")
+	}
+}
+
+func TestDatabricksTemplatePersistsReviewedParameters(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	in := mcpconfig.Input{ID: "workspace-profile", Name: "Workspace profile", Service: "databricks", Endpoint: "https://data.example/ai-gateway/mcp-services/team.data.reader", Template: &mcpconfig.TemplateRef{ID: "databricks", Version: 1}, TemplateParameters: map[string]string{"workspace": "https://data.example", "service": "team.data.reader"}, Credential: &mcpconfig.Credential{Value: "synthetic-databricks-token"}}
+	body, _ := json.Marshal(in)
+	var saved mcpconfig.View
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), &saved); code != 201 {
+		t.Fatal(code)
+	}
+	loaded, err := a.MCP.Get(t.Context(), in.ID)
+	if err != nil || loaded.TemplateParameters["service"] != "team.data.reader" || !loaded.CredentialConfigured || len(loaded.Tools) != 0 {
+		t.Fatal(loaded, err)
+	}
+	public, _ := json.Marshal(loaded)
+	if strings.Contains(string(public), "synthetic-databricks-token") {
+		t.Fatal("secret leaked")
+	}
+	in.ID = "bad-workspace-profile"
+	in.TemplateParameters["service"] = "a.b/../c"
+	body, _ = json.Marshal(in)
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", string(body), nil); code != 422 {
+		t.Fatal(code)
+	}
+	if _, err := a.MCP.Get(t.Context(), in.ID); err == nil {
+		t.Fatal("invalid profile persisted")
 	}
 }

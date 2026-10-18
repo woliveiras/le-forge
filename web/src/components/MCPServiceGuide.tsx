@@ -1,7 +1,11 @@
 export function MCPServiceGuide({service}:{service:string}) {
  return <aside aria-label="OAuth service setup">
   <p>Connections belong to this LeForge installation. Use separate IDs and names, such as Personal GitHub and Work Atlassian. Each connection has its own credentials and agent grants.</p>
-  {service==='sentry'?<>
+  {service==='databricks'?<>
+   <p>Select your workspace and the three-part service name from Unity Gateway. Confirm service permissions and any required beta enablement with the administrator. Use a PAT for testing, or register a public OAuth application under account Settings → App connections using the exact callback below and ai-gateway scope. Request ai-gateway and offline_access.</p>
+   <p>Obtain the issuer from that MCP's protected-resource metadata. LeForge checks resource and issuer binding; no Databricks compatibility exception is applied. Workspace consent and downstream provider consent are separate. Service-principal client_credentials renewal is not supported.</p>
+   <a href="https://docs.databricks.com/aws/en/ai-gateway/coding-agent-codex" target="_blank" rel="noreferrer">Databricks MCP registration and service access</a>
+  </>:service==='sentry'?<>
    <p>Use the Sentry MCP issuer https://mcp.sentry.dev and the exact callback below. Review automatic registration to choose advertised DCR/CIMD, or enter a compatible previously registered client. Metadata availability does not prove account approval.</p>
    <p>Start with org:read. Project, team, event and alert write scopes need separate review. OAuth consent does not grant agent tools. Organization/project endpoint defaults do not replace credential restrictions.</p>
    <a href="https://mcp.sentry.dev/" target="_blank" rel="noreferrer">Sentry MCP setup</a>
