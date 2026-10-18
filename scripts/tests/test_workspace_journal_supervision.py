@@ -17,8 +17,8 @@ class WorkspaceJournalSupervisionTests(unittest.TestCase):
             (root / "run").mkdir()
             scripts = {
                 "chown": "#!/bin/sh\nexit 0\n",
-                "forge-workspace-journal": "#!/bin/sh\nsleep 0.2\nexit 3\n",
-                "dockerd-entrypoint.sh": '#!/bin/sh\ntrap \'echo stopped > "$FIXTURE/daemon-stopped"; exit 0\' TERM\nwhile :; do sleep 0.1; done\n',
+                "forge-workspace-journal": '#!/bin/sh\nwhile [ ! -f "$FIXTURE/daemon-ready" ]; do sleep 0.01; done\nexit 3\n',
+                "dockerd-entrypoint.sh": '#!/bin/sh\ntrap \'echo stopped > "$FIXTURE/daemon-stopped"; exit 0\' TERM\ntouch "$FIXTURE/daemon-ready"\nwhile :; do sleep 0.1; done\n',
                 "iptables": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE/firewall-calls"\nexit 0\n',
             }
             for name, content in scripts.items():
