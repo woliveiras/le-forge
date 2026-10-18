@@ -181,3 +181,8 @@ replay; events retain the collector's observation time. Journal metadata contain
 no command lines or file contents. See the
 [kernel journal contract](tool-permissions.md#kernel-journal-in-the-dedicated-linux-daemon)
 for supported namespaces, limits and the meaning of controller-offline recovery.
+
+## Native analysis delegation
+
+See [delegation](delegation.md) for the explicit grant, mandatory approval, child
+execution records, event metadata, fixed limits and inclusive usage accounting.

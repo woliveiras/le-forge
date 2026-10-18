@@ -196,6 +196,11 @@ type GraphRecord struct {
 
 // Execution is one turn of one replica.
 type Execution struct {
+	ParentExecutionID  string    `json:"parentExecutionId,omitempty"`
+	DelegationTemplate string    `json:"delegationTemplate,omitempty"`
+	DelegationModel    *ModelRef `json:"delegationModel,omitempty"`
+	ApprovalID         string    `json:"approvalId,omitempty"`
+
 	ID          string          `json:"id"`
 	GraphID     string          `json:"graphId"`
 	GraphVer    int             `json:"graphVersion"`
@@ -245,6 +250,7 @@ type MessageRecord struct {
 type ApprovalKind string
 
 const (
+	ApprovalDelegation  ApprovalKind = "delegation"
 	ApprovalEnvironment ApprovalKind = "environment" // proposed environment requiring developer approval
 	ApprovalTool        ApprovalKind = "tool"        // a tool call requiring approval
 	ApprovalMessage     ApprovalKind = "message"     // a message held at a gate

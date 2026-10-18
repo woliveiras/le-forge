@@ -139,9 +139,10 @@ type TurnResult struct {
 	// Summary is a short human-readable account of the turn.
 	Summary string `json:"summary,omitempty"`
 	// Broadcast is the line ring neighbours will read next turn.
-	Broadcast string    `json:"broadcast,omitempty"`
-	Signal    Signal    `json:"signal,omitempty"`
-	Usage     llm.Usage `json:"usage"`
+	Broadcast string `json:"broadcast,omitempty"`
+	Signal    Signal `json:"signal,omitempty"`
+	// Usage counts runtime-local inference only; TurnEnv.Chat is charged by the engine.
+	Usage llm.Usage `json:"usage"`
 	// ToolCalls counts runtime-local calls only; TurnEnv.InvokeTool calls are counted by the engine.
 	ToolCalls int `json:"toolCalls"`
 	// Retry asks the engine to nack the inputs instead of acking them

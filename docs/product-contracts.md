@@ -13,9 +13,9 @@ schemas alongside the code.
 
 | Surface | Current contract and implementation | Known boundary |
 |---|---|---|
-| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and delegation remain planned. |
+| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and configurable delegation remain planned; the native analysis delegation foundation is implemented (see section 4). |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, managed Docker reviews/previews, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
-| Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; no delegation request contract is sent yet. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
+| Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; native analysis delegation is implemented; external-runtime delegation remains planned. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
 | Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | MCP registration/discovery and gateway invocation enforce exact grants and current connection state; see [MCP limits](mcp.md). |
 | Workspace | `GET /api/v1/graphs/{id}/files` and `/files/content` are viewer-readable. Paths are resolved inside the graph/worktree root; `.git` is hidden, directory results are capped, file content is limited to 4 MiB and served as plain text with a deny-all CSP. | Viewer-readable `/git/status`, `/git/diff` and `/git/history` now provide bounded live inspection with private Git metadata and explicit unsafe-configuration failures. Execution/tool-operation context and bounded before/after observations of filesystem, Git-write and shell calls are persisted; a controller-lifetime monitor additionally records net changes from concurrent/background/external writers with unknown authorship and explicit coverage gaps. A dedicated-Linux-daemon kernel journal also records process PID evidence and transient events and replays them after controller downtime. Exact agent/execution attribution is not inferred; unsupported namespaces, collector downtime, overflow and unresolved paths remain gaps. Native `workspace.readOnly` denies mutation tools, shell and agent Git tools regardless of grants; Docker mounts read-only. External runtimes cannot claim this policy. See [tool permissions](tool-permissions.md#workspace-write-access-and-observations). No user-facing workspace write/delete/upload API. |
 | Persistence | `storage.Store` persists graph versions/control records, events, messages, executions, approvals, operator messages, replica status, KV, leases, and revisioned installation settings. Settings use compare-and-set revisions. Provider credentials are encrypted before storage. See [database schema](database-schema.md). | Future install-wide records should use settings or an explicitly designed store entity; graph/workspace data must remain scoped. |
@@ -451,6 +451,17 @@ Task and execution history follow existing retention/audit policy and cannot
 be used to read another graph's workspace.
 
 ### Dynamic child execution
+
+**Implemented foundation:** Native parents with the exact `delegation.request`
+grant can request a built-in `analysis` child, await mandatory operator approval,
+and receive its result. Children use the parent's model and have no tools,
+workspace, history or recursive delegation. Execution records, approval context,
+fixed shared-store capacity limits and parent links in Runs are implemented.
+See [delegation](delegation.md) for the precise contract and limitations.
+
+**Planned extended contract:** The profile/policy APIs, `agent.delegate` capability
+and external-runtime callback below are not implemented by this foundation.
+They require a versioned transition from the narrower `delegation.request` tool.
 
 The installation administrator manages approved profiles and the global
 delegation policy through the public API:

@@ -1976,6 +1976,10 @@ components:
         graphId: {type: string}
         graphVersion: {type: integer}
         runId: {type: string}
+        parentExecutionId: {type: string}
+        delegationTemplate: {type: string}
+        delegationModel: {type: object, additionalProperties: true}
+        approvalId: {type: string}
         nodeId: {type: string}
         replica: {type: integer}
         iteration: {type: integer}
@@ -1999,7 +2003,7 @@ components:
         nodeId: {type: string}
         replica: {type: integer}
         executionId: {type: string}
-        kind: {enum: [tool, message, turn, question, environment]}
+        kind: {enum: [tool, message, turn, question, environment, delegation]}
         status: {$ref: "#/components/schemas/ApprovalStatus"}
         title: {type: string}
         detail: {description: "tool: {tool,args}; message: {graphId,channel,message,onTimeout}; turn: {inputs,onTimeout}; question: {question}"}

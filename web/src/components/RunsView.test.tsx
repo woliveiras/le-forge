@@ -69,3 +69,13 @@ it('counts invocation events separately from completion events and retained atte
  render(<RunsView graphId="g" executionId="e" section="tools"/>);
  expect(await screen.findByText('2 tool invocations observed · 4 tool lifecycle events in this window. These are not additional calls.')).toBeTruthy();
 });
+
+it('shows a scoped child-parent link and explains inclusive usage without configuration changes', async()=>{
+ const backend=fakeApi({...routes(),'GET /api/v1/executions/e':()=>({...execution,parentExecutionId:'parent/id',delegationTemplate:'analysis'})});
+ render(<RunsView graphId="g" executionId="e"/>);
+ const context=await screen.findByRole('complementary',{name:'Delegation context'});
+ expect(within(context).getByRole('link',{name:'View parent execution'}).getAttribute('href')).toBe('#/g/g/runs?execution=parent%2Fid&section=result');
+ expect(context.textContent).toContain('No tools or workspace access');
+ expect(context.textContent).toContain('do not add both totals');
+ expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
+});

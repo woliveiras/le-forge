@@ -236,6 +236,15 @@ func (e *Engine) recover(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("recover: %w", err)
 	}
+	pending, err := e.store.ListExecutions(ctx, storage.ExecutionFilter{Status: domain.ExecAwaitingApproval, Limit: 10000})
+	if err != nil {
+		return fmt.Errorf("recover delegated approvals: %w", err)
+	}
+	for _, x := range pending {
+		if x.ParentExecutionID != "" {
+			execs = append(execs, x)
+		}
+	}
 	for _, x := range execs {
 		if x.Instance == e.opt.Instance {
 			e.interrupt(ctx, x, "platform restarted during the turn")
@@ -245,6 +254,16 @@ func (e *Engine) recover(ctx context.Context) error {
 }
 
 func (e *Engine) interrupt(ctx context.Context, x *domain.Execution, why string) {
+	if x.ParentExecutionID != "" && x.ApprovalID != "" {
+		a, err := e.store.GetApproval(ctx, x.ApprovalID)
+		if err == nil && a.Status == domain.ApprovalPending {
+			_, err = e.opt.Approvals.Expire(ctx, a)
+		}
+		if err != nil {
+			e.log.Error("interrupt delegation approval", "execution", x.ID, "err", err)
+		}
+	}
+
 	now := time.Now().UTC()
 	x.Status = domain.ExecInterrupted
 	x.Error = why

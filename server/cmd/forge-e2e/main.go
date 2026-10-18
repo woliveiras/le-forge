@@ -37,6 +37,21 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	if strings.Contains(r.System, "temporary analysis assistant") {
+		if len(r.Tools) != 0 {
+			return nil, fmt.Errorf("child unexpectedly received tools")
+		}
+		return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Delegated fixture result"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+	}
+	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "delegation-fixture") {
+		for _, m := range r.Messages {
+			if m.Role == llm.RoleTool {
+				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Parent received: " + m.Content}}, nil
+			}
+		}
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "delegate", Name: "delegation.request", Arguments: json.RawMessage(`{"template":"analysis","objective":"Summarize supplied fixture text without tools"}`)}}}}, nil
+	}
+
 	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") || strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {
 		for _, m := range r.Messages {
 			if m.Role == llm.RoleTool {

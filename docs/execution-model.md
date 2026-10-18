@@ -158,3 +158,8 @@ Each replica also has a scratch folder `<workdir>/.leforge/<node>/r<n>` (`@loop`
 | Stop / kill (graph or node) | Graceful drain or immediate cancellation (inputs nacked). |
 | Scale | Fixed: replica count override. Autoscale: edits `maxReplicas` (new graph version). |
 | Edit graph | Applied live; see [state-machines.md](state-machines.md) and sequence 10 in [diagrams/sequences.md](diagrams/sequences.md). |
+
+## Native analysis delegation
+
+See [delegation](delegation.md) for the explicit grant, mandatory approval, child
+execution records, event metadata, fixed limits and inclusive usage accounting.

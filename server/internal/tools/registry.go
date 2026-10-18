@@ -126,6 +126,7 @@ func Builtin(cfg BuiltinConfig) *Registry {
 	r.MustRegister(gitTools()...)
 	r.MustRegister(httpTools(cfg)...)
 	r.MustRegister(humanTools()...)
+	r.MustRegister(delegationTools()...)
 	return r
 }
 

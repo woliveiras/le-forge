@@ -2,7 +2,7 @@
 
 This checklist breaks down the [product plan](./PLAN.md) into implementable work. Tasks are grouped by dependency and may be reordered when implementation reveals additional technical dependencies.
 
-Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP live DCR/CIMD/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
+Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP live DCR/CIMD/vendor acceptance, configurable dynamic delegation, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
 
 ## Delivery Order and Final Acceptance (2026-10-18)
 
@@ -18,15 +18,12 @@ to the final Release 1 validation stage. Live vendor qualification remains separ
 pending where credentials, corporate approval or authorized test resources are
 required; postponement does not qualify a provider or authorize external changes.
 
-Recommended next delivery: the foundation for bounded dynamic delegation (section 8).
-Review existing execution, approval and runtime contracts; introduce durable
-parent/child delegation states and a runtime request/result path using approved
-child configurations. Enforce non-escalating grants, approval before child start,
-bounded execution and defined cancellation/failure behavior. Include unit,
-integration and browser coverage before claiming delivery. Follow with the
-operator policy/limits UI, execution-tree controls and bounded automatic policy.
-This is a planned sequence, not an implementation claim or an instruction to
-spawn coding agents.
+The bounded native analysis delegation foundation is implemented and tested
+(section 8). Next: installation-managed revisioned profiles and configurable
+approval/limits policy, followed by execution-tree controls and bounded automatic
+execution. Preserve the mandatory-approval, empty-child-grant foundation until
+these broader contracts are implemented and verified. Final developer acceptance
+remains deferred; this implementation does not claim installation activation.
 
 Remaining Release 1 implementation areas also include vendor-specific MCP
 capabilities and multi-instance OAuth transaction persistence, installation/setup
@@ -438,25 +435,54 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 
 ### 8. Allow Dynamic Delegation to Subagents
 
+**Foundation delivered (2026-10-18):** Explicit native `delegation.request` grant,
+immutable analysis template, same parent model, no child tools/workspace/history,
+mandatory operator approval, persisted parent/child/approval linkage, structured
+result/error return and fixed depth/count/shared-capacity/deadline/output limits.
+Runs distinguishes children and links to the parent. Reported child consumption
+is included in the parent without double-counting native gateway inference.
+Pending approval cleanup and restart interruption are covered. See
+[delegation](../docs/delegation.md) for boundaries, including the absence of a
+hard monetary ceiling, configurable policies, external runtime delegation and
+independent tree controls.
+
+**Verification:** `make test` (Go suites and 257 frontend tests), `make lint`,
+`make build`, `make test-e2e` (52 standard browser tests plus one hosted-CIMD
+scenario) and `go test -race ./internal/engine -run Delegation -count=1` passed.
+Browser scenarios use a disposable real backend and a deterministic model fixture;
+live-provider qualification, installation activation and developer acceptance
+are not claimed.
+
+#### Verified Foundation
+
+- [x] Persist native analysis children, parent links, approval IDs, outcomes and reported usage without modifying the saved graph.
+- [x] Require an exact tool grant and mandatory operator approval; children receive no tools, workspace or recursive capability.
+- [x] Return approved results or bounded failures to the parent, with fixed request/count/depth/capacity/deadline/output limits.
+- [x] Cover success, rejection, timeout, provider/empty/partial/tool-call failures, admission budgets, wildcard denial, concurrent capacity, persistence failure and recovery with unit/integration tests.
+- [x] Cover approval/rejection, viewer denial, parent continuation and child-to-parent navigation in browser E2E tests.
+
+The broader checklist below remains open where configurable profiles, automatic
+policy, arbitrary permission intersections or full tree controls are required.
+
 #### Model, Policies, and Execution
 
 - [ ] Define entities and states for delegation, child execution, approval, cancellation, result, and consumption.
 - [ ] Add a runtime capability for requesting a delegated subtask and waiting for/returning its result to the parent agent.
-- [ ] Implement temporary child execution instantiation without editing the permanent graph.
+- [x] Implement temporary child execution instantiation without editing the permanent graph. — Native analysis foundation; see scope above.
 - [ ] Define how child configurations are selected from installation-approved templates; do not accept arbitrary configurations that could elevate privileges.
 - [ ] Implement grant inheritance and guarantee that a child receives no more permissions than its parent.
 - [ ] Implement a configurable global policy: approval required for every delegation or bounded automatic execution.
-- [ ] Implement pending-approval state and block the child execution until a human decision when required.
+- [x] Implement pending-approval state and block the child execution until a human decision when required. — Native analysis foundation; see scope above.
 - [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost.
 - [ ] Account for consumption across the entire tree and stop/reject new delegations when limits are reached.
 - [ ] Implement child execution cancellation and defined propagation of failure/cancellation to the parent agent.
-- [ ] Define behavior for timeout, failure, partial result, and delegation with no result.
+- [x] Define behavior for timeout, failure, partial result, and delegation with no result. — Native analysis foundation; see scope above.
 - [ ] Add auditing with parent/child, objective, model/configuration, effective grants, approval decision, and consumption.
 
 #### Interface and Tests
 
 - [ ] Add configuration for global approval policy and limits.
-- [ ] Add a delegation-approval queue with enough context for an informed decision.
+- [x] Add a delegation-approval queue with enough context for an informed decision. — Native analysis foundation; see scope above.
 - [ ] Show the execution tree, state, agent, duration, consumption, and parent/child relationship.
 - [ ] Allow an operator to stop a child execution or tree according to their permissions.
 - [ ] Add tests for approval/automatic policies, limits, grant inheritance, recursion, concurrency, and cancellation.

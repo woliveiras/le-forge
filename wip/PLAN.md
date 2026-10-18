@@ -16,15 +16,12 @@ to the final Release 1 validation stage. Live vendor qualification remains separ
 pending where credentials, corporate approval or authorized test resources are
 required; postponement does not qualify a provider or authorize external changes.
 
-Recommended next delivery: the foundation for bounded dynamic delegation (section 8).
-Review existing execution, approval and runtime contracts; introduce durable
-parent/child delegation states and a runtime request/result path using approved
-child configurations. Enforce non-escalating grants, approval before child start,
-bounded execution and defined cancellation/failure behavior. Include unit,
-integration and browser coverage before claiming delivery. Follow with the
-operator policy/limits UI, execution-tree controls and bounded automatic policy.
-This is a planned sequence, not an implementation claim or an instruction to
-spawn coding agents.
+The bounded native analysis delegation foundation is implemented and tested
+(section 8). Next: installation-managed revisioned profiles and configurable
+approval/limits policy, followed by execution-tree controls and bounded automatic
+execution. Preserve the mandatory-approval, empty-child-grant foundation until
+these broader contracts are implemented and verified. Final developer acceptance
+remains deferred; this implementation does not claim installation activation.
 
 Remaining Release 1 implementation areas also include vendor-specific MCP
 capabilities and multi-instance OAuth transaction persistence, installation/setup
@@ -550,6 +547,24 @@ Define clear precedence: global, graph, agent, and task instructions; repository
 **Delivered scope:** Admin-managed revisioned Markdown skills, explicit graph/default/project opt-ins and narrower agent selections are available in **Skills & steering**. Project sources are immediate `.leforge/steering/*.md` files in the authorized workspace. Immutable execution manifests show included content, revision/hash and omission reasons. Bounded composition preserves mandatory agent/task text; graphs without opt-in retain their previous prompt semantics. This does not execute skill scripts, discover arbitrary instruction formats, grant permissions or implement delegation. Limits and verification are recorded in [instructions.md](../docs/instructions.md).
 
 ### 8. Allow Dynamic Delegation to Subagents
+
+**Foundation delivered (2026-10-18):** Explicit native `delegation.request` grant,
+immutable analysis template, same parent model, no child tools/workspace/history,
+mandatory operator approval, persisted parent/child/approval linkage, structured
+result/error return and fixed depth/count/shared-capacity/deadline/output limits.
+Runs distinguishes children and links to the parent. Reported child consumption
+is included in the parent without double-counting native gateway inference.
+Pending approval cleanup and restart interruption are covered. See
+[delegation](../docs/delegation.md) for boundaries, including the absence of a
+hard monetary ceiling, configurable policies, external runtime delegation and
+independent tree controls.
+
+**Verification:** `make test` (Go suites and 257 frontend tests), `make lint`,
+`make build`, `make test-e2e` (52 standard browser tests plus one hosted-CIMD
+scenario) and `go test -race ./internal/engine -run Delegation -count=1` passed.
+Browser scenarios use a disposable real backend and a deterministic model fixture;
+live-provider qualification, installation activation and developer acceptance
+are not claimed.
 
 Give orchestrator agents the ability to delegate subtasks when they determine it is necessary, without requiring users to pre-draw every subagent in the graph.
 

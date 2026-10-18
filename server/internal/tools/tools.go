@@ -38,6 +38,8 @@ type Tool interface {
 
 // Principal identifies who is calling: one replica during one execution.
 type Principal struct {
+	Delegate func(context.Context, json.RawMessage) (*Result, error)
+
 	GraphID     string
 	NodeID      string
 	Replica     int

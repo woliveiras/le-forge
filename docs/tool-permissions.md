@@ -339,3 +339,8 @@ installation. The collector requires filesystem file-handle support and the
 fanotify capabilities of the privileged daemon; unsupported kernels/filesystems
 fail explicitly. See [fanotify](https://man7.org/linux/man-pages/man7/fanotify.7.html)
 for kernel semantics.
+
+## Native analysis delegation
+
+See [delegation](delegation.md) for the explicit grant, mandatory approval, child
+execution records, event metadata, fixed limits and inclusive usage accounting.

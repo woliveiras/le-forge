@@ -100,8 +100,7 @@ func (r *Runtime) Turn(ctx context.Context, in *runtime.TurnInput, env runtime.T
 		if err != nil {
 			return nil, fmt.Errorf("model call: %w", err)
 		}
-		res.Usage.InputTokens += resp.Usage.InputTokens
-		res.Usage.OutputTokens += resp.Usage.OutputTokens
+		// TurnEnv.Chat accounts for gateway model usage, including delegated children.
 		msg := resp.Message
 		msg.Role = llm.RoleAssistant
 		text := strings.TrimSpace(msg.Content)

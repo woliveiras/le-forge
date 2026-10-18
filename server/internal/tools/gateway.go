@@ -244,7 +244,7 @@ func (g *Gateway) audit(ctx context.Context, p *Principal, typ domain.EventType,
 	if g.Auditor == nil {
 		return
 	}
-	if strings.HasPrefix(name, "mcp.") {
+	if strings.HasPrefix(name, "mcp.") || name == "delegation.request" {
 		args = nil
 	}
 	data := map[string]any{"tool": name, "outcome": outcome, "durationMs": d.Milliseconds()}

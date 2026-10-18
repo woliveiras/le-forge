@@ -305,6 +305,10 @@ export interface Usage {
 }
 
 export interface Execution {
+  parentExecutionId?: string;
+  delegationTemplate?: string;
+  approvalId?: string;
+
   id: string;
   graphId: string;
   graphVersion: number;
@@ -339,7 +343,7 @@ export interface MessageRecord {
   updatedAt: string;
 }
 
-export type ApprovalKind = 'tool' | 'message' | 'turn' | 'question' | 'environment';
+export type ApprovalKind = 'tool' | 'message' | 'turn' | 'question' | 'environment' | 'delegation';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
 export interface Approval {
