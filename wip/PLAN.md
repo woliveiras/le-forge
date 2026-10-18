@@ -2,6 +2,40 @@
 
 **Goal:** Make the web interface the place where users configure models and integrations, build graphs, and monitor agents at work. LangGraph remains supported; reusable components are deferred to the second release.
 
+## Delivery Order and Final Acceptance (2026-10-18)
+
+Developer usability acceptance is deferred by user decision until the remaining
+Release 1 implementation is ready. It is not a prerequisite for the next delivery
+and must remain unchecked until performed. The UX reorganization, UX-01–UX-05 and
+resumable onboarding are implemented and activated; their recorded automated and
+installation smoke tests do not constitute developer acceptance.
+
+Continue unit, integration and relevant browser regression tests with each change.
+Defer the consolidated developer walkthrough and clean-install acceptance exercise
+to the final Release 1 validation stage. Live vendor qualification remains separately
+pending where credentials, corporate approval or authorized test resources are
+required; postponement does not qualify a provider or authorize external changes.
+
+Recommended next delivery: the foundation for bounded dynamic delegation (section 8).
+Review existing execution, approval and runtime contracts; introduce durable
+parent/child delegation states and a runtime request/result path using approved
+child configurations. Enforce non-escalating grants, approval before child start,
+bounded execution and defined cancellation/failure behavior. Include unit,
+integration and browser coverage before claiming delivery. Follow with the
+operator policy/limits UI, execution-tree controls and bounded automatic policy.
+This is a planned sequence, not an implementation claim or an instruction to
+spawn coding agents.
+
+Remaining Release 1 implementation areas also include vendor-specific MCP
+capabilities and multi-instance OAuth transaction persistence, installation/setup
+and operations gaps, and the unresolved limits of workspace change attribution.
+Reconcile partially delivered checklist entries against code before implementation;
+an unchecked umbrella item does not mean all of its subfeatures are absent.
+Rootless sandbox support stays deferred by the earlier user decision. Items marked
+Later and Release 2 reusable components do not block Release 1 UX completion.
+Do not add a new first-class task resource merely to close this UI checklist:
+current task operation uses existing graph/agent execution and message controls.
+
 ## Product Principles
 
 - **The web interface is the primary path:** Normal workflows must not require server access or CLI usage.
@@ -711,7 +745,7 @@ dirtying the graph. No configuration, credential or grant changes were submitted
 This is installation smoke-test evidence, not developer usability acceptance.
 
 
-### Developer usability validation — in progress (2026-10-17)
+### Developer usability validation — historical round (2026-10-17; continuation deferred to final acceptance on 2026-10-18)
 
 The developer-led round uses the current local installation with visual baseline
 7ef1178. Automated checks and assistant-operated smoke tests remain separate

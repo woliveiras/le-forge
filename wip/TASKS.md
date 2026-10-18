@@ -4,6 +4,40 @@ This checklist breaks down the [product plan](./PLAN.md) into implementable work
 
 Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP live DCR/CIMD/vendor acceptance, dynamic delegation, onboarding, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
 
+## Delivery Order and Final Acceptance (2026-10-18)
+
+Developer usability acceptance is deferred by user decision until the remaining
+Release 1 implementation is ready. It is not a prerequisite for the next delivery
+and must remain unchecked until performed. The UX reorganization, UX-01–UX-05 and
+resumable onboarding are implemented and activated; their recorded automated and
+installation smoke tests do not constitute developer acceptance.
+
+Continue unit, integration and relevant browser regression tests with each change.
+Defer the consolidated developer walkthrough and clean-install acceptance exercise
+to the final Release 1 validation stage. Live vendor qualification remains separately
+pending where credentials, corporate approval or authorized test resources are
+required; postponement does not qualify a provider or authorize external changes.
+
+Recommended next delivery: the foundation for bounded dynamic delegation (section 8).
+Review existing execution, approval and runtime contracts; introduce durable
+parent/child delegation states and a runtime request/result path using approved
+child configurations. Enforce non-escalating grants, approval before child start,
+bounded execution and defined cancellation/failure behavior. Include unit,
+integration and browser coverage before claiming delivery. Follow with the
+operator policy/limits UI, execution-tree controls and bounded automatic policy.
+This is a planned sequence, not an implementation claim or an instruction to
+spawn coding agents.
+
+Remaining Release 1 implementation areas also include vendor-specific MCP
+capabilities and multi-instance OAuth transaction persistence, installation/setup
+and operations gaps, and the unresolved limits of workspace change attribution.
+Reconcile partially delivered checklist entries against code before implementation;
+an unchecked umbrella item does not mean all of its subfeatures are absent.
+Rootless sandbox support stays deferred by the earlier user decision. Items marked
+Later and Release 2 reusable components do not block Release 1 UX completion.
+Do not add a new first-class task resource merely to close this UI checklist:
+current task operation uses existing graph/agent execution and message controls.
+
 ## Release 1 — Build and Operate Graphs Through the Interface
 
 ### 0. Prepare Product Contracts and Acceptance Criteria
@@ -464,11 +498,13 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 - [x] Add end-to-end tests for the first-use journey, including canvas graph creation and execution/result inspection when corresponding steps are available.
 - [x] Update quickstart documentation and contextual help to remain consistent with onboarding.
 
-**Implemented scope:** Browser guidance and automated validation cover the existing execution journey. Developer usability acceptance, installation activation and a clean-install exercise remain separate; this does not complete first-class tasks or delegation.
+**Implemented scope:** Browser guidance and automated validation cover the existing execution journey. Installation activation is recorded below. Developer usability acceptance and a clean-install exercise are deferred to final Release 1 validation; this does not complete first-class tasks or delegation.
 
 **Done when:** A new operator can follow onboarding in the browser, understand essential concepts, configure available dependencies, create or adapt an example graph, and run a first task; they can skip steps, resume, and revisit help without server or CLI access.
 
 ### 11. Integrated Validation of Release 1
+
+Run the consolidated acceptance round after the remaining Release 1 implementation. Per-delivery automated tests continue throughout development. Include the deferred UX walkthrough; do not mark acceptance complete based only on automated tests.
 
 - [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled.
 - [ ] Repeat the flow with both approval-required and automatic delegation policies.
@@ -507,8 +543,8 @@ Start only after Release 1 is complete and stable.
 - [x] Deliver dedicated agent configuration sections with effective permission/isolation summaries and a whole-graph change review before save. — General, Instructions, Tools & permissions and Advanced share the graph draft; the summary explicitly describes configured boundaries rather than claiming runtime authorization. Review lists changed fields across the entire graph without copying values. Unit and real-client component tests cover inherited/explicit grants, isolation, routes, multiple-agent/graph changes, validation failures, dependency errors, revision conflicts and viewers. Disposable-backend Chromium verifies reviewed persistence, constrained and MCP grants, reload/back navigation, invalid-input recovery and narrow read-only access. All 207 frontend tests and 39 standard/hosted-CIMD browser scenarios pass; make test, make lint and make build pass. Existing canvas/Definition editing remains compatible; activation and developer usability validation remain separate.
 - [x] Deliver Runs list/detail screens over existing execution records, highlighting blockers and distinguishing execution outcome from individual tool outcomes. — Search/filter the latest 100 executions; Result, Timeline, Tool calls, Messages and Diagnostics use existing authorized APIs. Details verify graph identity, correlate records by persisted IDs, label bounded history and current-workspace links, and reuse approval role gates. Unit/real-client integration tests cover filters, scope, independent tool outcomes, polling, missing records, failures and recovery. Chromium covers approval-to-completion, deep links/reload/back, viewer restrictions, graph mismatch and failed-history retry. All 219 frontend tests and 42 standard/hosted-CIMD E2E scenarios pass; the six Runs/Activity scenarios were repeated after final changes. make test, make lint and make build pass. Installation activation and developer usability validation remain separate.
 - [x] Consolidate typography, spacing, button hierarchy, contextual help and accessible responsive components across the remaining screens. — Shared page/card/form styles cover Models, Administration, Approvals and Skills; canvas guidance is a native disclosure. Skills adopts shared action buttons with unchanged handlers and disabled fieldsets. Security notices and errors remain visible; focus and reduced-motion styles are explicit. Unit tests cover disclosure and disabled actions; real-client integration proves help does not invoke providers or expose viewer actions. Chromium covers keyboard disclosure, narrow layouts, viewer permissions and unchanged canvas editing. make test (229 frontend tests), make lint, make build and make test-e2e (45 standard plus one hosted-CIMD scenario) pass. A canvas-edge rendering failure after reload occurred in an earlier suite attempt; its isolated repeat and the final full suite passed without changing assertions. Preview was inspected at narrow and desktop widths. This slice was subsequently activated as commit 7ef1178 on 2026-10-17; see the activation evidence below. Developer usability acceptance remains pending.
-- [ ] Validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets.
-- [x] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams. — Optional Getting started panel, browser-local identity-scoped progress, explicit review/skip/pause/restart, live prerequisite reads and safe echo example. See the 2026-10-18 evidence below; installation activation and developer acceptance remain pending.
+- [ ] Final Release 1 acceptance: validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets. — Deferred by user decision on 2026-10-18 until remaining implementation is ready; not a blocker to development.
+- [x] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams. — Optional Getting started panel, browser-local identity-scoped progress, explicit review/skip/pause/restart, live prerequisite reads and safe echo example. See the 2026-10-18 implementation and activation evidence below; developer acceptance is deferred to final Release 1 validation.
 
 
 **Navigation baseline activation (2026-10-17):** Commit b0f7670 and preceding UX
