@@ -1513,3 +1513,10 @@ explicitly separated the proposed alternate delegation API from the delivered
 execution-scoped tools callback. Profile deletion, alternate fields and idempotent
 request keys remain proposals. This documentation-only correction adds no API,
 permission or runtime behavior; the tested delegation guide remains authoritative.
+
+### Context7 public discovery evidence (2026-10-18)
+
+Extended the opt-in public production-transport test to Context7, whose official
+guide permits anonymous basic access. Live discovery passed with two tools and
+no credentials or tool calls. Existing immutable template and permissions remain
+unchanged; authenticated/private/OAuth and tool-execution acceptance are pending.

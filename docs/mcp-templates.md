@@ -155,3 +155,12 @@ Before delivery:
 
 Neither provider currently has a LeForge query-cost guarantee. A template,
 fixture or public catalogue must not mark these authenticated journeys complete.
+
+### Context7 anonymous discovery
+
+The [official server guide](https://github.com/upstash/context7/blob/master/packages/mcp/README.md)
+also documents basic remote access without an API key. On 2026-10-18 the opt-in
+public discovery test passed against the existing Context7 endpoint with two
+tools and no credential. The immutable v1 preset still offers Bearer-key setup;
+this evidence does not change saved connections or claim private-repository,
+authenticated, OAuth or tool-execution acceptance. Rate limits still apply.

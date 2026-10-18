@@ -17,7 +17,7 @@ func TestLivePublicTemplateDiscovery(t *testing.T) {
 	if os.Getenv("LEFORGE_TEST_PUBLIC_MCP") != "1" {
 		t.Skip("set LEFORGE_TEST_PUBLIC_MCP=1 for public network discovery")
 	}
-	for _, id := range []string{"deepwiki", "hugging-face"} {
+	for _, id := range []string{"deepwiki", "hugging-face", "context7"} {
 		t.Run(id, func(t *testing.T) {
 			var selected *Template
 			for _, template := range Templates() {
