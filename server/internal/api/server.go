@@ -399,16 +399,16 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) error {
 	checks := map[string]string{"storage": "ok", "queue": "ok", "sandbox": "not configured"}
 	code := 200
 	if err := s.Store.Ping(ctx); err != nil {
-		checks["storage"], code = err.Error(), 503
+		checks["storage"], code = "unavailable", 503
 	}
 	if err := s.Broker.Ping(ctx); err != nil {
-		checks["queue"], code = err.Error(), 503
+		checks["queue"], code = "unavailable", 503
 	}
 	// The sandbox daemon only matters to docker-isolated agents, so it is
 	// reported but does not make the platform unready.
 	if d := s.Config.Isolation.Docker; d.Host != "" {
 		if _, err := tools.PingDocker(ctx, d.Bin, d.Host); err != nil {
-			checks["sandbox"] = err.Error()
+			checks["sandbox"] = "unavailable"
 		} else {
 			checks["sandbox"] = "ok"
 		}

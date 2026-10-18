@@ -3,6 +3,9 @@
 package api_test
 
 import (
+	"context"
+	"errors"
+	"github.com/woliveiras/le-forge/server/internal/storage"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,8 +47,32 @@ func TestReadinessReportsSandboxDaemon(t *testing.T) {
 		c.Isolation.Docker.Host = "tcp://sandbox-daemon:2376"
 		c.Isolation.Docker.Bin = writeDocker(t, "1")
 	})
-	want := "docker daemon tcp://sandbox-daemon:2376 unreachable: Cannot connect to the Docker daemon at tcp://sandbox-daemon:2376"
+	want := "unavailable"
 	if c := call(t, down, "GET", "/readyz", "", "", "", &checks); c != 200 || checks["sandbox"] != want || checks["storage"] != "ok" {
 		t.Fatalf("daemon down: %d %v", c, checks)
+	}
+}
+
+type unavailablePing struct{ storage.Store }
+
+func (unavailablePing) Ping(context.Context) error {
+	return errors.New("postgres://user:synthetic-private-password@internal-db/private")
+}
+
+func TestReadinessHidesDependencyDetailsAndRecovers(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	original := a.API.Store
+	a.API.Store = unavailablePing{Store: original}
+	var checks map[string]string
+	if code := call(t, srv, "GET", "/readyz", "", "", "", &checks); code != 503 || checks["storage"] != "unavailable" || checks["queue"] != "ok" {
+		t.Fatalf("%d %v", code, checks)
+	}
+	// Liveness and readiness have intentionally different contracts.
+	if code := call(t, srv, "GET", "/healthz", "", "", "", nil); code != 200 {
+		t.Fatal(code)
+	}
+	a.API.Store = original
+	if code := call(t, srv, "GET", "/readyz", "", "", "", &checks); code != 200 || checks["storage"] != "ok" {
+		t.Fatalf("%d %v", code, checks)
 	}
 }

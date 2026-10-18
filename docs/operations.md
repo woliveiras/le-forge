@@ -71,7 +71,9 @@ does not persist arbitrary UI-created Grafana state in a named volume.
    store without disclosing values. Start with the recorded image and schema.
 3. Check service health and **Administration → Health**. `/healthz` is liveness;
    `/readyz` checks store and queue. A sandbox failure is reported but does not
-   make the entire control plane unready. Provider and MCP availability must be
+   make the entire control plane unready. Public readiness responses use bounded
+   `ok`, `unavailable` or `not configured` states, never raw dependency errors
+   containing endpoints or credentials. Provider and MCP availability must be
    checked independently; a healthy HTTP process does not prove valid credentials.
 4. Compare graph versions, explicit grants, connection names and authorization
    states. Check a representative file and diff, execution/approval history and

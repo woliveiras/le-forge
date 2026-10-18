@@ -1275,3 +1275,11 @@ parent tool limits and root-tree token reservations. Profile review and executio
 audit expose the effective access. Unit/integration/browser coverage includes
 out-of-path denial, ungranted writes, bounded repeat calls and per-tool approval.
 No installation activation or live-provider qualification is claimed.
+
+### Dependency health contract (2026-10-18)
+
+Administration already exposes liveness and store/queue/sandbox readiness. The
+public readiness endpoint now returns bounded states instead of raw dependency
+errors that could contain credentials or internal endpoints. Unit and real HTTP
+integration cover failure, redaction and recovery; sandbox failure still does not
+make non-sandbox work globally unready. Provider/MCP qualification remains separate.
