@@ -23,7 +23,7 @@ The native analysis delegation foundation and installation-managed profiles,
 approval policy, finite limits and execution-tree controls are implemented (section 8).
 Next: broader runtime/profile support and enforceable cumulative budgets. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
-this delivery does not claim installation activation.
+installation activation of the execution-tree controls was validated on 2026-10-18 (section 8).
 
 Remaining Release 1 implementation areas also include vendor-specific MCP
 capabilities and multi-instance OAuth transaction persistence, installation/setup
@@ -461,9 +461,30 @@ viewer denial, explicit confirmation, storage failures/corruption, invalid tree
 relationships/bounds, historical lookup outside the recent list, idempotency (including terminal retries),
 capacity cleanup, and SQLite migration/backfill preserving existing records.
 Browser journeys use the real disposable backend with a deterministic model.
-Live multi-process PostgreSQL/provider qualification, installation activation and
-final developer usability acceptance remain pending; this delivery claims none
-of them. Cancellation-marker retention/cleanup is not yet implemented.
+Broader multi-process/provider qualification and final developer usability
+acceptance remain pending. Local installation activation is recorded below. Cancellation-marker retention/cleanup is not yet implemented.
+
+**Execution-tree installation activation (2026-10-18):** Activated commit
+`27e13bf` using `docker compose build forged` and
+`docker compose up -d --no-deps --no-build --force-recreate forged`. Only the
+application service was recreated. Existing volume mounts were verified unchanged,
+`/healthz` returned OK, and additive PostgreSQL migration 3 completed with no
+parent-index/document mismatches. The three pre-existing graphs retained versions
+1, 7 and 1; existing execution history was preserved.
+
+Authenticated Chrome validation used a separate `execution-tree-validation`
+graph with the existing local Ollama `llama3.2:latest` provider and only the
+`delegation.request` grant. With a child awaiting approval, Stop child plus
+confirmation produced a cancelled child and a successful parent. A second run
+used Stop entire tree plus confirmation and both parent and child became
+cancelled. Both pending approvals expired, no delegation capacity leases remained,
+and the graph stayed at version 1 with its original grant. The validation graph
+was stopped afterward; its four execution records were retained for inspection.
+No repositories, MCP tools, secrets or authentication settings were changed.
+The previous application image is retained as
+`leforge/forged:before-execution-tree`. This validates a local PostgreSQL-backed
+worker and pending-approval interruption; live interruption during child inference
+and distributed-worker qualification remain outside this installation check.
 
 **Configurable profiles and policies (2026-10-18):** Administration → Delegation
 now supports reviewed admin-only edits to revisioned native analysis profiles and
