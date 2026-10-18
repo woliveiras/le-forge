@@ -1,9 +1,9 @@
-# Native Delegation Profiles and Policy
+# Delegation Profiles and Policy
 
-Native agents can request a temporary analysis execution through the tool gateway.
+Native and external agents can request a temporary native analysis execution through the tool gateway.
 Grant the exact `delegation.request` tool explicitly; wildcard grants do not enable
-it. Existing gateway constraints and approval rules still apply. External runtimes
-and standalone gateway calls cannot delegate.
+it. Existing gateway constraints and approval rules still apply. External parents
+use their active execution callback; standalone gateway calls cannot delegate.
 
 ```json
 {"template":"analysis","objective":"Review the supplied design and return concerns"}
@@ -133,9 +133,9 @@ reported output over the limit is rejected. These are not a guaranteed monetary
 or provider-billing ceiling. Cumulative token admission is described below; hard billing ceilings require
 provider-specific enforcement and remain planned.
 
-Other runtimes/models, external callbacks,
-idempotent delegation requests and enforceable monetary ceilings
-remain planned. Native cumulative token admission is implemented below.
+External child runtimes/model overrides, idempotent delegation requests and
+enforceable monetary ceilings remain planned. External parents can request native
+children through authenticated callbacks as described below. Native cumulative token admission is implemented below.
 No installation activation or
 live-provider acceptance is claimed by the automated fixture tests.
 
@@ -218,7 +218,8 @@ Administration → Delegation configures `maxTreeTokens` (1–10,000,000; defaul
 65,536). Existing stored policies that predate this field use the default;
 new policy writes must specify it. Native parents with an exact
 `delegation.request` grant share one durable budget with their analysis children.
-Non-delegating runs and external runtimes are unchanged. The tighter parent
+Non-delegating runs are unchanged. External parents with an exact delegation
+grant also reserve gateway inference against the root ledger. The tighter parent
 `limits.maxTokens` also applies. The first reservation fixes the tree ceiling;
 later accepted reservations can lower it, but a policy increase cannot replenish
 an existing tree. Child policy/profile snapshots are still checked before start.
@@ -282,3 +283,31 @@ Telemetry adds `leforge_tree_budget_operations_total{operation,outcome}` and
 (`reserve`, `dispatch`, `settle`, `reconcile`; outcomes `ok`, `exhausted`, `error`), with matching
 `delegation.token_budget.*` trace spans. Payloads and execution IDs are not metric
 labels. Existing model-usage metrics retain their reported-usage meaning.
+
+## External parents through Runtime Protocol v1
+
+External runtimes can request a **native, server-managed** child using their
+execution callback: `POST /tools/delegation.request` with `template` and
+`objective`. The parent needs the exact grant, a configured managed model and
+an active execution. Echo/unknown runtimes and wildcard-only grants remain
+unsupported. Children use the parent's configured model and the approved profile;
+this does not launch external child processes or accept arbitrary runtime settings.
+
+The call waits for approval and completion. Child failures use the existing tool
+error envelope; authorization failures remain HTTP 403. The execution-scoped token
+expires with the parent. Cancellation or callback disconnection propagates to the
+child; do not retry a request with an uncertain outcome. Review the recorded tree
+first. Idempotent request keys remain future work.
+
+Python agents can call `ctx.delegate(objective, template="analysis")`. Configure
+the callback timeout to cover the installation's approval/child duration and keep
+the parent turn deadline consistent. The helper does not retry or bypass grants.
+Gateway model calls and delegated children share the root reservation ledger.
+Runtime-local inference outside the gateway is not controlled or billed by that
+ledger. Provider cancellation and monetary guarantees retain the existing limits.
+
+The SDK no longer reports gateway model usage or gateway tool attempts again as
+runtime-local totals. Returned chat usage remains available to the agent;
+`ctx.add_usage` is reserved for genuinely runtime-local work. This aligns with the
+Runtime Protocol contract and avoids double-counting existing external callbacks.
+Historical totals are not rewritten.

@@ -45,7 +45,7 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	if err != nil {
 		return nil, err
 	}
-	if t.n.Runtime.Kind != domain.RuntimeNative {
+	if !delegationRuntime(t.n.Runtime.Kind) {
 		return nil, tools.ErrDenied
 	}
 	e := t.gr.e
@@ -313,4 +313,9 @@ func snapshotDelegationDecision(x *domain.Execution, a *domain.Approval) {
 		at := *a.DecidedAt
 		x.DelegationAudit.DecidedAt = &at
 	}
+}
+
+// External parents request only server-managed native children through the same gateway.
+func delegationRuntime(kind domain.RuntimeKind) bool {
+	return kind == domain.RuntimeNative || kind == domain.RuntimeExternal
 }

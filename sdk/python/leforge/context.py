@@ -64,7 +64,7 @@ class LLM:
             metadata=metadata or {},
         )
         resp = ChatResponse.from_json(self._ctx._backend.chat(req.to_json()))
-        self._ctx._result.usage.add(resp.usage)
+        # Gateway usage is already recorded by the server, not runtime-local usage.
         return resp
 
     def complete(self, prompt: str, **kw: Any) -> str:
@@ -95,7 +95,7 @@ class Tools:
         self._ctx = ctx
 
     def call(self, name: str, **args: Any) -> ToolResult:
-        self._ctx._result.tool_calls += 1
+        # Gateway attempts are counted by the server, including denied calls.
         res = ToolResult.from_json(self._ctx._backend.invoke_tool(name, args))
         return res
 
@@ -225,6 +225,17 @@ class TurnContext:
             self._backend.output(text)
         except Exception as e:
             self.log.debug("output failed: %s", e)
+
+    def delegate(self, objective: str, template: str = "analysis") -> ToolResult:
+        """Wait for a server-managed native child through delegation.request.
+
+        Requires an exact grant. Installation approval, inherited permissions,
+        duration and shared token admission remain server-enforced. Operational
+        child failures return an error ToolResult; authorization errors propagate.
+        Calls are never retried automatically. Configure the callback timeout for
+        the installation's approval/child deadline when using long-running work.
+        """
+        return self.tools.call("delegation.request", template=template, objective=objective)
 
     def ask_human(self, question: str) -> str:
         """Block until an operator answers (human-in-the-loop)."""

@@ -338,6 +338,11 @@ func run() error {
 	if err := prepareBudgetRecovery(ctx, a, cfg.Instance); err != nil {
 		return err
 	}
+	closeExternal, err := prepareExternalDelegation(ctx, a, "http://"+addr)
+	if err != nil {
+		return err
+	}
+	defer closeExternal()
 	return a.Run(ctx)
 }
 

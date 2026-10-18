@@ -176,8 +176,8 @@ class ProtocolRoundTrip(unittest.TestCase):
         self.assertEqual(res["summary"], "all done")
         self.assertEqual(res["signal"], "no_further_work")
         self.assertEqual(res["broadcast"], "did stuff")
-        self.assertEqual(res["usage"], {"inputTokens": 3, "outputTokens": 2})
-        self.assertEqual(res["toolCalls"], 2)
+        self.assertEqual(res["usage"], {"inputTokens": 0, "outputTokens": 0})
+        self.assertEqual(res["toolCalls"], 0)
         e = res["emits"][0]
         self.assertEqual(e["type"], "out")
         self.assertEqual(e["target"], "b")

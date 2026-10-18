@@ -118,3 +118,18 @@ Native agents get, in addition to their granted gateway tools, four
 platform tools that need no grant: `emit {type, payload, target?, channel?}`,
 `state_get {key}`, `state_set {key, value}`, `finish {signal, summary?, broadcast?}`.
 Wire names use `__` for `.` (see `llm.WireToolName`).
+
+### Delegation through the execution callback
+
+Runtime Protocol v1 external parents may invoke `delegation.request` through the
+existing tool callback with only `template` and `objective`. An exact grant and
+managed model are required. The request waits for the installation's approval
+policy and a server-managed native child result. Error envelopes, callback expiry,
+cooperative cancellation and gateway admission limits apply. Do not retry uncertain
+requests: no delegation idempotency key is defined. External child process launch
+and model/runtime overrides are unsupported.
+
+Gateway model usage and tool attempts are counted by the server. `TurnResult.usage`
+and `toolCalls` represent only runtime-local work, never mirrored callback totals.
+The Python SDK follows this contract; `ctx.delegate` returns a `ToolResult`, while
+`ctx.add_usage` remains available for genuinely local inference.

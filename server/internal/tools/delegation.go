@@ -19,7 +19,7 @@ func delegationTools() []Tool {
 				}
 			}
 			if !exact || inv.Principal.Delegate == nil {
-				return nil, fmt.Errorf("%w: delegation requires an explicit grant and an active native parent", ErrDenied)
+				return nil, fmt.Errorf("%w: delegation requires an explicit grant and an active supported parent", ErrDenied)
 			}
 			return inv.Principal.Delegate(ctx, inv.Args)
 		}}}

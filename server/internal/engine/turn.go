@@ -558,7 +558,7 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
 		WorkspaceReadOnly: n.Workspace.ReadOnly, Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
 	}}
-	if n.Runtime.Kind == domain.RuntimeNative {
+	if delegationRuntime(n.Runtime.Kind) {
 		env.principal.Delegate = env.delegate
 	}
 	env.principal.PrepareTool = func(ctx context.Context, name string) error {

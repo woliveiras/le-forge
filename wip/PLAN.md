@@ -1442,3 +1442,18 @@ resource binding and per-agent grants are preserved. Unit, API/storage and brows
 configuration tests cover valid/invalid parameters, safe persistence and pending
 consent. Live workspace acceptance, service-principal renewal, downstream provider
 consent and service-specific data/cost controls remain unproven or unimplemented.
+
+### External parents requesting native delegation (2026-10-18)
+
+Runtime Protocol callbacks now accept delegation.request from active external
+parents with the exact grant, a managed model and the existing reviewed policy.
+Children remain native server-managed executions; no external child launch or
+runtime/model override is accepted. Parent callback inference and descendants share
+the root token ledger. Approval, cancellation, grants and expiry use the same
+server paths. The Python helper blocks for the result without automatic replay;
+gateway usage/tool attempts are no longer duplicated in runtime-local totals.
+Unit and real HTTP runtime → callback → engine → provider/storage tests cover
+approval/automatic success, rejection, invalid inputs, missing grants, provider
+failure, budget denial and expired tokens. Browser tests cover approval, rejection,
+tree cancellation and unchanged graph/grants. External inference outside the
+gateway, hard monetary guarantees and idempotent request keys remain outside scope.

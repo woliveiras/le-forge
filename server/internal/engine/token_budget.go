@@ -19,7 +19,7 @@ type tokenReservation struct {
 }
 
 func (t *turnEnv) hasTreeBudget() bool {
-	if t.n.Runtime.Kind != domain.RuntimeNative {
+	if !delegationRuntime(t.n.Runtime.Kind) {
 		return false
 	}
 	for _, g := range t.n.Tools {

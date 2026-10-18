@@ -50,3 +50,20 @@ func TestDelegationDecisionSnapshot(t *testing.T) {
 	snapshotDelegationDecision(x, nil)
 	snapshotDelegationDecision(&domain.Execution{}, a)
 }
+
+func TestDelegationRuntimeAndTreeBudget(t *testing.T) {
+	for _, kind := range []domain.RuntimeKind{domain.RuntimeNative, domain.RuntimeExternal, domain.RuntimeEcho, domain.RuntimeKind("unknown")} {
+		supported := kind == domain.RuntimeNative || kind == domain.RuntimeExternal
+		if delegationRuntime(kind) != supported {
+			t.Fatal(kind)
+		}
+		env := &turnEnv{n: &domain.Node{Runtime: domain.RuntimeRef{Kind: kind}, Tools: []domain.ToolGrant{{Name: "delegation.request"}}}}
+		if env.hasTreeBudget() != supported {
+			t.Fatal("runtime bypassed shared admission", kind)
+		}
+		env.n.Tools = []domain.ToolGrant{{Name: "*"}}
+		if env.hasTreeBudget() {
+			t.Fatal("wildcard became delegation authority")
+		}
+	}
+}

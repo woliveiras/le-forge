@@ -13,6 +13,7 @@ import (
 // Platform memory/emit tools are never offered or executed by this bounded loop.
 func (t *turnEnv) delegatedChat(ctx context.Context, x *domain.Execution, grants []domain.ToolGrant, req *llm.ChatRequest, provider string, first *tokenReservation, maxBytes int) (*llm.ChatResponse, error) {
 	node := *t.n
+	node.Runtime = domain.RuntimeRef{Kind: domain.RuntimeNative}
 	node.Tools = grants
 	node.Model.MaxTokens = req.MaxTokens
 	node.Limits.MaxToolCalls = 16
