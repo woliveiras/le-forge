@@ -29,6 +29,7 @@ func Run(t *testing.T, newStore func(t *testing.T) storage.Store) {
 		{"Graphs", testGraphs},
 		{"GraphConflict", testGraphConflict},
 		{"GraphRecords", testGraphRecords},
+		{"GraphObservedState", testGraphObservedState},
 		{"Events", testEvents},
 		{"Messages", testMessages},
 		{"MarkProcessed", testMarkProcessed},
@@ -1008,5 +1009,42 @@ func testOperatorMessageOutbox(t *testing.T, s storage.Store) {
 	must(t, err)
 	if len(got) != 0 {
 		t.Fatal("consumed continuation resurrected")
+	}
+}
+
+func testGraphObservedState(t *testing.T, s storage.Store) {
+	original := &domain.GraphRecord{ID: "observed", Version: 1, DesiredState: domain.GraphRunning, State: domain.GraphStopped, RunID: "run1"}
+	must(t, s.PutGraphRecord(ctx, original))
+	snapshot, err := s.GetGraphRecord(ctx, original.ID)
+	must(t, err)
+	must(t, s.UpdateGraphState(ctx, snapshot, domain.GraphRunning))
+	got, err := s.GetGraphRecord(ctx, original.ID)
+	must(t, err)
+	if got.State != domain.GraphRunning || got.DesiredState != domain.GraphRunning || got.RunID != "run1" {
+		t.Fatal(got)
+	}
+	if !errors.Is(s.UpdateGraphState(ctx, snapshot, domain.GraphFailed), storage.ErrConflict) {
+		t.Fatal("stale observation accepted")
+	}
+	for _, desired := range []domain.GraphState{domain.GraphStopped, domain.GraphPaused, domain.GraphRunning} {
+		before, err := s.GetGraphRecord(ctx, original.ID)
+		must(t, err)
+		command := *before
+		command.DesiredState = desired
+		command.RunID += "-new"
+		command.Version++
+		command.UpdatedAt = time.Now().UTC()
+		must(t, s.PutGraphRecord(ctx, &command))
+		if !errors.Is(s.UpdateGraphState(ctx, before, domain.GraphStopped), storage.ErrConflict) {
+			t.Fatal("operator command overwritten")
+		}
+		got, err = s.GetGraphRecord(ctx, original.ID)
+		must(t, err)
+		if got.DesiredState != desired || got.RunID != command.RunID || got.Version != command.Version {
+			t.Fatal(got)
+		}
+	}
+	if s.UpdateGraphState(ctx, nil, domain.GraphStopped) == nil {
+		t.Fatal("nil snapshot accepted")
 	}
 }

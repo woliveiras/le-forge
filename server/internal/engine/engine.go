@@ -371,9 +371,7 @@ func (e *Engine) markFailed(ctx context.Context, rec *domain.GraphRecord, cause 
 	if rec.DesiredState == domain.GraphStopped || rec.State == domain.GraphFailed {
 		return
 	}
-	rec.State = domain.GraphFailed
-	rec.UpdatedAt = time.Now().UTC()
-	if err := e.store.PutGraphRecord(ctx, rec); err == nil {
+	if e.updateObservedState(ctx, rec, domain.GraphFailed) {
 		e.bus.Publish(ctx, domain.NewEvent(domain.EvGraphFailed, rec.ID, map[string]any{"error": cause.Error()}))
 	}
 }
@@ -403,15 +401,11 @@ func (e *Engine) settleStopped(ctx context.Context, rec *domain.GraphRecord) {
 	}
 	if live {
 		if rec.State != domain.GraphStopping {
-			rec.State = domain.GraphStopping
-			rec.UpdatedAt = time.Now().UTC()
-			_ = e.store.PutGraphRecord(ctx, rec)
+			e.updateObservedState(ctx, rec, domain.GraphStopping)
 		}
 		return
 	}
-	rec.State = domain.GraphStopped
-	rec.UpdatedAt = time.Now().UTC()
-	if err := e.store.PutGraphRecord(ctx, rec); err == nil {
+	if e.updateObservedState(ctx, rec, domain.GraphStopped) {
 		e.bus.Publish(ctx, domain.NewEvent(domain.EvGraphStopped, rec.ID, map[string]any{"runId": rec.RunID}))
 	}
 }
@@ -433,4 +427,14 @@ func (e *Engine) acquireTurn(ctx context.Context) (func(), error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// An observation cannot replace a newer operator command or graph version.
+// A conflict is expected: the next reconciliation reads the newer snapshot.
+func (e *Engine) updateObservedState(ctx context.Context, rec *domain.GraphRecord, state domain.GraphState) bool {
+	err := e.store.UpdateGraphState(ctx, rec, state)
+	if err != nil && !errors.Is(err, storage.ErrConflict) && !errors.Is(err, storage.ErrNotFound) && ctx.Err() == nil {
+		e.log.Warn("persist observed graph state", "graph", rec.ID, "err", err)
+	}
+	return err == nil
 }

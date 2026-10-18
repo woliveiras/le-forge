@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/graph"
@@ -323,10 +322,11 @@ func (r *graphRun) updateRecord(ctx context.Context) {
 	if rec.DesiredState == domain.GraphPaused {
 		want = domain.GraphPaused
 	}
+	if rec.DesiredState == domain.GraphStopped || rec.Version != r.version || rec.RunID != r.runID {
+		return
+	}
 	if rec.State != want {
-		rec.State = want
-		rec.UpdatedAt = time.Now().UTC()
-		_ = r.e.store.PutGraphRecord(ctx, rec)
+		r.e.updateObservedState(ctx, rec, want)
 	}
 }
 

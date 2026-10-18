@@ -45,6 +45,8 @@ type Store interface {
 	// GraphRecord is the control state (desired/actual/run id).
 	GetGraphRecord(ctx context.Context, id string) (*domain.GraphRecord, error)
 	PutGraphRecord(ctx context.Context, r *domain.GraphRecord) error
+	// UpdateGraphState changes observed state only if the complete snapshot still matches.
+	UpdateGraphState(ctx context.Context, expected *domain.GraphRecord, state domain.GraphState) error
 	ListGraphRecords(ctx context.Context) ([]*domain.GraphRecord, error)
 
 	// --- events ---------------------------------------------------------

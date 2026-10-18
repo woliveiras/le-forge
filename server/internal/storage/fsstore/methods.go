@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -867,4 +868,30 @@ func (s *Store) PutOperatorMessageOnce(ctx context.Context, m *domain.OperatorMe
 		m.CreatedAt = time.Now().UTC()
 	}
 	return s.putOperatorLocked(clone(m))
+}
+
+func (s *Store) UpdateGraphState(ctx context.Context, expected *domain.GraphRecord, state domain.GraphState) error {
+	if expected == nil || expected.ID == "" {
+		return fmt.Errorf("fsstore: graph record id is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return err
+	}
+	current, ok := s.records[expected.ID]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	if !reflect.DeepEqual(current, expected) {
+		return storage.ErrConflict
+	}
+	next := clone(current)
+	next.State = state
+	next.UpdatedAt = time.Now().UTC()
+	if err := writeJSON(s.path("records", encodeName(next.ID)+".json"), next); err != nil {
+		return err
+	}
+	s.records[next.ID] = next
+	return nil
 }

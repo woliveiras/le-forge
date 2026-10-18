@@ -210,3 +210,32 @@ func (s *Store) ListGraphRecords(ctx context.Context) ([]*domain.GraphRecord, er
 	}
 	return out, rows.Err()
 }
+
+func (s *Store) UpdateGraphState(ctx context.Context, expected *domain.GraphRecord, state domain.GraphState) error {
+	if expected == nil || expected.ID == "" {
+		return fmt.Errorf("sqlstore: graph record id is required")
+	}
+	old, err := json.Marshal(expected)
+	if err != nil {
+		return err
+	}
+	next := *expected
+	next.State = state
+	next.UpdatedAt = time.Now().UTC()
+	doc, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+	result, err := s.db.ExecContext(ctx, s.q(`UPDATE graph_records SET state = ?, updated_at = ?, doc = ? WHERE id = ? AND doc = ?`), string(state), s.ts(next.UpdatedAt), string(doc), next.ID, string(old))
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return storage.ErrConflict
+	}
+	return nil
+}

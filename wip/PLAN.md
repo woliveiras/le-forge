@@ -1369,3 +1369,14 @@ Full-suite validation also reproduced an environment start/stop race: a stale
 reconciler graph-record write can replace the operator desired state. The MCP
 unit/integration and browser checks pass; the lifecycle race is a separate
 follow-up before final full-suite acceptance.
+
+### Graph state reconciliation preserves operator commands (2026-10-18)
+
+A full-suite run reproduced stale observed-state writes overwriting a newer stop
+command. Observed-state persistence now compares the complete graph-record
+snapshot atomically in filesystem and SQL storage before updating state. It never
+replaces desired state, graph version or run identity. A changed snapshot is
+retried by the next reconciliation; storage failures are reported without
+publishing a successful state event. Old runs do not publish running state after
+a stop, new version or new run. Storage conformance, focused engine tests, the
+repeated environment API lifecycle and browser start/stop journeys cover this fix.
