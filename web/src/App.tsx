@@ -1,3 +1,4 @@
+import { Onboarding } from './components/Onboarding';
 import { runSection, type RunSection } from './components/runPresentation';
 import { agentSection, type AgentSection } from './components/agentSettingsModel';
 import { Activity, useCallback, useEffect, useState } from 'react';
@@ -198,6 +199,7 @@ function Shell() {
           </button>
         </nav>
         <main>
+          {info.data?.identity && <Onboarding key={JSON.stringify(info.data.identity)} identity={info.data.identity} onCreated={id => { void graphs.reload(); go({view: 'graph', id, tab: 'canvas'}); }}/>}
           <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
           {route.view === 'graphs' && (
             <GraphList

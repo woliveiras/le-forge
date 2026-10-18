@@ -1866,3 +1866,8 @@ button, summary, a { touch-action: manipulation; }
   .tl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
   .tl-text { grid-column: 1 / -1; }
 }
+
+.onboarding { padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--line); }
+.onboarding > .card { margin-top: 0.75rem; max-width: 70rem; }
+.onboarding [aria-current="step"] { outline: 2px solid currentColor; }
+.onboarding p { max-width: 80ch; overflow-wrap: anywhere; }

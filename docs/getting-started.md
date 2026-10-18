@@ -3,6 +3,25 @@
 This guide takes you from a clone to a running agent factory, then to real
 models, your own graph, and running without Docker.
 
+## Browser guide
+
+Once the console is running and you have signed in, open **Getting started** above
+the current screen. You can pause, skip topics, resume after a reload, or revisit
+completed topics. The guide links to health, models, connections, graph editing
+and Runs; reviewing a topic does not grant tools or certify a successful test.
+
+For a first execution without model credentials or external access, choose
+**Create and review a graph → Create echo example**. Review its single echo agent
+on the canvas, then explicitly start it and inspect its execution in **Runs**.
+Expect an echoed-message count, not a model response. MCP connections and model
+configuration are optional for this example. Viewers can follow the guidance but
+need an authorized operator to create/run graphs.
+
+Progress stays in this browser for the sign-in identity and can be reset using
+**Restart guide → Confirm restart**, without deleting application data.
+See [guide behavior and persistence](interface-navigation.md#resumable-first-use-guide)
+for details.
+
 ## 1. Start the platform
 
 Requirements: Docker Engine (or Docker Desktop / Colima / Rancher Desktop /

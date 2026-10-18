@@ -446,23 +446,25 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 
 #### Journey and Content
 
-- [ ] Define the initial journey from arriving at the application through the first completed task, identifying prerequisites and alternatives when providers/MCPs are not yet configured.
-- [ ] Explain graph, agent, channel, tool, execution, and approval concepts in plain language.
-- [ ] Guide installation and model-provider health checks without presenting configuration/listing as proof that inference succeeded.
-- [ ] Guide MCP connection and permission assignment when available; adapt the steps and honestly identify unavailable features.
-- [ ] Guide creation of agents and channels in the visual editor, validation, and saving of the first graph.
-- [ ] Guide task submission, monitoring of events/messages/delegations/approvals, and inspection of files/diffs when available.
-- [ ] Create or review a safe, functional example graph, documenting what users must configure or adapt before running it.
+- [x] Define the initial journey from arriving at the application through the first completed execution, identifying prerequisites and alternatives when providers/MCPs are not yet configured.
+- [x] Explain graph, agent, channel, tool, execution, and approval concepts in plain language.
+- [x] Guide installation and model-provider health checks without presenting configuration/listing as proof that inference succeeded.
+- [x] Guide MCP connection and permission assignment when available; adapt the steps and honestly identify unavailable features.
+- [x] Guide creation of agents and channels in the visual editor, validation, and saving of the first graph.
+- [x] Guide currently available execution start, monitoring of events/messages/approvals, and inspection of files/diffs; explicitly identify first-class task submission and delegation as separate pending workstreams.
+- [x] Create or review a safe, functional example graph, documenting what users must configure or adapt before running it.
 
 #### Interface, Progress, and Validation
 
-- [ ] Add progressive, dismissible, resumable onboarding that does not block experienced users or erase current work when the guide starts or resumes.
-- [ ] Allow users to return to onboarding and contextual help after completion without inadvertently resetting the completion state.
-- [ ] Show the real state of prerequisites and dependencies; provide navigation to configuration and never mark steps complete through fallback or mere configuration presence.
-- [ ] Define and document how progress is persisted and how to deliberately restart the guide, respecting the installation's authentication and privacy model.
-- [ ] Add unit and integration tests for progress, resumption, dismissal, intentional restart, missing prerequisites, and errors during guided steps.
-- [ ] Add end-to-end tests for the first-use journey, including canvas graph creation and execution/result inspection when corresponding steps are available.
-- [ ] Update quickstart documentation and contextual help to remain consistent with onboarding.
+- [x] Add progressive, dismissible, resumable onboarding that does not block experienced users or erase current work when the guide starts or resumes.
+- [x] Allow users to return to onboarding and contextual help after completion without inadvertently resetting the completion state.
+- [x] Show the real state of prerequisites and dependencies; provide navigation to configuration and never mark steps complete through fallback or mere configuration presence.
+- [x] Define and document how progress is persisted and how to deliberately restart the guide, respecting the installation's authentication and privacy model.
+- [x] Add unit and integration tests for progress, resumption, dismissal, intentional restart, missing prerequisites, and errors during guided steps.
+- [x] Add end-to-end tests for the first-use journey, including canvas graph creation and execution/result inspection when corresponding steps are available.
+- [x] Update quickstart documentation and contextual help to remain consistent with onboarding.
+
+**Implemented scope:** Browser guidance and automated validation cover the existing execution journey. Developer usability acceptance, installation activation and a clean-install exercise remain separate; this does not complete first-class tasks or delegation.
 
 **Done when:** A new operator can follow onboarding in the browser, understand essential concepts, configure available dependencies, create or adapt an example graph, and run a first task; they can skip steps, resume, and revisit help without server or CLI access.
 
@@ -506,7 +508,7 @@ Start only after Release 1 is complete and stable.
 - [x] Deliver Runs list/detail screens over existing execution records, highlighting blockers and distinguishing execution outcome from individual tool outcomes. — Search/filter the latest 100 executions; Result, Timeline, Tool calls, Messages and Diagnostics use existing authorized APIs. Details verify graph identity, correlate records by persisted IDs, label bounded history and current-workspace links, and reuse approval role gates. Unit/real-client integration tests cover filters, scope, independent tool outcomes, polling, missing records, failures and recovery. Chromium covers approval-to-completion, deep links/reload/back, viewer restrictions, graph mismatch and failed-history retry. All 219 frontend tests and 42 standard/hosted-CIMD E2E scenarios pass; the six Runs/Activity scenarios were repeated after final changes. make test, make lint and make build pass. Installation activation and developer usability validation remain separate.
 - [x] Consolidate typography, spacing, button hierarchy, contextual help and accessible responsive components across the remaining screens. — Shared page/card/form styles cover Models, Administration, Approvals and Skills; canvas guidance is a native disclosure. Skills adopts shared action buttons with unchanged handlers and disabled fieldsets. Security notices and errors remain visible; focus and reduced-motion styles are explicit. Unit tests cover disclosure and disabled actions; real-client integration proves help does not invoke providers or expose viewer actions. Chromium covers keyboard disclosure, narrow layouts, viewer permissions and unchanged canvas editing. make test (229 frontend tests), make lint, make build and make test-e2e (45 standard plus one hosted-CIMD scenario) pass. A canvas-edge rendering failure after reload occurred in an earlier suite attempt; its isolated repeat and the final full suite passed without changing assertions. Preview was inspected at narrow and desktop widths. This slice was subsequently activated as commit 7ef1178 on 2026-10-17; see the activation evidence below. Developer usability acceptance remains pending.
 - [ ] Validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets.
-- [ ] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams.
+- [x] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams. — Optional Getting started panel, browser-local identity-scoped progress, explicit review/skip/pause/restart, live prerequisite reads and safe echo example. See the 2026-10-18 evidence below; installation activation and developer acceptance remain pending.
 
 
 **Navigation baseline activation (2026-10-17):** Commit b0f7670 and preceding UX
@@ -663,3 +665,40 @@ were inspected. This is installation activation evidence, not developer usabilit
 acceptance. The broader developer usability round and the previously recorded
 intermittent sandbox supervision test remain open. No secret values, authentication
 configuration, external OAuth applications or persistent volumes were changed.
+
+
+**Resumable onboarding evidence (2026-10-18):** Implemented an optional, initially
+collapsed Getting started panel without route redirects or background mutations.
+Six topics cover concepts, health, models, MCP discovery/grants, canvas editing
+and execution inspection. Live prerequisite reads report errors and retry explicitly;
+topic acknowledgements are never inference, tool-access or installation-health
+certification. Progress is versioned, local to the browser origin and sign-in
+identity name/role, with no credentials or configuration payloads. Skipping does
+not complete a topic; revisiting completion preserves progress; confirmed restart
+only resets the guide. Storage failure/corruption is visible. The explicit example
+uses the existing validation/create APIs, a finite echo runtime, no tools or model,
+and no automatic start; viewers cannot create it. Echo forwards messages and does
+not validate model inference or MCP access. The native-only read-only workspace
+flag is intentionally absent from echo, following existing graph validation.
+
+Validation: make test passed (Go unit/integration, Python suites and 256 frontend
+tests across 43 files), make lint passed, make build passed, make test-e2e passed
+(50 standard Chromium scenarios plus one hosted-CIMD scenario), and git diff --check
+passed. New unit/real-client component tests cover progress parsing, invalid data,
+skip/review/resume/restart, storage failures, prerequisite errors/retry, rejected
+validation/create attempts, stable retry IDs and viewer restrictions. New real
+disposable-backend browser tests create the example, preserve an unsaved agent
+draft across guide/navigation changes, save it, execute echo and inspect its real
+result, reload completed progress, confirm restart without deleting the graph,
+and retry failed prerequisites as a viewer without mutations. Existing canvas
+agent/channel creation, MCP, grant, OAuth and execution journeys also pass.
+Desktop and narrow browser captures were inspected.
+
+Earlier focused E2E failures exposed the native-only read-only workspace rule
+and an incorrect expectation that echo returns its prompt; the example and test
+were corrected to the actual runtime contract before the full passing suite.
+README, getting-started and interface-navigation documentation describe the
+browser journey and persistence limitations. No installation activation, external
+OAuth changes, real model inference, fresh Docker installation, or developer
+usability acceptance is claimed. First-class tasks and delegation remain in their
+existing workstreams. Activation and the final developer usability round are pending.

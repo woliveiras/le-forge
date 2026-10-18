@@ -557,6 +557,8 @@ The onboarding should guide users to:
 
 Include a safe, working example graph to explore or duplicate, clearly indicating which settings must be adjusted before running it. Show unconfigured dependencies and provide paths to the relevant screens; do not claim success until real tests pass. Let users return to tutorials and contextual help without restarting or losing existing work.
 
+**Implementation (2026-10-18):** The optional Getting started panel now covers the existing graph/execution journey. It stores only a versioned topic index and reviewed topic IDs in browser local storage scoped to origin and identity name/role. Acknowledgement is separate from live prerequisite observations; provider/MCP presence never proves inference or authorization. Skip/pause/revisit preserve progress, and deliberate restart resets only the guide. Existing graph drafts remain mounted. An explicit validated echo example requires no model or tools and never auto-starts. Task submission and delegation remain separate workstreams. Installation activation, developer acceptance and clean-install validation are not claimed by this implementation.
+
 **Acceptance criterion:** A new operator can follow onboarding in the browser, understand the essential concepts, configure available dependencies, create or adapt an example graph, and run their first task. They can skip steps, resume the journey, and revisit help without server or CLI access.
 
 ## Release 2 — Reusable Components
@@ -900,3 +902,40 @@ were inspected. This is installation activation evidence, not developer usabilit
 acceptance. The broader developer usability round and the previously recorded
 intermittent sandbox supervision test remain open. No secret values, authentication
 configuration, external OAuth applications or persistent volumes were changed.
+
+
+**Resumable onboarding evidence (2026-10-18):** Implemented an optional, initially
+collapsed Getting started panel without route redirects or background mutations.
+Six topics cover concepts, health, models, MCP discovery/grants, canvas editing
+and execution inspection. Live prerequisite reads report errors and retry explicitly;
+topic acknowledgements are never inference, tool-access or installation-health
+certification. Progress is versioned, local to the browser origin and sign-in
+identity name/role, with no credentials or configuration payloads. Skipping does
+not complete a topic; revisiting completion preserves progress; confirmed restart
+only resets the guide. Storage failure/corruption is visible. The explicit example
+uses the existing validation/create APIs, a finite echo runtime, no tools or model,
+and no automatic start; viewers cannot create it. Echo forwards messages and does
+not validate model inference or MCP access. The native-only read-only workspace
+flag is intentionally absent from echo, following existing graph validation.
+
+Validation: make test passed (Go unit/integration, Python suites and 256 frontend
+tests across 43 files), make lint passed, make build passed, make test-e2e passed
+(50 standard Chromium scenarios plus one hosted-CIMD scenario), and git diff --check
+passed. New unit/real-client component tests cover progress parsing, invalid data,
+skip/review/resume/restart, storage failures, prerequisite errors/retry, rejected
+validation/create attempts, stable retry IDs and viewer restrictions. New real
+disposable-backend browser tests create the example, preserve an unsaved agent
+draft across guide/navigation changes, save it, execute echo and inspect its real
+result, reload completed progress, confirm restart without deleting the graph,
+and retry failed prerequisites as a viewer without mutations. Existing canvas
+agent/channel creation, MCP, grant, OAuth and execution journeys also pass.
+Desktop and narrow browser captures were inspected.
+
+Earlier focused E2E failures exposed the native-only read-only workspace rule
+and an incorrect expectation that echo returns its prompt; the example and test
+were corrected to the actual runtime contract before the full passing suite.
+README, getting-started and interface-navigation documentation describe the
+browser journey and persistence limitations. No installation activation, external
+OAuth changes, real model inference, fresh Docker installation, or developer
+usability acceptance is claimed. First-class tasks and delegation remain in their
+existing workstreams. Activation and the final developer usability round are pending.

@@ -178,6 +178,9 @@ See the official [installation](https://colima.run/docs/installation/) and
 
 ## Quickstart (60 seconds)
 
+After signing in, open **Getting started** in the console for optional, resumable
+guidance and a no-model echo example. See the [browser guide](docs/getting-started.md#browser-guide).
+
 Requirements: Docker with Compose v2.
 
 ```bash
