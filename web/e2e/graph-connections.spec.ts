@@ -61,11 +61,12 @@ async function deleteSelection(page: Page, message: string, accept: boolean) {
   await dialogHandled;
 }
 
-test('creates agents, drags connections, validates, cancels and confirms Delete, then reopens persisted edits', async ({ page }) => {
+test('creates agents, drags connections, validates, cancels and confirms Delete, then reopens persisted edits', async ({ page }, testInfo) => {
+  const graphName = `browser-connections-${testInfo.repeatEachIndex}`;
   await page.addInitScript(() => localStorage.setItem('leforgeToken', 'e2e-admin-token'));
   // Seed one source agent through the real API; all creation and connection gestures use the browser.
   const created = await page.request.post('/api/v1/graphs', { headers, data: {
-    metadata: { name: 'browser-connections' },
+    metadata: { name: graphName },
     spec: { nodes: [{ id: 'source', runtime: { kind: 'echo' }, position: { x: 0, y: 0 } }] },
   } });
   expect(created.ok()).toBeTruthy();
@@ -119,7 +120,7 @@ test('creates agents, drags connections, validates, cancels and confirms Delete,
   await save(page);
   await page.goto('/#/');
   await page.getByRole('button', { name: 'Select graph', exact: true }).click();
-  await page.getByRole('region', { name: 'Graph selector' }).getByRole('button', { name: /browser-connections/ }).click();
+  await page.getByRole('region', { name: 'Graph selector' }).getByRole('button', { name: new RegExp(graphName) }).click();
   await expect(node(page, 'source')).toBeVisible();
   await expect(node(page, 'agent-3')).toBeVisible();
   await expect(node(page, 'agent-2')).toHaveCount(0);

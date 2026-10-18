@@ -137,6 +137,8 @@ const toolbarButton = (name: string) => screen.getByRole('button', { name });
 beforeEach(() => {
   vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+  // jsdom has no transform matrix API; canvas measurements use unit zoom here.
+  vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1; });
   vi.stubGlobal('confirm', vi.fn(() => true));
 });
 afterEach(() => {

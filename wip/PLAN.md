@@ -1457,3 +1457,16 @@ approval/automatic success, rejection, invalid inputs, missing grants, provider
 failure, budget denial and expired tokens. Browser tests cover approval, rejection,
 tree cancellation and unchanged graph/grants. External inference outside the
 gateway, hard monetary guarantees and idempotent request keys remain outside scope.
+
+### Canvas connection measurement recovery (2026-10-18)
+
+Full browser acceptance exposed missing rendered edges after reload/reopening a
+cached graph, despite preserved nodes/channels. An isolated repeated scenario
+reproduced two failures in five runs. Structural node rebuilds discard React Flow
+handle bounds without necessarily changing DOM dimensions. The canvas now requests
+handle measurement after the structure render and when Activity restarts effects
+on reveal; cleanup cancels pending frames. Graph data, selection, permissions and
+saved node positions are unchanged. Component integration exercises actual rendered
+paths through rebuild, hide/reveal, removal and restoration. The original browser
+journey retains all assertions and uses independent IDs for repeat runs; all five
+repetitions pass after the change.

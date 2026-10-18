@@ -1009,3 +1009,11 @@ Developer usability acceptance and a fresh-install exercise remain separate.
   repeated integration/race tests cover an immediate message after pause and
   verify it remains unconsumed until resume. Browser recovery coverage pauses,
   sends input, resumes and checks the preserved workspace.
+
+**Canvas regression follow-up (2026-10-18):** The previously intermittent missing
+edges after reload/reopening were reproduced in two of five isolated browser runs.
+Explicit post-render handle measurement now restores connections after structural
+rebuilds and cached workspace reveal. Component integration verifies rendered
+paths, removal and restoration; the unchanged browser behavior assertions pass in
+five independently seeded repetitions. This is local code/test evidence, not a
+new installation activation or developer homologation.

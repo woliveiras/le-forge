@@ -8,6 +8,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type Node,
@@ -56,6 +57,7 @@ function Canvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, screenToFlowPosition, getNodes } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const onSelectRef = useRef(onSelect);
   const didFitView = useRef(false);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,14 @@ function Canvas({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structureKey]);
+
+  // Rebuilding nodes clears React Flow's handle bounds, even when their DOM
+  // dimensions have not changed. Activity also restarts effects on reveal.
+  // Measure after the structure render instead of relying on a resize event.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => updateNodeInternals(getNodes().map(node => node.id)));
+    return () => cancelAnimationFrame(frame);
+  }, [structureKey, updateNodeInternals, getNodes]);
 
   // Live data: patch node/edge data in place.
   useEffect(() => {
