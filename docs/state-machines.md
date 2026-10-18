@@ -90,7 +90,8 @@ stateDiagram-v2
   interrupted --> [*]
 ```
 
-`pending` exists in the domain model, but the engine creates executions directly in `running`. While a turn waits for a human, the *replica* shows `awaiting_approval`; the execution record stays `running`.
+`pending` exists in the domain model, but the engine creates executions directly in `running`. While a turn waits for a human, the *replica* shows `awaiting_approval`; the execution record stays `running`. Delegated children are the exception: their
+initial delegation-approval wait is persisted as `awaiting_approval` (see below).
 
 | Outcome | Effect on inputs |
 |---|---|
@@ -137,3 +138,59 @@ stateDiagram-v2
 | `question` | `human.ask` tool, `AskHuman` callback | `answer` returned to the agent | Error returned to the agent |
 
 `DecideApproval` succeeds only from `pending`; a second decision returns HTTP 409. Expiry is evaluated by the waiter and by the periodic `Sweep`.
+
+## Dynamic delegation entities and states
+
+Delegation uses existing execution and approval records, not temporary graph
+nodes. This is the current native contract; other runtimes and recursive children
+remain separate capabilities.
+
+| Entity | Identity and authoritative fields |
+|---|---|
+| Parent execution | Immutable execution ID, graph/run/version, node/replica; owns the tool request and inclusive reported consumption. |
+| Child execution | Its own execution ID plus `parentExecutionId`; selected profile/model/objective, revisioned configuration, access/decision audit, outcome, result/error and child-only reported usage. |
+| Delegation approval | Approval ID linked to the child execution, kind `delegation`, pending/approved/rejected/expired decision, actor and time. Automatic admission has no synthetic human approval. |
+| Tool approval | Separate approval linked to the child for a granted tool requiring consent. Delegation approval does not replace it. |
+| Cancellation request | Durable record addressed to an execution ID with child/tree scope, root ID, actor and time. It requests cooperative cancellation; it is not a terminal execution outcome. |
+| Result | Child summary or bounded error persisted on the child and returned to the waiting parent as the delegation tool outcome. It does not add a graph channel or create a new task resource. |
+| Consumption ledger | Root-execution key, bounded reservations and charged/estimated totals. Reported execution usage and conservative admission accounting have different meanings. |
+
+```mermaid
+stateDiagram-v2
+  [*] --> awaiting_approval : admitted under required policy
+  [*] --> running : admitted under automatic policy
+  awaiting_approval --> running : approved and configuration/capacity revalidated
+  awaiting_approval --> failed : rejected or stale configuration
+  awaiting_approval --> cancelled : cancellation or deadline
+  awaiting_approval --> interrupted : restart or lease takeover
+  running --> succeeded : bounded complete result
+  running --> failed : model/tool/limit/persistence failure
+  running --> cancelled : cooperative cancellation or deadline
+  running --> interrupted : restart or lease takeover
+```
+
+A rejected/expired decision is retained on the approval; it does not introduce
+`rejected` or `expired` execution statuses. An expiry returned as an approval
+decision produces failure; expiry through the request deadline produces a
+cancelled child. Recovery interrupts abandoned children and expires their pending
+approvals. A child's tool approval can suspend work without changing the child's
+persisted execution status from `running`; inspect linked approvals for that wait.
+
+The parent can handle a failed/rejected/cancelled child and finish successfully.
+Stopping one child does not cancel its parent or siblings. Tree cancellation
+checks the root request in every active descendant context. A request racing with
+completion can coexist with a terminal successful outcome; the UI must not turn
+an acknowledged request into a claim that work was forcibly killed.
+
+Reservations move from reserved to dispatched and then settled. Undispatched
+failures release credit; dispatched unknown usage charges the reservation
+conservatively. Settlement is idempotent. Recovery closes terminal-root ledgers,
+retains active/unknown-root holds and later compacts per-call details while keeping
+a closed aggregate tombstone. Do not sum parent and child execution usage: parent
+reported usage is inclusive. This accounting is not a guaranteed monetary ceiling.
+
+Transitions are covered by the delegation, execution-control and budget
+unit/integration suites and browser approval, interruption and recovery journeys.
+See [delegation](delegation.md) for limits and [operations](operations.md) for
+restart/version compatibility. General event publication is best effort; persisted
+execution/approval/ledger records are the source of truth.

@@ -1283,3 +1283,12 @@ public readiness endpoint now returns bounded states instead of raw dependency
 errors that could contain credentials or internal endpoints. Unit and real HTTP
 integration cover failure, redaction and recovery; sandbox failure still does not
 make non-sandbox work globally unready. Provider/MCP qualification remains separate.
+
+### Delegation entity/state contract (2026-10-18)
+
+The [state-machine reference](../docs/state-machines.md#dynamic-delegation-entities-and-states)
+now defines the existing native parent/child, approval, cancellation, result and
+consumption entities without inventing new graph nodes or task records. It explains
+persisted approval waits, terminal outcomes, per-tool approvals, cancellation races,
+inclusive reported usage and ledger recovery. The implementation suites validate
+these boundaries; external runtimes and recursion are still pending.

@@ -675,7 +675,7 @@ and cooperative interruption for the current native scope are verified above.
 
 #### Model, Policies, and Execution
 
-- [ ] Define entities and states for delegation, child execution, approval, cancellation, result, and consumption.
+- [x] Define entities and states for delegation, child execution, approval, cancellation, result, and consumption. — `docs/state-machines.md` records the actual native execution/approval/cancellation/result/ledger identities and transitions, including separate tool approvals, child failure with parent success, cooperative cancellation races and idempotent settlement/recovery. External runtimes and recursion remain separate implementation tasks.
 - [ ] Add a runtime capability for requesting a delegated subtask and waiting for/returning its result to the parent agent.
 - [x] Implement temporary child execution instantiation without editing the permanent graph. — Native analysis foundation; see scope above.
 - [x] Define how child configurations are selected from installation-approved templates; do not accept arbitrary configurations that could elevate privileges. — Explicit installation profile ID; guidance/output allowance only, no model/runtime/tool overrides.
