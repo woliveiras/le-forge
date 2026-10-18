@@ -58,7 +58,7 @@ func NewAtlassianFlat() *AtlassianFlatServer {
 				return
 			}
 			if q.Params["cursor"] == nil {
-				result = map[string]any{"tools": []any{map[string]any{"name": "getJiraIssue", "inputSchema": schema}}, "nextCursor": "flat-next"}
+				result = map[string]any{"tools": []any{map[string]any{"name": "getJiraIssue", "inputSchema": schema}, map[string]any{"name": "executeRead", "inputSchema": schema}, map[string]any{"name": "executeWrite", "inputSchema": schema}, map[string]any{"name": "executeDestructive", "inputSchema": schema}}, "nextCursor": "flat-next"}
 			} else if q.Params["cursor"] == "flat-next" {
 				name := "getConfluenceContent"
 				if f.Drift.Load() {

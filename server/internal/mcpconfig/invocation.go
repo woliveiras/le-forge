@@ -73,6 +73,9 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if err != nil || !r.Enabled || r.Status != "ready" || r.Revision != t.revision {
 		return nil, fmt.Errorf("%w: MCP connection changed; retry with current catalogue", tools.ErrDenied)
 	}
+	if blockedDispatcher(r.View, t.tool.Name) {
+		return nil, fmt.Errorf("%w: select an individual Atlassian operation instead of a dispatcher", tools.ErrDenied)
+	}
 	if len(grant.Paths) > 0 || len(grant.Commands) > 0 {
 		return nil, fmt.Errorf("%w: workspace constraints cannot authorize remote MCP operations", tools.ErrDenied)
 	}

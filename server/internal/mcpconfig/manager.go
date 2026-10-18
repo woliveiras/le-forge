@@ -147,7 +147,7 @@ func (m *Manager) load(ctx context.Context, id string) (record, error) {
 }
 func (m *Manager) Get(ctx context.Context, id string) (View, error) {
 	r, e := m.load(ctx, id)
-	return r.View, e
+	return operationCatalogue(r.View), e
 }
 func (m *Manager) List(ctx context.Context) ([]View, error) {
 	ss, e := m.Store.ListSettings(ctx, prefix)
@@ -164,11 +164,12 @@ func (m *Manager) List(ctx context.Context) ([]View, error) {
 			continue
 		}
 		r.Revision = s.Revision
-		out = append(out, r.View)
+		out = append(out, operationCatalogue(r.View))
 	}
 	return out, nil
 }
 func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event string) (View, error) {
+	r.View = operationCatalogue(r.View)
 	r.UpdatedAt = time.Now().UTC()
 	r.UpdatedBy = actor
 	r.CredentialConfigured = r.Sealed != ""

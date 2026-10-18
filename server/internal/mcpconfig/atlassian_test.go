@@ -83,3 +83,76 @@ func TestFlatAtlassianDiscoveryDriftAndGateway(t *testing.T) {
 		t.Fatal("failed discovery retained authority", view, err)
 	}
 }
+
+func TestAtlassianOperationCatalogue(t *testing.T) {
+	for _, v := range []View{
+		{Service: "atlassian", Endpoint: "https://custom.example/mcp"},
+		{Service: "jira"}, {Service: "confluence"}, {Service: "bitbucket"},
+		{Service: "generic", Endpoint: "https://MCP.ATLASSIAN.COM/v2/mcp"},
+	} {
+		v.Tools = []Tool{{Name: "executeRead"}, {Name: "getJiraIssue"}, {Name: "executeWrite"}, {Name: "executeDestructive"}}
+		filtered := operationCatalogue(v)
+		if len(filtered.Tools) != 1 || filtered.Tools[0].Name != "getJiraIssue" || len(v.Tools) != 4 {
+			t.Fatal("unsafe or mutating filter", filtered)
+		}
+	}
+	v := View{Service: "generic", Endpoint: "https://mcp.atlassian.com.attacker.example/mcp", Tools: []Tool{{Name: "executeRead"}}}
+	if len(operationCatalogue(v).Tools) != 1 {
+		t.Fatal("unrelated server filtered")
+	}
+}
+
+func TestAtlassianLegacyDispatchersDeniedAtEveryBoundary(t *testing.T) {
+	m := testManager(t)
+	ctx := t.Context()
+	in := input()
+	in.ID = "legacy"
+	in.Service = "generic"
+	in.Endpoint = atlassianMCPEndpoint
+	if _, err := m.Put(ctx, in, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	r, err := m.load(ctx, in.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Status = "ready"
+	r.Tools = []Tool{{Name: "executeRead"}, {Name: "executeWrite"}, {Name: "executeDestructive"}, {Name: "getJiraIssue"}}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a persisted catalogue/grant created before dispatcher filtering.
+	revision, err := m.Store.PutSetting(ctx, prefix+in.ID, raw, r.Revision, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Call = func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error) {
+		t.Fatal("blocked operation reached transport")
+		return nil, nil
+	}
+	got, err := m.Get(ctx, in.ID)
+	if err != nil || len(got.Tools) != 1 {
+		t.Fatal(got, err)
+	}
+	available, err := m.Available(ctx)
+	if err != nil || len(available) != 1 {
+		t.Fatal(available, err)
+	}
+	for _, name := range []string{"executeRead", "executeWrite", "executeDestructive"} {
+		qualified := "mcp.legacy." + name
+		if _, err := m.Resolve(ctx, qualified); !errors.Is(err, tools.ErrDenied) {
+			t.Fatal("dispatcher resolved", err)
+		}
+		g := &domain.Graph{}
+		g.Spec.Defaults.Tools = []domain.ToolGrant{{Name: qualified}}
+		if !errors.Is(m.ValidateGrants(ctx, g), ErrInvalid) {
+			t.Fatal("dispatcher grant accepted")
+		}
+		stale := &remoteTool{m: m, connection: in.ID, revision: revision, tool: Tool{Name: name}}
+		principal := &tools.Principal{GraphID: "g", NodeID: "worker", Grants: g.Spec.Defaults.Tools}
+		if _, err := stale.Invoke(ctx, &tools.Invocation{Principal: principal, Args: json.RawMessage(`{"tool":"deleteIssue"}`)}); !errors.Is(err, tools.ErrDenied) {
+			t.Fatal("legacy dispatcher invoked", err)
+		}
+	}
+}

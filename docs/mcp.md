@@ -621,3 +621,15 @@ explicit grants. Dependency failure clears the available catalogue and stays
 visible. TLS fixtures cover pagination, catalogue drift, denied new operations,
 resource binding and browser configuration. Live corporate/vendor qualification
 remains pending.
+
+### Atlassian dispatcher restrictions
+
+LeForge excludes `executeRead`, `executeWrite` and `executeDestructive` from
+Atlassian catalogues. These generic dispatchers could route a single grant to
+multiple underlying operations. Select individual tools from the `tools=all`
+catalogue and explicitly grant them to each agent. Existing saved dispatcher
+grants are also denied at invocation; refresh discovery and replace them with
+reviewed individual operations. The restriction applies to Atlassian-family
+service labels and the official MCP host even when labeled custom. It does not
+provide site/project restrictions: those remain dependent on provider permissions
+until explicit resource constraints are implemented.

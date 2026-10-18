@@ -1353,3 +1353,19 @@ revision checks and explicit grants apply to the paginated flat catalogue. TLS
 fixtures and browser coverage prove routing, schema discovery, catalogue drift,
 stale/new-tool denial and failed discovery. Live corporate qualification remains
 pending; dispatcher protection and product/site policy are separate work below.
+
+### Atlassian operation authorization (2026-10-18)
+
+The generic executeRead, executeWrite and executeDestructive dispatchers are
+excluded from discovery results and previously saved catalogues. Exact grants
+cannot resolve them, and invocation rejects retained tool instances before
+credential access or transport dispatch. Identification uses either the service
+family or official hostname, preventing custom labels from bypassing the guard.
+Individual operations remain available with explicit grants. Unit, persistence/
+gateway integration and paginated TLS/browser fixtures cover these boundaries.
+Product-specific selection and site context remain separate pending work.
+
+Full-suite validation also reproduced an environment start/stop race: a stale
+reconciler graph-record write can replace the operator desired state. The MCP
+unit/integration and browser checks pass; the lifecycle race is a separate
+follow-up before final full-suite acceptance.

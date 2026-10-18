@@ -15,6 +15,7 @@ test('discovers a paginated Atlassian flat catalogue and refuses unreviewed endp
  await page.getByRole('link',{name:'Tools',exact:true}).click();
  await expect(page.getByText('mcp.atlassian-flat.getJiraIssue',{exact:true})).toBeVisible();
  await expect(page.getByText('mcp.atlassian-flat.getConfluenceContent',{exact:true})).toBeVisible();
+ for(const name of ['executeRead','executeWrite','executeDestructive']) await expect(page.getByText('mcp.atlassian-flat.'+name,{exact:true})).toHaveCount(0);
  await page.getByRole('link',{name:'Settings',exact:true}).click();
  await page.getByRole('button',{name:'Edit Flat Atlassian',exact:true}).click();
  await page.getByLabel('MCP endpoint',{exact:true}).fill('https://mcp.atlassian.com/v2/mcp?tools=all&unexpected=true');
