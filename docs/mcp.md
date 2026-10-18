@@ -563,3 +563,10 @@ page's cursor. Historical event payloads are projected through an allowlist;
 legacy raw fields are never forwarded by this endpoint. New MCP tool audit errors
 also use platform-owned summaries. Approval review itself retains its existing
 protected detail contract.
+
+## Planned managed hosting
+
+Remote connections remain the supported deployment model. The
+[managed hosting design](mcp-hosting.md) describes a future dedicated-daemon
+boundary for reviewed server profiles; it does not enable arbitrary server
+commands or mark candidate vendor images as qualified.

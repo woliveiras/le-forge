@@ -1255,3 +1255,11 @@ remote-host override, while previews stay local. Real Compose-render tests use
 synthetic credentials and no `.env`, covering network/volume/restart contracts and
 missing-secret rejection. No existing installation was recreated. Live reachability
 and clean-install acceptance remain separate from configuration validation.
+
+### Managed MCP hosting design (2026-10-18)
+
+[Managed MCP hosting](../docs/mcp-hosting.md) defines the isolation/lifecycle,
+transport authentication, upstream credential, resource admission, private-network
+and qualification contracts for candidate Playwright, MLflow and Qdrant profiles.
+Only the design task is complete; implementation and vendor qualification are not
+implied, and no service has been installed or launched.
