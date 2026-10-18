@@ -14,6 +14,7 @@ import (
 type credentialSchemeKey struct{}
 
 func credentialContext(ctx context.Context, v View) context.Context {
+	ctx = context.WithValue(ctx, metadataHeadersKey{}, v.MetadataHeaders)
 	return context.WithValue(ctx, credentialSchemeKey{}, v.CredentialType)
 }
 func authorizationHeader(ctx context.Context, token string) string {
@@ -37,8 +38,11 @@ func containsTransportCredential(ctx context.Context, raw json.RawMessage, token
 	return !ok || containsCredential(raw, email) || containsCredential(raw, password) || containsCredential(raw, string(decoded))
 }
 func validateCredentialMode(in Input) error {
-	if in.CredentialType != "" && in.CredentialType != "bearer" && in.CredentialType != "basic" {
+	if in.CredentialType != "" && in.CredentialType != "bearer" && in.CredentialType != "basic" && in.CredentialType != "langsmith" {
 		return fmt.Errorf("%w: unsupported credential type", ErrInvalid)
+	}
+	if in.CredentialType == "langsmith" && (in.Service != "generic" || in.OAuth != nil) {
+		return fmt.Errorf("%w: standalone LangSmith API keys require a custom connection without OAuth", ErrInvalid)
 	}
 	if in.CredentialType == "basic" {
 		if in.OAuth != nil || !atlassianConnection(View{Service: in.Service, Endpoint: in.Endpoint}) {
@@ -57,4 +61,11 @@ func validateCredentialMode(in Input) error {
 		}
 	}
 	return nil
+}
+
+func credentialKind(kind string) string {
+	if kind == "" {
+		return "bearer"
+	}
+	return kind
 }

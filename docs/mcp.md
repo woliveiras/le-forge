@@ -654,3 +654,34 @@ restrictions. See the [official authentication guide](https://developer.atlassia
 Local tests cover TLS discovery/calls, encrypted persistence, write-only UI,
 invalid credentials, credential-type changes and response echo rejection. Live
 corporate enablement, scoped tool availability and site access remain unverified.
+
+### Typed dbt and standalone LangSmith headers
+
+Custom connections offer bounded transport settings rather than an arbitrary
+header editor. Keys stay in the encrypted credential field; metadata is non-secret
+and visible in connection responses. Changing metadata requires replacing/clearing
+a stored token, or reauthorizing OAuth. Discovery revisions and explicit agent
+grants continue to apply. Protocol, Host, Cookie and arbitrary authorization
+headers cannot be supplied as metadata.
+
+For remote dbt, use the account's public HTTPS MCP endpoint and Bearer token.
+Optional typed fields accept numeric production/development environment and user
+IDs only. The provider requires production context for token authentication; SQL
+execution needs a personal token and development/user context. Service tokens are
+not sufficient for `execute_sql`. Review the [dbt setup contract](https://docs.getdbt.com/docs/dbt-ai/setup-remote-mcp)
+for account permissions and tool-specific requirements. URL-form IDs and additional
+dbt v2 headers are not supported by this profile.
+
+For the standalone LangSmith MCP implementation, select **Standalone LangSmith API
+key**. LeForge sends `LANGSMITH-API-KEY`, with an optional workspace UUID and a
+bounded US/EU API-region selection. The MCP endpoint itself must use public HTTPS;
+this does not launch a local server. Arbitrary upstream URLs are refused. The
+[standalone server contract](https://github.com/langchain-ai/langsmith-mcp-server/blob/main/README.md)
+differs from the [hosted LangSmith OAuth service](https://docs.langchain.com/langsmith/langsmith-mcp-server).
+Do not use the standalone header profile as proof of hosted-service compatibility.
+
+TLS fixtures verify initialization, pagination and calls with the
+expected headers, encrypted persistence and missing-context failures. Browser
+fixtures verify save/discovery and rejection of unauthorized header names. Live
+account access, per-tool permission/cost behavior and regional deployments remain
+pending qualification.

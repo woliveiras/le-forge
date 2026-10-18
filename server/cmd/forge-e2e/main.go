@@ -228,7 +228,17 @@ func run() error {
 	if _, err := a.MCP.Put(ctx, mcpconfig.Input{ID: "oauth-fixture-config", Name: "OAuth fixture config", Service: "generic", Endpoint: fixtureOAuth.URL + "/mcp", Enabled: false, OAuth: &mcpconfig.OAuthConfig{Issuer: fixtureOAuth.URL, ClientID: "fixture-client", Scopes: []string{"read"}}}, 0, "fixture"); err != nil {
 		return err
 	}
+	headerFixtures := map[string]*httptest.Server{
+		"https://langsmith.fixture.example/mcp": mcptest.NewWithHeaders(map[string]string{"Langsmith-Api-Key": "fixture-mcp-token", "Langsmith-Workspace-Id": "11111111-1111-1111-1111-111111111111", "Langsmith-Endpoint": "https://eu.api.smith.langchain.com"}),
+		"https://dbt.fixture.example/mcp":       mcptest.NewWithHeaders(map[string]string{"Authorization": "Bearer fixture-mcp-token", "X-Dbt-Prod-Environment-Id": "123"}),
+	}
+	for _, fixture := range headerFixtures {
+		defer fixture.Close()
+	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if fixture := headerFixtures[endpoint]; fixture != nil {
+			return mcpconfig.DiscoverWithClient(ctx, fixture.URL, token, fixture.Client())
+		}
 		if endpoint == "https://mcp.atlassian.com/v2/mcp?tools=all" {
 			return mcpconfig.DiscoverWithClient(ctx, fixtureFlat.URL+"?tools=all", token, fixtureFlat.Client())
 		}
@@ -241,6 +251,9 @@ func run() error {
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		if fixture := headerFixtures[endpoint]; fixture != nil {
+			return mcpconfig.CallWithClient(ctx, fixture.URL, token, name, args, fixture.Client())
+		}
 		if endpoint == "https://mcp.atlassian.com/v2/mcp?tools=all" {
 			return mcpconfig.CallWithClient(ctx, fixtureFlat.URL+"?tools=all", token, name, args, fixtureFlat.Client())
 		}

@@ -9,14 +9,28 @@ import (
 	"sync/atomic"
 )
 
-func New() *httptest.Server { return newServer(false) }
+func New() *httptest.Server { return newServer(false, nil) }
 
 // NewRecovering expires every first session before dispatch to exercise recovery.
-func NewRecovering() *httptest.Server { return newServer(true) }
-func newServer(recovering bool) *httptest.Server {
+func NewRecovering() *httptest.Server                           { return newServer(true, nil) }
+func NewWithHeaders(headers map[string]string) *httptest.Server { return newServer(false, headers) }
+func newServer(recovering bool, headers map[string]string) *httptest.Server {
 	var sessions atomic.Int64
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer fixture-mcp-token" {
+		valid := true
+		if headers == nil {
+			valid = r.Header.Get("Authorization") == "Bearer fixture-mcp-token"
+		} else {
+			for name, value := range headers {
+				if r.Header.Get(name) != value {
+					valid = false
+				}
+			}
+			if _, ok := headers["Langsmith-Api-Key"]; ok && r.Header.Get("Authorization") != "" {
+				valid = false
+			}
+		}
+		if !valid {
 			http.Error(w, "fixture authentication required", 401)
 			return
 		}

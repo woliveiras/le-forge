@@ -138,9 +138,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		if e == nil {
 			req.Header.Set("Mcp-Session-Id", session)
 			req.Header.Set("MCP-Protocol-Version", protocol)
-			if token != "" {
-				req.Header.Set("Authorization", authorizationHeader(ctx, token))
-			}
+			applyTransportHeaders(ctx, req, token)
 			var res *http.Response
 			res, e = client.Do(req)
 			if e == nil {
@@ -173,9 +171,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		if session != "" {
 			req.Header.Set("Mcp-Session-Id", session)
 		}
-		if token != "" {
-			req.Header.Set("Authorization", authorizationHeader(ctx, token))
-		}
+		applyTransportHeaders(ctx, req, token)
 		res, e := client.Do(req)
 		if e != nil {
 			var safe *DiscoveryError

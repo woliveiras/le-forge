@@ -16,7 +16,7 @@ export function templateEndpoint(template: MCPTemplate, parameters: Record<strin
 
 export function templateDraft(input: MCPConnectionInput, template: MCPTemplate, parameters: Record<string,string> = {}): MCPConnectionInput {
   const endpoint = templateEndpoint(template, parameters);
-  const mode = input.oauth ? 'oauth' : 'bearer';
+  const mode = input.oauth ? 'oauth' : input.credentialType ?? 'bearer';
   if (template.authenticationModes?.length && !template.authenticationModes.includes(mode)) throw new Error('Choose a supported authentication mode before applying this template.');
   const issuer = endpoint.replace(/\/api\/v4\/mcp$/, '');
   const oauth = template.id === 'gitlab' && input.oauth && input.oauth.issuer !== issuer ? {...input.oauth,issuer,clientId:''} : input.oauth;

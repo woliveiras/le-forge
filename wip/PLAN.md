@@ -1404,3 +1404,16 @@ check the encoded pair, email and token. Replacement/clear, endpoint/mode change
 failed discovery and exact per-agent grants retain their existing boundaries.
 Unit, TLS manager/storage integration and browser fixtures cover the contract.
 Real corporate access and scope/site qualification remain pending.
+
+### Typed MCP headers for dbt and standalone LangSmith (2026-10-18)
+
+Custom connections support an encrypted standalone LangSmith API-key mode and
+bounded, named metadata settings. dbt accepts numeric production/development/user
+IDs with Bearer/OAuth; standalone LangSmith accepts a workspace UUID and reviewed
+US/EU API endpoints. Arbitrary names, Host/protocol headers, malformed values and
+unreviewed upstream URLs are rejected. Metadata changes invalidate discovery and
+require token replacement/clear or renewed OAuth authorization. The UI uses typed
+fields without exposing stored keys. Unit, real TLS transport/storage integration
+and browser fixtures cover persistence, calls, discovery and invalid settings.
+This profile does not qualify hosted LangSmith OAuth, self-hosted private URLs,
+provider tool permissions, Sentry or Databricks; those remain separate work.

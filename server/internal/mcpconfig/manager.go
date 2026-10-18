@@ -31,6 +31,7 @@ type Credential struct {
 	Clear    bool   `json:"clear,omitempty"`
 }
 type Input struct {
+	MetadataHeaders    map[string]string `json:"metadataHeaders,omitempty"`
 	CredentialType     string            `json:"credentialType,omitempty"`
 	TemplateParameters map[string]string `json:"templateParameters,omitempty"`
 	CallsPerMinute     int               `json:"callsPerMinute,omitempty"`
@@ -50,6 +51,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	MetadataHeaders      map[string]string `json:"metadataHeaders,omitempty"`
 	CredentialType       string            `json:"credentialType,omitempty"`
 	TemplateParameters   map[string]string `json:"templateParameters,omitempty"`
 	CallsPerMinute       int               `json:"callsPerMinute,omitempty"`
@@ -94,6 +96,9 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateMetadataHeaders(in); err != nil {
+		return err
+	}
 	if err := validateCredentialMode(in); err != nil {
 		return err
 	}
@@ -224,14 +229,14 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			return View{}, storage.ErrConflict
 		}
 	}
-	if (r.Endpoint != "" && r.Endpoint != in.Endpoint || (r.CredentialType == "basic") != (in.CredentialType == "basic")) && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
-		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint or credential type", ErrInvalid)
+	if (r.Endpoint != "" && r.Endpoint != in.Endpoint || credentialKind(r.CredentialType) != credentialKind(in.CredentialType) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders)) && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
+		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint, credential type or metadata headers", ErrInvalid)
 	}
 	var oldOAuth *OAuthConfig
 	if r.OAuth != nil {
 		oldOAuth = &r.OAuth.OAuthConfig
 	}
-	oauthChanged := r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
+	oauthChanged := !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
 	if oauthChanged {
 		r.Registration = nil
 		if in.OAuth != nil && !manualOAuth(in.OAuth) {
@@ -261,7 +266,8 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			}
 		}
 	}
-	changed := r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	changed := !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.MetadataHeaders = in.MetadataHeaders
 	r.CredentialType = in.CredentialType
 	r.CallsPerMinute = in.CallsPerMinute
 	r.Template = in.Template

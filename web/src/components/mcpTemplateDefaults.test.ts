@@ -17,3 +17,9 @@ it('requires a new client identity when selecting another GitLab instance',()=>{
  expect(()=>templateDraft({...input,oauth:undefined},template)).toThrow(/authentication/);
  expect(()=>templateEndpoint(template,{instance:'https://gitlab.example/?token=x'})).toThrow();
 });
+
+it('does not reinterpret typed credentials as Bearer during template upgrades',()=>{
+ for(const credentialType of ['basic','langsmith'] as const){
+  expect(()=>templateDraft({id:'typed',name:'Typed',service:'generic',endpoint:'https://fixture.example/mcp',enabled:true,credentialType},github)).toThrow(/authentication/);
+ }
+});
