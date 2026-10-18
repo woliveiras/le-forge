@@ -226,3 +226,8 @@ tree reads this index instead of guessing relationships from recent history.
 Durable cooperative cancellation markers live in settings under
 `execution-control/cancel/<execution-id>` with first-request actor/time and scope.
 They use revision-zero compare-and-set creation; retries do not overwrite them.
+
+Tree token admission uses CAS settings at `delegation/budget/{rootExecutionId}`.
+The bounded per-call ledger survives process restarts, keeps settlement idempotent,
+and separates held reservations from known/estimated charges. It needs no schema
+migration; see [delegation](delegation.md#cumulative-tree-token-budget).

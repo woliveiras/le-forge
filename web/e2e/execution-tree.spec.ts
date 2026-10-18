@@ -10,6 +10,8 @@ for(const scope of ['child','tree'] as const){
   let approval:{id:string;executionId:string;detail:{parentExecutionId:string}}|undefined;
   await expect.poll(async()=>{approval=(await(await page.request.get('/api/v1/approvals?graph='+id,{headers:admin})).json()).find((a:{kind:string;status:string})=>a.kind==='delegation'&&a.status==='pending');return !!approval;}).toBe(true);
   const child=approval!.executionId,root=approval!.detail.parentExecutionId;
+  const held=await(await page.request.get('/api/v1/executions/'+root+'/tree',{headers:admin})).json();
+  expect(held.budget.reserved).toBeGreaterThan(0);
   await page.goto('/#/g/'+id+'/runs?execution='+child+'&section=tree');
   const tree=page.getByRole('region',{name:'Execution tree',exact:true});await expect(tree.getByRole('link',{name:'parent · '+root})).toBeVisible();
   await page.evaluate(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));await page.reload();
@@ -25,6 +27,14 @@ for(const scope of ['child','tree'] as const){
   await expect.poll(async()=>(await(await page.request.get('/api/v1/executions/'+root,{headers:admin})).json()).status).toBe(scope==='child'?'succeeded':'cancelled');
   await expect.poll(async()=>(await(await page.request.get('/api/v1/executions/'+child,{headers:admin})).json()).status).toBe('cancelled');
   await tree.getByRole('button',{name:'Refresh tree'}).click();await expect(tree.getByRole('button',{name:'Stop child'})).toBeDisabled();
+  const settled=await(await page.request.get('/api/v1/executions/'+root+'/tree',{headers:admin})).json();
+  expect(settled.budget.reserved).toBe(0);
+  // This fixture omits parent usage: dispatched parent calls retain estimates,
+  // while the child cancelled before inference is refunded in full.
+  expect(settled.budget.estimated).toBeGreaterThanOrEqual(held.budget.estimated);
+  expect(settled.budget.charged).toBe(settled.budget.estimated);
+  if(scope==='tree')expect(settled.budget.estimated).toBe(held.budget.estimated);
+  await expect(page.getByRole('region',{name:'Tree token budget',exact:true})).toContainText('Reserved: 0');
   const retry=await page.request.post('/api/v1/executions/'+child+'/cancel',{headers:admin,data:{scope,confirm:true}});
   expect(retry.status()).toBe(200);expect((await retry.json()).alreadyTerminal).toBe(true);
   const approvals=await(await page.request.get('/api/v1/approvals?graph='+id,{headers:admin})).json();expect(approvals.find((a:{id:string})=>a.id===approval!.id).status).toBe('expired');

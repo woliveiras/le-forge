@@ -704,3 +704,15 @@ events; it does not claim complete history, a new persisted task entity, or a wo
 completion percentage. Operators/admins use existing approval actions; environment
 approval remains admin-only. Viewers have no decision controls. Server authorization
 continues to apply to every read and mutation. Workspace inspection remains read-only.
+
+### Native delegation tree token admission — implemented
+
+A native parent explicitly granted `delegation.request` shares a persistent token
+ledger with its analysis children. Administration configures `maxTreeTokens`;
+the tighter parent limit applies. Reservation precedes dispatch and child approval.
+Settlement is idempotent per model call and never sums inclusive execution totals.
+Pre-dispatch failure/cancellation releases the reservation; unknown post-dispatch
+usage becomes an estimated charge, and storage failures cannot replenish budget.
+Runs exposes charges, reservations and estimates under existing read permissions.
+This does not establish a provider billing guarantee, automatic crash refunds,
+external-runtime accounting or a monetary ceiling. See [delegation](delegation.md#cumulative-tree-token-budget).

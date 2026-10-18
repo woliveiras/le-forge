@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it} from 'vitest';
 import {fakeApi,apiError} from '../test/fakeApi';
 import {DelegationSection} from './DelegationSection';
-const current={revision:0,policy:{enabled:true,approvalMode:'required',maxDepth:1,maxChildrenPerExecution:3,maxConcurrentChildren:4,maxDurationSeconds:120,maxOutputTokens:1024,maxObjectiveBytes:4096,maxResultBytes:16384}};
+const current={revision:0,policy:{enabled:true,approvalMode:'required',maxDepth:1,maxChildrenPerExecution:3,maxConcurrentChildren:4,maxDurationSeconds:120,maxOutputTokens:1024,maxObjectiveBytes:4096,maxResultBytes:16384,maxTreeTokens:65536}};
 const profiles=[{revision:0,profile:{id:'analysis',name:'Analysis',instructions:'Review text',enabled:true,maxOutputTokens:1024}}];
 afterEach(cleanup);
 it('reads policy and profiles without exposing edits to non-admins',async()=>{
@@ -48,4 +48,16 @@ it('keeps failed reads unavailable and rejects invalid policy limits',async()=>{
  render(<DelegationSection canManage/>);expect(await screen.findByText('storage unavailable')).toBeTruthy();expect(screen.queryByLabelText('Approval mode')).toBeNull();
  fail=false;await userEvent.click(screen.getByRole('button',{name:'Reload delegation policy'}));const input=await screen.findByLabelText('Concurrent children');
  await userEvent.clear(input);await userEvent.type(input,'33');expect((screen.getByRole('button',{name:'Review delegation policy'}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('reviews and persists the tree token ceiling through the configuration API',async()=>{
+ const backend=fakeApi({'GET /api/v1/delegation-policy':()=>current,'GET /api/v1/delegation-profiles':()=>profiles,'PUT /api/v1/delegation-policy':c=>({...current,revision:1,policy:c.body})});
+ render(<DelegationSection canManage/>);
+ const input=await screen.findByLabelText('Tree token budget');
+ await userEvent.clear(input);await userEvent.type(input,'8000');
+ await userEvent.click(screen.getByRole('button',{name:'Review delegation policy'}));
+ expect(backend.calls.filter(c=>c.method==='PUT')).toHaveLength(0);
+ await userEvent.click(screen.getByRole('button',{name:'Confirm delegation policy'}));
+ await screen.findByText(/Delegation policy saved/);
+ expect(backend.find('PUT','/api/v1/delegation-policy')[0].body).toEqual({...current.policy,maxTreeTokens:8000});
 });

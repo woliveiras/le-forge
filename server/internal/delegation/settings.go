@@ -31,9 +31,12 @@ type Policy struct {
 	MaxOutputTokens         int    `json:"maxOutputTokens"`
 	MaxObjectiveBytes       int    `json:"maxObjectiveBytes"`
 	MaxResultBytes          int    `json:"maxResultBytes"`
+	MaxTreeTokens           int    `json:"maxTreeTokens"`
 }
 
-func DefaultPolicy() Policy { return Policy{true, "required", 1, 3, 4, 120, 1024, 4096, 16384} }
+func DefaultPolicy() Policy {
+	return Policy{true, "required", 1, 3, 4, 120, 1024, 4096, 16384, DefaultTreeTokens}
+}
 func (p Policy) Validate() error {
 	if p.ApprovalMode != "required" && p.ApprovalMode != "automatic" {
 		return errors.New("approvalMode must be required or automatic")
@@ -44,7 +47,7 @@ func (p Policy) Validate() error {
 	for _, v := range []struct {
 		name   string
 		n, max int
-	}{{"maxChildrenPerExecution", p.MaxChildrenPerExecution, 32}, {"maxConcurrentChildren", p.MaxConcurrentChildren, MaxSlots}, {"maxDurationSeconds", p.MaxDurationSeconds, 600}, {"maxOutputTokens", p.MaxOutputTokens, 4096}, {"maxObjectiveBytes", p.MaxObjectiveBytes, 16384}, {"maxResultBytes", p.MaxResultBytes, 65536}} {
+	}{{"maxChildrenPerExecution", p.MaxChildrenPerExecution, 32}, {"maxConcurrentChildren", p.MaxConcurrentChildren, MaxSlots}, {"maxDurationSeconds", p.MaxDurationSeconds, 600}, {"maxOutputTokens", p.MaxOutputTokens, 4096}, {"maxObjectiveBytes", p.MaxObjectiveBytes, 16384}, {"maxResultBytes", p.MaxResultBytes, 65536}, {"maxTreeTokens", p.MaxTreeTokens, MaxTreeTokens}} {
 		if v.n < 1 || v.n > v.max {
 			return fmt.Errorf("%s must be between 1 and %d", v.name, v.max)
 		}
@@ -103,7 +106,7 @@ func (m Manager) Policy(ctx context.Context) (PolicyView, error) {
 	if e != nil {
 		return v, e
 	}
-	v.Policy = Policy{}
+	v.Policy = Policy{MaxTreeTokens: DefaultTreeTokens}
 	if e = json.Unmarshal(r.Value, &v.Policy); e != nil {
 		return v, errors.New("invalid stored delegation policy")
 	}

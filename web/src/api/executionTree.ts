@@ -1,7 +1,7 @@
 import type { Execution } from './types';
 export type CancelScope = 'child'|'tree';
 export interface Cancellation { executionId:string; rootExecutionId:string; scope:CancelScope; actor:string; requestedAt:string }
-export interface ExecutionTree { rootExecutionId:string; selectedExecutionId:string; nodes:{execution:Execution;cancellation?:Cancellation}[] }
+export interface ExecutionTree { budget?:{limit:number;charged:number;reserved:number;estimated:number}; rootExecutionId:string; selectedExecutionId:string; nodes:{execution:Execution;cancellation?:Cancellation}[] }
 export function activeExecution(x:Execution) { return ['pending','running','awaiting_approval'].includes(x.status); }
 export function treeDepths(tree:ExecutionTree,graph:string,selected:string):Map<string,number> {
  const depths=new Map<string,number>();

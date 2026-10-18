@@ -85,6 +85,17 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	if err != nil {
 		return nil, errors.New("delegation: parent model unavailable")
 	}
+	request := &llm.ChatRequest{Model: model, System: system, Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: objective}}, MaxTokens: output}
+	reservation, err := t.reserveTokens(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if e := reservation.settle(ctx); e != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("settle child token budget: %w", e))
+			result = nil
+		}
+	}()
 	t.children++ // Rejected/failed requests also consume the bounded admission count.
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(policy.MaxDurationSeconds)*time.Second)
 	defer cancel()
@@ -206,9 +217,12 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	}
 	publish("delegation.started")
 	t.r.setState(domain.ReplicaRunning, "waiting for delegated analysis")
-	response, err := e.opt.Models.Chat(ctx, prov.Name(), &llm.ChatRequest{Model: model, System: system,
-		Messages: []llm.ChatMessage{{Role: llm.RoleUser, Content: objective}}, MaxTokens: output,
-		Metadata: map[string]string{"graph": x.GraphID, "node": x.NodeID, "execution": x.ID}})
+	request.Metadata = map[string]string{"graph": x.GraphID, "node": x.NodeID, "execution": x.ID}
+	if err = reservation.dispatch(ctx); err != nil {
+		return nil, err
+	}
+	response, err := e.opt.Models.Chat(ctx, prov.Name(), request)
+	reservation.report(response)
 	if response != nil {
 		x.Usage = domain.Usage{InputTokens: response.Usage.InputTokens, OutputTokens: response.Usage.OutputTokens}
 		t.mu.Lock()

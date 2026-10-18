@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
 	"net/http"
@@ -12,7 +13,14 @@ func (s *Server) executionTree(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, tree)
+	budget, err := (delegation.Manager{Store: s.Store}).Budget(r.Context(), tree.RootID)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, 200, struct {
+		executioncontrol.Tree
+		Budget *delegation.BudgetView `json:"budget,omitempty"`
+	}{tree, budget})
 	return nil
 }
 func (s *Server) cancelExecution(w http.ResponseWriter, r *http.Request) error {

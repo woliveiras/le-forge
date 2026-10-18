@@ -21,7 +21,7 @@ required; postponement does not qualify a provider or authorize external changes
 
 The native analysis delegation foundation and installation-managed profiles,
 approval policy, finite limits and execution-tree controls are implemented (section 8).
-Next: broader runtime/profile support and enforceable cumulative budgets. Preserve explicit delegation grants
+Next: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
 installation activation of the execution-tree controls was validated on 2026-10-18 (section 8).
 
@@ -435,6 +435,37 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 
 ### 8. Allow Dynamic Delegation to Subagents
 
+**Cumulative tree tokens (2026-10-18):** Native parents with an exact
+`delegation.request` grant share a persistent CAS ledger with their children.
+Admin policy adds `maxTreeTokens` (default 65,536), intersected with parent token
+limits. Estimated input plus bounded output is reserved per call, including
+children awaiting approval. Each call settles once; inclusive parent/child usage
+is never summed. Pre-dispatch failure/rejection/cancellation refunds the reservation;
+unknown post-dispatch usage converts it to an estimated charge. Reported overages
+block subsequent admission. Settlement failures fail closed without freeing token capacity.
+Existing policies receive the new default without rewriting stored settings.
+Runs exposes the limit, charges, held reservations and estimated portion. Fixed
+cardinality metrics and spans cover CAS operations. No grants, approval policies,
+recursive capability or external runtimes are added.
+
+This is conservative token admission, not a provider tokenizer or monetary cap.
+Crash-held reservations remain held; automatic reconciliation and ledger retention
+are pending. Installation activation and real-provider qualification are not
+claimed for this increment. See [delegation](../docs/delegation.md#cumulative-tree-token-budget).
+
+**Tree-token verification:** `make test` passed (Go/Python suites and 274
+frontend tests), as did `make lint`, `make build` and `make test-e2e` (57 main
+Chromium scenarios plus one hosted-CIMD scenario). Race-enabled delegation/engine
+budget tests passed. Tests cover atomic concurrent admission, idempotent settlement,
+provider-reported overages, independent trees, retained reservations after storage
+reopen, corrupt/unavailable storage, settlement write failures, legacy policy
+compatibility, pre-inference exhaustion, rejection and child/tree cancellation,
+unknown usage, parent/child accounting, admin review and existing viewer restrictions.
+Browser tests use a real disposable backend and deterministic model fixture.
+Initial new browser assertions incorrectly assumed the fixture reported parent
+usage; they now verify conservative estimated charges. An unrelated graph-drag
+visibility timeout passed on the full rerun without changing that test.
+
 **Execution tree and interruption (2026-10-18):** Runs → Execution tree now
 shows persisted parent/child links, agent/profile, state, duration and inclusive
 reported usage, independently of the recent execution/event windows. Viewer
@@ -552,9 +583,9 @@ and cooperative interruption for the current native scope are verified above.
 - [ ] Implement grant inheritance and guarantee that a child receives no more permissions than its parent.
 - [x] Implement a configurable global policy: approval required for every delegation or bounded automatic execution. — Implemented for native tool-free analysis profiles; richer runtimes and tool-bearing children remain separate.
 - [x] Implement pending-approval state and block the child execution until a human decision when required. — Native analysis foundation; see scope above.
-- [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost. — Bounded depth/count/concurrency/duration/output limits are implemented; hard cost and cumulative token budgets remain pending.
-- [ ] Account for consumption across the entire tree and stop/reject new delegations when limits are reached.
-- [ ] Implement child execution cancellation and defined propagation of failure/cancellation to the parent agent.
+- [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost. — Bounded depth/count/concurrency/duration/output limits are implemented; cumulative token admission is implemented for native trees; a hard monetary ceiling remains pending.
+- [x] Account for consumption across the entire tree and stop/reject new delegations when limits are reached. — Native tree CAS reservations and exactly-once settlement; unknown usage is charged conservatively. No monetary guarantee or external-runtime support.
+- [x] Implement child execution cancellation and defined propagation of failure/cancellation to the parent agent. — Native child/tree cooperative interruption and parent continuation are implemented; external-runtime propagation remains separate.
 - [x] Define behavior for timeout, failure, partial result, and delegation with no result. — Native analysis foundation; see scope above.
 - [ ] Add auditing with parent/child, objective, model/configuration, effective grants, approval decision, and consumption.
 
@@ -564,7 +595,7 @@ and cooperative interruption for the current native scope are verified above.
 - [x] Add a delegation-approval queue with enough context for an informed decision. — Native analysis foundation; see scope above.
 - [x] Show the execution tree, state, agent, duration, consumption, and parent/child relationship. — Persisted bounded trees for native delegation; usage is inclusive, not a monetary ceiling.
 - [x] Allow an operator to stop a child execution or tree according to their permissions. — Explicit confirmation, operator/admin API enforcement and durable cooperative cancellation; no hard process kill.
-- [ ] Add tests for approval/automatic policies, limits, grant inheritance, recursion, concurrency, and cancellation. — Required/automatic native analysis, empty grants, fixed depth, capacity reduction and revision invalidation are covered; nonempty inheritance/recursive execution and independent cancellation remain pending.
+- [ ] Add tests for approval/automatic policies, limits, grant inheritance, recursion, concurrency, and cancellation. — Required/automatic native analysis, empty grants, fixed depth, capacity reduction and revision invalidation are covered; native child/tree cancellation and token reservations are covered; nonempty inheritance and recursive execution remain pending.
 - [x] Add end-to-end tests for delegation, returning results to the parent, and viewing the tree in the interface. — Native approve/reject and automatic profile journeys, disabled profiles, explicit grants, viewer restrictions, stale updates and child/tree interruption are covered with a real disposable backend and deterministic model.
 
 **Done when:** Agents decide when to delegate; administrators choose individual approval or bounded automation; the server enforces limits and permissions; the tree is observable and controllable through the web.

@@ -8,6 +8,7 @@ export interface DelegationPolicy {
  maxOutputTokens: number;
  maxObjectiveBytes: number;
  maxResultBytes: number;
+ maxTreeTokens: number;
 }
 export interface DelegationProfile { id: string; name: string; instructions: string; enabled: boolean; maxOutputTokens: number }
 export interface DelegationPolicyView { policy: DelegationPolicy; revision: number; updatedBy?: string }
@@ -16,6 +17,7 @@ export const delegationLimits = [
  ['maxChildrenPerExecution', 'Children per parent', 32],
  ['maxConcurrentChildren', 'Concurrent children', 32],
  ['maxDurationSeconds', 'Duration including approval (seconds)', 600],
+ ['maxTreeTokens', 'Tree token budget', 10000000],
  ['maxOutputTokens', 'Output token allowance', 4096],
  ['maxObjectiveBytes', 'Objective size (bytes)', 16384],
  ['maxResultBytes', 'Result size (bytes)', 65536],

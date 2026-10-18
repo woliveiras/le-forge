@@ -634,7 +634,7 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 	return result, err
 }
 
-func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {
+func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (response *llm.ChatResponse, retErr error) {
 	ctx, done, controlErr := t.controlled(ctx)
 	defer done()
 	if controlErr != nil {
@@ -675,13 +675,35 @@ func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResp
 		req.Metadata = map[string]string{}
 	}
 	req.Metadata["graph"], req.Metadata["node"], req.Metadata["execution"] = t.gr.g.Metadata.ID, t.n.ID, t.x.ID
+	var reservation *tokenReservation
+	if t.hasTreeBudget() {
+		reservation, err = t.reserveTokens(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if e := reservation.settle(ctx); e != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("settle parent token budget: %w", e))
+				response = nil
+			}
+		}()
+		if err = reservation.dispatch(ctx); err != nil {
+			return nil, err
+		}
+	}
 	resp, err := e.opt.Models.Chat(ctx, prov.Name(), req)
+	if reservation != nil {
+		reservation.report(resp)
+	}
+	if resp != nil {
+		t.mu.Lock()
+		t.use.Add(domain.Usage{InputTokens: resp.Usage.InputTokens, OutputTokens: resp.Usage.OutputTokens})
+		t.mu.Unlock()
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	t.mu.Lock()
-	t.use.Add(domain.Usage{InputTokens: resp.Usage.InputTokens, OutputTokens: resp.Usage.OutputTokens})
-	t.mu.Unlock()
 	return resp, nil
 }
 

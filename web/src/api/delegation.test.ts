@@ -1,6 +1,6 @@
 import {expect,it} from 'vitest';
 import { validDelegationPolicy, validDelegationProfile, type DelegationPolicy } from './delegation';
-const policy:DelegationPolicy={enabled:true,approvalMode:'required',maxDepth:1,maxChildrenPerExecution:3,maxConcurrentChildren:4,maxDurationSeconds:120,maxOutputTokens:1024,maxObjectiveBytes:4096,maxResultBytes:16384};
+const policy:DelegationPolicy={enabled:true,approvalMode:'required',maxDepth:1,maxChildrenPerExecution:3,maxConcurrentChildren:4,maxDurationSeconds:120,maxOutputTokens:1024,maxObjectiveBytes:4096,maxResultBytes:16384,maxTreeTokens:65536};
 it('validates finite limits and supported approval/depth choices',()=>{
  expect(validDelegationPolicy(policy)).toBe(true);
  for(const patch of [{maxDepth:2},{maxConcurrentChildren:33},{maxDurationSeconds:0},{maxOutputTokens:1.5},{maxChildrenPerExecution:NaN}])expect(validDelegationPolicy({...policy,...patch})).toBe(false);

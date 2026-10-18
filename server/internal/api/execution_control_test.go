@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
 	"testing"
@@ -36,5 +37,34 @@ func TestExecutionTreeAPI(t *testing.T) {
 	}
 	if c := call(t, srv, "GET", "/api/v1/executions/missing/tree", viewerTok, "", "", nil); c != 404 {
 		t.Fatal(c)
+	}
+}
+
+func TestExecutionTreeBudgetUsesRootLedger(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	ctx := context.Background()
+	for _, x := range []*domain.Execution{{ID: "budget-root", GraphID: "g", RunID: "r", Status: domain.ExecRunning}, {ID: "budget-child", ParentExecutionID: "budget-root", GraphID: "g", RunID: "r", Status: domain.ExecRunning}} {
+		x.StartedAt = time.Now()
+		if e := a.Store.PutExecution(ctx, x); e != nil {
+			t.Fatal(e)
+		}
+	}
+	m := delegation.Manager{Store: a.Store}
+	if e := m.ReserveTokens(ctx, "budget-root", "call", 100, 20); e != nil {
+		t.Fatal(e)
+	}
+	if e := m.DispatchTokens(ctx, "budget-root", "call"); e != nil {
+		t.Fatal(e)
+	}
+	if e := m.SettleTokens(ctx, "budget-root", "call", 7, true); e != nil {
+		t.Fatal(e)
+	}
+	for _, id := range []string{"budget-root", "budget-child"} {
+		var view struct {
+			Budget delegation.BudgetView `json:"budget"`
+		}
+		if code := call(t, srv, "GET", "/api/v1/executions/"+id+"/tree", viewerTok, "", "", &view); code != 200 || view.Budget.Charged != 7 || view.Budget.Reserved != 0 || view.Budget.Limit != 100 {
+			t.Fatal(code, view)
+		}
 	}
 }

@@ -9,14 +9,14 @@ func TestPolicyValidation(t *testing.T) {
 	if e := DefaultPolicy().Validate(); e != nil {
 		t.Fatal(e)
 	}
-	for _, mut := range []func(*Policy){func(p *Policy) { p.ApprovalMode = "skip" }, func(p *Policy) { p.MaxDepth = 2 }, func(p *Policy) { p.MaxChildrenPerExecution = 0 }, func(p *Policy) { p.MaxConcurrentChildren = 33 }, func(p *Policy) { p.MaxDurationSeconds = 601 }, func(p *Policy) { p.MaxOutputTokens = -1 }, func(p *Policy) { p.MaxObjectiveBytes = 16385 }, func(p *Policy) { p.MaxResultBytes = 65537 }} {
+	for _, mut := range []func(*Policy){func(p *Policy) { p.ApprovalMode = "skip" }, func(p *Policy) { p.MaxDepth = 2 }, func(p *Policy) { p.MaxChildrenPerExecution = 0 }, func(p *Policy) { p.MaxConcurrentChildren = 33 }, func(p *Policy) { p.MaxDurationSeconds = 601 }, func(p *Policy) { p.MaxOutputTokens = -1 }, func(p *Policy) { p.MaxObjectiveBytes = 16385 }, func(p *Policy) { p.MaxResultBytes = 65537 }, func(p *Policy) { p.MaxTreeTokens = 0 }, func(p *Policy) { p.MaxTreeTokens = MaxTreeTokens + 1 }} {
 		p := DefaultPolicy()
 		mut(&p)
 		if p.Validate() == nil {
 			t.Fatalf("accepted %+v", p)
 		}
 	}
-	p := Policy{true, "automatic", 1, 32, 32, 600, 4096, 16384, 65536}
+	p := Policy{true, "automatic", 1, 32, 32, 600, 4096, 16384, 65536, MaxTreeTokens}
 	if e := p.Validate(); e != nil {
 		t.Fatal(e)
 	}

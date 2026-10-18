@@ -19,7 +19,7 @@ required; postponement does not qualify a provider or authorize external changes
 
 The native analysis delegation foundation and installation-managed profiles,
 approval policy, finite limits and execution-tree controls are implemented (section 8).
-Next: broader runtime/profile support and enforceable cumulative budgets. Preserve explicit delegation grants
+Next: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
 installation activation of the execution-tree controls was validated on 2026-10-18 (section 8).
 
@@ -547,6 +547,37 @@ Define clear precedence: global, graph, agent, and task instructions; repository
 **Delivered scope:** Admin-managed revisioned Markdown skills, explicit graph/default/project opt-ins and narrower agent selections are available in **Skills & steering**. Project sources are immediate `.leforge/steering/*.md` files in the authorized workspace. Immutable execution manifests show included content, revision/hash and omission reasons. Bounded composition preserves mandatory agent/task text; graphs without opt-in retain their previous prompt semantics. This does not execute skill scripts, discover arbitrary instruction formats, grant permissions or implement delegation. Limits and verification are recorded in [instructions.md](../docs/instructions.md).
 
 ### 8. Allow Dynamic Delegation to Subagents
+
+**Cumulative tree tokens (2026-10-18):** Native parents with an exact
+`delegation.request` grant share a persistent CAS ledger with their children.
+Admin policy adds `maxTreeTokens` (default 65,536), intersected with parent token
+limits. Estimated input plus bounded output is reserved per call, including
+children awaiting approval. Each call settles once; inclusive parent/child usage
+is never summed. Pre-dispatch failure/rejection/cancellation refunds the reservation;
+unknown post-dispatch usage converts it to an estimated charge. Reported overages
+block subsequent admission. Settlement failures fail closed without freeing token capacity.
+Existing policies receive the new default without rewriting stored settings.
+Runs exposes the limit, charges, held reservations and estimated portion. Fixed
+cardinality metrics and spans cover CAS operations. No grants, approval policies,
+recursive capability or external runtimes are added.
+
+This is conservative token admission, not a provider tokenizer or monetary cap.
+Crash-held reservations remain held; automatic reconciliation and ledger retention
+are pending. Installation activation and real-provider qualification are not
+claimed for this increment. See [delegation](../docs/delegation.md#cumulative-tree-token-budget).
+
+**Tree-token verification:** `make test` passed (Go/Python suites and 274
+frontend tests), as did `make lint`, `make build` and `make test-e2e` (57 main
+Chromium scenarios plus one hosted-CIMD scenario). Race-enabled delegation/engine
+budget tests passed. Tests cover atomic concurrent admission, idempotent settlement,
+provider-reported overages, independent trees, retained reservations after storage
+reopen, corrupt/unavailable storage, settlement write failures, legacy policy
+compatibility, pre-inference exhaustion, rejection and child/tree cancellation,
+unknown usage, parent/child accounting, admin review and existing viewer restrictions.
+Browser tests use a real disposable backend and deterministic model fixture.
+Initial new browser assertions incorrectly assumed the fixture reported parent
+usage; they now verify conservative estimated charges. An unrelated graph-drag
+visibility timeout passed on the full rerun without changing that test.
 
 **Execution tree and interruption (2026-10-18):** Runs → Execution tree now
 shows persisted parent/child links, agent/profile, state, duration and inclusive

@@ -27,3 +27,11 @@ it('allows abandoning review and retries a failed tree stop without pretending s
  render(<ExecutionTreeView graphId="g" executionId="c" role="admin"/>);await userEvent.click(await screen.findByRole('button',{name:'Stop entire tree'}));await userEvent.click(screen.getByRole('button',{name:'Keep running'}));expect(backend.calls.filter(c=>c.method==='POST')).toHaveLength(0);
  await userEvent.click(screen.getByRole('button',{name:'Stop entire tree'}));await userEvent.click(screen.getByRole('button',{name:'Confirm interruption'}));expect(await screen.findByText('Store unavailable')).toBeTruthy();fail=false;await userEvent.click(screen.getByRole('button',{name:'Confirm interruption'}));expect(await screen.findByText('The execution has already finished.')).toBeTruthy();expect(backend.find('POST','/api/v1/executions/r/cancel')[0].body).toEqual({scope:'tree',confirm:true});
 });
+
+it('shows charged, reserved and estimated tree totals without summing inclusive execution usage',async()=>{
+ fakeApi({'GET /api/v1/executions/c/tree':()=>({...tree,budget:{limit:1000,charged:200,reserved:300,estimated:50}})});
+ render(<ExecutionTreeView graphId="g" executionId="c" role="viewer"/>);
+ const budget=await screen.findByRole('region',{name:'Tree token budget'});
+ expect(budget.textContent).toContain('Limit: 1000 · Charged: 200 · Reserved: 300 · Estimated charges: 50');
+ expect(budget.textContent).toContain('Parent and child calls are counted once');
+});

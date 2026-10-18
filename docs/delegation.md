@@ -102,12 +102,12 @@ sum parent and child totals. Native gateway inference is counted once, not again
 as runtime-local usage. Existing historical usage rows are unchanged. Admission
 uses a conservative byte-based input estimate and remaining parent token allowance;
 reported output over the limit is rejected. These are not a guaranteed monetary
-or provider-billing ceiling. Configurable cumulative budgets require stronger
+or provider-billing ceiling. Cumulative token admission is described below; hard billing ceilings require
 provider-specific enforcement and remain planned.
 
 Arbitrary tool-bearing children, other runtimes/models, external callbacks,
-idempotent delegation requests and enforceable cumulative budgets
-remain planned. Full configurable token/cost budgets are not implemented.
+idempotent delegation requests and enforceable monetary ceilings
+remain planned. Native cumulative token admission is implemented below.
 No installation activation or
 live-provider acceptance is claimed by the automated fixture tests.
 
@@ -166,3 +166,50 @@ Persisted markers survive service restart; existing interrupted-execution recove
 still applies. Markers are retained with installation settings; automatic marker
 retention/garbage collection is not implemented. Filesystem storage remains
 single-instance; live multi-process PostgreSQL validation is pending.
+
+## Cumulative tree token budget
+
+Administration → Delegation configures `maxTreeTokens` (1–10,000,000; default
+65,536). Existing stored policies that predate this field use the default;
+new policy writes must specify it. Native parents with an exact
+`delegation.request` grant share one durable budget with their analysis children.
+Non-delegating runs and external runtimes are unchanged. The tighter parent
+`limits.maxTokens` also applies. The first reservation fixes the tree ceiling;
+later accepted reservations can lower it, but a policy increase cannot replenish
+an existing tree. Child policy/profile snapshots are still checked before start.
+
+Each model call reserves the serialized request byte length plus 512 framing
+units and its output allowance before inference. A child reserves before waiting
+for approval. Parent requests without an output allowance use the policy's finite
+output allowance. This is conservative admission accounting, not a vendor-specific
+tokenizer, a guarantee of provider billing, or a monetary ceiling.
+
+A CAS ledger in installation settings (`delegation/budget/{rootExecutionId}`)
+serializes concurrent reservations and settlement across storage clients. Each call
+has a unique entry; settling the same entry twice cannot double-charge it, and a
+settled entry cannot be dispatched again. The ledger counts direct model calls,
+not the sum of inclusive parent and child execution usage. Reported overages are
+recorded in full and prevent further calls once the ceiling is reached.
+
+Rejection, capacity failure, invalidated configuration and cancellation before
+dispatch release the entire reservation. After dispatch, known positive usage is
+charged and unused reservation released. Missing, zero or invalid usage is unknown:
+the reservation becomes an estimated charge, including provider errors and
+cancellation. Admission to the model gateway is the dispatch boundary, so waiting
+inside a provider concurrency gate is conservatively considered uncertain too.
+Failure to persist settlement is returned to the caller and leaves the reservation
+held; it must never appear to free budget. A process restart does not refund held
+entries. Automatic crash reconciliation and ledger retention remain future work;
+no new delegation can consume an uncertain reservation's capacity.
+
+Runs → Execution tree exposes `limit`, `charged`, `reserved` and `estimated` to
+existing viewers. `estimated` is included in `charged`, not an additional amount.
+Historical trees without a ledger omit the budget. No prompts, credentials or
+reservation identities are included in this summary. API and operator permissions
+remain unchanged. Ledger size is bounded to 1,024 call entries per tree.
+
+Telemetry adds `leforge_tree_budget_operations_total{operation,outcome}` and
+`leforge_tree_budget_operation_duration_seconds{operation}` for CAS operations
+(`reserve`, `dispatch`, `settle`; outcomes `ok`, `exhausted`, `error`), with matching
+`delegation.token_budget.*` trace spans. Payloads and execution IDs are not metric
+labels. Existing model-usage metrics retain their reported-usage meaning.

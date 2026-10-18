@@ -895,6 +895,15 @@ paths:
                 properties:
                   rootExecutionId: {type: string}
                   selectedExecutionId: {type: string}
+                  budget:
+                    type: object
+                    description: Persisted native tree admission accounting; reported plus conservative unknown charges, counted once per model call. Not a billing guarantee. Absent on historical or non-delegating runs.
+                    required: [limit, charged, reserved, estimated]
+                    properties:
+                      limit: {type: integer}
+                      charged: {type: integer}
+                      reserved: {type: integer}
+                      estimated: {type: integer}
                   nodes:
                     type: array
                     maxItems: 256
@@ -1783,7 +1792,7 @@ components:
     DelegationPolicy:
       type: object
       additionalProperties: false
-      required: [enabled, approvalMode, maxDepth, maxChildrenPerExecution, maxConcurrentChildren, maxDurationSeconds, maxOutputTokens, maxObjectiveBytes, maxResultBytes]
+      required: [enabled, approvalMode, maxDepth, maxChildrenPerExecution, maxConcurrentChildren, maxDurationSeconds, maxOutputTokens, maxObjectiveBytes, maxResultBytes, maxTreeTokens]
       properties:
         enabled: {type: boolean}
         approvalMode: {type: string, enum: [required, automatic]}
@@ -1794,6 +1803,7 @@ components:
         maxOutputTokens: {type: integer, minimum: 1, maximum: 4096}
         maxObjectiveBytes: {type: integer, minimum: 1, maximum: 16384}
         maxResultBytes: {type: integer, minimum: 1, maximum: 65536}
+        maxTreeTokens: {type: integer, minimum: 1, maximum: 10000000, default: 65536}
     DelegationPolicyView:
       type: object
       properties:
