@@ -1481,3 +1481,16 @@ create OAuth clients, mutate repositories or execute Hugging Face Space compute.
 The normal offline suite skips network checks; explicit local execution passed.
 Authenticated vendor journeys and the rest of the first-wave catalogue remain
 pending rather than inferred from public discovery.
+
+### Warehouse MCP qualification boundary (2026-10-18)
+
+Reviewed official BigQuery/Snowflake contracts against the existing stateful
+transport. A public BigQuery stateless discovery probe returned nine tools with
+no authentication or query invocation. Its read-query schema lacks a maximum
+billed-bytes input; neither dry-run estimates nor client timeouts provide a hard
+cost ceiling. Snowflake documents lifecycle/notification/version exclusions and
+account-specific issuer/role/warehouse requirements; no live account was tested.
+The template guide now separates documented contracts, observed public evidence
+and pending transport/data/cost controls. No compatibility fallback or template
+is enabled from documentation alone. Documentation-only change; no behavior or
+installation changes and no new unit/integration tests required.

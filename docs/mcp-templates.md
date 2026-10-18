@@ -90,3 +90,68 @@ tool. Those acceptance cases remain pending with appropriate authorized accounts
 The [DeepWiki contract](https://docs.devin.ai/work-with-devin/deepwiki-mcp) and
 [Hugging Face server](https://github.com/huggingface/hf-mcp-server) describe the
 public endpoints used by these tests.
+
+## Warehouse protocol qualification (2026-10-18)
+
+These are candidates, not supported connection templates. The existing transport
+uses MCP 2025-06-18 with initialization, initialized notification and session
+cleanup. Do not bypass a failed handshake automatically or infer compatibility
+from a successful OAuth login.
+
+### BigQuery
+
+The [official MCP guide](https://docs.cloud.google.com/bigquery/docs/use-bigquery-mcp)
+describes stateless 2026-07-28 requests, no initialization/session handshake,
+request metadata/headers and possible multi-round-trip requests. IAM remains
+independent of OAuth consent: review MCP Tool User, BigQuery Job User and narrowly
+scoped Data Viewer permissions for the chosen identity and billing project.
+
+A credential-free `tools/list` probe to `https://bigquery.googleapis.com/mcp` on
+2026-10-18 returned HTTP 200 and nine tools using the advertised protocol and
+`Mcp-Method: tools/list`. No tool was invoked or job submitted. The live
+`execute_sql_readonly` schema requires `projectId` and `query`; it exposes
+`dryRun`, `jobTimeoutMs`, `timeoutMs` and `labels`, but no maximum-billed-bytes
+argument. This is catalogue evidence, not authenticated execution qualification.
+
+Before delivery:
+
+- Add an explicit versioned stateless transport profile with bounded metadata,
+  response parsing and unsupported multi-round-trip errors. Preserve DNS/TLS,
+  redirect, credential-redaction and no-replay guarantees.
+- Revalidate tool schemas at discovery; never forward arbitrary schema-specified
+  HTTP headers or accept agent-controlled billing projects without policy.
+- Separate metadata, read-query, write-query and cancellation grants. Read-only
+  SQL can still consume paid resources. A dry run estimates work; it is not a
+  reservation or enforceable spending ceiling. A client timeout does not prove
+  that a remote job stopped.
+- Require explicit billing-project/data boundaries and provider-enforced cost
+  controls before query execution; do not invent a maximum-bytes parameter.
+- Test denial, expiry, schema drift, asynchronous completion, cancellation and
+  uncertain outcomes with fixtures, then authorized disposable cloud resources.
+
+### Snowflake
+
+The [managed MCP guide](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-mcp)
+excludes MCP lifecycle phases, notifications and version negotiation. It supports
+up to 50 tools and may truncate SQL/generic results at 250 KB. OAuth can use
+Snowflake or an explicitly bound external identity provider; discover the chosen
+resource's issuer rather than assuming the account URL. Access also requires
+appropriate server/object privileges, a default role and default warehouse with
+warehouse usage. No account, credentials or live lifecycle were tested here.
+
+Before delivery:
+
+- Capture the chosen account's request/response contract in fixtures before
+  adding a lifecycle-free profile; do not reuse BigQuery semantics by analogy.
+- Validate account/database/schema/server parameters and exact resource/issuer
+  binding. Keep private networking subject to installation policy.
+- Document role and warehouse prerequisites, underlying object permissions,
+  credential renewal and revocation for the chosen authentication method.
+- Classify actual discovered tools and preserve exact agent grants. SQL/custom
+  tools need independent data and spending controls; truncation is visible,
+  never evidence that all rows were returned.
+- Test missing privileges, warehouse failures, truncation, expired credentials
+  and uncertain execution outcomes before an authorized account acceptance run.
+
+Neither provider currently has a LeForge query-cost guarantee. A template,
+fixture or public catalogue must not mark these authenticated journeys complete.
