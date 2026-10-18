@@ -50,7 +50,7 @@ func operationCatalogue(v View) View {
 	}
 	filtered := make([]Tool, 0, len(v.Tools))
 	for _, tool := range v.Tools {
-		if !blockedDispatcher(v, tool.Name) {
+		if !blockedDispatcher(v, tool.Name) && atlassianPolicyTool(v, tool) {
 			filtered = append(filtered, tool)
 		}
 	}

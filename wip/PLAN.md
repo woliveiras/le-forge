@@ -1553,3 +1553,22 @@ The browser save/reload scenario passed; the two affected frontend suites passed
 15 tests. The production stateless transport also discovered nine public BigQuery
 tools without credentials or query execution in an opt-in live test. Warehouse data
 and spending policies remain separate pending work, not implied by transport.
+
+### Atlassian product/site read policy (2026-10-18)
+
+Optional connection policy selects Jira/Confluence and exact site UUIDs. A finite
+six-operation read allowlist requires a discovered string cloudId field; unknown,
+cross-product, dispatcher, broad search, write and Bitbucket operations are excluded.
+The gateway checks current policy/arguments before credential access and dispatch,
+and policy changes invalidate catalogues and stale references. This is an operation
+and site-argument boundary, not a JQL/project/space or returned-link data filter.
+Existing connections are unchanged unless configured. Corporate live acceptance
+and broader product resource constraints remain pending.
+
+Validation for the read policy: unit tests cover invalid products/sites, finite
+catalogue classification and required site schemas. Manager/store/gateway
+integration verifies cross-product/site denial before dispatch, successful scoped
+reads and stale-reference rejection after a policy change. Component tests cover
+explicit opt-in and independent selections; browser/API acceptance proves
+save/reload, invalid-site rejection and viewer denial using disposable fixtures.
+No external Atlassian connection or credential was changed.

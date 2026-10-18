@@ -755,3 +755,31 @@ This is a bounded protocol option, not a qualified BigQuery/Snowflake profile,
 IAM setup, resource boundary or spending limit. Review the
 [warehouse qualification requirements](mcp-templates.md#warehouse-protocol-qualification-2026-10-18)
 before enabling data-query tools. Transport selection never grants agent access.
+
+## Atlassian read boundaries
+
+An administrator may enable **Restrict Atlassian products and sites** on a
+connection and select Jira and/or Confluence plus 1–32 exact cloud UUIDs.
+The reviewed allowlist is intentionally small:
+
+| Product | Eligible operation names |
+| --- | --- |
+| Jira | `getJiraIssue`, `listJiraProjects`, `searchJiraIssuesUsingJql` |
+| Confluence | `getConfluenceContent`, `listConfluenceSpaces`, `getConfluenceSpace` |
+
+These names follow the [official catalogue](https://developer.atlassian.com/cloud/rovo-mcp/guides/supported-tools/).
+Discovery must also provide a string `cloudId` property for an operation to remain
+eligible. Unknown tools, cross-product operations, broad search, site enumeration,
+dispatchers, writes and Bitbucket operations are excluded under this policy.
+Every call rechecks the current policy and its exact `cloudId` before accessing
+credentials or dispatching remotely. Missing IDs, site URLs and disallowed UUIDs
+are denied. Changing the policy invalidates discovery and stale tool instances.
+
+Obtain the site UUID from the administrator; this configuration does not call a
+site-enumeration tool automatically. Agent grants and upstream scopes/access are
+still required. This limits the selected operations and their site argument,
+not projects, spaces, linked content or the authenticated user's upstream access.
+JQL is not rewritten or treated as a project boundary. Returned attachment links
+are not fetched. Other provider resource constraints and live corporate acceptance
+remain pending. Existing connections retain their behavior unless this optional
+policy is explicitly configured.

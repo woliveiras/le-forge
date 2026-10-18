@@ -90,6 +90,9 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if len(inv.Args) > 64<<10 || json.Unmarshal(inv.Args, &obj) != nil || obj == nil {
 		return nil, fmt.Errorf("invalid MCP arguments: bounded JSON object required")
 	}
+	if !atlassianPolicyArguments(r.View, t.tool, obj) {
+		return nil, fmt.Errorf("%w: operation or cloud ID is outside the connection policy", tools.ErrDenied)
+	}
 	var token string
 	r, token, err = t.m.accessToken(ctx, r)
 	if err != nil {
