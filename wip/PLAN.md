@@ -1520,3 +1520,22 @@ Extended the opt-in public production-transport test to Context7, whose official
 guide permits anonymous basic access. Live discovery passed with two tools and
 no credentials or tool calls. Existing immutable template and permissions remain
 unchanged; authenticated/private/OAuth and tool-execution acceptance are pending.
+
+### Release 1 verification checkpoint (2026-10-18)
+
+After the implementation and acceptance commits, `make test`, `make lint` and
+`make build` passed again. Frontend coverage is 53 files / 290 tests; backend,
+Python SDK/example and script suites passed. The latest full browser run passed
+73 standard scenarios plus one hosted-CIMD scenario. Subsequent changes only
+added Go acceptance tests and documentation; concurrent scope acceptance passed
+five race-detector repetitions and the affected instructions/tools/engine suites.
+Public DeepWiki/Hugging Face/Context7 discovery and a granted DeepWiki read passed
+explicit opt-in checks. BigQuery public discovery was a separate protocol probe.
+
+This is not final Release 1 acceptance. Remaining implementation includes explicit
+warehouse transport/data-cost profiles, broader vendor resource constraints and
+monetary admission semantics, and the consolidated clean-install journey. Live
+vendor credentials/registration, approved writes, installation operations and
+human UX acceptance require their separately authorized targets. Rootless remains
+deferred and Release 2 remains untouched. No installation deployment or push was
+performed by this work.
