@@ -1064,3 +1064,8 @@ Keep generated dependencies and outputs out of an approved Docker context with
 continuation until a new review. Full Compose/devcontainer compatibility,
 replacement proposals, daemon-wide registry filtering and exact queue ETAs are
 separate increments, not implied by this release.
+
+Pausing a graph keeps its idle sandbox suspended when operator messages arrive.
+Queued messages wait for resume. Before another turn starts, the controller checks
+the persisted graph state; if that check fails, execution waits rather than
+assuming the graph is running.

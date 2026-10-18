@@ -91,8 +91,14 @@ test('idle suspension and message-driven resume preserve workspace contents', as
   await expect(page.locator('.file-content')).toContainText('workspace survives suspension');
   await page.getByRole('tab', { name: 'Graph', exact: true }).click();
   await agent(page);
+  await page.locator('.toolbar-run-controls').getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect.poll(async () => (await read(page, id, 'status')).state).toBe('paused');
   await page.getByRole('textbox', { name: 'Operator message' }).fill('Resume and keep the workspace');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('.toolbar-run-controls').getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  expect(await lifecycle('resume')).toBe(0);
+  expect(await read(page, id, 'executions')).toHaveLength(0);
+  await page.locator('.toolbar-run-controls').getByRole('button', { name: 'Resume', exact: true }).click();
   await executed(page, id);
   await expect.poll(() => lifecycle('resume')).toBe(1);
   await expect.poll(() => lifecycle('suspend')).toBe(2);

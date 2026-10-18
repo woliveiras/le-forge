@@ -1000,3 +1000,11 @@ modified during this browser check. Only browser-local guide progress changed.
 The implementation's passing unit/integration and 51 E2E scenarios remain the
 automated evidence; this activation adds installed-browser pause/resume evidence.
 Developer usability acceptance and a fresh-install exercise remain separate.
+
+### Release 1 validation correction: paused input admission
+
+- [x] Consult durable pause state before input consumption and sandbox resumption.
+  Unit cases cover stale local state, resume, node pause, stop and storage failure;
+  repeated integration/race tests cover an immediate message after pause and
+  verify it remains unconsumed until resume. Browser recovery coverage pauses,
+  sends input, resumes and checks the preserved workspace.

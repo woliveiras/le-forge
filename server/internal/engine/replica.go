@@ -104,12 +104,18 @@ func (r *replica) setNodePaused(p bool) {
 	}
 }
 
-func (r *replica) paused() bool {
+func (r *replica) paused(ctx context.Context) (bool, error) {
 	r.mu.Lock()
 	np := r.nodePaused
 	gr := r.run_
 	r.mu.Unlock()
-	return np || gr.isPaused()
+	// Reconciliation is asynchronous. A message can wake this replica before
+	// the in-memory graph has observed a successful pause request.
+	rec, err := gr.e.store.GetGraphRecord(ctx, gr.g.Metadata.ID)
+	if err != nil {
+		return true, err
+	}
+	return np || rec.DesiredState != domain.GraphRunning, nil
 }
 
 func (r *replica) finished() bool {
@@ -292,9 +298,15 @@ func (r *replica) run() {
 			completed = true
 			return
 		}
-		if r.paused() {
+		paused, pauseErr := r.paused(ctx)
+		if pauseErr != nil {
+			log.Warn("cannot check graph execution state", "err", pauseErr)
+			r.wait(ctx, time.Second)
+			continue
+		}
+		if paused {
 			r.setState(domain.ReplicaPaused, "")
-			r.wait(ctx, time.Hour)
+			r.wait(ctx, time.Second)
 			continue
 		}
 
@@ -361,6 +373,29 @@ func (r *replica) run() {
 		if ctx.Err() != nil {
 			for _, d := range dels {
 				_ = d.Nack(context.Background(), 0)
+			}
+			return
+		}
+
+		// A pause may arrive while fetching queue deliveries. Keep claimed inputs
+		// in this turn until resume; cancellation below returns deliveries.
+		for ctx.Err() == nil && !r.isStopping() {
+			paused, err := r.paused(ctx)
+			if err == nil && !paused {
+				break
+			}
+			if err != nil {
+				log.Warn("cannot check graph execution state", "err", err)
+			} else {
+				r.setState(domain.ReplicaPaused, "")
+			}
+			r.wait(ctx, time.Second)
+		}
+		if ctx.Err() != nil || r.isStopping() {
+			for _, d := range dels {
+				if err := d.Nack(context.Background(), 0); err != nil {
+					log.Warn("return paused delivery", "err", err)
+				}
 			}
 			return
 		}

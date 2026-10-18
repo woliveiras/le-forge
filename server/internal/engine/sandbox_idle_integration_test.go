@@ -222,6 +222,10 @@ spec:
 	if sb.resumes.Load() != 0 {
 		t.Fatal("paused graph resumed on message")
 	}
+	queued, err := r.store.ListOperatorMessages(r.ctx, "scheduled-idle", "worker", 10)
+	if err != nil || len(queued) != 1 || queued[0].Consumed != nil {
+		t.Fatalf("paused input must remain available: %v %v", queued, err)
+	}
 	if err := r.eng.GraphAction(r.ctx, "scheduled-idle", "resume", "test"); err != nil {
 		t.Fatal(err)
 	}

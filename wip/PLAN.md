@@ -1314,3 +1314,11 @@ subtree. Unit/integration/race tests cover depth denial, exact inclusive usage,
 shared-ledger settlement and cancellation during grandchild approval; browser
 coverage reviews the depth and displays a completed three-generation tree.
 External runtimes and a guaranteed monetary cap remain separate pending work.
+
+### Pause admission race correction (2026-10-18)
+
+A successful pause is consulted from durable graph state before claiming operator
+input and again after waiting for queue deliveries. A wake-up no longer relies on
+the asynchronous reconciler's cached state. Storage failures defer execution;
+paused deliveries wait for resume or are returned on cancellation. This preserves
+sandbox suspension and queued input when a message arrives immediately after pause.
