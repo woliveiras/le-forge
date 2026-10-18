@@ -14,6 +14,7 @@ import (
 type credentialSchemeKey struct{}
 
 func credentialContext(ctx context.Context, v View) context.Context {
+	ctx = context.WithValue(ctx, transportProfileKey{}, v.TransportProfile)
 	ctx = context.WithValue(ctx, metadataHeadersKey{}, v.MetadataHeaders)
 	return context.WithValue(ctx, credentialSchemeKey{}, v.CredentialType)
 }

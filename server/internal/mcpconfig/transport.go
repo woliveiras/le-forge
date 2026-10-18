@@ -22,6 +22,11 @@ func (e *DiscoveryError) Error() string  { return e.Reason }
 func discoveryError(reason string) error { return &DiscoveryError{Reason: reason} }
 
 const protocol = "2025-06-18"
+const statelessProfile = "stateless-2026-07-28"
+const statelessProtocol = "2026-07-28"
+
+type transportProfileKey struct{}
+
 const maxBody = 2 << 20
 
 func publicIP(ip netip.Addr) bool {
@@ -128,6 +133,7 @@ func sessionOperation(ctx context.Context, endpoint, token string, client *http.
 }
 func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Client, action func(rpcCall) error) (catalog []Tool, err error) {
 	session := ""
+	stateless := ctx.Value(transportProfileKey{}) == statelessProfile
 	defer func() {
 		if session == "" {
 			return
@@ -154,6 +160,18 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		}
 	}()
 	call := func(id int, method string, params any) (json.RawMessage, error) {
+		if stateless {
+			encoded, e := json.Marshal(params)
+			if e != nil {
+				return nil, discoveryError("invalid MCP request parameters")
+			}
+			var fields map[string]any
+			if json.Unmarshal(encoded, &fields) != nil || fields == nil {
+				return nil, discoveryError("invalid MCP request parameters")
+			}
+			fields["_meta"] = map[string]any{"io.modelcontextprotocol/protocolVersion": statelessProtocol, "io.modelcontextprotocol/clientCapabilities": map[string]any{}, "io.modelcontextprotocol/clientInfo": map[string]string{"name": "LeForge", "version": "1"}}
+			params = fields
+		}
 		msg := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
 		if id > 0 {
 			msg["id"] = id
@@ -165,7 +183,17 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json, text/event-stream")
-		if id != 1 {
+		if stateless {
+			req.Header.Set("MCP-Protocol-Version", statelessProtocol)
+			req.Header.Set("Mcp-Method", method)
+			if method == "tools/call" {
+				name, _ := params.(map[string]any)["name"].(string)
+				if !toolName.MatchString(name) {
+					return nil, discoveryError("invalid MCP tool name")
+				}
+				req.Header.Set("Mcp-Name", name)
+			}
+		} else if id != 1 {
 			req.Header.Set("MCP-Protocol-Version", protocol)
 		}
 		if session != "" {
@@ -197,7 +225,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 			}
 			return nil, nil
 		}
-		if id == 1 {
+		if id == 1 && !stateless {
 			session = res.Header.Get("Mcp-Session-Id")
 			if len(session) > 1024 || strings.IndexFunc(session, func(r rune) bool { return r < 0x21 || r > 0x7e }) >= 0 {
 				return nil, discoveryError("invalid MCP session")
@@ -254,21 +282,32 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		if json.Unmarshal(raw, &env) != nil || env.JSONRPC != "2.0" || env.ID != id || len(env.Error) > 0 || len(env.Result) == 0 {
 			return nil, discoveryError("invalid or failed MCP response")
 		}
+		if stateless {
+			var result map[string]json.RawMessage
+			if json.Unmarshal(env.Result, &result) != nil || result == nil {
+				return nil, discoveryError("invalid MCP result")
+			}
+			if _, exists := result["inputRequests"]; exists {
+				return nil, discoveryError("MCP additional input requests are unsupported; no automatic retry")
+			}
+		}
 		return env.Result, nil
 	}
-	init, e := call(1, "initialize", map[string]any{"protocolVersion": protocol, "capabilities": map[string]any{}, "clientInfo": map[string]string{"name": "LeForge", "version": "1"}})
-	if e != nil {
-		return nil, e
-	}
-	var hello struct {
-		Protocol     string                     `json:"protocolVersion"`
-		Capabilities map[string]json.RawMessage `json:"capabilities"`
-	}
-	if json.Unmarshal(init, &hello) != nil || hello.Protocol != protocol || hello.Capabilities["tools"] == nil {
-		return nil, discoveryError("MCP tools capability or protocol unavailable")
-	}
-	if _, e = call(0, "notifications/initialized", map[string]any{}); e != nil {
-		return nil, e
+	if !stateless {
+		init, e := call(1, "initialize", map[string]any{"protocolVersion": protocol, "capabilities": map[string]any{}, "clientInfo": map[string]string{"name": "LeForge", "version": "1"}})
+		if e != nil {
+			return nil, e
+		}
+		var hello struct {
+			Protocol     string                     `json:"protocolVersion"`
+			Capabilities map[string]json.RawMessage `json:"capabilities"`
+		}
+		if json.Unmarshal(init, &hello) != nil || hello.Protocol != protocol || hello.Capabilities["tools"] == nil {
+			return nil, discoveryError("MCP tools capability or protocol unavailable")
+		}
+		if _, e = call(0, "notifications/initialized", map[string]any{}); e != nil {
+			return nil, e
+		}
 	}
 	if action != nil {
 		return nil, action(call)
@@ -306,6 +345,9 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 			if !toolName.MatchString(t.Name) || names[t.Name] || len(t.Description) > 8192 || json.Unmarshal(t.InputSchema, &schema) != nil || schema["type"] != "object" {
 				return nil, discoveryError("invalid MCP tool definition")
 			}
+			if stateless && containsHeaderAnnotation(schema) {
+				return nil, discoveryError("MCP custom parameter headers are unsupported by this profile")
+			}
 			names[t.Name] = true
 			out = append(out, t)
 			if len(out) > 500 {
@@ -322,4 +364,26 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		seen[cursor] = true
 	}
 	return nil, discoveryError("MCP catalogue exceeds 20 pages")
+}
+
+// Reject annotated catalogues rather than silently omit required wire metadata.
+func containsHeaderAnnotation(value any) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		if _, ok := v["x-mcp-header"]; ok {
+			return true
+		}
+		for _, child := range v {
+			if containsHeaderAnnotation(child) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range v {
+			if containsHeaderAnnotation(child) {
+				return true
+			}
+		}
+	}
+	return false
 }

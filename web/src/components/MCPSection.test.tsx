@@ -116,3 +116,13 @@ it('submits Basic credentials together and clears both fields after saving',asyn
  expect((screen.getByLabelText('API token owner email') as HTMLInputElement).value).toBe('');
  expect((screen.getByLabelText('Personal API token') as HTMLInputElement).value).toBe('');
 });
+
+it('preserves an explicit stateless transport when editing and saving',async()=>{
+ const current={...connection,transportProfile:'stateless-2026-07-28',enabled:false,status:'disabled'};
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>[current],'PUT /api/v1/mcp/connections/team':()=>current});
+ render(<MCPSection role="admin"/>);
+ await userEvent.click(await screen.findByRole('button',{name:'Edit Team'}));
+ expect((screen.getByLabelText('Transport profile') as HTMLSelectElement).value).toBe('stateless-2026-07-28');
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(backend.find('PUT','/api/v1/mcp/connections/team')[0].body).toMatchObject({transportProfile:'stateless-2026-07-28'});
+});

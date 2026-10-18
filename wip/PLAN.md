@@ -1539,3 +1539,17 @@ vendor credentials/registration, approved writes, installation operations and
 human UX acceptance require their separately authorized targets. Rootless remains
 deferred and Release 2 remains untouched. No installation deployment or push was
 performed by this work.
+
+### Explicit stateless MCP transport (2026-10-18)
+
+Custom connections may select the bounded 2026-07-28 stateless transport while
+existing connections and pinned templates retain 2025-06-18 sessions. Requests
+carry matching protocol/body metadata and method/name headers; no handshake,
+session lifecycle or automatic tool replay occurs. Profile changes invalidate
+discovery and OAuth authorization. Unit validation, TLS transport and real
+API/storage/gateway tests cover exact grants, credential isolation, JSON/SSE,
+invalid responses, upstream failures and unsupported input/header requirements.
+The browser save/reload scenario passed; the two affected frontend suites passed
+15 tests. The production stateless transport also discovered nine public BigQuery
+tools without credentials or query execution in an opt-in live test. Warehouse data
+and spending policies remain separate pending work, not implied by transport.

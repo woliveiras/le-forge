@@ -93,9 +93,12 @@ public endpoints used by these tests.
 
 ## Warehouse protocol qualification (2026-10-18)
 
-These are candidates, not supported connection templates. The existing transport
+These are candidates, not supported connection templates. The default transport
 uses MCP 2025-06-18 with initialization, initialized notification and session
-cleanup. Do not bypass a failed handshake automatically or infer compatibility
+cleanup. Custom connections now have an explicit bounded stateless 2026-07-28
+option (see [MCP configuration](mcp.md#explicit-stateless-transport)); production
+transport discovery passed against the nine-tool public BigQuery catalogue.
+This does not qualify account authentication, query execution or spending controls. Do not bypass a failed handshake automatically or infer compatibility
 from a successful OAuth login.
 
 ### BigQuery
@@ -115,9 +118,10 @@ argument. This is catalogue evidence, not authenticated execution qualification.
 
 Before delivery:
 
-- Add an explicit versioned stateless transport profile with bounded metadata,
-  response parsing and unsupported multi-round-trip errors. Preserve DNS/TLS,
-  redirect, credential-redaction and no-replay guarantees.
+- The bounded stateless profile is implemented with metadata, response parsing
+  and explicit unsupported multi-round-trip errors, preserving DNS/TLS, redirect,
+  credential-redaction and no-replay guarantees. Extend only with qualified
+  custom-header/input-request contracts.
 - Revalidate tool schemas at discovery; never forward arbitrary schema-specified
   HTTP headers or accept agent-controlled billing projects without policy.
 - Separate metadata, read-query, write-query and cancellation grants. Read-only

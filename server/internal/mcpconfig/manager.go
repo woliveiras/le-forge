@@ -31,6 +31,7 @@ type Credential struct {
 	Clear    bool   `json:"clear,omitempty"`
 }
 type Input struct {
+	TransportProfile   string            `json:"transportProfile,omitempty"`
 	MetadataHeaders    map[string]string `json:"metadataHeaders,omitempty"`
 	CredentialType     string            `json:"credentialType,omitempty"`
 	TemplateParameters map[string]string `json:"templateParameters,omitempty"`
@@ -51,6 +52,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	TransportProfile     string            `json:"transportProfile,omitempty"`
 	MetadataHeaders      map[string]string `json:"metadataHeaders,omitempty"`
 	CredentialType       string            `json:"credentialType,omitempty"`
 	TemplateParameters   map[string]string `json:"templateParameters,omitempty"`
@@ -96,6 +98,12 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if in.TransportProfile != "" && in.TransportProfile != statelessProfile {
+		return fmt.Errorf("%w: unsupported transport profile", ErrInvalid)
+	}
+	if in.TransportProfile != "" && in.Template != nil {
+		return fmt.Errorf("%w: detach the template before selecting another transport profile", ErrInvalid)
+	}
 	if err := validateMetadataHeaders(in); err != nil {
 		return err
 	}
@@ -236,7 +244,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 	if r.OAuth != nil {
 		oldOAuth = &r.OAuth.OAuthConfig
 	}
-	oauthChanged := !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
+	oauthChanged := r.TransportProfile != in.TransportProfile || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.Service != in.Service || !reflect.DeepEqual(oldOAuth, in.OAuth) || in.OAuthClientSecret != nil || r.Endpoint != in.Endpoint
 	if oauthChanged {
 		r.Registration = nil
 		if in.OAuth != nil && !manualOAuth(in.OAuth) {
@@ -267,6 +275,7 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 		}
 	}
 	changed := !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.TransportProfile = in.TransportProfile
 	r.MetadataHeaders = in.MetadataHeaders
 	r.CredentialType = in.CredentialType
 	r.CallsPerMinute = in.CallsPerMinute

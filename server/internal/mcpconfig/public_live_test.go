@@ -74,3 +74,16 @@ func TestLiveDeepWikiReadThroughGateway(t *testing.T) {
 	}
 	t.Log("live anonymous public documentation read succeeded through exact gateway grant")
 }
+
+// Public catalogue only: no Google identity, query, job or billing operation.
+func TestLiveBigQueryStatelessDiscovery(t *testing.T) {
+	if os.Getenv("LEFORGE_TEST_PUBLIC_MCP") != "1" {
+		t.Skip("set LEFORGE_TEST_PUBLIC_MCP=1 for public network discovery")
+	}
+	ctx := credentialContext(t.Context(), View{TransportProfile: statelessProfile})
+	catalogue, err := Discover(ctx, "https://bigquery.googleapis.com/mcp", "")
+	if err != nil || len(catalogue) == 0 {
+		t.Fatal("public stateless discovery failed", err)
+	}
+	t.Logf("stateless public discovery returned %d tools; no query or account access tested", len(catalogue))
+}

@@ -734,3 +734,24 @@ follow tool-returned login links automatically. This profile does not implement
 service-principal `client_credentials` acquisition/renewal, legacy managed endpoint
 families, SQL cost limits or universal service scopes. Configuration fixtures do
 not establish live workspace acceptance; tool grants remain explicit per agent.
+
+## Explicit stateless transport
+
+Custom connections can select **Stateless MCP 2026-07-28 (bounded support)**.
+Omitting `transportProfile` preserves the existing session-based 2025-06-18
+behavior. Pinned templates retain their original protocol: detach the template
+before changing transport. Saving a profile change clears discovery and resets
+OAuth authorization; existing grants do not authorize a stale catalogue.
+
+The stateless path sends matching body metadata and protocol/method/name headers,
+without initialization, notifications, session reuse or cleanup. It preserves
+HTTPS/DNS protections, response/catalogue bounds, encrypted credentials and exact
+per-agent permissions. Tool calls are never automatically replayed. JSON and SSE
+responses are supported. Additional input requests (MRTR) and catalogues requiring
+`x-mcp-header` parameter mirroring fail explicitly; they are not silently ignored.
+See the [protocol binding](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http).
+
+This is a bounded protocol option, not a qualified BigQuery/Snowflake profile,
+IAM setup, resource boundary or spending limit. Review the
+[warehouse qualification requirements](mcp-templates.md#warehouse-protocol-qualification-2026-10-18)
+before enabling data-query tools. Transport selection never grants agent access.

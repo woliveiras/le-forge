@@ -21,6 +21,7 @@ export function templateEndpoint(template: MCPTemplate, parameters: Record<strin
 }
 
 export function templateDraft(input: MCPConnectionInput, template: MCPTemplate, parameters: Record<string,string> = {}): MCPConnectionInput {
+  if(input.transportProfile) throw new Error('Select the session-based transport before applying this template.');
   const endpoint = templateEndpoint(template, parameters);
   const mode = input.oauth ? 'oauth' : input.credentialType ?? 'bearer';
   if (template.authenticationModes?.length && !template.authenticationModes.includes(mode)) throw new Error('Choose a supported authentication mode before applying this template.');

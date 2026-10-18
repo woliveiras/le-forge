@@ -1859,6 +1859,7 @@ components:
       additionalProperties: false
       required: [id, name, service, endpoint, enabled]
       properties:
+        transportProfile: {type: string, enum: [stateless-2026-07-28], description: "Optional bounded stateless profile; omitted selects session-based MCP 2025-06-18. Not compatible with pinned templates."}
         callsPerMinute: {type: integer, minimum: 0, maximum: 60000, default: 0, description: "Shared fixed UTC-minute tool-call quota; zero is unlimited. Persisted across restart."}
         id: {type: string, pattern: "^[a-z][a-z0-9_-]{0,63}$"}
         name: {type: string, minLength: 1, maxLength: 120}
@@ -1875,6 +1876,7 @@ components:
     MCPConnection:
       type: object
       properties:
+        transportProfile: {type: string, enum: [stateless-2026-07-28]}
         callsPerMinute: {type: integer, minimum: 0, maximum: 60000, default: 0, description: "Shared fixed UTC-minute tool-call quota; zero is unlimited. Persisted across restart."}
         id: {type: string}
         name: {type: string}
