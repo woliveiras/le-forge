@@ -1,3 +1,4 @@
+import { DelegationSection } from './DelegationSection';
 import { useRef, useState } from 'react';
 import { Btn } from './common';
 import type { Info } from '../api/types';
@@ -12,11 +13,11 @@ import { HistoryRetentionSection } from './HistoryRetentionSection';
 import { SharedEnvironmentsSection } from './SharedEnvironmentsSection';
 import { ToolCatalog } from './ToolCatalog';
 
-export const administrationSections = ['health', 'network', 'resources', 'retention', 'tools'] as const;
+export const administrationSections = ['health', 'network', 'resources', 'retention', 'tools', 'delegation'] as const;
 export type AdministrationSection = typeof administrationSections[number];
 const titles: Record<AdministrationSection, string> = {
   health: 'System health', network: 'Network policies', resources: 'Shared images & caches',
-  retention: 'History retention', tools: 'Tool catalog',
+  retention: 'History retention', tools: 'Tool catalog', delegation: 'Delegation',
 };
 
 export function ConnectionsPage({ info, connectionID, connectionTab = 'overview', create, history, connectQuery, oauthQuery }: { info?: Info; connectionID?: string; connectionTab?: ConnectionTab; create?: boolean; history?: boolean; connectQuery?: string; oauthQuery?: string }) {
@@ -57,6 +58,7 @@ export function AdministrationPage({ info, infoError, section }: { info?: Info; 
       {section === 'resources' && <SharedEnvironmentsSection canManage={canManage} />}
       {section === 'retention' && <HistoryRetentionSection canManage={canManage} />}
       {section === 'tools' && <ToolCatalog />}
+      {section === 'delegation' && <DelegationSection canManage={canManage} />}
     </div>
   </div>;
 }

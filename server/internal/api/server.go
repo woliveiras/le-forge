@@ -108,6 +108,12 @@ func (s *Server) routes() {
 	O := config.RoleOperator
 	A := config.RoleAdmin
 	routes := []route{
+		{"GET /api/v1/delegation-policy", R, s.delegationPolicy},
+		{"PUT /api/v1/delegation-policy", A, s.delegationPolicy},
+		{"GET /api/v1/delegation-profiles", R, s.delegationProfiles},
+		{"POST /api/v1/delegation-profiles", A, s.delegationProfiles},
+		{"GET /api/v1/delegation-profiles/{profile}", R, s.delegationProfiles},
+		{"PUT /api/v1/delegation-profiles/{profile}", A, s.delegationProfiles},
 		{"GET /api/v1/mcp/connections", R, s.mcpList},
 		{"GET /api/v1/mcp/templates", R, s.mcpTemplates},
 		{"GET /api/v1/mcp/history", R, s.mcpHistory},

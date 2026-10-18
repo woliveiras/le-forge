@@ -1,0 +1,37 @@
+package delegation
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestPolicyValidation(t *testing.T) {
+	if e := DefaultPolicy().Validate(); e != nil {
+		t.Fatal(e)
+	}
+	for _, mut := range []func(*Policy){func(p *Policy) { p.ApprovalMode = "skip" }, func(p *Policy) { p.MaxDepth = 2 }, func(p *Policy) { p.MaxChildrenPerExecution = 0 }, func(p *Policy) { p.MaxConcurrentChildren = 33 }, func(p *Policy) { p.MaxDurationSeconds = 601 }, func(p *Policy) { p.MaxOutputTokens = -1 }, func(p *Policy) { p.MaxObjectiveBytes = 16385 }, func(p *Policy) { p.MaxResultBytes = 65537 }} {
+		p := DefaultPolicy()
+		mut(&p)
+		if p.Validate() == nil {
+			t.Fatalf("accepted %+v", p)
+		}
+	}
+	p := Policy{true, "automatic", 1, 32, 32, 600, 4096, 16384, 65536}
+	if e := p.Validate(); e != nil {
+		t.Fatal(e)
+	}
+}
+func TestProfileValidation(t *testing.T) {
+	for _, mut := range []func(*Profile){func(p *Profile) { p.ID = "../escape" }, func(p *Profile) { p.Name = " " }, func(p *Profile) { p.Instructions = "" }, func(p *Profile) { p.Instructions = "\x00" }, func(p *Profile) { p.Instructions = strings.Repeat("é", 2049) }, func(p *Profile) { p.MaxOutputTokens = 0 }, func(p *Profile) { p.MaxOutputTokens = 4097 }} {
+		p := DefaultProfile()
+		mut(&p)
+		if p.Validate() == nil {
+			t.Fatalf("accepted %+v", p)
+		}
+	}
+	p := DefaultProfile()
+	p.Instructions = strings.Repeat("é", 2048)
+	if e := p.Validate(); e != nil {
+		t.Fatal(e)
+	}
+}

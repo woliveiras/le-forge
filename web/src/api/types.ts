@@ -1,3 +1,4 @@
+import type { DelegationPolicyView, DelegationProfileView } from './delegation';
 // TypeScript mirrors of the Go domain types (server/internal/domain, runtime,
 // llm, tools). Field names are the Go JSON tags. Durations are Go duration
 // strings ("90s", "2h") or "" when unset.
@@ -307,6 +308,8 @@ export interface Usage {
 export interface Execution {
   parentExecutionId?: string;
   delegationTemplate?: string;
+  delegationConfig?: {policy:DelegationPolicyView;profile:DelegationProfileView};
+  delegationObjective?: string;
   approvalId?: string;
 
   id: string;

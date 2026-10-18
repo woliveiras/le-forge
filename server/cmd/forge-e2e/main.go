@@ -49,7 +49,12 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 				return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Parent received: " + m.Content}}, nil
 			}
 		}
-		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "delegate", Name: "delegation.request", Arguments: json.RawMessage(`{"template":"analysis","objective":"Summarize supplied fixture text without tools"}`)}}}}, nil
+		profile := "analysis"
+		if strings.Contains(r.Messages[0].Content, "custom-profile") {
+			profile = "browser-review"
+		}
+		args, _ := json.Marshal(map[string]string{"template": profile, "objective": "Summarize supplied fixture text without tools"})
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "delegate", Name: "delegation.request", Arguments: args}}}}, nil
 	}
 
 	if len(r.Messages) > 0 && (strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") || strings.Contains(r.Messages[0].Content, "mcp-recovery-fixture") || strings.Contains(r.Messages[0].Content, "mcp-call-fixture") || strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture")) {

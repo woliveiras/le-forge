@@ -196,10 +196,12 @@ type GraphRecord struct {
 
 // Execution is one turn of one replica.
 type Execution struct {
-	ParentExecutionID  string    `json:"parentExecutionId,omitempty"`
-	DelegationTemplate string    `json:"delegationTemplate,omitempty"`
-	DelegationModel    *ModelRef `json:"delegationModel,omitempty"`
-	ApprovalID         string    `json:"approvalId,omitempty"`
+	ParentExecutionID   string          `json:"parentExecutionId,omitempty"`
+	DelegationTemplate  string          `json:"delegationTemplate,omitempty"`
+	DelegationConfig    json.RawMessage `json:"delegationConfig,omitempty"`
+	DelegationObjective string          `json:"delegationObjective,omitempty"`
+	DelegationModel     *ModelRef       `json:"delegationModel,omitempty"`
+	ApprovalID          string          `json:"approvalId,omitempty"`
 
 	ID          string          `json:"id"`
 	GraphID     string          `json:"graphId"`

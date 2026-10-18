@@ -1,3 +1,4 @@
+import type { DelegationPolicy, DelegationPolicyView, DelegationProfile, DelegationProfileView } from './delegation';
 import type { MCPHistoryPage, MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
 import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
 import type {
@@ -160,6 +161,10 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  delegationPolicy: () => request<DelegationPolicyView>(`${V1}/delegation-policy`),
+  saveDelegationPolicy: (policy: DelegationPolicy, revision: number) => request<DelegationPolicyView>(`${V1}/delegation-policy`, {method:'PUT', body:policy, headers:{'If-Match':`"${revision}"`}}),
+  delegationProfiles: () => request<DelegationProfileView[]>(`${V1}/delegation-profiles`),
+  saveDelegationProfile: (profile: DelegationProfile, revision?: number) => request<DelegationProfileView>(`${V1}/delegation-profiles${revision === undefined ? '' : '/'+enc(profile.id)}`, {method:revision === undefined ? 'POST' : 'PUT', body:profile, headers:revision === undefined ? {} : {'If-Match':`"${revision}"`}}),
   mcpOAuthConfig: () => request<{callbackUrl:string}>(`${V1}/mcp/oauth/config`),
   previewMCPOAuth: (id: string) => request<{mode:string;reason:string}>(`${V1}/mcp/connections/${enc(id)}/oauth/preview`),
   startMCPOAuth: (id: string, mode?: string) => request<{url: string; state: string}>(`${V1}/mcp/connections/${enc(id)}/oauth/start${mode?`?registrationMode=${enc(mode)}`:""}`, {method:'POST'}),

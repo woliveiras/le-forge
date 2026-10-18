@@ -186,3 +186,8 @@ for supported namespaces, limits and the meaning of controller-offline recovery.
 
 See [delegation](delegation.md) for the explicit grant, mandatory approval, child
 execution records, event metadata, fixed limits and inclusive usage accounting.
+
+Delegation configuration adds `delegation.policy.updated` (revision, enabled,
+approvalMode) and `delegation.profile.updated` (profileId, revision, enabled), with
+the administrator actor. No profile instructions or objective text is included.
+Execution records carry the pinned policy/profile snapshot separately.

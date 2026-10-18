@@ -43,6 +43,97 @@ tags:
 security:
   - bearer: []
 paths:
+  /api/v1/delegation-policy:
+    get:
+      summary: Read the effective native delegation policy
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Built-in defaults (revision 0) or installation policy
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DelegationPolicyView'}
+    put:
+      summary: Replace the native delegation policy
+      x-leforge-role: admin
+      description: Finite limits only. New requests use this revision; waiting requests revalidate before inference. Already-started children retain their snapshots.
+      parameters:
+        - {in: header, name: If-Match, required: true, schema: {type: string}, description: Current revision including 0 for defaults}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DelegationPolicy'}
+      responses:
+        '200':
+          description: Saved revision
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DelegationPolicyView'}
+        '400': {description: Invalid configuration or missing revision}
+        '403': {description: Administrator required}
+        '409': {description: Stale revision}
+  /api/v1/delegation-profiles:
+    get:
+      summary: List enabled and disabled native analysis profiles
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Built-in analysis and custom profiles
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/DelegationProfileView'}}
+    post:
+      summary: Create an installation-approved native analysis profile
+      x-leforge-role: admin
+      description: Profiles cannot add tools, credentials, runtimes, model overrides or workspace access.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DelegationProfile'}
+      responses:
+        '201':
+          description: Created revision
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DelegationProfileView'}
+        '400': {description: Invalid profile}
+        '403': {description: Administrator required}
+        '409': {description: Duplicate profile ID}
+  /api/v1/delegation-profiles/{profile}:
+    parameters:
+      - {in: path, name: profile, required: true, schema: {type: string}}
+    get:
+      summary: Read a delegation profile revision
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Current profile
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DelegationProfileView'}
+        '404': {description: Unknown profile}
+    put:
+      summary: Update or disable a delegation profile
+      x-leforge-role: admin
+      parameters:
+        - {in: header, name: If-Match, required: true, schema: {type: string}, description: Current revision including 0 for the built-in analysis profile}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DelegationProfile'}
+      responses:
+        '200':
+          description: Saved revision; existing execution snapshots remain unchanged
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DelegationProfileView'}
+        '400': {description: Invalid profile or missing revision}
+        '403': {description: Administrator required}
+        '404': {description: Unknown profile}
+        '409': {description: Stale revision}
   /api/v1/skills:
     get:
       operationId: listSkills
@@ -1618,6 +1709,47 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    DelegationPolicy:
+      type: object
+      additionalProperties: false
+      required: [enabled, approvalMode, maxDepth, maxChildrenPerExecution, maxConcurrentChildren, maxDurationSeconds, maxOutputTokens, maxObjectiveBytes, maxResultBytes]
+      properties:
+        enabled: {type: boolean}
+        approvalMode: {type: string, enum: [required, automatic]}
+        maxDepth: {type: integer, const: 1}
+        maxChildrenPerExecution: {type: integer, minimum: 1, maximum: 32}
+        maxConcurrentChildren: {type: integer, minimum: 1, maximum: 32}
+        maxDurationSeconds: {type: integer, minimum: 1, maximum: 600}
+        maxOutputTokens: {type: integer, minimum: 1, maximum: 4096}
+        maxObjectiveBytes: {type: integer, minimum: 1, maximum: 16384}
+        maxResultBytes: {type: integer, minimum: 1, maximum: 65536}
+    DelegationPolicyView:
+      type: object
+      properties:
+        policy: {$ref: '#/components/schemas/DelegationPolicy'}
+        revision: {type: integer}
+        updatedBy: {type: string}
+    DelegationProfile:
+      type: object
+      additionalProperties: false
+      required: [id, name, instructions, enabled, maxOutputTokens]
+      properties:
+        id: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+        name: {type: string, description: Nonblank; at most 120 UTF-8 bytes}
+        instructions: {type: string, description: Nonblank valid text without NUL; at most 4096 UTF-8 bytes}
+        enabled: {type: boolean}
+        maxOutputTokens: {type: integer, minimum: 1, maximum: 4096}
+    DelegationProfileView:
+      type: object
+      properties:
+        profile: {$ref: '#/components/schemas/DelegationProfile'}
+        revision: {type: integer}
+        updatedBy: {type: string}
+    DelegationConfig:
+      type: object
+      properties:
+        policy: {$ref: '#/components/schemas/DelegationPolicyView'}
+        profile: {$ref: '#/components/schemas/DelegationProfileView'}
     MCPHistoryPage:
       type: object
       required: [entries, hasMore]
@@ -1978,6 +2110,8 @@ components:
         runId: {type: string}
         parentExecutionId: {type: string}
         delegationTemplate: {type: string}
+        delegationConfig: {$ref: "#/components/schemas/DelegationConfig"}
+        delegationObjective: {type: string}
         delegationModel: {type: object, additionalProperties: true}
         approvalId: {type: string}
         nodeId: {type: string}

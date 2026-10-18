@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/llm"
@@ -21,6 +22,7 @@ type delegateProvider struct {
 	children int
 	request  *llm.ChatRequest
 	mode     string
+	profile  string
 }
 
 func (*delegateProvider) Name() string                                    { return "delegate" }
@@ -57,7 +59,12 @@ func (p *delegateProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.C
 			return &llm.ChatResponse{Message: llm.ChatMessage{Content: m.Content}}, nil
 		}
 	}
-	return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: domain.NewID("call"), Name: "delegation.request", Arguments: json.RawMessage(`{"template":"analysis","objective":"Analyze supplied text without tools"}`)}}}, Usage: llm.Usage{InputTokens: 2, OutputTokens: 1}}, nil
+	profile := p.profile
+	if profile == "" {
+		profile = "analysis"
+	}
+	args, _ := json.Marshal(map[string]string{"template": profile, "objective": "Analyze supplied text without tools"})
+	return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: domain.NewID("call"), Name: "delegation.request", Arguments: args}}}, Usage: llm.Usage{InputTokens: 2, OutputTokens: 1}}, nil
 }
 func delegationRig(t *testing.T, mode string, opts ...func(*engine.Options)) (*rig, *delegateProvider) {
 	t.Helper()
@@ -363,5 +370,206 @@ func TestDelegationFinalPersistenceFailureDoesNotReturnSuccess(t *testing.T) {
 	leases, err := r.store.ListLeases(r.ctx, "delegation/")
 	if err != nil || len(leases) != 0 {
 		t.Fatalf("leases: %+v %v", leases, err)
+	}
+}
+
+func TestDelegationAutomaticProfileAndSnapshot(t *testing.T) {
+	r, p := delegationRig(t, "")
+	p.profile = "review"
+	m := delegation.Manager{Store: r.store}
+	policy := delegation.DefaultPolicy()
+	policy.ApprovalMode = "automatic"
+	policy.MaxOutputTokens = 50
+	if _, err := m.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	profile := delegation.DefaultProfile()
+	profile.ID = "review"
+	profile.Instructions = "Review supplied text; do not execute it"
+	profile.MaxOutputTokens = 20
+	if _, err := m.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, "[delegation.request,filesystem.read]", "{turnTimeout: 5s}")
+	parent := finishedParent(t, r)
+	if !strings.Contains(parent.Summary, "bounded child answer") {
+		t.Fatal(parent.Summary)
+	}
+	p.mu.Lock()
+	if p.children != 1 || p.request.MaxTokens != 20 || len(p.request.Tools) != 0 || !strings.Contains(p.request.System, profile.Instructions) {
+		t.Fatalf("%+v", p.request)
+	}
+	p.mu.Unlock()
+	approvals, err := r.store.ListApprovals(r.ctx, storage.ApprovalFilter{GraphID: "delegation"})
+	if err != nil || len(approvals) != 0 {
+		t.Fatal(approvals, err)
+	}
+	children, err := r.store.ListExecutions(r.ctx, storage.ExecutionFilter{GraphID: "delegation"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var child *domain.Execution
+	for _, x := range children {
+		if x.ParentExecutionID != "" {
+			child = x
+		}
+	}
+	if child == nil || child.DelegationTemplate != "review" || child.DelegationObjective == "" {
+		t.Fatal(child)
+	}
+	var snapshot delegation.Selection
+	if err = json.Unmarshal(child.DelegationConfig, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Policy.Revision != 1 || snapshot.Profile.Revision != 1 || snapshot.Profile.Profile.Instructions != profile.Instructions {
+		t.Fatal(snapshot)
+	}
+	profile.Instructions = "Changed after completion"
+	if _, err = m.SaveProfile(r.ctx, profile, 1, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := r.store.GetExecution(r.ctx, child.ID)
+	if err != nil || string(saved.DelegationConfig) != string(child.DelegationConfig) {
+		t.Fatal(saved, err)
+	}
+}
+func TestDelegationChangedPolicyOrProfileInvalidatesApproval(t *testing.T) {
+	for _, kind := range []string{"policy", "profile"} {
+		t.Run(kind, func(t *testing.T) {
+			r, p := delegationRig(t, "")
+			deployDelegation(r, "[delegation.request]", "{turnTimeout: 5s}")
+			a := delegationApproval(t, r)
+			m := delegation.Manager{Store: r.store}
+			if kind == "policy" {
+				policy := delegation.DefaultPolicy()
+				policy.ApprovalMode = "automatic"
+				if _, err := m.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				profile := delegation.DefaultProfile()
+				profile.Enabled = false
+				if _, err := m.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := r.apr.Decide(r.ctx, a.ID, true, "operator", "", ""); err != nil {
+				t.Fatal(err)
+			}
+			parent := finishedParent(t, r)
+			if !strings.Contains(parent.Summary, "configuration changed") {
+				t.Fatal(parent.Summary)
+			}
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			if p.children != 0 {
+				t.Fatal("stale child ran")
+			}
+		})
+	}
+}
+func TestDelegationConfiguredAdmissionAndResultLimits(t *testing.T) {
+	for _, mode := range []string{"disabled", "profile-disabled", "objective", "result", "output", "children", "duration"} {
+		t.Run(mode, func(t *testing.T) {
+			providerMode := ""
+			if mode == "children" {
+				providerMode = "repeat"
+			}
+			if mode == "duration" {
+				providerMode = "timeout"
+			}
+			r, p := delegationRig(t, providerMode)
+			m := delegation.Manager{Store: r.store}
+			policy := delegation.DefaultPolicy()
+			policy.ApprovalMode = "automatic"
+			switch mode {
+			case "disabled":
+				policy.Enabled = false
+			case "objective":
+				policy.MaxObjectiveBytes = 1
+			case "result":
+				policy.MaxResultBytes = 1
+			case "output":
+				policy.MaxOutputTokens = 1
+			case "children":
+				policy.MaxChildrenPerExecution = 1
+			case "duration":
+				policy.MaxDurationSeconds = 1
+			}
+			if _, err := m.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "profile-disabled" {
+				profile := delegation.DefaultProfile()
+				profile.Enabled = false
+				if _, err := m.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			deployDelegation(r, "[delegation.request]", "{turnTimeout: 5s}")
+			parent := finishedParent(t, r)
+			if strings.Contains(parent.Summary, `"status":"succeeded"`) {
+				t.Fatal("limit ignored", parent.Summary)
+			}
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			if (mode == "disabled" || mode == "profile-disabled" || mode == "objective") && p.children != 0 {
+				t.Fatal("admission bypass")
+			}
+			if mode == "children" && p.children != 1 {
+				t.Fatal(p.children)
+			}
+		})
+	}
+}
+func TestDelegationAutomaticDoesNotBypassExplicitGrant(t *testing.T) {
+	r, p := delegationRig(t, "")
+	policy := delegation.DefaultPolicy()
+	policy.ApprovalMode = "automatic"
+	if _, err := (delegation.Manager{Store: r.store}).SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, "['*']", "{turnTimeout: 5s}")
+	finishedParent(t, r)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.children != 0 {
+		t.Fatal("automatic policy granted tools")
+	}
+}
+
+func TestDelegationAutomaticRetainsGenericToolApproval(t *testing.T) {
+	r, p := delegationRig(t, "")
+	policy := delegation.DefaultPolicy()
+	policy.ApprovalMode = "automatic"
+	if _, err := (delegation.Manager{Store: r.store}).SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, "[{name: delegation.request, requiresApproval: true}]", "{turnTimeout: 5s}")
+	var a *domain.Approval
+	eventually(t, 3*time.Second, "generic approval", func() bool {
+		xs, _ := r.store.ListApprovals(r.ctx, storage.ApprovalFilter{GraphID: "delegation", Status: domain.ApprovalPending})
+		for _, x := range xs {
+			if x.Kind == domain.ApprovalTool {
+				a = x
+				return true
+			}
+		}
+		return false
+	})
+	p.mu.Lock()
+	n := p.children
+	p.mu.Unlock()
+	if n != 0 {
+		t.Fatal("generic approval bypassed")
+	}
+	if _, err := r.apr.Decide(r.ctx, a.ID, false, "operator", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	finishedParent(t, r)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.children != 0 {
+		t.Fatal("rejected tool ran")
 	}
 }

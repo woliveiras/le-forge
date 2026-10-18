@@ -13,7 +13,7 @@ schemas alongside the code.
 
 | Surface | Current contract and implementation | Known boundary |
 |---|---|---|
-| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and configurable delegation remain planned; the native analysis delegation foundation is implemented (see section 4). |
+| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and full delegation trees remain planned; native analysis profiles and configurable approval/limits are implemented (see section 4). |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, managed Docker reviews/previews, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
 | Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; native analysis delegation is implemented; external-runtime delegation remains planned. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
 | Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | MCP registration/discovery and gateway invocation enforce exact grants and current connection state; see [MCP limits](mcp.md). |
@@ -453,14 +453,20 @@ be used to read another graph's workspace.
 ### Dynamic child execution
 
 **Implemented foundation:** Native parents with the exact `delegation.request`
-grant can request a built-in `analysis` child, await mandatory operator approval,
-and receive its result. Children use the parent's model and have no tools,
+grant can request an installation analysis profile, follow its installation
+approval policy and receive the result. Children use the parent's model and have no tools,
 workspace, history or recursive delegation. Execution records, approval context,
-fixed shared-store capacity limits and parent links in Runs are implemented.
+bounded shared-store capacity limits and parent links in Runs are implemented.
 See [delegation](delegation.md) for the precise contract and limitations.
 
-**Planned extended contract:** The profile/policy APIs, `agent.delegate` capability
-and external-runtime callback below are not implemented by this foundation.
+**Implemented configuration:** Policy GET/PUT and profile list/create/read/update
+APIs now support native tool-free profiles, required/automatic approval and bounded
+limits. The console provides reviewed admin-only saves with revision conflicts.
+Execution snapshots pin policy/profile revisions; pending requests revalidate them.
+See [delegation](delegation.md) for the supported fields and hard bounds.
+
+**Planned extended contract:** The broader profile fields, profile deletion,
+`agent.delegate` capability and external-runtime callback below remain planned.
 They require a versioned transition from the narrower `delegation.request` tool.
 
 The installation administrator manages approved profiles and the global

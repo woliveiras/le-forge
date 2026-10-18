@@ -16,12 +16,12 @@ to the final Release 1 validation stage. Live vendor qualification remains separ
 pending where credentials, corporate approval or authorized test resources are
 required; postponement does not qualify a provider or authorize external changes.
 
-The bounded native analysis delegation foundation is implemented and tested
-(section 8). Next: installation-managed revisioned profiles and configurable
-approval/limits policy, followed by execution-tree controls and bounded automatic
-execution. Preserve the mandatory-approval, empty-child-grant foundation until
-these broader contracts are implemented and verified. Final developer acceptance
-remains deferred; this implementation does not claim installation activation.
+The native analysis delegation foundation and installation-managed profiles,
+approval policy and finite limits are implemented (section 8). Next: execution-tree
+navigation and independent child/tree controls, followed by broader runtime/profile
+support and enforceable cumulative budgets. Preserve explicit delegation grants
+and the empty child permission set. Final developer acceptance remains deferred;
+this delivery does not claim installation activation.
 
 Remaining Release 1 implementation areas also include vendor-specific MCP
 capabilities and multi-instance OAuth transaction persistence, installation/setup
@@ -548,7 +548,34 @@ Define clear precedence: global, graph, agent, and task instructions; repository
 
 ### 8. Allow Dynamic Delegation to Subagents
 
-**Foundation delivered (2026-10-18):** Explicit native `delegation.request` grant,
+**Configurable profiles and policies (2026-10-18):** Administration → Delegation
+now supports reviewed admin-only edits to revisioned native analysis profiles and
+required/automatic approval policies. Viewer/operator reads remain available;
+mutations require admin and compare-and-set revisions. Profiles customize guidance
+and output allowances while retaining the parent's model and no tools/workspace.
+Depth stays one. Child count, shared concurrency, duration, output tokens and
+objective/result sizes have finite configurable bounds. Snapshots retain policy,
+profile and objective; requests revalidate before inference. Lowered capacity
+counts existing high-numbered slots. Automatic policy does not grant tools or
+bypass a tool grant's own approval requirement. Disable profiles rather than
+removing historical configuration. See [delegation](../docs/delegation.md).
+
+
+**Configuration verification:** `make test` passed (Go/Python suites and 263
+frontend tests); `make lint`, `make build`, and `make test-e2e` passed (54 main
+browser scenarios plus one hosted-CIMD scenario). Race-enabled delegation/settings
+integration tests passed. The first full run encountered an existing workspace
+review test failure; five diagnostic repetitions and full reruns passed without
+changing or disabling that test. Configuration tests cover persistence/CAS, invalid
+inputs, storage failures, required/automatic policy, generic tool approval,
+disabled profiles, immutable execution snapshots, revision changes before start,
+finite limits and capacity reduction under concurrency. Browser tests cover
+reviewed admin saves, automatic execution and parent result, disabled profiles,
+explicit grant denial, viewer restrictions and stale revisions. Tests use SQLite
+and a deterministic model fixture; live-provider, multi-process PostgreSQL and
+installation validation are not claimed. Developer acceptance remains deferred.
+
+**Earlier foundation (2026-10-18; configuration extended above):** Explicit native `delegation.request` grant,
 immutable analysis template, same parent model, no child tools/workspace/history,
 mandatory operator approval, persisted parent/child/approval linkage, structured
 result/error return and fixed depth/count/shared-capacity/deadline/output limits.
@@ -556,7 +583,7 @@ Runs distinguishes children and links to the parent. Reported child consumption
 is included in the parent without double-counting native gateway inference.
 Pending approval cleanup and restart interruption are covered. See
 [delegation](../docs/delegation.md) for boundaries, including the absence of a
-hard monetary ceiling, configurable policies, external runtime delegation and
+hard monetary ceiling, external runtime delegation and
 independent tree controls.
 
 **Verification:** `make test` (Go suites and 257 frontend tests), `make lint`,
@@ -570,7 +597,7 @@ Give orchestrator agents the ability to delegate subtasks when they determine it
 
 Start with **temporary child executions**, not unrestricted edits to the permanent graph. Each delegation records its parent, objective, agent/configuration used, result, state, and resource consumption.
 
-Allow operators to configure the delegation policy:
+Allow administrators to configure the delegation policy; operators decide pending approvals:
 
 - **Approval required:** Each new delegation waits for human approval before starting.
 - **Automatic:** Delegations start without individual approval, subject to configured global limits.
