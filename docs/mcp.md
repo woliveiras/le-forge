@@ -633,3 +633,24 @@ reviewed individual operations. The restriction applies to Atlassian-family
 service labels and the official MCP host even when labeled custom. It does not
 provide site/project restrictions: those remain dependent on provider permissions
 until explicit resource constraints are implemented.
+
+### Atlassian personal API tokens
+
+Select an Atlassian-family service, the v2 flat endpoint and **Atlassian personal
+API token (Basic)** under Credential type. Enter the token owner's email and
+personal API token together. LeForge encrypts both values and builds the Basic
+header only in the server-side transport. After saving, neither value is returned;
+blank fields preserve the stored pair. Replacing either requires entering both.
+Changing the endpoint or credential type requires replacing or clearing the
+credential. Clearing it invalidates the catalogue and does not authorize agents.
+
+Organization administrators must enable API-token access. Choose the required
+`agent-interface` scopes and pass `cloudId` for operations that require it.
+Service account keys use **Bearer token**. OAuth remains available for interactive
+consent and tools unavailable to API tokens. API-token connections are governed by
+provider IP policies; OAuth callback-domain policies are not equivalent to token
+restrictions. See the [official authentication guide](https://developer.atlassian.com/cloud/rovo-mcp/guides/configuring-authentication-via-api-token/).
+
+Local tests cover TLS discovery/calls, encrypted persistence, write-only UI,
+invalid credentials, credential-type changes and response echo rejection. Live
+corporate enablement, scoped tool availability and site access remain unverified.

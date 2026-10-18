@@ -103,7 +103,7 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if err = t.m.admitCall(ctx, current); err != nil {
 		return nil, err
 	}
-	callctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	callctx, cancel := context.WithTimeout(credentialContext(ctx, r.View), 15*time.Second)
 	defer cancel()
 	raw, err := t.m.Call(callctx, r.Endpoint, token, t.tool.Name, inv.Args)
 	if err != nil {
@@ -112,7 +112,7 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 		}
 		return nil, fmt.Errorf("MCP call failed; remote outcome may be unknown; no automatic retry")
 	}
-	if len(raw) > maxBody || containsCredential(raw, token) {
+	if len(raw) > maxBody || containsTransportCredential(callctx, raw, token) {
 		return nil, fmt.Errorf("MCP result rejected")
 	}
 	var result struct {

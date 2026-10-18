@@ -21,6 +21,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [revision,setRevision]=useState<number>();
   const [gitlabInstance,setGitlabInstance]=useState('https://gitlab.com');
   const [token,setToken]=useState('');
+  const [credentialEmail,setCredentialEmail]=useState('');
   const [clientSecret,setClientSecret]=useState('');
   const [clearClientSecret,setClearClientSecret]=useState(false);
   const [clear,setClear]=useState(false);
@@ -31,13 +32,13 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
-  function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),template:undefined,templateParameters:undefined});setToken('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
+  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,credentialType:c.credentialType,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setCredentialEmail('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),credentialType:undefined,template:undefined,templateParameters:undefined});setToken('');setCredentialEmail('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){
     setBusy(true);setError(undefined);setSavedID(undefined);setSaveProgress('Saving connection…');
     try {
-      const result=await saveAndDiscover({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision,c=>{
-        setToken('');setClientSecret('');setSavedID(c.id);setEditing(false);
+      const result=await saveAndDiscover({...input,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token,...(input.credentialType==='basic'?{username:credentialEmail}:{})}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision,c=>{
+        setToken('');setCredentialEmail('');setClientSecret('');setSavedID(c.id);setEditing(false);
         setSaveProgress(canDiscover(c)?'Connection saved. Discovering tools…':c.enabled?'Connection saved. Authorization required before tool discovery.':'Connection saved. Disabled connections are not tested.');
       });
       await list.reload();
@@ -80,7 +81,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
     {presentation==='create'&&!admin&&<p>An administrator must create this connection.</p>}
     {admin&&editing&&(presentation!=='detail'||tab==='settings')&&<form className="form" onSubmit={e=>{e.preventDefault();void save();}}>
       <h3>{revision?'Edit connection':'New connection'}</h3>
-      {input.template&&<MCPTemplateSettings key={`${input.template.id}-${input.template.version}-${revision??'new'}`} input={input} onChange={value=>{setInput(value);setToken('');setClientSecret('');}}/>}
+      {input.template&&<MCPTemplateSettings key={`${input.template.id}-${input.template.version}-${revision??'new'}`} input={input} onChange={value=>{setInput(value);setToken('');setCredentialEmail('');setClientSecret('');}}/>}
       <label>Connection ID<input required pattern="[a-z][a-z0-9_-]{0,63}" value={input.id} disabled={!!revision||busy} onChange={e=>setInput({...input,id:e.target.value})}/></label>
       <label>Connection calls per minute<input type="number" min={0} max={60000} step={1} value={input.callsPerMinute??0} onChange={e=>setInput({...input,callsPerMinute:Number(e.target.value)})}/></label>
       <p>0 means unlimited. A fixed UTC-minute quota is shared by all agents and replicas using this connection. Admitted calls count even if they fail; approval refusals do not consume it.</p>
@@ -93,7 +94,7 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
         <Btn disabled={busy} onClick={applyDefaults}>Use OAuth defaults</Btn>
       </>}
       <label>MCP endpoint<input type="url" required placeholder="https://mcp.example.com/mcp" readOnly={!!input.template} value={input.endpoint} onChange={e=>setInput({...input,endpoint:e.target.value})}/></label>
-      <label><input type="checkbox" checked={!!input.oauth} onChange={e=>{setInput({...input,oauth:e.target.checked?{issuer:'',clientId:'',scopes:[]}:undefined});setToken('');setClear(false);setClientSecret('');setClearClientSecret(false);}}/>Use browser OAuth</label>
+      <label><input type="checkbox" checked={!!input.oauth} onChange={e=>{setInput({...input,credentialType:undefined,oauth:e.target.checked?{issuer:'',clientId:'',scopes:[]}:undefined});setToken('');setCredentialEmail('');setClear(false);setClientSecret('');setClearClientSecret(false);}}/>Use browser OAuth</label>
       {input.oauth?<fieldset><legend>OAuth client registration</legend>
         <MCPOAuthCallbackURL/><p>Review the issuer and scopes before saving.</p>{(!input.oauth.registrationMode||input.oauth.registrationMode==='manual')&&!input.oauth.clientId&&<p role="status">Configuration pending: enter a pre-registered OAuth client ID.</p>}
         <label>Client registration method<select value={input.oauth.registrationMode||'manual'} onChange={e=>{setInput({...input,oauth:{...input.oauth!,registrationMode:e.target.value,clientId:''}});setClientSecret('');setClearClientSecret(true);}}>
@@ -106,9 +107,12 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
         {(!input.oauth.registrationMode||input.oauth.registrationMode==='manual')&&<><label>OAuth client secret (optional)<input type="password" autoComplete="new-password" disabled={clearClientSecret} value={clientSecret} onChange={e=>setClientSecret(e.target.value)}/></label>
         <p>Blank preserves an existing client secret. Public clients do not need one.</p>
         <label><input type="checkbox" checked={clearClientSecret} onChange={e=>{setClearClientSecret(e.target.checked);setClientSecret('');}}/>Clear OAuth client secret</label></>}
-      </fieldset>:<><label>Bearer token<input type="password" autoComplete="new-password" value={token} disabled={clear} onChange={e=>setToken(e.target.value)}/></label>
+      </fieldset>:<>
+      <label>Credential type<select aria-label="Credential type" value={input.credentialType||'bearer'} onChange={e=>{setInput({...input,credentialType:e.target.value as 'bearer'|'basic'});setToken('');setCredentialEmail('');setClear(false);}}><option value="bearer">Bearer token</option>{(['atlassian','jira','confluence','bitbucket'].includes(input.service)||/^https:\/\/mcp\.atlassian\.com\//i.test(input.endpoint)||input.credentialType==='basic')&&<option value="basic">Atlassian personal API token (Basic)</option>}</select></label>
+      {input.credentialType==='basic'&&<><label>API token owner email<input type="email" autoComplete="off" value={credentialEmail} disabled={clear} onChange={e=>setCredentialEmail(e.target.value)}/></label><p>Enter the email and token together to replace the credential. Both are encrypted and never returned after saving. Organization admin enablement is required; use agent-interface scopes and supply cloudId where required. Service account keys use Bearer instead.</p></>}
+      <label>{input.credentialType==='basic'?'Personal API token':'Bearer token'}<input type="password" autoComplete="new-password" value={token} disabled={clear} onChange={e=>setToken(e.target.value)}/></label>
       <p className="muted small">Leave blank to keep the existing credential. Changing the endpoint requires replacing or clearing its credential.</p>
-      <label><input type="checkbox" checked={clear} onChange={e=>{setClear(e.target.checked);setToken('');}}/>Clear stored credential</label></>}
+      <label><input type="checkbox" checked={clear} onChange={e=>{setClear(e.target.checked);setToken('');setCredentialEmail('');}}/>Clear stored credential</label></>}
       <label><input type="checkbox" checked={input.enabled} onChange={e=>setInput({...input,enabled:e.target.checked})}/>Connection enabled</label>
       <div className="btn-row"><Btn type="submit" disabled={busy} tone="primary">Save MCP connection</Btn>{revision&&<Btn disabled={busy} onClick={()=>edit()}>Cancel connection edit</Btn>}{presentation==='create'&&<a href="#/connections">Cancel</a>}</div>
     </form>}

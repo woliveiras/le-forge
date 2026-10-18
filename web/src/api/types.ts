@@ -656,6 +656,7 @@ export interface MCPTemplate extends MCPTemplateRef { parameters?: {name:string;
 export interface MCPOAuthConfig { registrationMode?: string; issuer: string; clientId: string; scopes: string[] }
 export interface MCPOAuth extends MCPOAuthConfig { registrationStatus?: string; registrationDiagnostic?: {code: string; httpStatus?: number}; effectiveRegistrationMode?: string; status: string; expiresAt?: string; grantedScopes?: string[]; clientSecretConfigured: boolean; revocation?: string }
 export interface MCPConnection {
+ credentialType?: 'bearer'|'basic';
  callsPerMinute?: number;
   oauth?: MCPOAuth;
   template?: MCPTemplateRef;
@@ -666,13 +667,14 @@ export interface MCPConnection {
   lastTest?: string; updatedAt: string; updatedBy: string;
 }
 export interface MCPConnectionInput {
+ credentialType?: 'bearer'|'basic';
  callsPerMinute?: number;
   oauth?: MCPOAuthConfig;
   oauthClientSecret?: {value?: string; clear?: boolean};
   template?: MCPTemplateRef;
   templateParameters?: Record<string,string>;
   id: string; name: string; service: string; endpoint: string; enabled: boolean;
-  credential?: {value?: string; clear?: boolean};
+  credential?: {value?: string; username?: string; clear?: boolean};
 }
 
 export interface MCPHistoryEntry {seq:number;time:string;type:string;connection:string;graph:string;node:string;execution:string;tool:string;outcome:string;durationMs:number;approval?:string;summary:string}

@@ -1392,3 +1392,15 @@ The file/Git inspection routes are read-only for every role: POST, PUT, PATCH an
 DELETE are rejected, and the file remains unchanged. No editor or mutation action
 is offered in the inspection components. Broader graph/instruction isolation
 acceptance remains tracked separately.
+
+### Atlassian Basic credentials (2026-10-18)
+
+Personal email/token pairs now have an explicit Basic mode, separate from Bearer
+service-account credentials and OAuth. Both values are sealed with the existing
+connection-bound encryption; views expose only mode/configured status. The manager
+selects the transport scheme, including initialization, pagination and cleanup;
+agent arguments and remote metadata cannot select it. Result/catalogue echo guards
+check the encoded pair, email and token. Replacement/clear, endpoint/mode changes,
+failed discovery and exact per-agent grants retain their existing boundaries.
+Unit, TLS manager/storage integration and browser fixtures cover the contract.
+Real corporate access and scope/site qualification remain pending.

@@ -611,6 +611,9 @@ func (m *Manager) accessToken(ctx context.Context, r record) (record, string, er
 	if err != nil {
 		return r, "", oauthError("MCP credential unavailable")
 	}
+	if r.CredentialType == "basic" {
+		return r, base64.StdEncoding.EncodeToString(token), nil
+	}
 	return r, string(token), nil
 }
 func (m *Manager) discardTokens(ctx context.Context, r record, t oauthTokens) {

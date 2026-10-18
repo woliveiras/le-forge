@@ -96,3 +96,23 @@ it('persists and edits a connection quota without exposing credentials',async()=
  await userEvent.clear(screen.getByLabelText('Connection calls per minute'));await userEvent.type(screen.getByLabelText('Connection calls per minute'),'5');await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
  expect(await screen.findByText('Connection quota: 5 calls per UTC minute')).toBeTruthy();expect(backend.find('PUT','/api/v1/mcp/connections/team')[0].body).toMatchObject({callsPerMinute:5});
 });
+it('submits Basic credentials together and clears both fields after saving',async()=>{
+ let saved:MCPConnection|undefined;
+ const backend=fakeApi({'GET /api/v1/mcp/connections':()=>saved?[saved]:[],
+ 'POST /api/v1/mcp/connections':()=>{saved={...connection,service:'atlassian',credentialType:'basic',enabled:false,status:'disabled'};return saved;}});
+ render(<MCPSection role="admin"/>);
+ await userEvent.type(screen.getByLabelText('Connection ID'),'team');
+ await userEvent.type(screen.getByLabelText('Connection name'),'Team');
+ await userEvent.selectOptions(screen.getByRole('combobox',{name:/^Service/}),'atlassian');
+ await userEvent.type(screen.getByLabelText('MCP endpoint'),'https://mcp.atlassian.com/v2/mcp?tools=all');
+ await userEvent.selectOptions(screen.getByLabelText('Credential type'),'basic');
+ await userEvent.type(screen.getByLabelText('API token owner email'),'fixture@example.test');
+ await userEvent.type(screen.getByLabelText('Personal API token'),'fixture-token');
+ await userEvent.click(screen.getByLabelText('Connection enabled'));
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(await screen.findByText('Credential configured · revision 1 · catalogue 0')).toBeTruthy();
+ expect(backend.find('POST','/api/v1/mcp/connections')[0].body).toMatchObject({credentialType:'basic',credential:{username:'fixture@example.test',value:'fixture-token'}});
+ await userEvent.click(screen.getByRole('button',{name:'Edit Team'}));
+ expect((screen.getByLabelText('API token owner email') as HTMLInputElement).value).toBe('');
+ expect((screen.getByLabelText('Personal API token') as HTMLInputElement).value).toBe('');
+});

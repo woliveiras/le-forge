@@ -101,6 +101,9 @@ func validateTemplate(in Input) error {
 				return fmt.Errorf("%w: template defaults changed; detach the template to customize", ErrInvalid)
 			}
 			mode := "bearer"
+			if in.CredentialType == "basic" {
+				mode = "basic"
+			}
 			if in.OAuth != nil {
 				mode = "oauth"
 			}

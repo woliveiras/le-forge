@@ -1,6 +1,7 @@
 package mcptest
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,9 +11,10 @@ import (
 // AtlassianFlatServer exercises reviewed flat-list routing without vendor accounts.
 type AtlassianFlatServer struct {
 	*httptest.Server
-	Drift atomic.Bool
-	Fail  atomic.Bool
-	Calls atomic.Int32
+	Drift          atomic.Bool
+	Fail           atomic.Bool
+	Calls          atomic.Int32
+	EchoCredential atomic.Bool
 }
 
 func NewAtlassianFlat() *AtlassianFlatServer {
@@ -22,7 +24,7 @@ func NewAtlassianFlat() *AtlassianFlatServer {
 			http.Error(w, "flat option required", 400)
 			return
 		}
-		if r.Header.Get("Authorization") != "Bearer fixture-mcp-token" {
+		if r.Header.Get("Authorization") != "Bearer fixture-mcp-token" && r.Header.Get("Authorization") != "Basic "+base64.StdEncoding.EncodeToString([]byte("fixture@example.test:fixture-mcp-token")) {
 			w.WriteHeader(401)
 			return
 		}
@@ -71,7 +73,11 @@ func NewAtlassianFlat() *AtlassianFlatServer {
 			}
 		case "tools/call":
 			f.Calls.Add(1)
-			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "Flat operation completed"}}}
+			text := "Flat operation completed"
+			if f.EchoCredential.Load() {
+				text = "fixture@example.test fixture-mcp-token"
+			}
+			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": text}}}
 		default:
 			w.WriteHeader(400)
 			return

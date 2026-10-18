@@ -26,10 +26,12 @@ var identifier = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 var toolName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 type Credential struct {
-	Value string `json:"value,omitempty"`
-	Clear bool   `json:"clear,omitempty"`
+	Username string `json:"username,omitempty"`
+	Value    string `json:"value,omitempty"`
+	Clear    bool   `json:"clear,omitempty"`
 }
 type Input struct {
+	CredentialType     string            `json:"credentialType,omitempty"`
 	TemplateParameters map[string]string `json:"templateParameters,omitempty"`
 	CallsPerMinute     int               `json:"callsPerMinute,omitempty"`
 	OAuth              *OAuthConfig      `json:"oauth,omitempty"`
@@ -48,6 +50,7 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	CredentialType       string            `json:"credentialType,omitempty"`
 	TemplateParameters   map[string]string `json:"templateParameters,omitempty"`
 	CallsPerMinute       int               `json:"callsPerMinute,omitempty"`
 	OAuth                *OAuthView        `json:"oauth,omitempty"`
@@ -91,6 +94,9 @@ func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateCredentialMode(in); err != nil {
+		return err
+	}
 	if in.CallsPerMinute < 0 || in.CallsPerMinute > 60000 {
 		return fmt.Errorf("%w: callsPerMinute must be between 0 and 60000", ErrInvalid)
 	}
@@ -218,8 +224,8 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			return View{}, storage.ErrConflict
 		}
 	}
-	if r.Endpoint != "" && r.Endpoint != in.Endpoint && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
-		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint", ErrInvalid)
+	if (r.Endpoint != "" && r.Endpoint != in.Endpoint || (r.CredentialType == "basic") != (in.CredentialType == "basic")) && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
+		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint or credential type", ErrInvalid)
 	}
 	var oldOAuth *OAuthConfig
 	if r.OAuth != nil {
@@ -255,7 +261,8 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			}
 		}
 	}
-	changed := r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	changed := r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.CredentialType = in.CredentialType
 	r.CallsPerMinute = in.CallsPerMinute
 	r.Template = in.Template
 	r.TemplateParameters = in.TemplateParameters
@@ -267,7 +274,11 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 		if in.Credential.Clear {
 			r.Sealed = ""
 		} else if in.Credential.Value != "" {
-			r.Sealed, e = m.Box.Seal([]byte(in.Credential.Value), prefix+in.ID)
+			value := in.Credential.Value
+			if in.CredentialType == "basic" {
+				value = in.Credential.Username + ":" + value
+			}
+			r.Sealed, e = m.Box.Seal([]byte(value), prefix+in.ID)
 			if e != nil {
 				return View{}, e
 			}
@@ -301,7 +312,7 @@ func (m *Manager) Refresh(ctx context.Context, id, actor string) (View, error) {
 	opctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	started := time.Now()
-	catalog, discoverErr := m.Discover(opctx, r.Endpoint, token)
+	catalog, discoverErr := m.Discover(credentialContext(opctx, r.View), r.Endpoint, token)
 	if r.OAuth != nil {
 		var detail *DiscoveryError
 		if errors.As(discoverErr, &detail) && detail.Reason == "MCP HTTP status 401" {

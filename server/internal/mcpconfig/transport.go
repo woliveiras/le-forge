@@ -78,7 +78,7 @@ func CallWithClient(ctx context.Context, endpoint, token, name string, args json
 		if err != nil {
 			return err
 		}
-		if containsCredential(raw, token) {
+		if containsTransportCredential(ctx, raw, token) {
 			return discoveryError("MCP result contains credential material")
 		}
 		result = raw
@@ -139,7 +139,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 			req.Header.Set("Mcp-Session-Id", session)
 			req.Header.Set("MCP-Protocol-Version", protocol)
 			if token != "" {
-				req.Header.Set("Authorization", "Bearer "+token)
+				req.Header.Set("Authorization", authorizationHeader(ctx, token))
 			}
 			var res *http.Response
 			res, e = client.Do(req)
@@ -174,7 +174,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 			req.Header.Set("Mcp-Session-Id", session)
 		}
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Authorization", authorizationHeader(ctx, token))
 		}
 		res, e := client.Do(req)
 		if e != nil {
@@ -291,7 +291,7 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		if e != nil {
 			return nil, e
 		}
-		if containsCredential(raw, token) {
+		if containsTransportCredential(ctx, raw, token) {
 			return nil, discoveryError("MCP catalogue contains credential material")
 		}
 		bytesTotal += len(raw)
