@@ -588,10 +588,36 @@ initial new E2E restored admin credentials on reload in its test setup; correcti
 that setup made the unchanged viewer-restriction assertion pass. No security
 checks were removed or relaxed.
 
-Local installation activation and real multi-process crash qualification remain
-pending for this increment; the previous installed token-budget validation
+Local installation activation is recorded below. Real multi-process crash
+qualification remains pending; the earlier installed token-budget validation
 remains valid for its original scope. Cancellation-marker retention, broader
 runtimes and monetary ceilings remain separate work.
+
+**Recovery installation activation (2026-10-18):** Activated commit `acafb69`
+with `docker compose build forged` and
+`docker compose up -d --no-deps --no-build --force-recreate forged`. Both commands
+completed successfully. Only forged was recreated; its four named volume mounts,
+five graph versions and PostgreSQL migration versions 1–3 remained unchanged.
+Execution/settings counts increased with normal activity (23,346/22,081 before,
+23,378/22,113 after); no history or volumes were removed. The application is
+healthy, and the previous image is retained as `leforge/forged:before-budget-recovery`.
+
+Startup reconciliation closed both existing terminal ledgers. The reported-usage
+tree `exe_mvdd8sd60e4739a0459e18136e6c` retained 904 charged tokens and zero held
+reservations; its revision advanced once from 5 to 6. The uncertain-consumption
+tree `exe_mvddb2to3970ef76e1626003a006` retained 4,966 charged/estimated tokens and
+zero reservations; its revision advanced once from 3 to 4. Authenticated Chrome
+inspection and reload confirmed both totals. More than one minute after startup,
+both revisions and update timestamps remained unchanged, confirming repeated
+reconciliation did not rewrite or double-charge them. Validation graphs remained
+stopped. No credentials, connections, grants or global policies were changed.
+
+These existing ledgers were already settled before restart: this installed check
+qualifies closure, historical totals and idempotency, not recovery from an induced
+crash with outstanding holds. The unit/integration and disposable-browser tests
+above supply that recovery evidence. No installed record was old enough for
+30-day compaction; retention-boundary coverage remains automated. Real
+multi-process crash qualification remains pending.
 
 **Cumulative tree tokens (2026-10-18):** Native parents with an exact
 `delegation.request` grant share a persistent CAS ledger with their children.
