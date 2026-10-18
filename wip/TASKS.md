@@ -435,6 +435,51 @@ credentials/resources. Fixture coverage alone does not complete live acceptance.
 
 ### 8. Allow Dynamic Delegation to Subagents
 
+**Tree-budget recovery and retention (2026-10-18):** Startup and periodic
+reconciliation now close budgets whose root execution is durably terminal.
+The engine's existing restart/replica-takeover recovery supplies interruption
+state; age alone never marks a worker dead. CAS closure refunds undispatched
+holds, charges unknown dispatched usage conservatively and preserves known
+settlements. Active foreign workers, missing execution evidence, corrupt state
+and failed writes keep capacity unavailable. Errors are surfaced in engine logs;
+healthy trees continue reconciling, with failed work retried on a later sweep.
+
+After 30 days from terminal completion, per-call details are compacted into an
+indefinitely retained closed summary. Historical totals remain readable and late
+admission/dispatch cannot reopen credit; late callbacks cannot alter compacted
+usage. Undated and active roots are not compacted. Execution, approval and
+cancellation history remain intact; only old per-call budget detail is compacted,
+retaining its totals and closed-tree marker. This bounds per-tree reservation
+details, not the total number of retained summaries. No new API,
+permission, migration or admin policy is introduced.
+
+- [x] Recover terminal tree reservations idempotently after restart or lease takeover, preserving active workers and conservative unknown consumption.
+- [x] Compact old terminal reservation details while retaining historical totals and closed-tree fencing.
+
+**Recovery verification:** `make test` passed (Go unit/integration, Python and
+274 frontend tests), as did `make lint`, `make build` and `make test-e2e`
+(58 main Chromium scenarios plus one hosted-CIMD scenario). Focused race-enabled
+recovery tests passed. Unit tests cover idempotent closure and unchanged known
+usage. SQLite integration covers concurrent reconcilers/dispatch, active and
+missing roots, corrupt state, storage failures/retries, the 30-day boundary,
+undated roots, compaction, late calls and preserved totals. Engine integration
+reopens storage containing crash leftovers and runs actual startup recovery,
+while preserving another worker's active reservations. Browser coverage seeds
+crash/active/historical records in the disposable SQLite installation before
+startup, then verifies recovered/compacted totals, reload stability and viewer
+restrictions through the real API. It does not kill an installed process.
+
+The initial full test run hit an existing environment start/stop timeout; five
+focused repetitions and the full rerun passed without changing that test. The
+initial new E2E restored admin credentials on reload in its test setup; correcting
+that setup made the unchanged viewer-restriction assertion pass. No security
+checks were removed or relaxed.
+
+Local installation activation and real multi-process crash qualification remain
+pending for this increment; the previous installed token-budget validation
+remains valid for its original scope. Cancellation-marker retention, broader
+runtimes and monetary ceilings remain separate work.
+
 **Cumulative tree tokens (2026-10-18):** Native parents with an exact
 `delegation.request` grant share a persistent CAS ledger with their children.
 Admin policy adds `maxTreeTokens` (default 65,536), intersected with parent token
@@ -449,8 +494,8 @@ cardinality metrics and spans cover CAS operations. No grants, approval policies
 recursive capability or external runtimes are added.
 
 This is conservative token admission, not a provider tokenizer or monetary cap.
-Crash-held reservations remain held; automatic reconciliation and ledger retention
-are pending. Installation validation with local Ollama is recorded below;
+Terminal-root reconciliation and safe detail retention are implemented above;
+reservations without terminal execution evidence remain held. Installation validation with local Ollama is recorded below;
 broader provider qualification remains pending. See [delegation](../docs/delegation.md#cumulative-tree-token-budget).
 
 **Tree-token installation activation (2026-10-18):** Activated code commit

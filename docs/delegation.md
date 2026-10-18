@@ -198,9 +198,33 @@ the reservation becomes an estimated charge, including provider errors and
 cancellation. Admission to the model gateway is the dispatch boundary, so waiting
 inside a provider concurrency gate is conservatively considered uncertain too.
 Failure to persist settlement is returned to the caller and leaves the reservation
-held; it must never appear to free budget. A process restart does not refund held
-entries. Automatic crash reconciliation and ledger retention remain future work;
-no new delegation can consume an uncertain reservation's capacity.
+held; it must never appear to free budget.
+
+Startup recovery and a once-per-minute reconciliation sweep inspect saved root
+executions. Only a terminal root allows ledger closure: pre-dispatch holds are
+released, dispatched holds without persisted settlement become estimated charges,
+and known settled usage is preserved. Closure, dispatch and settlement share CAS,
+so a concurrent or delayed worker cannot dispatch refunded credit or reopen a
+closed tree. Repeated sweeps do not change settled amounts or ledger revisions.
+The engine first marks its abandoned executions interrupted on restart, or marks
+stale executions interrupted after replica lease takeover. Active roots (including
+other instances), missing roots, unreadable state and corrupt ledgers never imply
+a refund. Failed writes retain the old ledger and are retried on the next sweep;
+errors are logged with the root identifier. Other valid trees can still recover.
+A dead foreign worker whose execution has not yet been fenced by the engine keeps
+its reservations; elapsed time alone is not sufficient evidence of termination.
+
+Thirty days after a terminal root's recorded completion, the sweep compacts its
+settled per-call detail into a closed summary containing the original limit,
+charged and estimated totals. Undated or active executions are not compacted.
+The durable summary is retained indefinitely to reject late admission and preserve
+historical UI totals; delayed settlements after compaction fail without changing
+it. This bounds per-tree detail, not the total number of historical summaries.
+Execution, approval and cancellation history is not removed. No destructive
+migration or installation policy change is required. Legacy ledgers participate
+when their root execution supplies the required terminal evidence. When upgrading
+a shared installation, stop older workers before starting this version: older
+binaries do not understand the closed summary and must not write its ledgers.
 
 Runs → Execution tree exposes `limit`, `charged`, `reserved` and `estimated` to
 existing viewers. `estimated` is included in `charged`, not an additional amount.
@@ -210,6 +234,6 @@ remain unchanged. Ledger size is bounded to 1,024 call entries per tree.
 
 Telemetry adds `leforge_tree_budget_operations_total{operation,outcome}` and
 `leforge_tree_budget_operation_duration_seconds{operation}` for CAS operations
-(`reserve`, `dispatch`, `settle`; outcomes `ok`, `exhausted`, `error`), with matching
+(`reserve`, `dispatch`, `settle`, `reconcile`; outcomes `ok`, `exhausted`, `error`), with matching
 `delegation.token_budget.*` trace spans. Payloads and execution IDs are not metric
 labels. Existing model-usage metrics retain their reported-usage meaning.

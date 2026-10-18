@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/events"
 	"github.com/woliveiras/le-forge/server/internal/graph"
@@ -126,9 +127,10 @@ type Engine struct {
 	execs *execRegistry
 	turns chan struct{} // global turn semaphore (nil = unlimited)
 
-	wake chan struct{}
-	stop context.CancelFunc
-	done chan struct{}
+	budgetSweepAt time.Time // Only the reconcile loop writes this timestamp.
+	wake          chan struct{}
+	stop          context.CancelFunc
+	done          chan struct{}
 }
 
 func New(opt Options) (*Engine, error) {
@@ -250,6 +252,9 @@ func (e *Engine) recover(ctx context.Context) error {
 			e.interrupt(ctx, x, "platform restarted during the turn")
 		}
 	}
+	if err := (delegation.Manager{Store: e.store}).ReconcileBudgets(ctx, time.Now().UTC()); err != nil {
+		e.log.Error("recover tree token budgets", "err", err)
+	}
 	return nil
 }
 
@@ -276,6 +281,12 @@ func (e *Engine) interrupt(ctx context.Context, x *domain.Execution, why string)
 
 // reconcile drives every graph toward its desired state.
 func (e *Engine) reconcile(ctx context.Context) {
+	if time.Since(e.budgetSweepAt) >= time.Minute {
+		e.budgetSweepAt = time.Now()
+		if err := (delegation.Manager{Store: e.store}).ReconcileBudgets(ctx, e.budgetSweepAt); err != nil {
+			e.log.Error("reconcile tree token budgets", "err", err)
+		}
+	}
 	recs, err := e.store.ListGraphRecords(ctx)
 	if err != nil {
 		e.log.Warn("reconcile: list graphs", "err", err)

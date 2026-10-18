@@ -286,6 +286,9 @@ func run() error {
 			return err
 		}
 	}
+	if err := prepareBudgetRecovery(ctx, a, cfg.Instance); err != nil {
+		return err
+	}
 	return a.Run(ctx)
 }
 

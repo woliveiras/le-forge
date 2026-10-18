@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/woliveiras/le-forge/server/internal/observability"
 	"time"
 
+	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 )
 
@@ -25,8 +25,10 @@ type Reservation struct {
 	Estimated  bool `json:"estimated"`
 }
 type Budget struct {
-	Limit   int                    `json:"limit"`
-	Entries map[string]Reservation `json:"entries"`
+	Closed    bool                   `json:"closed,omitempty"`
+	Compacted *BudgetView            `json:"compacted,omitempty"`
+	Limit     int                    `json:"limit"`
+	Entries   map[string]Reservation `json:"entries"`
 }
 type BudgetView struct {
 	Limit     int `json:"limit"`
@@ -36,6 +38,9 @@ type BudgetView struct {
 }
 
 func (b Budget) View() BudgetView {
+	if b.Compacted != nil {
+		return *b.Compacted
+	}
 	v := BudgetView{Limit: b.Limit}
 	for _, r := range b.Entries {
 		if r.Settled {
@@ -61,8 +66,11 @@ func (m Manager) readBudget(ctx context.Context, root string) (*Budget, int64, e
 	if json.Unmarshal(row.Value, &b) != nil || b.Limit < 1 || b.Limit > MaxTreeTokens || b.Entries == nil || len(b.Entries) > 1024 {
 		return nil, 0, errors.New("invalid stored tree budget")
 	}
+	if b.Compacted != nil && (!b.Closed || len(b.Entries) != 0 || b.Compacted.Limit != b.Limit || b.Compacted.Reserved != 0 || b.Compacted.Charged < 0 || b.Compacted.Estimated < 0 || b.Compacted.Estimated > b.Compacted.Charged) {
+		return nil, 0, errors.New("invalid compacted tree budget")
+	}
 	for id, r := range b.Entries {
-		if id == "" || r.Amount < 1 || r.Amount > MaxTreeTokens || r.Charged < 0 || r.Charged > MaxTreeTokens*100 || (!r.Settled && r.Charged != 0) {
+		if (b.Closed && !r.Settled) || id == "" || r.Amount < 1 || r.Amount > MaxTreeTokens || r.Charged < 0 || r.Charged > MaxTreeTokens*100 || (!r.Settled && r.Charged != 0) {
 			return nil, 0, errors.New("invalid stored token reservation")
 		}
 	}
@@ -109,6 +117,10 @@ func (m Manager) updateBudget(ctx context.Context, root, operation string, chang
 		if e != nil {
 			return e
 		}
+		if b == nil {
+			// Reconciliation made no change.
+			return nil
+		}
 		raw, e := json.Marshal(b)
 		if e != nil {
 			return e
@@ -128,6 +140,9 @@ func (m Manager) ReserveTokens(ctx context.Context, root, id string, limit, amou
 	return m.updateBudget(ctx, root, "reserve", func(b *Budget) (*Budget, error) {
 		if b == nil {
 			b = &Budget{Limit: limit, Entries: map[string]Reservation{}}
+		}
+		if b.Closed {
+			return nil, storage.ErrConflict
 		}
 		if _, exists := b.Entries[id]; exists {
 			return nil, storage.ErrConflict
@@ -150,7 +165,7 @@ func (m Manager) DispatchTokens(ctx context.Context, root, id string) error {
 		if !ok {
 			return nil, storage.ErrNotFound
 		}
-		if r.Settled || r.Dispatched {
+		if b.Closed || r.Settled || r.Dispatched {
 			return nil, storage.ErrConflict
 		}
 		r.Dispatched = true

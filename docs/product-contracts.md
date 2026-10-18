@@ -714,5 +714,8 @@ Settlement is idempotent per model call and never sums inclusive execution total
 Pre-dispatch failure/cancellation releases the reservation; unknown post-dispatch
 usage becomes an estimated charge, and storage failures cannot replenish budget.
 Runs exposes charges, reservations and estimates under existing read permissions.
-This does not establish a provider billing guarantee, automatic crash refunds,
+Terminal-root recovery releases undispatched holds and estimates unknown dispatched
+usage, without modifying active trees. After 30 days, terminal per-call detail is
+compacted into a durable closed summary preserving totals and blocking late calls.
+This does not establish a provider billing guarantee, unconditional crash refunds,
 external-runtime accounting or a monetary ceiling. See [delegation](delegation.md#cumulative-tree-token-budget).

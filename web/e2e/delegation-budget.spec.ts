@@ -37,3 +37,21 @@ test('tree budget is reviewed, blocks inference and accounts parent and child on
   expect((await page.request.put('/api/v1/delegation-policy',{headers:{...admin,'If-Match':String(latest.revision)},data:original.policy})).status()).toBe(200);
  }
 });
+
+test('startup recovers abandoned reservations and preserves active and retained budgets',async({page})=>{
+ await page.addInitScript(()=>{if(!localStorage.getItem('leforgeToken'))localStorage.setItem('leforgeToken','e2e-admin-token');});
+ for(const id of ['budget-crashed','budget-retained','budget-active']){
+  await page.goto('/#/g/budget-recovery/runs?execution='+id+'&section=tree');
+  const budget=page.getByRole('region',{name:'Tree token budget',exact:true});
+  await expect(budget).toContainText(id==='budget-active'?'Charged: 0 · Reserved: 70 · Estimated charges: 0':'Charged: 30 · Reserved: 0 · Estimated charges: 30');
+  if(id!=='budget-active')await expect(page.getByRole('region',{name:'Execution tree',exact:true})).toContainText('interrupted');
+  await page.getByRole('button',{name:'Refresh tree',exact:true}).click();
+  await page.reload();
+  await expect(budget).toContainText(id==='budget-active'?'Reserved: 70':'Charged: 30 · Reserved: 0');
+ }
+ // Historical compacted totals remain readable without granting controls.
+ await page.evaluate(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));
+ await page.goto('/#/g/budget-recovery/runs?execution=budget-retained&section=tree');await page.reload();
+ await expect(page.getByRole('region',{name:'Tree token budget',exact:true})).toContainText('Charged: 30 · Reserved: 0');
+ await expect(page.getByRole('button',{name:'Stop entire tree',exact:true})).toHaveCount(0);
+});

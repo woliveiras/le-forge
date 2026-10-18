@@ -229,5 +229,8 @@ They use revision-zero compare-and-set creation; retries do not overwrite them.
 
 Tree token admission uses CAS settings at `delegation/budget/{rootExecutionId}`.
 The bounded per-call ledger survives process restarts, keeps settlement idempotent,
-and separates held reservations from known/estimated charges. It needs no schema
+and separates held reservations from known/estimated charges. Terminal-root
+reconciliation closes the ledger using CAS. After 30 days, per-call entries are
+compacted into an indefinitely retained closed summary; totals and admission
+fencing survive compaction. Active/undated records are not compacted. It needs no schema
 migration; see [delegation](delegation.md#cumulative-tree-token-budget).
