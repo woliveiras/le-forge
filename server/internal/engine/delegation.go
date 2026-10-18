@@ -109,6 +109,12 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	modelRef := t.n.Model
 	modelRef.Name = model
 	modelRef.Provider = prov.Name()
+	x.DelegationAudit = &domain.DelegationAudit{Runtime: "native", EffectiveGrants: []domain.ToolGrant{}, MaxOutputTokens: output, Decision: "pending"}
+	if policy.ApprovalMode == "automatic" {
+		at := x.StartedAt
+		x.DelegationAudit.Decision = "automatic"
+		x.DelegationAudit.DecidedAt = &at
+	}
 	x.DelegationModel = &modelRef
 	x.DelegationConfig = mustJSON(selected)
 	x.DelegationObjective = objective
@@ -174,10 +180,12 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 			defer done()
 			current, err := e.store.GetApproval(cleanup, a.ID)
 			if err == nil && current.Status == domain.ApprovalPending {
-				_, err = e.opt.Approvals.Expire(cleanup, current)
+				current, err = e.opt.Approvals.Expire(cleanup, current)
 			}
 			if err != nil {
 				retErr = errors.Join(retErr, fmt.Errorf("close delegation approval: %w", err))
+			} else {
+				snapshotDelegationDecision(x, current)
 			}
 		}()
 		if err = e.store.PutExecution(ctx, x); err != nil {
@@ -189,6 +197,7 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 		if err != nil {
 			return nil, err
 		}
+		snapshotDelegationDecision(x, decided)
 		if decided.Status != domain.ApprovalApproved {
 			return nil, errors.New("delegation rejected or expired")
 		}
@@ -251,4 +260,17 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	x.Summary = response.Message.Content
 	data := mustJSON(map[string]any{"childExecutionId": x.ID, "parentExecutionId": t.x.ID, "status": x.Status, "result": x.Summary, "usage": x.Usage})
 	return &tools.Result{Content: string(data), Data: data}, nil
+}
+
+// Copy only decision metadata, never approval answers or free-text comments.
+func snapshotDelegationDecision(x *domain.Execution, a *domain.Approval) {
+	if x.DelegationAudit == nil || a == nil || a.ID != x.ApprovalID || a.ExecutionID != x.ID || a.GraphID != x.GraphID || a.Kind != domain.ApprovalDelegation {
+		return
+	}
+	x.DelegationAudit.Decision = string(a.Status)
+	x.DelegationAudit.DecidedBy = a.DecidedBy
+	if a.DecidedAt != nil {
+		at := *a.DecidedAt
+		x.DelegationAudit.DecidedAt = &at
+	}
 }

@@ -195,13 +195,27 @@ type GraphRecord struct {
 }
 
 // Execution is one turn of one replica.
+// DelegationAudit records enforced access and the approval outcome, independently
+// of mutable installation settings. Nil on historical executions means unknown.
+type DelegationAudit struct {
+	Runtime         string      `json:"runtime"`
+	EffectiveGrants []ToolGrant `json:"effectiveGrants"`
+	WorkspaceAccess bool        `json:"workspaceAccess"`
+	RecursiveAccess bool        `json:"recursiveAccess"`
+	MaxOutputTokens int         `json:"maxOutputTokens"`
+	Decision        string      `json:"decision"`
+	DecidedBy       string      `json:"decidedBy,omitempty"`
+	DecidedAt       *time.Time  `json:"decidedAt,omitempty"`
+}
+
 type Execution struct {
-	ParentExecutionID   string          `json:"parentExecutionId,omitempty"`
-	DelegationTemplate  string          `json:"delegationTemplate,omitempty"`
-	DelegationConfig    json.RawMessage `json:"delegationConfig,omitempty"`
-	DelegationObjective string          `json:"delegationObjective,omitempty"`
-	DelegationModel     *ModelRef       `json:"delegationModel,omitempty"`
-	ApprovalID          string          `json:"approvalId,omitempty"`
+	DelegationAudit     *DelegationAudit `json:"delegationAudit,omitempty"`
+	ParentExecutionID   string           `json:"parentExecutionId,omitempty"`
+	DelegationTemplate  string           `json:"delegationTemplate,omitempty"`
+	DelegationConfig    json.RawMessage  `json:"delegationConfig,omitempty"`
+	DelegationObjective string           `json:"delegationObjective,omitempty"`
+	DelegationModel     *ModelRef        `json:"delegationModel,omitempty"`
+	ApprovalID          string           `json:"approvalId,omitempty"`
 
 	ID          string          `json:"id"`
 	GraphID     string          `json:"graphId"`

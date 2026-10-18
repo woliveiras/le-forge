@@ -686,7 +686,7 @@ and cooperative interruption for the current native scope are verified above.
 - [x] Account for consumption across the entire tree and stop/reject new delegations when limits are reached. — Native tree CAS reservations and exactly-once settlement; unknown usage is charged conservatively. No monetary guarantee or external-runtime support.
 - [x] Implement child execution cancellation and defined propagation of failure/cancellation to the parent agent. — Native child/tree cooperative interruption and parent continuation are implemented; external-runtime propagation remains separate.
 - [x] Define behavior for timeout, failure, partial result, and delegation with no result. — Native analysis foundation; see scope above.
-- [ ] Add auditing with parent/child, objective, model/configuration, effective grants, approval decision, and consumption.
+- [x] Add auditing with parent/child, objective, model/configuration, effective grants, approval decision, and consumption. — Native execution snapshots include enforced access/output bounds and the final approval decision/actor/time; automatic admission is distinct from human approval. Runs exposes the snapshot and labels legacy missing evidence. Reported usage and tree reservations remain separate. Unit, real-engine integration and approve/reject browser journeys verify the audit without changing grants.
 
 #### Interface and Tests
 

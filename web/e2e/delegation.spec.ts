@@ -27,6 +27,9 @@ for(const decision of ['approve','reject'] as const) {
   await expect.poll(async()=>(await (await page.request.get('/api/v1/executions/'+parentId,{headers:admin})).json()).status).toBe('succeeded');
   await page.goto('/#/g/'+id+'/runs?execution='+childId+'&section=result');
   await expect(page.getByRole('complementary',{name:'Delegation context'})).toContainText('No tools or workspace access');
+  await page.getByText('Delegation audit',{exact:true}).click();
+  await expect(page.getByRole('complementary',{name:'Delegation context'})).toContainText('Decision: '+(decision==='approve'?'approved':'rejected'));
+  await expect(page.getByRole('complementary',{name:'Delegation context'})).toContainText('Effective grants: None');
   if(decision==='approve') await expect(page.getByRole('region',{name:'Run detail'})).toContainText('Delegated fixture result');
   else await expect(page.getByRole('region',{name:'Run detail'})).toContainText('delegation rejected or expired');
   await page.getByRole('link',{name:'View parent execution'}).click();

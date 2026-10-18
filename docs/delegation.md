@@ -121,6 +121,18 @@ retain the applied profile content. As elsewhere in the platform, event-bus
 publication is best effort; settings/execution persistence errors fail the call.
 
 
+Execution records now include an immutable access snapshot: runtime, effective
+structured grants (an explicit empty list for analysis), workspace/recursive
+access and the actual output-token ceiling. Required approvals copy only the
+status, deciding actor and time into the child record, including rejection and
+expiry; free-text answers/comments are not duplicated. Automatic admission is
+labelled `automatic` with its admission time and policy revision, not as a human
+approval. Runs exposes this under **Delegation audit**, alongside the objective,
+resolved provider/model and parent link. Historical missing snapshots are labelled
+unknown; they are never reconstructed from current permissions. Reported child
+usage remains inclusive in the parent total. Tree budget estimates and reservations
+remain separately visible in the tree; reported usage is not a billing total.
+
 ## Execution tree and interruption
 
 Open **Runs → an execution → Execution tree** from either a parent or child.

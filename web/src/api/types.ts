@@ -310,6 +310,8 @@ export interface Execution {
   delegationTemplate?: string;
   delegationConfig?: {policy:DelegationPolicyView;profile:DelegationProfileView};
   delegationObjective?: string;
+  delegationModel?: {provider?: string; name?: string};
+  delegationAudit?: {runtime: string; effectiveGrants: ToolGrant[]; workspaceAccess: boolean; recursiveAccess: boolean; maxOutputTokens: number; decision: string; decidedBy?: string; decidedAt?: string};
   approvalId?: string;
 
   id: string;

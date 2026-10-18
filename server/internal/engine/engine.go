@@ -262,10 +262,12 @@ func (e *Engine) interrupt(ctx context.Context, x *domain.Execution, why string)
 	if x.ParentExecutionID != "" && x.ApprovalID != "" {
 		a, err := e.store.GetApproval(ctx, x.ApprovalID)
 		if err == nil && a.Status == domain.ApprovalPending {
-			_, err = e.opt.Approvals.Expire(ctx, a)
+			a, err = e.opt.Approvals.Expire(ctx, a)
 		}
 		if err != nil {
 			e.log.Error("interrupt delegation approval", "execution", x.ID, "err", err)
+		} else {
+			snapshotDelegationDecision(x, a)
 		}
 	}
 

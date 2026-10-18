@@ -143,6 +143,9 @@ func TestDelegationApprovalResultAndNoAmplification(t *testing.T) {
 	if child.Status != domain.ExecSucceeded || child.Summary != "bounded child answer" || child.Usage.InputTokens != 7 {
 		t.Fatalf("%+v", child)
 	}
+	if child.DelegationAudit == nil || child.DelegationAudit.Decision != "approved" || child.DelegationAudit.DecidedBy != "operator" || child.DelegationAudit.DecidedAt == nil || child.DelegationAudit.EffectiveGrants == nil || len(child.DelegationAudit.EffectiveGrants) != 0 || child.DelegationAudit.WorkspaceAccess || child.DelegationAudit.RecursiveAccess || child.DelegationAudit.MaxOutputTokens != 1024 {
+		t.Fatalf("incomplete audit: %+v", child.DelegationAudit)
+	}
 	p.mu.Lock()
 	req := p.request
 	p.mu.Unlock()
@@ -171,6 +174,10 @@ func TestDelegationRejectionNeverRunsChild(t *testing.T) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	child, err := r.store.GetExecution(r.ctx, a.ExecutionID)
+	if err != nil || child.DelegationAudit == nil || child.DelegationAudit.Decision != "rejected" {
+		t.Fatalf("rejection audit: %+v %v", child, err)
+	}
 	if p.children != 0 {
 		t.Fatal("ran rejected child")
 	}
@@ -306,7 +313,7 @@ func TestDelegationRestartInterruptsPendingChild(t *testing.T) {
 	dir := t.TempDir()
 	s := openStore(t, dir)
 	ctx := context.Background()
-	if err := s.PutExecution(ctx, &domain.Execution{ID: "child", ParentExecutionID: "parent", ApprovalID: "approval", GraphID: "g", NodeID: "n", Instance: "restarted", Status: domain.ExecAwaitingApproval, StartedAt: time.Now()}); err != nil {
+	if err := s.PutExecution(ctx, &domain.Execution{ID: "child", ParentExecutionID: "parent", ApprovalID: "approval", DelegationAudit: &domain.DelegationAudit{Decision: "pending"}, GraphID: "g", NodeID: "n", Instance: "restarted", Status: domain.ExecAwaitingApproval, StartedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.PutApproval(ctx, &domain.Approval{ID: "approval", Kind: domain.ApprovalDelegation, GraphID: "g", ExecutionID: "child", Status: domain.ApprovalPending, CreatedAt: time.Now()}); err != nil {
@@ -315,7 +322,7 @@ func TestDelegationRestartInterruptsPendingChild(t *testing.T) {
 	r := newRig(t, s, memory.New(), dir, "restarted")
 	x, _ := r.store.GetExecution(ctx, "child")
 	a, _ := r.store.GetApproval(ctx, "approval")
-	if x.Status != domain.ExecInterrupted || a.Status != domain.ApprovalExpired {
+	if x.Status != domain.ExecInterrupted || a.Status != domain.ApprovalExpired || x.DelegationAudit.Decision != "expired" {
 		t.Fatalf("%+v %+v", x, a)
 	}
 }

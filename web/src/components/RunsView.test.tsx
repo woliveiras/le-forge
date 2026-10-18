@@ -82,3 +82,19 @@ it('shows a scoped child-parent link and explains inclusive usage without config
  expect(context.textContent).toContain('Approval mode: automatic');
  expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
 });
+
+it('shows persisted delegation audit and leaves legacy evidence explicitly unknown',async()=>{
+ const child={...execution,parentExecutionId:'p',delegationObjective:'Inspect supplied text',delegationModel:{provider:'fixture',name:'test'},delegationAudit:{runtime:'native',effectiveGrants:[],workspaceAccess:false,recursiveAccess:false,maxOutputTokens:512,decision:'rejected',decidedBy:'reviewer'}};
+ fakeApi({...routes(),'GET /api/v1/executions/e':()=>child});
+ render(<RunsView graphId="g" executionId="e"/>);
+ await screen.findByRole('complementary',{name:'Delegation context'});
+ await userEvent.click(screen.getByText('Delegation audit'));
+ expect(screen.getByText('Decision: rejected · reviewer')).toBeTruthy();
+ expect(screen.getByText('Effective grants: None')).toBeTruthy();
+ expect(screen.getByText('Model: fixture/test')).toBeTruthy();
+ expect(screen.getByText('Objective: Inspect supplied text')).toBeTruthy();
+ cleanup();
+ fakeApi({...routes(),'GET /api/v1/executions/e':()=>({...execution,parentExecutionId:'p'})});
+ render(<RunsView graphId="g" executionId="e"/>);
+ expect(await screen.findByText('Access and decision snapshot not recorded for this historical execution.')).toBeTruthy();
+});

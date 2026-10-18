@@ -776,6 +776,14 @@ are not claimed.
 
 Give orchestrator agents the ability to delegate subtasks when they determine it is necessary, without requiring users to pre-draw every subagent in the graph.
 
+**Execution audit (2026-10-18):** Native delegated executions retain their enforced
+access/output bounds and approval status, actor and timestamp independently of
+mutable settings. Automatic admission is identified explicitly. Runs exposes the
+snapshot with objective, resolved model and parent link; historical missing data
+is labelled unknown. Approval free text is not duplicated into the snapshot.
+Unit, real-engine integration and approve/reject browser tests cover this slice.
+Installation activation and final acceptance remain pending.
+
 Start with **temporary child executions**, not unrestricted edits to the permanent graph. Each delegation records its parent, objective, agent/configuration used, result, state, and resource consumption.
 
 Allow administrators to configure the delegation policy; operators decide pending approvals:
