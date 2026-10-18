@@ -1494,3 +1494,14 @@ The template guide now separates documented contracts, observed public evidence
 and pending transport/data/cost controls. No compatibility fallback or template
 is enabled from documentation alone. Documentation-only change; no behavior or
 installation changes and no new unit/integration tests required.
+
+### Concurrent graph scope acceptance (2026-10-18)
+
+Added a real engine/SQLite/instruction manager/filesystem gateway acceptance test
+for two graphs sharing the same worker ID. Each receives its selected skill,
+workspace steering, prompt, operator task and file content; runtime input and
+persisted snapshot are checked for the other graph's marker. Relative traversal,
+absolute sibling paths and symlink escapes are denied. Existing instruction and
+filesystem unit tests cover lower-level validation/error behavior. This adds
+integration evidence without changing behavior or making claims about arbitrary
+host processes, Docker/external-runtime acceptance or the deferred UX walkthrough.
