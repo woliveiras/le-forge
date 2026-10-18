@@ -40,7 +40,7 @@ it('prepares known services explicitly, validates GitLab domains and saves publi
  render(<MCPSection role="admin"/>);
  await userEvent.selectOptions(screen.getByRole('combobox',{name:/Service/}),'atlassian');
  await userEvent.click(screen.getByRole('button',{name:'Use OAuth defaults'}));
- expect((screen.getByLabelText('MCP endpoint') as HTMLInputElement).value).toBe('https://mcp.atlassian.com/v2/mcp');
+ expect((screen.getByLabelText('MCP endpoint') as HTMLInputElement).value).toBe('https://mcp.atlassian.com/v2/mcp?tools=all');
  expect(await screen.findByText('https://forge.example/api/v1/mcp/oauth/callback')).toBeTruthy();
  expect(screen.getByText(/REST API 3LO application is not assumed/)).toBeTruthy();
  await userEvent.selectOptions(screen.getByRole('combobox',{name:/Service/}),'gitlab');

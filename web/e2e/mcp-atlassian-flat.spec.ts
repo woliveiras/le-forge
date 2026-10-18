@@ -1,0 +1,24 @@
+import {test,expect} from '@playwright/test';
+const headers={Authorization:'Bearer e2e-admin-token'};
+test('discovers a paginated Atlassian flat catalogue and refuses unreviewed endpoint queries',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/connections/new');
+ await page.getByRole('combobox',{name:/^Service/}).selectOption('atlassian');
+ await page.getByRole('button',{name:'Use OAuth defaults'}).click();
+ await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue('https://mcp.atlassian.com/v2/mcp?tools=all');
+ await page.getByLabel('Use browser OAuth',{exact:true}).uncheck();
+ await page.getByLabel('Connection ID',{exact:true}).fill('atlassian-flat');
+ await page.getByLabel('Connection name',{exact:true}).fill('Flat Atlassian');
+ await page.getByLabel('Bearer token',{exact:true}).fill('fixture-mcp-token');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page).toHaveURL(/connections\/c\/atlassian-flat\/overview$/);
+ await page.getByRole('link',{name:'Tools',exact:true}).click();
+ await expect(page.getByText('mcp.atlassian-flat.getJiraIssue',{exact:true})).toBeVisible();
+ await expect(page.getByText('mcp.atlassian-flat.getConfluenceContent',{exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();
+ await page.getByRole('button',{name:'Edit Flat Atlassian',exact:true}).click();
+ await page.getByLabel('MCP endpoint',{exact:true}).fill('https://mcp.atlassian.com/v2/mcp?tools=all&unexpected=true');
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('only Atlassian v2 tools=all');
+ const saved=await page.request.get('/api/v1/mcp/connections/atlassian-flat',{headers});expect(saved.ok()).toBeTruthy();expect((await saved.json()).endpoint).toBe('https://mcp.atlassian.com/v2/mcp?tools=all');
+});

@@ -4,7 +4,7 @@ Research date: 2026-10-17. These are source-confirmed vendor contracts and plann
 LeForge deliveries. Implemented compatibility is identified below; this is not
 live-service certification.
 The current [generic client](mcp.md) supports public HTTPS Streamable HTTP,
-protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries,
+protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries except the exact reviewed Atlassian v2 `tools=all` option,
 redirects and private destinations. Generic pre-registered OAuth now supports the
 browser lifecycle; see [implementation and limits](mcp.md#browser-oauth-pre-registered-clients).
 GitHub, Atlassian, GitLab and custom setup profiles are available for pre-registered
@@ -80,10 +80,11 @@ proposed LeForge route to exact per-operation grants; broad dispatcher grants
 must not provide an escape from those grants. Discover accessible resources and
 resolve `cloudId` as required. [Supported tools and scopes](https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/)
 
-Planned common work: a typed, narrowly validated `tools=all` option with bounded
-pagination, retaining rejection of unknown/secret query parameters; Basic
-credential support; OAuth lifecycle; product-specific tool filters and explicit
-site context. Qualify actual protocol version, schema/name compatibility and
+Implemented on 2026-10-18: the exact `tools=all` endpoint with bounded pagination,
+unknown/secret query rejection and canonical/advertised OAuth resource binding.
+TLS fixtures and browser tests cover this route; live acceptance remains pending.
+Planned common work: Basic credential support, dispatcher protection,
+product-specific tool filters and explicit site context. Qualify actual protocol version, schema/name compatibility and
 catalogue size against current bounds. Do not relax limits silently. Show site,
 project, workspace and space selections as defaults unless a verified policy
 actually restricts arguments. User permissions and LeForge grants both apply.

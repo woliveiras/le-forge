@@ -113,8 +113,8 @@ func validate(in Input) error {
 	if !identifier.MatchString(in.ID) || len(strings.TrimSpace(in.Name)) == 0 || len(in.Name) > 120 {
 		return fmt.Errorf("%w: valid id and display name required", ErrInvalid)
 	}
-	if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || len(in.Endpoint) > 2048 {
-		return fmt.Errorf("%w: endpoint must be HTTPS without user info, query or fragment", ErrInvalid)
+	if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || (u.RawQuery != "" || u.ForceQuery) && !flatAtlassianEndpoint(in.Endpoint) || u.Fragment != "" || len(in.Endpoint) > 2048 {
+		return fmt.Errorf("%w: endpoint must be HTTPS without user info or fragment; only Atlassian v2 tools=all is an allowed query", ErrInvalid)
 	}
 	switch in.Service {
 	case "github", "atlassian", "gitlab", "bitbucket", "jira", "confluence", "generic":

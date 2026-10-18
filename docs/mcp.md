@@ -61,7 +61,8 @@ TLS verification is enabled. Redirects and environment HTTP proxies are disabled
 DNS answers are validated at connection time and the validated IP is dialled
 directly. Private, loopback, link-local and reserved addresses are denied. No
 local server processes or arbitrary commands are launched. Endpoint URLs cannot
-contain user information, query parameters or fragments.
+contain user information or fragments. Queries are rejected except for the exact
+reviewed Atlassian v2 `tools=all` option described below.
 
 Discovery has a 15-second deadline, a 2 MiB response/aggregate catalogue limit,
 at most 20 pages and 500 tools. Tool names currently accept only ASCII letters,
@@ -599,3 +600,24 @@ Remote connections remain the supported deployment model. The
 [managed hosting design](mcp-hosting.md) describes a future dedicated-daemon
 boundary for reviewed server profiles; it does not enable arbitrary server
 commands or mark candidate vendor images as qualified.
+
+## Atlassian v2 flat discovery
+
+The reviewed `https://mcp.atlassian.com/v2/mcp?tools=all` endpoint requests
+[Atlassian's paginated flat catalogue](https://developer.atlassian.com/cloud/rovo-mcp/guides/supported-tools/).
+The console's Atlassian defaults use this endpoint. The API accepts only this
+exact query on this exact endpoint; additional, repeated, encoded or secret query
+parameters remain rejected. Existing query-free connections are preserved.
+
+OAuth discovery must advertise the selected issuer and either this exact resource
+or its query-free v2 resource. Authorization, exchange and refresh retain that
+advertised resource identifier; other resources remain rejected. The query option
+selects catalogue presentation and is not a scope or permission grant.
+
+The existing transport limits apply: 20 pages, 500 unique tools, two MiB aggregate
+catalogue, object schemas and bounded cursors. Refresh advances the catalogue
+revision; calls awaiting approval cannot use stale authority. New operations need
+explicit grants. Dependency failure clears the available catalogue and stays
+visible. TLS fixtures cover pagination, catalogue drift, denied new operations,
+resource binding and browser configuration. Live corporate/vendor qualification
+remains pending.

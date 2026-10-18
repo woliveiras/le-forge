@@ -78,6 +78,7 @@ func testOAuthMultipleServiceConnections(t *testing.T, automatic bool) {
 		{ID: "gitlab", Name: "GitLab instance", Service: "gitlab", Enabled: true, Endpoint: "https://gitlab.example.org/api/v4/mcp", OAuth: &OAuthConfig{Issuer: "https://gitlab.example.org", ClientID: "gitlab", Scopes: []string{"mcp"}}},
 	}
 	second := inputs[1]
+	second.Endpoint = atlassianFlatEndpoint
 	second.ID = "work-two"
 	second.Name = "Another work connection"
 	inputs = append(inputs, second)

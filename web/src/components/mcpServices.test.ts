@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { gitLabOrigin, oauthDefaults, atlassianIssuer } from './mcpServices';
 it('supplies distinct MCP contracts, never REST scopes or shared client credentials',()=>{
  expect(oauthDefaults('github').oauth?.clientId).toBe('');
+ expect(oauthDefaults('atlassian').endpoint).toBe('https://mcp.atlassian.com/v2/mcp?tools=all');
  expect(oauthDefaults('atlassian').oauth?.issuer).toBe(atlassianIssuer);
  expect(oauthDefaults('atlassian').oauth?.scopes).toContain('read:jira:agent-interface');
  expect(oauthDefaults('gitlab','https://gitlab.example.org/')).toEqual({endpoint:'https://gitlab.example.org/api/v4/mcp',oauth:{issuer:'https://gitlab.example.org',clientId:'',scopes:['mcp']}});

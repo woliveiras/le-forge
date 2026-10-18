@@ -188,6 +188,8 @@ func run() error {
 	a.MCP.QuotaNow = func() time.Time { return quotaTime }
 	fixtureRecovery := mcptest.NewRecovering()
 	defer fixtureRecovery.Close()
+	fixtureFlat := mcptest.NewAtlassianFlat()
+	defer fixtureFlat.Close()
 	fixtureMCP := mcptest.New()
 	defer fixtureMCP.Close()
 	fixtureOAuth := mcptest.NewOAuth("")
@@ -227,6 +229,9 @@ func run() error {
 		return err
 	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if endpoint == "https://mcp.atlassian.com/v2/mcp?tools=all" {
+			return mcpconfig.DiscoverWithClient(ctx, fixtureFlat.URL+"?tools=all", token, fixtureFlat.Client())
+		}
 		if endpoint == "https://recovery.fixture.invalid/mcp" {
 			return mcpconfig.DiscoverWithClient(ctx, fixtureRecovery.URL, token, fixtureRecovery.Client())
 		}
@@ -236,6 +241,9 @@ func run() error {
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		if endpoint == "https://mcp.atlassian.com/v2/mcp?tools=all" {
+			return mcpconfig.CallWithClient(ctx, fixtureFlat.URL+"?tools=all", token, name, args, fixtureFlat.Client())
+		}
 		if endpoint == "https://recovery.fixture.invalid/mcp" {
 			return mcpconfig.CallWithClient(ctx, fixtureRecovery.URL, token, name, args, fixtureRecovery.Client())
 		}

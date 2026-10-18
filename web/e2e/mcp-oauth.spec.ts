@@ -116,7 +116,7 @@ test('keeps personal, corporate and GitLab OAuth connections and agent grants in
   await page.getByRole('combobox',{name:/^Service/}).selectOption(service);
   if(service==='gitlab')await page.getByLabel('GitLab instance URL').fill('https://gitlab.fixture.example');
   await page.getByRole('button',{name:'Use OAuth defaults',exact:true}).click();
-  await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue(configurations[service].endpoint);
+  await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue(configurations[service].endpoint+(service==='atlassian'?'?tools=all':''));
   await expect(page.getByText(new URL('/api/v1/mcp/oauth/callback',page.url()).href,{exact:true})).toBeVisible();
   await page.getByLabel('Connection ID',{exact:true}).fill(id);await page.getByLabel('Connection name',{exact:true}).fill(name);
   await page.getByLabel('OAuth client ID',{exact:true}).fill(id);
@@ -130,20 +130,20 @@ test('keeps personal, corporate and GitLab OAuth connections and agent grants in
   await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);
   await page.getByRole('button',{name:'Complete OAuth connection'}).click();
   await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');
-  await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText(`mcp.${id}.search`);
+  await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText(`mcp.${id}.${service==='atlassian'?'getJiraIssue':'search'}`);
  }
  const before=await (await page.request.get('/api/v1/mcp/connections/personal-mcp',{headers})).json();
  const graphID='multi-mcp-grants';
  expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id:graphID,name:graphID},spec:{nodes:[{id:'worker',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},isolation:{mode:'process'},loop:{mode:'once'},prompt:'test',tools:[]}]}}})).status()).toBe(201);
  await page.goto(`/#/g/${graphID}/canvas?sel=node:worker`);
  const grants=page.getByRole('region',{name:'MCP permissions',exact:true});
- for(const [id] of connections)await expect(grants.getByRole('checkbox',{name:`mcp.${id}.search`,exact:true})).not.toBeChecked();
+ for(const [id,,service] of connections)await expect(grants.getByRole('checkbox',{name:`mcp.${id}.${service==='atlassian'?'getJiraIssue':'search'}`,exact:true})).not.toBeChecked();
  await grants.getByRole('checkbox',{name:'mcp.personal-mcp.search',exact:true}).check();
  await Promise.all([page.waitForResponse(r=>r.url().endsWith('/api/v1/graphs/'+graphID)&&r.request().method()==='PUT'&&r.status()===200),page.getByRole('button',{name:'Save graph',exact:true}).click()]);
  await page.goto('/#/integrations');
  const work=page.getByRole('article',{name:'MCP Work Atlassian',exact:true});
  await work.getByRole('button',{name:'Revoke OAuth Work Atlassian',exact:true}).click();await work.getByRole('button',{name:'Confirm revoke Work Atlassian',exact:true}).click();
- await expect(work).toContainText('OAuth: revoked');await expect(work).not.toContainText('mcp.work-mcp.search');
+ await expect(work).toContainText('OAuth: revoked');await expect(work).not.toContainText('mcp.work-mcp.getJiraIssue');
  for(const name of ['Personal GitHub','Other Work Atlassian','Team GitLab'])await expect(page.getByRole('article',{name:'MCP '+name,exact:true})).toContainText('OAuth: authorized');
  expect(await (await page.request.get('/api/v1/mcp/connections/personal-mcp',{headers})).json()).toEqual(before);
  await work.getByRole('button',{name:'Reauthorize Work Atlassian',exact:true}).click();await page.getByRole('button',{name:'Deny fixture access'}).click();await page.getByRole('button',{name:'Complete OAuth connection'}).click();await expect(page.getByText(/authorization cancelled or denied/)).toBeVisible();

@@ -1343,3 +1343,13 @@ only to the draft. Explicit saving retains optimistic concurrency, endpoint-chan
 credential handling and per-agent grants. Unit/API integration/browser tests cover
 resolution, invalid parameters, stale writes, preview cancellation and persisted
 updates. Live vendor/tool permission qualification remains pending.
+
+### Atlassian v2 flat catalogue foundation (2026-10-18)
+
+Only the exact reviewed tools=all query is accepted on the canonical Atlassian v2
+endpoint. The advertised issuer and exact or query-free resource remain validated;
+OAuth requests retain the accepted resource identifier. Existing transport limits,
+revision checks and explicit grants apply to the paginated flat catalogue. TLS
+fixtures and browser coverage prove routing, schema discovery, catalogue drift,
+stale/new-tool denial and failed discovery. Live corporate qualification remains
+pending; dispatcher protection and product/site policy are separate work below.

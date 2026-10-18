@@ -44,6 +44,7 @@ type OAuthView struct {
 	Revocation             string     `json:"revocation,omitempty"`
 }
 type oauthMetadata struct {
+	Resource      string   `json:"resource,omitempty"`
 	Registration  string   `json:"registration_endpoint"`
 	CIMD          bool     `json:"client_id_metadata_document_supported"`
 	Issuer        string   `json:"issuer"`
@@ -232,7 +233,7 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 	if err := oauthJSON(ctx, client, resourceURL, nil, "", &resource); err != nil {
 		return meta, err
 	}
-	if resource.Resource != r.Endpoint || !slices.Contains(resource.Servers, r.OAuth.Issuer) {
+	if (resource.Resource != r.Endpoint && resource.Resource != canonicalMCPResource(r.Endpoint)) || !slices.Contains(resource.Servers, r.OAuth.Issuer) {
 		return meta, fmt.Errorf("%w: OAuth issuer is not advertised for this MCP resource", ErrInvalid)
 	}
 	issuer, _ := url.Parse(r.OAuth.Issuer)
@@ -240,6 +241,7 @@ func (m *Manager) metadata(ctx context.Context, r record) (oauthMetadata, error)
 	if err := oauthJSON(ctx, client, discovery, nil, "", &meta); err != nil {
 		return meta, err
 	}
+	meta.Resource = resource.Resource
 	if meta.Issuer != r.OAuth.Issuer || !slices.Contains(meta.Challenges, "S256") {
 		return meta, fmt.Errorf("%w: issuer mismatch or PKCE S256 unavailable", ErrInvalid)
 	}
@@ -304,7 +306,7 @@ func (m *Manager) StartOAuthReviewed(ctx context.Context, id, actor, redirect, a
 	}
 	state, binding, verifier := nonce(), nonce(), nonce()
 	hash := sha256.Sum256([]byte(verifier))
-	q := url.Values{"response_type": {"code"}, "client_id": {oauthClientID(r)}, "redirect_uri": {redirect}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "scope": {strings.Join(r.OAuth.Scopes, " ")}, "resource": {r.Endpoint}}
+	q := url.Values{"response_type": {"code"}, "client_id": {oauthClientID(r)}, "redirect_uri": {redirect}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "scope": {strings.Join(r.OAuth.Scopes, " ")}, "resource": {oauthResource(r.Endpoint, meta)}}
 	err = m.updatePending(ctx, func(entries map[string]oauthPending) error {
 		if len(entries) >= maxOAuthPending {
 			return fmt.Errorf("%w: too many pending OAuth authorizations", ErrInvalid)
@@ -356,7 +358,7 @@ func (m *Manager) tokenRequest(ctx context.Context, r record, meta oauthMetadata
 	client, close := m.oauthHTTP()
 	defer close()
 	form.Set("client_id", oauthClientID(r))
-	form.Set("resource", r.Endpoint)
+	form.Set("resource", oauthResource(r.Endpoint, meta))
 	secret := ""
 	if r.OAuthClientSealed != "" {
 		b, err := m.Box.Open(r.OAuthClientSealed, prefix+r.ID+"/oauth-client")

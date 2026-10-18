@@ -10,6 +10,7 @@ export function MCPServiceGuide({service}:{service:string}) {
    <p>Pre-registration through the UI requires GitLab 19.3 or a compatible version. Ask the administrator to enable MCP for the instance or group. REST api scope and legacy personal tokens are not MCP authorization. Only publicly reachable HTTPS instances are supported.</p>
    <a href="https://docs.gitlab.com/user/model_context_protocol/mcp_server/#reuse-a-single-oauth-application" target="_blank" rel="noreferrer">GitLab MCP registration instructions</a>
   </>:['atlassian','jira','confluence','bitbucket'].includes(service)?<>
+   <p>The tools=all endpoint option requests a paginated catalogue of individual operations for explicit agent grants. No other query parameters are accepted.</p>
    <p>Use a client already registered with the authorization server advertised by Atlassian MCP v2. Ask your administrator or Atlassian to provision a client for the exact callback below, Authorization Code with PKCE S256, refresh tokens and the reviewed MCP scopes. A REST API 3LO application is not assumed to work.</p>
    <p>The current MCP issuer advertises CIMD and DCR; choose automatic setup to review the available mechanism. Manual setup remains available with a compatible pre-registered client. Live acceptance is still pending. Corporate callback-domain, site and IP policies may require administrator approval.</p>
    <a href="https://github.com/atlassian/atlassian-mcp-server" target="_blank" rel="noreferrer">Atlassian MCP setup and corporate requirements</a>
