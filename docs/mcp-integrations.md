@@ -1,16 +1,15 @@
 # Priority MCP integration contracts
 
-Research date: 2026-10-17. These are source-confirmed vendor contracts and planned
+Research date: 2026-10-17; implementation reconciliation: 2026-10-18. These are source-confirmed vendor contracts and planned
 LeForge deliveries. Implemented compatibility is identified below; this is not
 live-service certification.
 The current [generic client](mcp.md) supports public HTTPS Streamable HTTP,
-protocol 2025-06-18 and optional Bearer credentials. It rejects URL queries except the exact reviewed Atlassian v2 `tools=all` option,
+protocol 2025-06-18 and optional Bearer credentials. Custom connections can explicitly select the bounded stateless 2026-07-28 profile; it does not imply complete warehouse compatibility. It rejects URL queries except the exact reviewed Atlassian v2 `tools=all` option,
 redirects and private destinations. Generic pre-registered OAuth now supports the
 browser lifecycle; see [implementation and limits](mcp.md#browser-oauth-pre-registered-clients).
 GitHub, Atlassian, GitLab and custom setup profiles are available for pre-registered
 clients, plus reviewed DCR/CIMD setup where advertised; [registration and evidence](mcp.md#service-setup-and-independent-connections)
-distinguish fixture coverage from pending live/corporate qualification. Other
-credential modes remain pending.
+distinguish fixture coverage from pending live/corporate qualification. Typed encrypted Atlassian Basic and standalone LangSmith credentials are also implemented; arbitrary credential headers are not supported.
 See also the [additional template survey](mcp-templates.md).
 
 ## GitHub
@@ -39,11 +38,40 @@ authentication metadata, confidential POST exchange/renewal, comma-separated sco
 and OAuth errors returned with HTTP 200. Unit, TLS API integration and browser
 fixtures cover the contract. Follow the [manual app registration guide](mcp.md#registering-githubcom-oauth-for-a-local-leforge); live consent remains pending.
 
-Remaining delivery: guided OAuth app setup and PAT guidance; reviewed
-per-tool permission matrix; repository selection with an honest distinction
+The guided OAuth setup and PAT/read-only toolset profiles are implemented.
+Remaining delivery: a live-qualified per-tool permission matrix and resource
+selection with an honest distinction
 between UI defaults and enforced token restrictions; discovery and read-only
 smoke test; separately approved issue/PR write tests. Diagnose token expiry,
 organization approval/SSO and policy denials without exposing credential values.
+
+### Read-permission review worksheet
+
+Reviewed against official endpoint documentation on 2026-10-18. This is a
+starting worksheet for underlying API permissions, **not a live-tested MCP
+permission matrix**. Check the discovered MCP schema and the server version's
+implementation before assigning a permission to a specific tool/method.
+
+| Intended operation | Fine-grained repository permission to review | Source |
+| --- | --- | --- |
+| Read repository file/directory | Contents: read | [Repository contents](https://docs.github.com/en/rest/repos/contents#get-repository-content) |
+| Read an issue | Issues: read or Pull requests: read, depending on endpoint/resource | [Get an issue](https://docs.github.com/en/rest/issues/issues#get-an-issue) |
+| Read a pull request | Pull requests: read | [Get a pull request](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request) |
+| Read a workflow run | Actions: read | [Get a workflow run](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run) |
+
+Select the credential's resource owner and permitted repositories first. A
+successful public read does not establish access to a private repository or
+prove that an excluded repository is denied. Organization approval, SSO policy,
+expiry and token type can independently restrict calls. A `404` is not evidence
+that the resource does not exist. Do not expand scopes automatically to solve a
+failure, and do not use a read-only toolset label as a credential boundary.
+
+Before closing qualification, run each chosen MCP operation with a dedicated
+test credential that permits only its reviewed resources, then repeat against
+an excluded test resource. Record connection/template revision, exact tool and
+method, expected permission and sanitized outcome. Keep write tests separate
+and obtain approval for the exact external test target. No such live permission
+matrix was executed by this documentation change.
 
 ## Shared Atlassian Cloud contract
 
@@ -75,16 +103,18 @@ names. Request only those needed for the chosen profile:
 | Bitbucket Cloud | `read:bitbucket:agent-interface` | `write:bitbucket:agent-interface` |
 
 The default catalogue also exposes `discover` and dispatcher tools
-`executeRead`, `executeWrite`, `executeDestructive`. The flat catalogue is the
-proposed LeForge route to exact per-operation grants; broad dispatcher grants
-must not provide an escape from those grants. Discover accessible resources and
+`executeRead`, `executeWrite`, `executeDestructive`. LeForge uses the flat catalogue for exact per-operation grants and rejects
+the broad dispatchers during discovery and invocation, including legacy entries. Discover accessible resources and
 resolve `cloudId` as required. [Supported tools and scopes](https://support.atlassian.com/atlassian-ai-gateway/docs/supported-tools/)
 
 Implemented on 2026-10-18: the exact `tools=all` endpoint with bounded pagination,
 unknown/secret query rejection and canonical/advertised OAuth resource binding.
 TLS fixtures and browser tests cover this route; live acceptance remains pending.
-Planned common work: Basic credential support, dispatcher protection,
-product-specific tool filters and explicit site context. Qualify actual protocol version, schema/name compatibility and
+Encrypted Basic credentials, dispatcher protection and an optional finite
+Jira/Confluence read policy with explicit cloud UUIDs are implemented. The policy
+filters the catalogue and checks the site argument before dispatch; it does not
+enforce Jira projects or Confluence spaces. See the [bounded read policy](mcp.md#atlassian-read-boundaries).
+Remaining work: qualify actual protocol version, schema/name compatibility and
 catalogue size against current bounds. Do not relax limits silently. Show site,
 project, workspace and space selections as defaults unless a verified policy
 actually restricts arguments. User permissions and LeForge grants both apply.
@@ -110,10 +140,10 @@ Never replay a possibly completed write automatically after a lost response.
 
 Version templates and record the reviewed source/date; guide credential setup,
 show granted access, discover tools, authorize each agent call and support
-revocation. Add deletion, aggregate quotas and a filterable call/approval/outcome
-history without exposing secrets or sensitive payloads. Implement OAuth state,
+revocation. Deletion, per-connection quotas and a filterable call/approval/outcome
+history are implemented without exposing secrets or sensitive payloads. OAuth state,
 PKCE, callback/issuer validation, encrypted tokens, refresh concurrency and
-reauthorization errors. Do not forward credentials across hosts or use a template
+reauthorization errors are implemented with fixture coverage. Do not forward credentials across hosts or use a template
 to bypass the existing network policy. Additional-header support belongs to the
 broader template backlog; it is not a prerequisite for the initial PAT GitHub path.
 

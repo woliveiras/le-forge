@@ -1605,3 +1605,13 @@ live test passed; response content is not logged and no credential, account,
 installed connection or repository is changed. This is test-only work; existing
 transport/grant units remain unchanged. `query-docs`, authenticated access and
 private library qualification remain pending.
+
+### MCP contract documentation reconciliation (2026-10-18)
+
+The priority integration guide now identifies delivered typed credentials,
+stateless selection, flat Atlassian discovery/dispatcher protection, bounded
+product/site policy, quotas/history and OAuth lifecycle. A source-linked GitHub
+read-permission worksheet separates underlying REST requirements from live MCP
+qualification and defines positive/negative resource checks. No credential or
+external application was changed; a source review is not a tested permission
+matrix. Documentation-only change; `git diff --check` passed.
