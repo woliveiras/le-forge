@@ -182,46 +182,10 @@ duplicate count; the count disclosure explains this limitation. Missing events a
 not inferred to be zero attempts, and execution completion does not imply that
 every tool succeeded.
 
-## Resumable first-use guide
+## First-use navigation
 
-After sign-in, **Getting started** is available above the current screen. It starts
-collapsed and never opens a modal or redirects a route automatically. Open it to
-review concepts, installation health, models, MCP connections and explicit grants,
-graph creation, and execution inspection. **Pause guide** closes it; opening it
-again resumes the selected topic. **Skip for now** advances without marking the
-topic reviewed. Completed topics remain accessible.
-
-Progress is a learning checklist, not an installation readiness certificate:
-**Mark reviewed and continue** records the operator's acknowledgement. Health,
-provider and connection queries run only when the corresponding topic is open.
-Failures remain visible and can be retried with **Refresh prerequisites**; existing
-configuration never becomes proof of successful inference or tool execution.
-Follow the linked screens to inspect detailed tests, authorization and grants.
-
-Progress uses a versioned browser-local record scoped to the origin and sign-in
-identity name/role. Only a topic index and reviewed topic identifiers are stored;
-the guide stores no tokens, configuration, graph IDs or connection IDs. Shared
-identities in the same browser share progress. Clearing browser storage removes
-progress, and changing origin/identity/role starts a separate record. It does not
-sync across devices or authenticate anyone. Storage failures and malformed records
-are reported. **Restart guide → Confirm restart** replaces only this record, never
-graphs, drafts, connections, permissions, or execution history. Opening or restarting
-the guide preserves mounted editor drafts; normal full-page reload limitations
-still apply.
-
-**Create echo example** explicitly validates and creates a new graph through the
-existing authorized API, then opens its canvas without starting it. Viewers cannot
-create examples. The example has one finite echo agent with no model or tool grants;
-the built-in echo runtime forwards messages and summarizes their count, without
-accessing repositories. It is not a model-inference or MCP validation. Read-only
-workspace enforcement is a native-runtime feature and is not enabled on echo.
-Operators can adapt the graph in the canvas, validate/save changes, explicitly run
-it, and inspect Runs. A creation error retains the guide and its progress; retries
-within the mounted guide reuse the graph ID to avoid duplicate creation. If the
-response was lost, inspect Graphs before reloading and creating another example.
-
-MCP discovery does not require an agent. Model tests, OAuth consent, tool grants,
-execution, approvals and configuration remain separate explicit actions with
-existing server authorization. First-class task submission and delegation remain
-separate workstreams; the guide describes currently available execution, Activity,
-Messages, Approvals and Files views without treating unavailable features as done.
+The global Getting started panel has been removed following layout feedback.
+Use the main navigation directly: Graphs, Connections, Models, Administration,
+Approvals, and Skills & steering. Contextual help remains available in each screen.
+Existing browser-local guide progress is ignored; no stored application data,
+graphs, drafts, connections, permissions, or execution history is deleted.

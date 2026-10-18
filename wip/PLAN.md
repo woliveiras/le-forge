@@ -6,9 +6,10 @@
 
 Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
-and must remain unchecked until performed. The UX reorganization, UX-01–UX-05 and
-resumable onboarding are implemented and activated; their recorded automated and
-installation smoke tests do not constitute developer acceptance.
+and must remain unchecked until performed. The UX reorganization and UX-01–UX-05 are implemented and activated. The global
+onboarding panel was removed from the application on 2026-10-18 at the user's
+request after reported layout breakage. Activation of this removal is pending;
+earlier onboarding evidence below is historical, not current acceptance.
 
 Continue unit, integration and relevant browser regression tests with each change.
 Defer the consolidated developer walkthrough and clean-install acceptance exercise
@@ -618,24 +619,25 @@ Review deployment and documentation so the primary workflow is:
 
 **Acceptance criterion:** Setting up and operating a new installation does not depend on editing files on the server or submitting tasks through the CLI.
 
-### 10. Guide First Use with Onboarding
+### 10. First-use guidance — global onboarding withdrawn
 
-Add an onboarding experience in the interface to introduce LeForge and guide operators from initial configuration through their first completed task. The journey must be progressive, resumable, and dismissible without blocking experienced users; guidance must remain available after completion.
+**Decision (2026-10-18):** Remove the global resumable onboarding panel following
+user-reported layout breakage. It is no longer a Release 1 implementation or
+acceptance requirement. Keep direct navigation and contextual help. Historical
+implementation/activation evidence below describes the previous version.
+Browser-local progress is ignored, not deleted; graphs, connections, grants,
+drafts and execution history are preserved. Installation activation is pending.
 
-The onboarding should guide users to:
+Removal regression coverage checks absent onboarding for fresh and existing
+browser state, direct navigation, draft preservation, explicit echo execution,
+viewer restrictions, dependency failures, and narrow-screen layout.
 
-- understand the basics of graphs, agents, channels, and tools;
-- check installation services and configure/test a model provider;
-- discover and configure MCP connections and permissions when available;
-- create a first graph on the canvas, configure agents, and connect them with channels;
-- start a task and monitor agents, messages, executions, and approvals;
-- inspect resulting files and diffs while respecting the user's read-only access.
-
-Include a safe, working example graph to explore or duplicate, clearly indicating which settings must be adjusted before running it. Show unconfigured dependencies and provide paths to the relevant screens; do not claim success until real tests pass. Let users return to tutorials and contextual help without restarting or losing existing work.
-
-**Implementation (2026-10-18):** The optional Getting started panel now covers the existing graph/execution journey. It stores only a versioned topic index and reviewed topic IDs in browser local storage scoped to origin and identity name/role. Acknowledgement is separate from live prerequisite observations; provider/MCP presence never proves inference or authorization. Skip/pause/revisit preserve progress, and deliberate restart resets only the guide. Existing graph drafts remain mounted. An explicit validated echo example requires no model or tools and never auto-starts. Task submission and delegation remain separate workstreams. Installation activation, developer acceptance and clean-install validation are not claimed by this implementation.
-
-**Acceptance criterion:** A new operator can follow onboarding in the browser, understand the essential concepts, configure available dependencies, create or adapt an example graph, and run their first task. They can skip steps, resume the journey, and revisit help without server or CLI access.
+**Removal verification:** `make test` passed (Go/Python and 272 frontend tests),
+`make lint` and `make build` passed, and seven targeted Playwright journeys passed
+(onboarding removal, navigation and UX feedback). The browser suite builds the
+web application and uses the real disposable backend. Existing isolated guide
+unit tests are retained, but the guide has no application mount or production
+import. No installation activation is claimed.
 
 ## Release 2 — Reusable Components
 
@@ -661,8 +663,8 @@ After graph creation and operation have stabilized:
 6. **Web configuration for models and MCPs**, with protected credentials and Bitbucket, GitHub, Confluence, and Jira integrations.
 7. **Skills and steering**, with hybrid storage, precedence, traceability, and trust boundaries.
 8. **Dynamic delegation**, with a configurable choice between individual approval and bounded automatic execution.
-9. **Guided onboarding**, integrated into delivered screens and flows, with an example graph and resumable help.
-10. **End-to-end tests** for the full interface workflow, including onboarding, authorization, and isolation.
+9. **Contextual guidance and direct navigation**; the global onboarding panel has been withdrawn.
+10. **End-to-end tests** for the full interface workflow, including direct navigation, authorization, and isolation.
 11. **Component library** as the second release.
 
 Compose delivery note: development-service selection and reviewed list-form
@@ -737,8 +739,8 @@ remain separate planned work. All interface copy remains in English.
    role gates. Results distinguish execution status from blocked tool calls; workspace
    links explicitly refer to current graph files. Full-history pagination and replay
    are outside this interface slice.
-6. Consolidate typography, spacing, contextual help, focus and responsive behavior, then
-   implement optional resumable onboarding. Prototype/user research does not establish
+6. Consolidate typography, spacing, contextual help, focus and responsive behavior.
+   The global onboarding panel has been withdrawn. Prototype/user research does not establish
    usability success: validate with developers before claiming the proposed task-time goals.
 
 Each slice requires unit tests, real-client/component integration tests and disposable-
@@ -764,7 +766,7 @@ The remaining pages now share heading, spacing, form, card, button and focus
 styles, including Skills, Approvals, Models, Administration and canvas controls.
 Optional guidance uses native disclosures; security/error context stays visible.
 Existing handlers, role checks and draft semantics are retained. Developer journey
-validation and optional resumable onboarding remain pending. This visual slice
+validation remains pending; global onboarding has since been withdrawn. This visual slice
 was subsequently activated with approval; see the evidence below.
 
 
@@ -980,7 +982,7 @@ intermittent sandbox supervision test remain open. No secret values, authenticat
 configuration, external OAuth applications or persistent volumes were changed.
 
 
-**Resumable onboarding evidence (2026-10-18):** Implemented an optional, initially
+**Historical resumable onboarding evidence (withdrawn 2026-10-18):** Implemented an optional, initially
 collapsed Getting started panel without route redirects or background mutations.
 Six topics cover concepts, health, models, MCP discovery/grants, canvas editing
 and execution inspection. Live prerequisite reads report errors and retry explicitly;
@@ -1017,7 +1019,7 @@ usability acceptance is claimed. First-class tasks and delegation remain in thei
 existing workstreams. Activation and the final developer usability round are pending.
 
 
-**Onboarding installation activation (2026-10-18):** Activated commit 9b8d1e8
+**Historical onboarding installation activation (before removal):** Activated commit 9b8d1e8
 with docker compose build forged and docker compose up -d --no-deps
 --force-recreate --wait forged; both completed successfully. Only forged was
 recreated, without removing volumes, running migrations, or changing authentication.

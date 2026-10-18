@@ -1,23 +1,14 @@
 import { test, expect } from '@playwright/test';
 const headers = { Authorization: 'Bearer e2e-admin-token' };
 
-test('first use resumes, creates a safe example, preserves canvas drafts and inspects a real execution', async ({page}) => {
+test('direct first use preserves canvas drafts and inspects a real execution without onboarding', async ({page}) => {
   await page.addInitScript(() => localStorage.setItem('leforgeToken', 'e2e-admin-token'));
+  const id='direct-first-use';
+  expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:'Direct first use'},spec:{nodes:[{id:'echo',name:'Echo',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}}})).status()).toBe(201);
   await page.goto('/#/graphs');
-  const guide = page.getByRole('region', {name:'Getting started', exact:true});
-  await guide.getByRole('button', {name:'Getting started', exact:true}).click();
-  await guide.getByText('Mark reviewed and continue').click();
-  await expect(guide.getByRole('status')).toContainText('API health: ok');
-  await guide.getByText('Skip for now').click();
-  await guide.getByRole('button', {name:'Pause guide', exact:true}).first().click();
-  await page.reload();
-  await guide.getByRole('button', {name:'Getting started', exact:true}).click();
-  await expect(guide.getByRole('heading', {name:'Choose a model', exact:true})).toBeVisible();
-  await expect(guide).toContainText('1/6 topics reviewed');
-  await guide.getByRole('button', {name:/5. Create and review/}).click();
-  await guide.getByRole('button', {name:'Create echo example', exact:true}).click();
-  await expect(page).toHaveURL(/g\/first-steps-.*\/canvas/);
-  const id = decodeURIComponent(new URL(page.url()).hash.split('/')[2]);
+  const guide = page.getByRole('region',{name:'Getting started',exact:true});
+  await expect(guide).toHaveCount(0);
+  await page.goto('/#/g/'+id+'/canvas');
   const stored = await (await page.request.get('/api/v1/graphs/' + id, {headers})).json();
   expect(stored.graph.spec.nodes[0].runtime.kind).toBe('echo');
   expect(stored.graph.spec.nodes[0].tools ?? []).toEqual([]);
@@ -25,13 +16,10 @@ test('first use resumes, creates a safe example, preserves canvas drafts and ins
   await page.getByRole('complementary',{name:'Agents', exact:true}).getByRole('button',{name:'Configure Echo',exact:true}).click();
   const name = page.getByRole('region',{name:'Agent configuration',exact:true}).getByLabel('Name',{exact:true});
   await name.fill('My first echo');
-  await guide.getByRole('button', {name:'Getting started', exact:true}).click();
-  await guide.getByRole('button', {name:/3. Choose a model/}).click();
-  await guide.getByRole('link', {name:'Open Models'}).click();
+  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Models',exact:true}).click();
   await page.getByRole('button', {name:'Graphs',exact:true}).click();
   await page.getByRole('button',{name:'Configure Echo',exact:true}).click();
   await expect(name).toHaveValue('My first echo');
-  await guide.getByRole('button',{name:'Pause guide',exact:true}).first().click();
   await page.getByRole('button',{name:'Review & save',exact:true}).click();
   await page.getByRole('button',{name:'Save graph draft',exact:true}).click();
   await expect(page.getByRole('button',{name:'Review & save',exact:true})).toBeDisabled();
@@ -44,36 +32,22 @@ test('first use resumes, creates a safe example, preserves canvas drafts and ins
   await expect(page.getByRole('region',{name:'Run detail'})).toContainText('Completed');
   await page.getByRole('navigation',{name:'Run sections'}).getByRole('link',{name:'Result',exact:true}).click();
   await expect(page.getByRole('region',{name:'Run detail'})).toContainText('echoed 0 message(s)');
-  await guide.getByRole('button',{name:'Getting started',exact:true}).click();
-  await guide.getByRole('button',{name:/1. Understand/}).click();
-  for(let i=0;i<6;i++) await guide.getByText('Mark reviewed and continue').click();
   await page.reload();
-  await expect(guide).toContainText('6/6 topics reviewed · Guide complete');
-  await guide.getByRole('button',{name:'Getting started',exact:true}).click();
-  await guide.getByText('Restart guide').click();
-  await guide.getByText('Confirm restart').click();
-  await expect(guide).toContainText('0/6 topics reviewed');
-  await page.screenshot({path:'/tmp/leforge-onboarding-desktop.png',fullPage:true});
+  await expect(guide).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Run detail'})).toContainText('Completed');
   expect((await page.request.get('/api/v1/graphs/' + id,{headers})).ok()).toBe(true);
 });
 
-test('viewer can resume help and retry a failed prerequisite check without mutation', async ({page}) => {
-  await page.addInitScript(() => localStorage.setItem('leforgeToken','e2e-viewer-token'));
-  const mutations:string[] = [];
-  page.on('request', r => {if(r.method() !== 'GET') mutations.push(r.url());});
-  await page.setViewportSize({width:580,height:850});
-  await page.goto('/#/graphs');
-  const guide=page.getByRole('region',{name:'Getting started',exact:true});
-  await guide.getByRole('button',{name:'Getting started',exact:true}).click();
-  await page.route('**/api/v1/providers',r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Provider service unavailable'})}));
-  await guide.getByRole('button',{name:/3. Choose/}).click();
-  await expect(guide.getByRole('alert')).toContainText('Could not check prerequisites');
-  await page.unroute('**/api/v1/providers');
-  await guide.getByText('Refresh prerequisites').click();
-  await expect(guide.getByRole('status')).toContainText('configured');
-  await guide.getByRole('button',{name:/5. Create/}).click();
-  await expect(guide.getByText('Create echo example')).toBeDisabled();
-  expect(mutations).toEqual([]);
-  await page.screenshot({path:'/tmp/leforge-onboarding-mobile.png',fullPage:true});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+test('viewer navigation ignores corrupt legacy guide progress and preserves narrow-screen permissions',async({page})=>{
+ await page.addInitScript(()=>{localStorage.setItem('leforgeToken','e2e-viewer-token');localStorage.setItem('leforge.guide.v1:["viewer","viewer"]','{');});
+ const mutations:string[]=[];page.on('request',r=>{if(r.method()!=='GET')mutations.push(r.url());});
+ await page.setViewportSize({width:580,height:850});await page.goto('/#/graphs');
+ await expect(page.getByRole('heading',{name:'Graphs',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Getting started',exact:true})).toHaveCount(0);
+ await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Models',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Models',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Add provider'})).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('region',{name:'Getting started',exact:true})).toHaveCount(0);
+ expect(mutations).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+ expect(await page.evaluate(()=>localStorage.getItem('leforge.guide.v1:["viewer","viewer"]'))).toBe('{');
 });

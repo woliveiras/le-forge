@@ -8,9 +8,10 @@ Checked boxes represent only work that has been implemented and verified. Releas
 
 Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
-and must remain unchecked until performed. The UX reorganization, UX-01–UX-05 and
-resumable onboarding are implemented and activated; their recorded automated and
-installation smoke tests do not constitute developer acceptance.
+and must remain unchecked until performed. The UX reorganization and UX-01–UX-05 are implemented and activated. The global
+onboarding panel was removed from the application on 2026-10-18 at the user's
+request after reported layout breakage. Activation of this removal is pending;
+earlier onboarding evidence below is historical, not current acceptance.
 
 Continue unit, integration and relevant browser regression tests with each change.
 Defer the consolidated developer walkthrough and clean-install acceptance exercise
@@ -529,31 +530,25 @@ permission intersections, cumulative billing budgets or full tree controls are r
 
 **Done when:** A new installation can be configured and operated in the browser; infrastructure commands are limited to initial deployment and documented administrative maintenance.
 
-### 10. Guide First Use with Onboarding
+### 10. First-use guidance — global onboarding withdrawn
 
-#### Journey and Content
+**Decision (2026-10-18):** Remove the global resumable onboarding panel following
+user-reported layout breakage. It is no longer a Release 1 implementation or
+acceptance requirement. Keep direct navigation and contextual help. Historical
+implementation/activation evidence below describes the previous version.
+Browser-local progress is ignored, not deleted; graphs, connections, grants,
+drafts and execution history are preserved. Installation activation is pending.
 
-- [x] Define the initial journey from arriving at the application through the first completed execution, identifying prerequisites and alternatives when providers/MCPs are not yet configured.
-- [x] Explain graph, agent, channel, tool, execution, and approval concepts in plain language.
-- [x] Guide installation and model-provider health checks without presenting configuration/listing as proof that inference succeeded.
-- [x] Guide MCP connection and permission assignment when available; adapt the steps and honestly identify unavailable features.
-- [x] Guide creation of agents and channels in the visual editor, validation, and saving of the first graph.
-- [x] Guide currently available execution start, monitoring of events/messages/approvals, and inspection of files/diffs; explicitly identify first-class task submission and delegation as separate pending workstreams.
-- [x] Create or review a safe, functional example graph, documenting what users must configure or adapt before running it.
+Removal regression coverage checks absent onboarding for fresh and existing
+browser state, direct navigation, draft preservation, explicit echo execution,
+viewer restrictions, dependency failures, and narrow-screen layout.
 
-#### Interface, Progress, and Validation
-
-- [x] Add progressive, dismissible, resumable onboarding that does not block experienced users or erase current work when the guide starts or resumes.
-- [x] Allow users to return to onboarding and contextual help after completion without inadvertently resetting the completion state.
-- [x] Show the real state of prerequisites and dependencies; provide navigation to configuration and never mark steps complete through fallback or mere configuration presence.
-- [x] Define and document how progress is persisted and how to deliberately restart the guide, respecting the installation's authentication and privacy model.
-- [x] Add unit and integration tests for progress, resumption, dismissal, intentional restart, missing prerequisites, and errors during guided steps.
-- [x] Add end-to-end tests for the first-use journey, including canvas graph creation and execution/result inspection when corresponding steps are available.
-- [x] Update quickstart documentation and contextual help to remain consistent with onboarding.
-
-**Implemented scope:** Browser guidance and automated validation cover the existing execution journey. Installation activation is recorded below. Developer usability acceptance and a clean-install exercise are deferred to final Release 1 validation; this does not complete first-class tasks or delegation.
-
-**Done when:** A new operator can follow onboarding in the browser, understand essential concepts, configure available dependencies, create or adapt an example graph, and run a first task; they can skip steps, resume, and revisit help without server or CLI access.
+**Removal verification:** `make test` passed (Go/Python and 272 frontend tests),
+`make lint` and `make build` passed, and seven targeted Playwright journeys passed
+(onboarding removal, navigation and UX feedback). The browser suite builds the
+web application and uses the real disposable backend. Existing isolated guide
+unit tests are retained, but the guide has no application mount or production
+import. No installation activation is claimed.
 
 ### 11. Integrated Validation of Release 1
 
@@ -561,7 +556,7 @@ Run the consolidated acceptance round after the remaining Release 1 implementati
 
 - [ ] Create an end-to-end test flow: installation → login → provider → MCP connection → permissions → visual editor → environment build → task → execution → files/diff → approval, when enabled.
 - [ ] Repeat the flow with both approval-required and automatic delegation policies.
-- [ ] Validate onboarding on a clean installation, including steps that depend on real test MCPs and providers.
+- [ ] Validate direct first-use navigation on a clean installation, including real test MCPs and providers; the global onboarding panel has been withdrawn.
 - [ ] Verify that no interface path allows users to directly edit workspace files.
 - [ ] Verify that no secret reaches the browser after saving, the runtime, a prompt, or logs.
 - [ ] Verify that no project toolchain, image, or container is installed or created on the host; everything runs on the LeForge Docker daemon and is removed by its reset.
@@ -597,7 +592,7 @@ Start only after Release 1 is complete and stable.
 - [x] Deliver Runs list/detail screens over existing execution records, highlighting blockers and distinguishing execution outcome from individual tool outcomes. — Search/filter the latest 100 executions; Result, Timeline, Tool calls, Messages and Diagnostics use existing authorized APIs. Details verify graph identity, correlate records by persisted IDs, label bounded history and current-workspace links, and reuse approval role gates. Unit/real-client integration tests cover filters, scope, independent tool outcomes, polling, missing records, failures and recovery. Chromium covers approval-to-completion, deep links/reload/back, viewer restrictions, graph mismatch and failed-history retry. All 219 frontend tests and 42 standard/hosted-CIMD E2E scenarios pass; the six Runs/Activity scenarios were repeated after final changes. make test, make lint and make build pass. Installation activation and developer usability validation remain separate.
 - [x] Consolidate typography, spacing, button hierarchy, contextual help and accessible responsive components across the remaining screens. — Shared page/card/form styles cover Models, Administration, Approvals and Skills; canvas guidance is a native disclosure. Skills adopts shared action buttons with unchanged handlers and disabled fieldsets. Security notices and errors remain visible; focus and reduced-motion styles are explicit. Unit tests cover disclosure and disabled actions; real-client integration proves help does not invoke providers or expose viewer actions. Chromium covers keyboard disclosure, narrow layouts, viewer permissions and unchanged canvas editing. make test (229 frontend tests), make lint, make build and make test-e2e (45 standard plus one hosted-CIMD scenario) pass. A canvas-edge rendering failure after reload occurred in an earlier suite attempt; its isolated repeat and the final full suite passed without changing assertions. Preview was inspected at narrow and desktop widths. This slice was subsequently activated as commit 7ef1178 on 2026-10-17; see the activation evidence below. Developer usability acceptance remains pending.
 - [ ] Final Release 1 acceptance: validate navigation and the three redesigned journeys with developers; record evidence separately from proposed usability targets. — Deferred by user decision on 2026-10-18 until remaining implementation is ready; not a blocker to development.
-- [x] Complete resumable onboarding after the underlying journeys stabilize; keep first-class tasks and delegation in their existing workstreams. — Optional Getting started panel, browser-local identity-scoped progress, explicit review/skip/pause/restart, live prerequisite reads and safe echo example. See the 2026-10-18 implementation and activation evidence below; developer acceptance is deferred to final Release 1 validation.
+- [x] Remove the global onboarding panel following user-reported layout breakage; preserve direct navigation and contextual help. Activation of the removal is pending.
 
 
 **Navigation baseline activation (2026-10-17):** Commit b0f7670 and preceding UX
@@ -617,7 +612,7 @@ unchanged. Authenticated browser checks covered Models and its four providers,
 keyboard-opened help, Skills guidance, Approvals, Administration health and canvas
 guidance. Software Factory rendered its ten edges before and after reload;
 Save graph remained disabled. No configuration, grant or credential edits were
-submitted. Developer usability acceptance and resumable onboarding remain pending.
+submitted. Developer usability acceptance remains pending; global onboarding has since been withdrawn.
 
 
 **Developer usability round (2026-10-17, in progress):** The first task asks the
@@ -756,7 +751,7 @@ intermittent sandbox supervision test remain open. No secret values, authenticat
 configuration, external OAuth applications or persistent volumes were changed.
 
 
-**Resumable onboarding evidence (2026-10-18):** Implemented an optional, initially
+**Historical resumable onboarding evidence (withdrawn 2026-10-18):** Implemented an optional, initially
 collapsed Getting started panel without route redirects or background mutations.
 Six topics cover concepts, health, models, MCP discovery/grants, canvas editing
 and execution inspection. Live prerequisite reads report errors and retry explicitly;
@@ -793,7 +788,7 @@ usability acceptance is claimed. First-class tasks and delegation remain in thei
 existing workstreams. Activation and the final developer usability round are pending.
 
 
-**Onboarding installation activation (2026-10-18):** Activated commit 9b8d1e8
+**Historical onboarding installation activation (before removal):** Activated commit 9b8d1e8
 with docker compose build forged and docker compose up -d --no-deps
 --force-recreate --wait forged; both completed successfully. Only forged was
 recreated, without removing volumes, running migrations, or changing authentication.
