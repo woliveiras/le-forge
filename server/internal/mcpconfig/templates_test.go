@@ -9,6 +9,9 @@ func TestTemplateValidation(t *testing.T) {
 	for _, template := range Templates() {
 		t.Run(template.ID, func(t *testing.T) {
 			in := Input{ID: "connection", Name: "Connection", Service: template.Service, Endpoint: template.Endpoint, Template: &template.TemplateRef}
+			if template.Service == "sentry" {
+				in.OAuth = &OAuthConfig{Issuer: "https://mcp.sentry.dev", ClientID: "client", Scopes: []string{"org:read"}}
+			}
 			if template.Service == "gitlab" {
 				in.OAuth = &OAuthConfig{Issuer: "https://gitlab.com", ClientID: "client", Scopes: []string{"mcp"}}
 			}

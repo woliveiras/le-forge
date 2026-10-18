@@ -1,7 +1,11 @@
 export function MCPServiceGuide({service}:{service:string}) {
  return <aside aria-label="OAuth service setup">
   <p>Connections belong to this LeForge installation. Use separate IDs and names, such as Personal GitHub and Work Atlassian. Each connection has its own credentials and agent grants.</p>
-  {service==='github'?<>
+  {service==='sentry'?<>
+   <p>Use the Sentry MCP issuer https://mcp.sentry.dev and the exact callback below. Review automatic registration to choose advertised DCR/CIMD, or enter a compatible previously registered client. Metadata availability does not prove account approval.</p>
+   <p>Start with org:read. Project, team, event and alert write scopes need separate review. OAuth consent does not grant agent tools. Organization/project endpoint defaults do not replace credential restrictions.</p>
+   <a href="https://mcp.sentry.dev/" target="_blank" rel="noreferrer">Sentry MCP setup</a>
+  </>:service==='github'?<>
    <p>Register a dedicated GitHub OAuth App with the callback below and your LeForge homepage. Enter its Client ID and client secret. Start with read:user and offline_access; private repository access needs a separate permission review.</p>
    <a href="https://github.com/settings/applications/new" target="_blank" rel="noreferrer">Register GitHub OAuth App</a>
    <p>Organization approval and SSO may restrict access. GitHub does not advertise standard token revocation: also revoke the grant in GitHub account settings.</p>

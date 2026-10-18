@@ -160,7 +160,7 @@ func TestMCPGatewayWithTLSAndPersistedRegistry(t *testing.T) {
 func TestMCPVersionedTemplatesPersistence(t *testing.T) {
 	srv, a := setupApp(t, nil)
 	var catalogue []mcpconfig.Template
-	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 7 {
+	if code := call(t, srv, "GET", "/api/v1/mcp/templates", viewerTok, "", "", &catalogue); code != 200 || len(catalogue) != 8 {
 		t.Fatal(code, catalogue)
 	}
 	template := catalogue[0]
@@ -338,5 +338,32 @@ func TestMCPTemplateParametersAPI(t *testing.T) {
 	}
 	if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/mcp/connections/"+in.ID, adminTok, string(body), map[string]string{"If-Match": "1"}); c != 409 {
 		t.Fatal("stale template update", c)
+	}
+}
+
+func TestSentryTemplateConfigurationDoesNotAuthorize(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	in := mcpconfig.Input{ID: "sentry-profile", Name: "Sentry profile", Service: "sentry", Endpoint: "https://mcp.sentry.dev/mcp", Template: &mcpconfig.TemplateRef{ID: "sentry", Version: 1}, OAuth: &mcpconfig.OAuthConfig{Issuer: "https://mcp.sentry.dev", ClientID: "registered-client", Scopes: []string{"org:read"}}}
+	body, _ := json.Marshal(in)
+	path := "/api/v1/mcp/connections"
+	if code := call(t, srv, "POST", path, viewerTok, "application/json", string(body), nil); code != 403 {
+		t.Fatal(code)
+	}
+	var saved mcpconfig.View
+	if code := call(t, srv, "POST", path, adminTok, "application/json", string(body), &saved); code != 201 {
+		t.Fatal(code)
+	}
+	loaded, err := a.MCP.Get(t.Context(), in.ID)
+	if err != nil || loaded.OAuth == nil || loaded.OAuth.Status != "authorization_required" || len(loaded.Tools) != 0 || loaded.CredentialConfigured {
+		t.Fatal(loaded, err)
+	}
+	in.ID = "sentry-bearer"
+	in.OAuth = nil
+	body, _ = json.Marshal(in)
+	if code := call(t, srv, "POST", path, adminTok, "application/json", string(body), nil); code != 422 {
+		t.Fatal(code)
+	}
+	if _, err := a.MCP.Get(t.Context(), in.ID); err == nil {
+		t.Fatal("invalid template persisted")
 	}
 }

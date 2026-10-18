@@ -1417,3 +1417,14 @@ fields without exposing stored keys. Unit, real TLS transport/storage integratio
 and browser fixtures cover persistence, calls, discovery and invalid settings.
 This profile does not qualify hosted LangSmith OAuth, self-hosted private URLs,
 provider tool permissions, Sentry or Databricks; those remain separate work.
+
+### Sentry MCP configuration profile (2026-10-18)
+
+The immutable Sentry v1 template and service selector provide the public endpoint,
+issuer, minimal advertised org:read scope and provider setup guidance. Saving a
+connection neither registers a client nor authorizes/grants tools. Existing PKCE,
+resource/issuer discovery, registration review, token sealing and revocation
+flows remain unchanged; there is no Sentry compatibility bypass. Unit, API/storage
+integration and browser configuration tests cover pending authorization and invalid
+Bearer template use. Live consent, dispatcher/catalogue qualification and actual
+per-tool scope requirements remain pending despite advertised DCR/CIMD support.

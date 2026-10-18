@@ -685,3 +685,27 @@ expected headers, encrypted persistence and missing-context failures. Browser
 fixtures verify save/discovery and rejection of unauthorized header names. Live
 account access, per-tool permission/cost behavior and regional deployments remain
 pending qualification.
+
+### Sentry OAuth profile
+
+Choose the versioned **Sentry** template to populate the public MCP endpoint,
+issuer and `org:read` scope. Enter a compatible registered client or review the
+existing automatic registration flow; no application is registered on save.
+Use the exact callback shown by LeForge. Agent tools still require explicit
+grants after successful authorization and discovery.
+
+The [Sentry MCP guide](https://mcp.sentry.dev/) and
+[authorization metadata](https://mcp.sentry.dev/.well-known/oauth-authorization-server)
+were reviewed on 2026-10-18. The server advertises PKCE S256, refresh tokens,
+DCR, CIMD and revocation. This is metadata evidence, not completed consent or
+refresh/revocation acceptance. The generic OAuth implementation still validates
+protected-resource metadata, issuer binding and advertised client methods.
+No provider-specific compatibility exception was added.
+
+The template intentionally requests only the advertised `org:read` scope.
+Additional project/team/event/alert write scopes require review; it does not
+claim that all read tools work with this scope. Scoped organization/project
+endpoints can be configured after detaching the template, but require their own
+metadata verification and permission review. Generic dispatcher tools must not
+be treated as grants to individual underlying operations. Catalogue qualification,
+live tool permissions and account acceptance remain pending.

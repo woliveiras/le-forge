@@ -2,7 +2,7 @@ import type { MCPConnectionInput } from '../api/types';
 
 export const atlassianIssuer = 'https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3';
 export const serviceOptions = [
- ['generic','Custom'],['github','GitHub'],['atlassian','Atlassian'],['gitlab','GitLab'],
+ ['generic','Custom'],['github','GitHub'],['atlassian','Atlassian'],['gitlab','GitLab'],['sentry','Sentry'],
  ['bitbucket','Bitbucket (existing profile)'],['jira','Jira (existing profile)'],['confluence','Confluence (existing profile)'],
 ] as const;
 
@@ -14,6 +14,7 @@ export function gitLabOrigin(value:string):string {
 }
 
 export function oauthDefaults(service:string, instance='https://gitlab.com'):Pick<MCPConnectionInput,'endpoint'|'oauth'> {
+ if(service==='sentry') return {endpoint:'https://mcp.sentry.dev/mcp',oauth:{issuer:'https://mcp.sentry.dev',clientId:'',scopes:['org:read']}};
  if(service==='github') return {endpoint:'https://api.githubcopilot.com/mcp/',oauth:{issuer:'https://github.com/login/oauth',clientId:'',scopes:['read:user','offline_access']}};
  if(service==='atlassian'||['jira','confluence','bitbucket'].includes(service)) return {endpoint:'https://mcp.atlassian.com/v2/mcp?tools=all',oauth:{issuer:atlassianIssuer,clientId:'',scopes:['read:me','offline_access','read:jira:agent-interface','read:confluence:agent-interface']}};
  if(service==='gitlab'){const origin=gitLabOrigin(instance);return {endpoint:origin+'/api/v4/mcp',oauth:{issuer:origin,clientId:'',scopes:['mcp']}};}

@@ -12,3 +12,8 @@ it('supplies distinct MCP contracts, never REST scopes or shared client credenti
 it('rejects unsafe or ambiguous instance input',()=>{
  for(const value of ['gitlab.example','http://gitlab.example','https://user:secret@gitlab.example','https://gitlab.example/path','https://gitlab.example/?token=x','https://gitlab.example/#x']) expect(()=>gitLabOrigin(value)).toThrow();
 });
+it('starts Sentry with a public MCP issuer and minimal advertised scope',()=>{
+ expect(oauthDefaults('sentry')).toEqual({endpoint:'https://mcp.sentry.dev/mcp',oauth:{issuer:'https://mcp.sentry.dev',clientId:'',scopes:['org:read']}});
+ const first=oauthDefaults('sentry');first.oauth!.scopes.push('project:write');
+ expect(oauthDefaults('sentry').oauth!.scopes).toEqual(['org:read']);
+});

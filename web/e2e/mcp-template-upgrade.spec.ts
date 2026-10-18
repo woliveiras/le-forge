@@ -48,3 +48,19 @@ test('GitLab template reviews an instance and keeps authorization pending withou
  const response=await page.request.get('/api/v1/mcp/connections/gitlab-template-instance',{headers});expect(response.ok()).toBeTruthy();
  const saved=await response.json();expect(saved.templateParameters).toEqual({instance:'https://gitlab.fixture.example'});expect(saved.oauth.status).toBe('authorization_required');expect(saved.tools).toEqual([]);
 });
+
+test('Sentry template keeps consent and agent grants separate from configuration',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/connections/connect?template=sentry&version=1');
+ await page.getByRole('button',{name:'Use template defaults'}).click();
+ await expect(page.getByLabel('MCP endpoint',{exact:true})).toHaveValue('https://mcp.sentry.dev/mcp');
+ await expect(page.getByLabel('OAuth issuer',{exact:true})).toHaveValue('https://mcp.sentry.dev');
+ await expect(page.getByRole('link',{name:'Sentry MCP setup',exact:true})).toBeVisible();
+ await page.getByLabel('OAuth client ID',{exact:true}).fill('fixture-client');
+ await page.getByLabel('Connection ID',{exact:true}).fill('sentry-template');
+ await page.getByLabel('Connection enabled',{exact:true}).uncheck();
+ await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page).toHaveURL(/connections\/c\/sentry-template\/overview$/);
+ const response=await page.request.get('/api/v1/mcp/connections/sentry-template',{headers});expect(response.ok()).toBeTruthy();
+ const saved=await response.json();expect(saved.oauth.status).toBe('authorization_required');expect(saved.oauth.scopes).toEqual(['org:read']);expect(saved.tools).toEqual([]);expect(saved.credentialConfigured).toBe(false);
+});
