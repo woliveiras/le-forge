@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/instructions"
 	"github.com/woliveiras/le-forge/server/internal/llm"
@@ -101,7 +102,12 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		x.InputIDs = append(x.InputIDs, m.ID)
 	}
 	span.SetAttributes(attribute.String("leforge.execution", x.ID))
-	_ = e.store.PutExecution(turnCtx, x)
+	if err := e.store.PutExecution(turnCtx, x); err != nil {
+		nackAll(dels, e.opt.RetryBackoff)
+		return turnOutcome{err: err}
+	}
+	turnCtx, stopControl := (executioncontrol.Manager{Store: e.store}).Watch(turnCtx, x.ID)
+	defer stopControl()
 	r.mu.Lock()
 	r.execID = x.ID
 	r.mu.Unlock()
@@ -134,6 +140,27 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		e.bus.Publish(context.WithoutCancel(turnCtx), domain.NewEvent(ev, gid, x).WithNode(n.ID, r.index).WithExecution(x.ID).WithTrace(x.TraceID))
 	}
 
+	// An explicit execution stop consumes this attempt; requeuing its inputs
+	// would immediately restart the very work the operator interrupted.
+	stopRequested := func() bool {
+		if !errors.Is(context.Cause(turnCtx), executioncontrol.ErrRequested) {
+			checkCtx, done := context.WithTimeout(context.WithoutCancel(turnCtx), 2*time.Second)
+			err := (executioncontrol.Manager{Store: e.store}).Check(checkCtx, x.ID)
+			done()
+			if !errors.Is(err, executioncontrol.ErrRequested) {
+				return false
+			}
+		}
+		for i, d := range dels {
+			if err := d.Term(context.WithoutCancel(turnCtx), executioncontrol.ErrRequested.Error()); err != nil {
+				e.log.Error("cancelled input termination failed", "execution", x.ID, "err", err)
+			}
+			e.recordMessage(context.WithoutCancel(turnCtx), gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgDeadLettered, d.Attempt(), x.ID, executioncontrol.ErrRequested.Error())
+		}
+		finish(domain.ExecCancelled, executioncontrol.ErrRequested.Error())
+		return true
+	}
+
 	// Human gate before the turn.
 	if n.Approval.BeforeTurn {
 		r.setState(domain.ReplicaAwaitingApproval, "waiting for approval to start the turn")
@@ -144,6 +171,9 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 			ExpiresAt: expiry(n.Approval.Timeout),
 		})
 		if err != nil || a.Status != domain.ApprovalApproved {
+			if stopRequested() {
+				return turnOutcome{}
+			}
 			reason := "turn rejected by operator"
 			if err != nil {
 				reason = err.Error()
@@ -171,6 +201,9 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	unregister()
 	resumeCancel()
 	if resumeErr != nil {
+		if stopRequested() {
+			return turnOutcome{}
+		}
 		nackAll(dels, e.opt.RetryBackoff)
 		for _, op := range ops {
 			copy := *op
@@ -184,6 +217,7 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	}
 
 	env := newTurnEnv(r, gr, n, x)
+	env.executionCtx = turnCtx
 	env.span = trace.SpanContextFromContext(turnCtx)
 	token := e.execs.register(x.ID, env)
 	defer e.execs.unregister(x.ID)
@@ -198,6 +232,9 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 	}
 	observability.InstructionLoadSeconds.Observe(time.Since(instructionStart).Seconds())
 	if instructionErr != nil {
+		if stopRequested() {
+			return turnOutcome{}
+		}
 		observability.InstructionLoads.WithLabelValues("failed").Inc()
 		nackAll(dels, e.opt.RetryBackoff)
 		// Restore operator requests: a failed context load must not consume them.
@@ -228,7 +265,7 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 
 	rt := e.opt.Runtimes[n.Runtime.Kind]
 	res, err := rt.Turn(turnCtx, in, env)
-	killed := errors.Is(turnCtx.Err(), context.Canceled)
+	killed := errors.Is(turnCtx.Err(), context.Canceled) && !errors.Is(context.Cause(turnCtx), executioncontrol.ErrUnavailable)
 	env.mu.Lock()
 	yielded := env.yielded
 	env.mu.Unlock()
@@ -239,6 +276,13 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 		res = &runtime.TurnResult{Summary: "Awaiting durable human review"}
 		err = nil
 	}
+	if turnCtx.Err() != nil {
+		err = context.Cause(turnCtx)
+	} else if controlErr := (executioncontrol.Manager{Store: e.store}).Check(turnCtx, x.ID); controlErr != nil {
+		err = controlErr
+	}
+	operatorCancelled := errors.Is(err, executioncontrol.ErrRequested)
+	killed = killed || operatorCancelled
 	if err == nil && res == nil {
 		err = errors.New("runtime returned no result")
 	}
@@ -283,7 +327,7 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 				delay = backoffDelay(e.opt.RetryBackoff, d.Attempt())
 			}
 			ch := from[i].cfg
-			if st == domain.ExecFailed && ch != nil && d.Attempt() >= ch.MaxDeliver {
+			if operatorCancelled || (st == domain.ExecFailed && ch != nil && d.Attempt() >= ch.MaxDeliver) {
 				_ = d.Term(context.WithoutCancel(turnCtx), err.Error())
 				e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgDeadLettered, d.Attempt(), x.ID, err.Error())
 				observability.MessagesConsumed.WithLabelValues(gid, n.ID, "dead").Inc()
@@ -293,8 +337,11 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 			e.recordMessage(turnCtx, gid, from[i].group.Channel, from[i].group.Group, d.Message(), domain.MsgNacked, d.Attempt(), x.ID, err.Error())
 			observability.MessagesConsumed.WithLabelValues(gid, n.ID, "nacked").Inc()
 		}
-		// Operator messages were consumed by this turn; give them back.
+		// Only retryable failures restore operator messages.
 		for _, op := range ops {
+			if operatorCancelled {
+				break
+			}
 			cp := *op
 			cp.ID, cp.Consumed = domain.NewID("opm"), nil
 			_ = e.store.PutOperatorMessage(context.WithoutCancel(turnCtx), &cp)
@@ -485,13 +532,14 @@ func (e *Engine) neighbours(ctx context.Context, graphID, node string, me, size 
 // door out of an agent: tools go through the gateway with this replica's
 // grants, model calls through the LLM registry with this node's model.
 type turnEnv struct {
-	toolMu    sync.Mutex
-	r         *replica
-	gr        *graphRun
-	n         *domain.Node
-	x         *domain.Execution
-	principal *tools.Principal
-	span      trace.SpanContext
+	executionCtx context.Context
+	toolMu       sync.Mutex
+	r            *replica
+	gr           *graphRun
+	n            *domain.Node
+	x            *domain.Execution
+	principal    *tools.Principal
+	span         trace.SpanContext
 
 	mu       sync.Mutex
 	yielded  bool
@@ -524,10 +572,35 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 // SpanContext is the turn's span; callback requests from external runtimes
 // are parented to it so their tool and model calls appear inside the turn.
 func (t *turnEnv) SpanContext() trace.SpanContext { return t.span }
+func (t *turnEnv) controlled(ctx context.Context) (context.Context, func(), error) {
+	linked, cancel := context.WithCancelCause(ctx)
+	stop := func() bool { return false }
+	if t.executionCtx != nil {
+		stop = context.AfterFunc(t.executionCtx, func() { cancel(context.Cause(t.executionCtx)) })
+		if t.executionCtx.Err() != nil {
+			cancel(context.Cause(t.executionCtx))
+		}
+	}
+	cleanup := func() { stop(); cancel(context.Canceled) }
+	if linked.Err() != nil {
+		cleanup()
+		return linked, func() {}, context.Cause(linked)
+	}
+	if err := (executioncontrol.Manager{Store: t.gr.e.store}).Check(linked, t.x.ID); err != nil {
+		cleanup()
+		return linked, func() {}, err
+	}
+	return linked, cleanup, nil
+}
 
 func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMessage) (*tools.Result, error) {
 	t.toolMu.Lock()
 	defer t.toolMu.Unlock()
+	ctx, done, controlErr := t.controlled(ctx)
+	defer done()
+	if controlErr != nil {
+		return nil, controlErr
+	}
 	t.mu.Lock()
 	if t.yielded {
 		t.mu.Unlock()
@@ -562,6 +635,11 @@ func (t *turnEnv) InvokeTool(ctx context.Context, name string, args json.RawMess
 }
 
 func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResponse, error) {
+	ctx, done, controlErr := t.controlled(ctx)
+	defer done()
+	if controlErr != nil {
+		return nil, controlErr
+	}
 	t.mu.Lock()
 	yielded := t.yielded
 	t.mu.Unlock()
@@ -608,6 +686,11 @@ func (t *turnEnv) Chat(ctx context.Context, req *llm.ChatRequest) (*llm.ChatResp
 }
 
 func (t *turnEnv) Emit(ctx context.Context, em runtime.Emit) error {
+	ctx, done, controlErr := t.controlled(ctx)
+	defer done()
+	if controlErr != nil {
+		return controlErr
+	}
 	t.mu.Lock()
 	yielded := t.yielded
 	t.mu.Unlock()
@@ -646,10 +729,20 @@ func (t *turnEnv) drainEmits() []runtime.Emit {
 func (t *turnEnv) stateNS() string { return t.gr.g.Metadata.ID + "/" + t.n.ID }
 
 func (t *turnEnv) StateGet(ctx context.Context, key string) ([]byte, error) {
+	ctx, done, err := t.controlled(ctx)
+	defer done()
+	if err != nil {
+		return nil, err
+	}
 	return t.gr.e.store.KVGet(ctx, t.stateNS(), key)
 }
 
 func (t *turnEnv) StatePut(ctx context.Context, key string, value []byte) error {
+	ctx, done, controlErr := t.controlled(ctx)
+	defer done()
+	if controlErr != nil {
+		return controlErr
+	}
 	if len(value) > 1<<20 {
 		return errors.New("state values are limited to 1 MiB")
 	}
@@ -657,6 +750,11 @@ func (t *turnEnv) StatePut(ctx context.Context, key string, value []byte) error 
 }
 
 func (t *turnEnv) Output(ctx context.Context, text string) {
+	ctx, done, err := t.controlled(ctx)
+	defer done()
+	if err != nil {
+		return
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return
@@ -666,6 +764,11 @@ func (t *turnEnv) Output(ctx context.Context, text string) {
 }
 
 func (t *turnEnv) AskHuman(ctx context.Context, question string) (string, error) {
+	ctx, done, controlErr := t.controlled(ctx)
+	defer done()
+	if controlErr != nil {
+		return "", controlErr
+	}
 	t.r.setState(domain.ReplicaAwaitingApproval, "asked a human")
 	defer t.r.setState(domain.ReplicaRunning, "")
 	a, err := t.gr.e.opt.Approvals.RequestApproval(ctx, &domain.Approval{
@@ -733,7 +836,7 @@ func (e *Engine) Callback(execID, token string) (runtime.TurnEnv, *tools.Princip
 	e.execs.mu.Lock()
 	ent := e.execs.envs[execID]
 	e.execs.mu.Unlock()
-	if ent == nil || subtle.ConstantTimeCompare([]byte(ent.token), []byte(token)) != 1 {
+	if ent == nil || subtle.ConstantTimeCompare([]byte(ent.token), []byte(token)) != 1 || (ent.env.executionCtx != nil && ent.env.executionCtx.Err() != nil) {
 		return nil, nil, ErrBadCallback
 	}
 	return ent.env, ent.env.principal, nil

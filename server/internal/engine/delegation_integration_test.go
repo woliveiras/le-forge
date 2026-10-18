@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
 	"strings"
 	"sync"
 	"testing"
@@ -571,5 +573,51 @@ func TestDelegationAutomaticRetainsGenericToolApproval(t *testing.T) {
 	defer p.mu.Unlock()
 	if p.children != 0 {
 		t.Fatal("rejected tool ran")
+	}
+}
+
+func TestDelegationExecutionControls(t *testing.T) {
+	for _, scope := range []string{"child", "tree"} {
+		for _, running := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/running=%t", scope, running), func(t *testing.T) {
+				r, p := delegationRig(t, "timeout")
+				deployDelegation(r, "[delegation.request]", "{turnTimeout: 10s}")
+				a := delegationApproval(t, r)
+				if running {
+					if _, err := r.apr.Decide(r.ctx, a.ID, true, "operator", "", ""); err != nil {
+						t.Fatal(err)
+					}
+					eventually(t, time.Second, "child running", func() bool { p.mu.Lock(); defer p.mu.Unlock(); return p.children == 1 })
+				}
+				result, err := (executioncontrol.Manager{Store: r.store}).Cancel(r.ctx, a.ExecutionID, scope, "operator")
+				if err != nil || !result.Created {
+					t.Fatal(result, err)
+				}
+				parent := finishedParent(t, r)
+				want := domain.ExecSucceeded
+				if scope == "tree" {
+					want = domain.ExecCancelled
+				}
+				if parent.Status != want {
+					t.Fatalf("parent %+v", parent)
+				}
+				child, err := r.store.GetExecution(r.ctx, a.ExecutionID)
+				if err != nil || child.Status != domain.ExecCancelled {
+					t.Fatalf("child %+v %v", child, err)
+				}
+				approval, _ := r.store.GetApproval(r.ctx, a.ID)
+				if !running && approval.Status != domain.ApprovalExpired {
+					t.Fatal(approval)
+				}
+				leases, _ := r.store.ListLeases(r.ctx, "delegation/slot/")
+				if len(leases) != 0 {
+					t.Fatal("capacity leaked", leases)
+				}
+				graph, _ := r.store.GetGraph(r.ctx, "delegation", 0)
+				if graph.Metadata.Version != 1 || len(graph.Spec.Nodes) != 1 {
+					t.Fatal("graph mutated")
+				}
+			})
+		}
 	}
 }

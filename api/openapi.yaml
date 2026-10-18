@@ -877,6 +877,68 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Execution"}
         "404": {$ref: "#/components/responses/NotFound"}
+  /api/v1/executions/{executionId}/tree:
+    get:
+      tags: [executions]
+      operationId: getExecutionTree
+      x-leforge-role: viewer
+      parameters:
+        - {name: executionId, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Persisted root and descendants, bounded to 256 nodes and 16 levels; inclusive parent usage must not be summed with child usage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rootExecutionId, selectedExecutionId, nodes]
+                properties:
+                  rootExecutionId: {type: string}
+                  selectedExecutionId: {type: string}
+                  nodes:
+                    type: array
+                    maxItems: 256
+                    items:
+                      type: object
+                      required: [execution]
+                      properties:
+                        execution: {$ref: "#/components/schemas/Execution"}
+                        cancellation: {$ref: "#/components/schemas/ExecutionCancellation"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: Inconsistent or oversized execution tree; no partial tree returned.}
+  /api/v1/executions/{executionId}/cancel:
+    post:
+      tags: [executions]
+      operationId: cancelExecution
+      x-leforge-role: operator
+      parameters:
+        - {name: executionId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [scope, confirm]
+              properties:
+                scope: {type: string, enum: [child, tree]}
+                confirm: {type: boolean, enum: [true]}
+      responses:
+        "202":
+          description: Durable cooperative interruption request; workers own the final outcomes. Repeated requests preserve the first request.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: {$ref: "#/components/schemas/ExecutionCancellation"}
+                  alreadyTerminal: {type: boolean}
+        "200": {description: All target executions already terminal; no new request needed.}
+        "400": {description: Invalid scope, child scope used for a root, or missing confirmation.}
+        "403": {description: Operator or admin role required.}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: Inconsistent or oversized execution tree.}
   /api/v1/graphs/{id}/events:
     parameters: [{$ref: "#/components/parameters/GraphId"}]
     get:
@@ -1709,6 +1771,15 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    ExecutionCancellation:
+      type: object
+      required: [executionId, rootExecutionId, scope, actor, requestedAt]
+      properties:
+        executionId: {type: string}
+        rootExecutionId: {type: string}
+        scope: {type: string, enum: [child, tree]}
+        actor: {type: string}
+        requestedAt: {type: string, format: date-time}
     DelegationPolicy:
       type: object
       additionalProperties: false

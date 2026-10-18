@@ -18,9 +18,8 @@ pending where credentials, corporate approval or authorized test resources are
 required; postponement does not qualify a provider or authorize external changes.
 
 The native analysis delegation foundation and installation-managed profiles,
-approval policy and finite limits are implemented (section 8). Next: execution-tree
-navigation and independent child/tree controls, followed by broader runtime/profile
-support and enforceable cumulative budgets. Preserve explicit delegation grants
+approval policy, finite limits and execution-tree controls are implemented (section 8).
+Next: broader runtime/profile support and enforceable cumulative budgets. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
 this delivery does not claim installation activation.
 
@@ -549,6 +548,36 @@ Define clear precedence: global, graph, agent, and task instructions; repository
 
 ### 8. Allow Dynamic Delegation to Subagents
 
+**Execution tree and interruption (2026-10-18):** Runs → Execution tree now
+shows persisted parent/child links, agent/profile, state, duration and inclusive
+reported usage, independently of the recent execution/event windows. Viewer
+reads remain separate from operator/admin controls. Reviewed child interruption
+returns an error to the parent, which may continue; tree interruption resolves
+the root and cancels its current descendants. Durable idempotent requests retain
+the first actor/time and are observed across shared storage. The console reports
+requested versus terminal states separately. Pending approvals expire and child
+capacity is released; graph definitions and grants remain unchanged. Cancellation
+is cooperative, does not undo effects, and does not stop future independent runs.
+Native depth remains one; broader runtime/profile support and cumulative billing
+ceilings remain pending. See [delegation](../docs/delegation.md).
+
+**Execution-control verification:** `make test` passed (Go/Python and 272 frontend
+tests), together with `make lint`, `make build`, and `make test-e2e` (56 main
+browser scenarios plus one hosted-CIMD scenario). Focused race tests passed for
+execution controls, approval cleanup and engine cancellation. One existing cache
+selection test exceeded its 5-second timeout during concurrent suite execution;
+the complete `make test` rerun without browser-suite contention passed without
+changing or skipping tests. Coverage includes
+child/tree cancellation during approval and active inference, parent continuation,
+late callback rejection, a late successful runtime result, unchanged grants,
+viewer denial, explicit confirmation, storage failures/corruption, invalid tree
+relationships/bounds, historical lookup outside the recent list, idempotency (including terminal retries),
+capacity cleanup, and SQLite migration/backfill preserving existing records.
+Browser journeys use the real disposable backend with a deterministic model.
+Live multi-process PostgreSQL/provider qualification, installation activation and
+final developer usability acceptance remain pending; this delivery claims none
+of them. Cancellation-marker retention/cleanup is not yet implemented.
+
 **Configurable profiles and policies (2026-10-18):** Administration → Delegation
 now supports reviewed admin-only edits to revisioned native analysis profiles and
 required/automatic approval policies. Viewer/operator reads remain available;
@@ -584,8 +613,8 @@ Runs distinguishes children and links to the parent. Reported child consumption
 is included in the parent without double-counting native gateway inference.
 Pending approval cleanup and restart interruption are covered. See
 [delegation](../docs/delegation.md) for boundaries, including the absence of a
-hard monetary ceiling, external runtime delegation and
-independent tree controls.
+hard monetary ceiling and external runtime delegation. Execution-tree controls
+are extended below.
 
 **Verification:** `make test` (Go suites and 257 frontend tests), `make lint`,
 `make build`, `make test-e2e` (52 standard browser tests plus one hosted-CIMD

@@ -494,6 +494,7 @@ func testMarkProcessed(t *testing.T, s storage.Store) {
 }
 
 func testExecutions(t *testing.T, s storage.Store) {
+	defer testExecutionParents(t, s)
 	if _, err := s.GetExecution(ctx, "x"); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
@@ -537,6 +538,23 @@ func testExecutions(t *testing.T, s storage.Store) {
 	}
 }
 
+func testExecutionParents(t *testing.T, s storage.Store) {
+	for _, id := range []string{"parent-one", "parent-two"} {
+		must(t, s.PutExecution(ctx, &domain.Execution{ID: id, GraphID: "tree", ParentExecutionID: "root", StartedAt: time.Now()}))
+	}
+	list, err := s.ListExecutions(ctx, storage.ExecutionFilter{ParentExecutionID: "root"})
+	must(t, err)
+	if len(list) != 2 {
+		t.Fatalf("parent filter: %+v", list)
+	}
+	list[0].ParentExecutionID = "other-root"
+	must(t, s.PutExecution(ctx, list[0]))
+	list, err = s.ListExecutions(ctx, storage.ExecutionFilter{ParentExecutionID: "root"})
+	must(t, err)
+	if len(list) != 1 {
+		t.Fatal("parent index was not updated")
+	}
+}
 func testApprovals(t *testing.T, s storage.Store) {
 	if _, err := s.GetApproval(ctx, "x"); !errors.Is(err, storage.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)

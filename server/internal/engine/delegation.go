@@ -12,6 +12,7 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/executioncontrol"
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/tools"
@@ -100,6 +101,8 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 	x.DelegationModel = &modelRef
 	x.DelegationConfig = mustJSON(selected)
 	x.DelegationObjective = objective
+	ctx, stopControl := (executioncontrol.Manager{Store: e.store}).Watch(ctx, x.ID, t.x.ID)
+	defer stopControl()
 	// Reserve an installation-wide slot even during approval. Store leases survive
 	// process death; the bounded deadline plus grace avoids an unbounded leak.
 	slot, err := manager.Reserve(ctx, x.ID, policy.MaxConcurrentChildren, time.Until(deadline)+10*time.Second)
@@ -130,7 +133,7 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 		if retErr != nil {
 			x.Status = domain.ExecFailed
 			x.Error = retErr.Error()
-			if ctx.Err() != nil {
+			if errors.Is(retErr, executioncontrol.ErrRequested) || (ctx.Err() != nil && !errors.Is(context.Cause(ctx), executioncontrol.ErrUnavailable)) {
 				x.Status = domain.ExecCancelled
 				x.Error = "delegation cancelled or deadline exceeded"
 			}
@@ -179,7 +182,7 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 			return nil, errors.New("delegation rejected or expired")
 		}
 	}
-	if err = ctx.Err(); err != nil {
+	if err = (executioncontrol.Manager{Store: e.store}).Check(ctx, x.ID, t.x.ID); err != nil {
 		return nil, err
 	}
 	current, err := manager.Select(ctx, profileID)
@@ -213,7 +216,10 @@ func (t *turnEnv) delegate(ctx context.Context, raw json.RawMessage) (result *to
 		t.mu.Unlock()
 	}
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
+	}
+	if err := (executioncontrol.Manager{Store: e.store}).Check(ctx, x.ID, t.x.ID); err != nil {
+		return nil, err
 	}
 	if err != nil {
 		return nil, errors.New("delegation model request failed")

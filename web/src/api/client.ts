@@ -1,3 +1,4 @@
+import type { ExecutionTree, CancelScope, Cancellation } from './executionTree';
 import type { DelegationPolicy, DelegationPolicyView, DelegationProfile, DelegationProfileView } from './delegation';
 import type { MCPHistoryPage, MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
 import type { Skill, SkillInput, InstructionSnapshot } from './instructions';
@@ -262,6 +263,8 @@ export const api = {
 
   executions: (id: string, f: { node?: string; status?: string; limit?: number } = {}) =>
     request<Execution[]>(`${V1}/graphs/${enc(id)}/executions`, { query: f }),
+  executionTree: (id:string) => request<ExecutionTree>(`${V1}/executions/${enc(id)}/tree`),
+  cancelExecution: (id:string,scope:CancelScope) => request<{request?:Cancellation;alreadyTerminal:boolean}>(`${V1}/executions/${enc(id)}/cancel`, {method:'POST',body:{scope,confirm:true}}),
   execution: (execId: string) => request<Execution>(`${V1}/executions/${enc(execId)}`),
 
   events: (id: string, f: { after?: number; node?: string; types?: string; limit?: number } = {}) =>

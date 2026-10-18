@@ -470,7 +470,7 @@ func (s *Store) ListExecutions(ctx context.Context, f storage.ExecutionFilter) (
 	}
 	var all []*domain.Execution
 	for _, e := range s.executions {
-		if (f.GraphID == "" || e.GraphID == f.GraphID) && (f.NodeID == "" || e.NodeID == f.NodeID) && (f.Status == "" || e.Status == f.Status) {
+		if (f.ParentExecutionID == "" || e.ParentExecutionID == f.ParentExecutionID) && (f.GraphID == "" || e.GraphID == f.GraphID) && (f.NodeID == "" || e.NodeID == f.NodeID) && (f.Status == "" || e.Status == f.Status) {
 			all = append(all, e)
 		}
 	}

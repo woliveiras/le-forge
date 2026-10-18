@@ -124,7 +124,7 @@ are **kept** (audit trail) — prune them with SQL if required.
 | `events` | `seq` (auto) | `(graph_id, seq)`, `(type)`, unique `id` | Append-only log; tailed by SSE (`seq > after`) |
 | `messages` | `(message_id, channel, grp)` | `(graph_id, channel, created_at)`, `(graph_id, created_at)`, `(correlation_id)` | Message history, upserted per status change; `created_at` keeps the original value |
 | `processed` | `(grp, message_id)` | PK | Dedupe log: `MarkProcessed` is insert-if-absent |
-| `executions` | `id` | `(graph_id, started_at)`, `(graph_id, node_id, started_at)`, `(status)` | Turns; recovery scans `status = running` |
+| `executions` | `id` | `(graph_id, started_at)`, `(graph_id, node_id, started_at)`, `(status)`, `(parent_execution_id, started_at)` | Turns; recovery scans `status = running` |
 | `approvals` | `id` | `(status, created_at)`, `(graph_id, created_at)` | HITL; `DecideApproval` updates only while `status = pending` (first decision wins) |
 | `operator_messages` | `id` | `(graph_id, node_id, consumed_at, created_at)` | Inbox; `ConsumeOperatorMessages` marks and returns atomically; `replica = -1` = any replica |
 | `replica_status` | `(graph_id, node_id, replica)` | PK | Live status written by whichever instance runs the replica |
@@ -217,3 +217,12 @@ Known limitations: lease expiry uses each instance's clock (keep NTP in sync wel
 ## Instruction records
 
 Existing settings CAS stores `instructions/skills/{id}` with current revision plus immutable history and actor/time, and `instructions/executions/{executionId}` as a create-only manifest. No SQL migration. See [limits and deletion semantics](instructions.md).
+
+
+Migration `0003_execution_parent.sql` adds the indexed `parent_execution_id`
+column and backfills it from existing execution JSON without changing the
+saved documents. SQLite and PostgreSQL use equivalent migrations. The execution
+tree reads this index instead of guessing relationships from recent history.
+Durable cooperative cancellation markers live in settings under
+`execution-control/cancel/<execution-id>` with first-request actor/time and scope.
+They use revision-zero compare-and-set creation; retries do not overwrite them.

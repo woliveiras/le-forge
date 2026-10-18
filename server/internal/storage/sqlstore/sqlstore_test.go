@@ -63,3 +63,35 @@ func TestSQLiteDSNMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestExecutionParentMigrationBackfillsExistingRecords(t *testing.T) {
+	ctx := context.Background()
+	s, err := sqlstore.OpenSQLite(ctx, filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	// Build a genuine pre-parent-index fixture, including its migration journal.
+	for _, file := range []string{"0001_init.sql", "0002_settings.sql"} {
+		b, e := os.ReadFile("migrations/sqlite/" + file)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = s.DB().ExecContext(ctx, string(b)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, err = s.DB().ExecContext(ctx, `CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT NOT NULL);INSERT INTO schema_migrations VALUES(1,'init','fixture'),(2,'settings','fixture');INSERT INTO executions(id,graph_id,node_id,status,started_at,doc) VALUES('old-child','g','n','succeeded',1,'{"id":"old-child","graphId":"g","parentExecutionId":"old-root","summary":"preserved"}')`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Migrate(ctx); err != nil {
+		t.Fatal("repeat migration", err)
+	}
+	children, err := s.ListExecutions(ctx, storage.ExecutionFilter{ParentExecutionID: "old-root"})
+	if err != nil || len(children) != 1 || children[0].Summary != "preserved" {
+		t.Fatal(children, err)
+	}
+}

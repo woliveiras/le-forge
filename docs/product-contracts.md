@@ -13,7 +13,7 @@ schemas alongside the code.
 
 | Surface | Current contract and implementation | Known boundary |
 |---|---|---|
-| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and full delegation trees remain planned; native analysis profiles and configurable approval/limits are implemented (see section 4). |
+| Public API | `/api/v1` REST API, role-checked per route; graph CRUD/versioning, lifecycle, messages, chat, executions, events, approvals, model providers, tools, workspace file listing/reading and Git inspection. See [API reference](api.md) and [OpenAPI](../api/openapi.yaml). | Skills/steering are implemented (see section 3); MCP registration/discovery are implemented; first-class user tasks and broader recursive delegation remain planned; native analysis profiles and configurable approval/limits are implemented (see section 4). |
 | Web console | React/TypeScript SPA served by `forged`; graph canvas, provider/integration settings, files, approvals, managed Docker reviews/previews, events, and operational views. Main surfaces: `web/src/App.tsx`, `GraphCanvas.tsx`, `IntegrationsView.tsx`, `FilesView.tsx`, `ApprovalsView.tsx`, and `EventsView.tsx`. | The canvas edits a local graph draft (agents, channels, properties, positions) shared with the YAML view and saves it through the whole-document `PUT` with `If-Match`; validation errors are mapped to the agent/channel field that caused them. File interaction is partial; user file operations are read-only. |
 | Runtime | External runtimes use Runtime Protocol v1. `TurnInput` carries graph/node/replica context, prompt, inputs, model reference, granted tools, and a per-execution callback token. Model calls and tools are mediated by the control plane. | Effective instruction snapshots are sent and persisted; native analysis delegation is implemented; external-runtime delegation remains planned. Platform-managed provider credentials are not sent to runtimes; graph-authored `runtime.env` and `config` are passed as runtime inputs and are not a secure secret store. |
 | Tools and permissions | Default-deny tool gateway. Graph node `tools` grants are enforced for native and external agents; constraints and approval/rate limits are defined in [tool permissions](tool-permissions.md). | MCP registration/discovery and gateway invocation enforce exact grants and current connection state; see [MCP limits](mcp.md). |
@@ -464,6 +464,14 @@ APIs now support native tool-free profiles, required/automatic approval and boun
 limits. The console provides reviewed admin-only saves with revision conflicts.
 Execution snapshots pin policy/profile revisions; pending requests revalidate them.
 See [delegation](delegation.md) for the supported fields and hard bounds.
+
+**Implemented execution controls:** Runs provides a bounded persisted execution
+tree, including historical parent relationships, status, duration and inclusive
+usage. Viewer reads and operator/admin interruption use separate API roles.
+Child-only cancellation returns an error to the parent; whole-tree cancellation
+stops the current root and descendants cooperatively. Confirmation, durable
+request state, pending approval cleanup and unchanged graph/grants are covered.
+This does not implement recursion, hard process kills or cumulative cost ceilings.
 
 **Planned extended contract:** The broader profile fields, profile deletion,
 `agent.delegate` capability and external-runtime callback below remain planned.

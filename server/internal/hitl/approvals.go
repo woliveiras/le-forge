@@ -70,14 +70,21 @@ func (s *Service) Create(ctx context.Context, a *domain.Approval) (*domain.Appro
 }
 
 // RequestApproval implements tools.Approver: create and block until decided.
-// If ctx ends first the approval is left pending (a human may still decide
-// it; the decision is then simply not acted upon) and ctx.Err() returned.
+// If the caller ends first, close the pending approval without applying its
+// timeout-approval policy. A cancelled execution cannot accept late approval.
 func (s *Service) RequestApproval(ctx context.Context, a *domain.Approval) (*domain.Approval, error) {
 	a, err := s.Create(ctx, a)
 	if err != nil {
 		return nil, err
 	}
-	return s.Wait(ctx, a.ID)
+	out, err := s.Wait(ctx, a.ID)
+	if err != nil && ctx.Err() != nil {
+		cleanup, done := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer done()
+		_, closeErr := s.CancelPending(cleanup, a.ID)
+		err = errors.Join(err, closeErr)
+	}
+	return out, err
 }
 
 // Wait blocks until the approval leaves pending.
@@ -197,4 +204,17 @@ func (s *Service) decided(ctx context.Context, a *domain.Approval) {
 	for _, h := range hooks {
 		h(ctx, a)
 	}
+}
+
+// CancelPending never applies the timeout approval policy.
+func (s *Service) CancelPending(ctx context.Context, id string) (*domain.Approval, error) {
+	a, err := s.store.DecideApproval(ctx, id, domain.ApprovalExpired, "system:cancel", "execution cancelled", "")
+	if errors.Is(err, storage.ErrConflict) {
+		return s.store.GetApproval(ctx, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.decided(ctx, a)
+	return a, nil
 }

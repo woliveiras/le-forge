@@ -167,6 +167,8 @@ func (s *Server) routes() {
 		{"GET /api/v1/messages/{mid}", R, s.getMessage},
 		{"GET /api/v1/graphs/{id}/executions", R, s.listExecutions},
 		{"GET /api/v1/executions/{eid}", R, s.getExecution},
+		{"GET /api/v1/executions/{eid}/tree", R, s.executionTree},
+		{"POST /api/v1/executions/{eid}/cancel", O, s.cancelExecution},
 		{"GET /api/v1/graphs/{id}/events", R, s.listEvents},
 		{"GET /api/v1/events/stream", R, s.stream},
 		{"GET /api/v1/approvals", R, s.listApprovals},

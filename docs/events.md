@@ -184,10 +184,18 @@ for supported namespaces, limits and the meaning of controller-offline recovery.
 
 ## Native analysis delegation
 
-See [delegation](delegation.md) for the explicit grant, mandatory approval, child
-execution records, event metadata, fixed limits and inclusive usage accounting.
+See [delegation](delegation.md) for the explicit grant, configurable approval, child
+execution records, event metadata, bounded configurable limits and inclusive usage accounting.
 
 Delegation configuration adds `delegation.policy.updated` (revision, enabled,
 approvalMode) and `delegation.profile.updated` (profileId, revision, enabled), with
 the administrator actor. No profile instructions or objective text is included.
 Execution records carry the pinned policy/profile snapshot separately.
+
+
+`execution.cancel_requested` records the immutable target executionId,
+rootExecutionId, scope (`child` or `tree`), actor and requestedAt. It is emitted
+once for a newly persisted request, with normal graph/node/execution correlation.
+It does not claim the worker has stopped; consult terminal execution records.
+Event-bus publication remains best effort; the persisted cancellation setting is
+authoritative. Payloads contain no objectives, model output or credentials.

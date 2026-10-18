@@ -147,10 +147,10 @@ func (s *Store) PutExecution(ctx context.Context, e *domain.Execution) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, s.q(`INSERT INTO executions (id, graph_id, node_id, replica, status, started_at, doc) VALUES (?, ?, ?, ?, ?, ?, ?)
+	_, err = s.db.ExecContext(ctx, s.q(`INSERT INTO executions (id, graph_id, node_id, replica, status, started_at, doc, parent_execution_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET graph_id = excluded.graph_id, node_id = excluded.node_id, replica = excluded.replica,
-		status = excluded.status, started_at = excluded.started_at, doc = excluded.doc`),
-		e.ID, e.GraphID, e.NodeID, e.Replica, string(e.Status), s.ts(e.StartedAt), string(doc))
+		status = excluded.status, started_at = excluded.started_at, doc = excluded.doc, parent_execution_id = excluded.parent_execution_id`),
+		e.ID, e.GraphID, e.NodeID, e.Replica, string(e.Status), s.ts(e.StartedAt), string(doc), e.ParentExecutionID)
 	return err
 }
 
@@ -168,6 +168,9 @@ func (s *Store) GetExecution(ctx context.Context, id string) (*domain.Execution,
 
 func (s *Store) ListExecutions(ctx context.Context, f storage.ExecutionFilter) ([]*domain.Execution, error) {
 	var w where
+	if f.ParentExecutionID != "" {
+		w.add("parent_execution_id = ?", f.ParentExecutionID)
+	}
 	if f.GraphID != "" {
 		w.add("graph_id = ?", f.GraphID)
 	}

@@ -163,10 +163,11 @@ type MessageFilter struct {
 }
 
 type ExecutionFilter struct {
-	GraphID string
-	NodeID  string
-	Status  domain.ExecutionStatus
-	Limit   int
+	ParentExecutionID string
+	GraphID           string
+	NodeID            string
+	Status            domain.ExecutionStatus
+	Limit             int
 }
 
 type ApprovalFilter struct {
