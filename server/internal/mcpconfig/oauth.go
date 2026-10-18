@@ -305,43 +305,41 @@ func (m *Manager) StartOAuthReviewed(ctx context.Context, id, actor, redirect, a
 	state, binding, verifier := nonce(), nonce(), nonce()
 	hash := sha256.Sum256([]byte(verifier))
 	q := url.Values{"response_type": {"code"}, "client_id": {oauthClientID(r)}, "redirect_uri": {redirect}, "state": {state}, "code_challenge": {base64.RawURLEncoding.EncodeToString(hash[:])}, "code_challenge_method": {"S256"}, "scope": {strings.Join(r.OAuth.Scopes, " ")}, "resource": {r.Endpoint}}
-	m.oauthMu.Lock()
-	defer m.oauthMu.Unlock()
-	if m.pending == nil {
-		m.pending = map[string]oauthPending{}
-	}
-	for key, p := range m.pending {
-		if time.Now().After(p.Expires) {
-			delete(m.pending, key)
+	err = m.updatePending(ctx, func(entries map[string]oauthPending) error {
+		if len(entries) >= maxOAuthPending {
+			return fmt.Errorf("%w: too many pending OAuth authorizations", ErrInvalid)
 		}
+		entries[state] = oauthPending{ID: id, Actor: actor, Binding: binding, Verifier: verifier, Redirect: redirect, Revision: r.Revision, Metadata: meta, Expires: time.Now().Add(10 * time.Minute)}
+		return nil
+	})
+	if err != nil {
+		return OAuthStart{}, err
 	}
-	if len(m.pending) >= 128 {
-		return OAuthStart{}, fmt.Errorf("%w: too many pending OAuth authorizations", ErrInvalid)
-	}
-	m.pending[state] = oauthPending{ID: id, Actor: actor, Binding: binding, Verifier: verifier, Redirect: redirect, Revision: r.Revision, Metadata: meta, Expires: time.Now().Add(10 * time.Minute)}
 	return OAuthStart{URL: meta.Authorization + "?" + q.Encode(), State: state, Binding: binding}, nil
 }
 
 // CaptureOAuth accepts the provider callback but defers token exchange until the
 // original authenticated LeForge session explicitly completes it.
 func (m *Manager) CaptureOAuth(state, binding, code, issuer, providerError string) error {
-	m.oauthMu.Lock()
-	defer m.oauthMu.Unlock()
-	p, ok := m.pending[state]
-	if !ok || !oauthState.MatchString(state) || p.Binding != binding || p.Returned || time.Now().After(p.Expires) {
-		return fmt.Errorf("%w: invalid or expired OAuth return", ErrInvalid)
-	}
-	if issuer != "" && issuer != p.Metadata.Issuer {
-		return fmt.Errorf("%w: OAuth issuer mismatch", ErrInvalid)
-	}
-	if len(code) > 8192 || (code == "") == (providerError == "") {
-		return fmt.Errorf("%w: invalid OAuth response", ErrInvalid)
-	}
-	p.Code = code
-	p.Denied = providerError != ""
-	p.Returned = true
-	m.pending[state] = p
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return m.updatePending(ctx, func(entries map[string]oauthPending) error {
+		p, ok := entries[state]
+		if !ok || !oauthState.MatchString(state) || p.Binding != binding || p.Returned {
+			return fmt.Errorf("%w: invalid or expired OAuth return", ErrInvalid)
+		}
+		if issuer != "" && issuer != p.Metadata.Issuer {
+			return fmt.Errorf("%w: OAuth issuer mismatch", ErrInvalid)
+		}
+		if len(code) > 8192 || (code == "") == (providerError == "") {
+			return fmt.Errorf("%w: invalid OAuth response", ErrInvalid)
+		}
+		p.Code = code
+		p.Denied = providerError != ""
+		p.Returned = true
+		entries[state] = p
+		return nil
+	})
 }
 
 type oauthTokens struct {
@@ -422,19 +420,26 @@ func (m *Manager) installTokens(r *record, t oauthTokens) error {
 	return nil
 }
 func (m *Manager) CompleteOAuth(ctx context.Context, state, binding, actor string) (View, error) {
-	m.oauthMu.Lock()
-	p, ok := m.pending[state]
-	if !ok || p.Binding != binding || p.Actor != actor || !p.Returned || time.Now().After(p.Expires) {
-		m.oauthMu.Unlock()
-		return View{}, fmt.Errorf("%w: OAuth session changed, expired or already completed", ErrInvalid)
+	var p oauthPending
+	err := m.updatePending(ctx, func(entries map[string]oauthPending) error {
+		entry, ok := entries[state]
+		if !ok || !oauthState.MatchString(state) || entry.Binding != binding || entry.Actor != actor || !entry.Returned {
+			return fmt.Errorf("%w: OAuth session changed, expired or already completed", ErrInvalid)
+		}
+		p = entry
+		delete(entries, state)
+		return nil
+	})
+	if err != nil {
+		return View{}, err
 	}
-	// The caller's session digest is only an in-memory binding, never an audit actor.
+	// The caller's session digest is encrypted in the pending transaction,
+	// never used as an audit actor. Consumption precedes token exchange: a crash
+	// here requires fresh authorization, never an uncertain code exchange retry.
 	auditActor := actor
 	if separator := strings.LastIndex(actor, ":"); separator >= 0 {
 		auditActor = actor[:separator]
 	}
-	delete(m.pending, state)
-	m.oauthMu.Unlock()
 	r, err := m.load(ctx, p.ID)
 	if err != nil {
 		return View{}, err

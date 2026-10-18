@@ -17,6 +17,7 @@ test('connects from a template link through OAuth consent, renewal and revocatio
  await expect(page.getByRole('heading',{name:'Fixture OAuth consent'})).toBeVisible();
  await page.getByRole('button',{name:'Allow fixture access'}).click();
  await expect(page).toHaveURL(/#\/integrations\/oauth\?state=/);expect(page.url()).not.toContain('code=');
+ await page.reload();
  await page.getByRole('button',{name:'Complete OAuth connection'}).click();
  await expect(page.getByRole('region',{name:'OAuth return',exact:true}).getByRole('status')).toContainText('OAuth connected.');
  const card=page.getByRole('article',{name:'MCP Browser OAuth',exact:true});await expect(card).toContainText('mcp.oauth-browser.search');await expect(card).toContainText('OAuth: authorized');

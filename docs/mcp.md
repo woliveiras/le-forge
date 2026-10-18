@@ -203,7 +203,7 @@ These mechanisms follow the [MCP authorization contract](https://modelcontextpro
 The browser goes to provider consent and returns to the backend callback. A
 10-minute, single-use transaction binds the connection revision, issuer, callback,
 initiating LeForge identity/session and an HttpOnly SameSite=Lax cookie (Secure
-on HTTPS). The callback holds the code in bounded server memory and redirects to
+on HTTPS). The callback holds the code in encrypted, bounded server-side storage and redirects to
 a frontend route containing only an opaque transaction handle. **Complete OAuth
 connection** requires the original authenticated admin session plus the binding
 cookie before exchanging the code with PKCE and a resource indicator. Denial,
@@ -212,10 +212,19 @@ No access/refresh token or client secret is sent to the frontend. Discovery foll
 the exchange; failure remains visible and does not mark the connection ready.
 OAuth consent never grants an agent tools.
 
-Transactions are limited to 128 pending entries per manager and expire after ten
-minutes; a backend restart loses unfinished authorizations, which must be restarted.
-Multi-instance deployments need sticky routing for this in-memory authorization
-transaction; distributed pending-transaction storage remains future work. Completed
+Transactions share an installation-wide limit of 128 entries and expire after ten
+minutes. State, browser/session bindings, PKCE verifiers and callback codes are
+stored in one encrypted, revision-checked document. Pending authorizations survive
+a backend restart and can continue on another controller sharing the same storage,
+encryption keys, authentication configuration and public URL; sticky routing is
+not required for this transaction. Filesystem storage remains single-process;
+multi-controller installations use a shared database. Keep controller clocks
+synchronized. Expired entries are rejected immediately and reclaimed on the next
+successful transaction update; the bounded encrypted document may retain expired
+entries while authorization is idle. Capture and consumption each have one winner.
+Consumption precedes the token exchange: a crash or uncertain exchange after that
+point requires fresh authorization and never replays the code automatically.
+Storage/key failures fail closed without disclosing transaction contents. Completed
 credentials and issuer endpoints are encrypted/persisted as appropriate and survive
 restart: access tokens, refresh tokens and client secrets are encrypted separately
 and bound to the connection; issuer endpoint metadata is public configuration.

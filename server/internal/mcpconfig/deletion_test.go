@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/storage"
 )
@@ -30,12 +31,19 @@ func TestDeleteReservesIdentityAndErasesCredentials(t *testing.T) {
 	if err = m.Delete(t.Context(), in.ID, v.Revision-1, "admin"); !errors.Is(err, storage.ErrConflict) {
 		t.Fatal(err)
 	}
-	m.pending = map[string]oauthPending{"same": {ID: in.ID}, "other": {ID: "other"}}
+	if err := m.updatePending(t.Context(), func(entries map[string]oauthPending) error {
+		entries["same"] = oauthPending{ID: in.ID, Expires: time.Now().Add(time.Minute)}
+		entries["other"] = oauthPending{ID: "other", Expires: time.Now().Add(time.Minute)}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err = m.Delete(t.Context(), in.ID, v.Revision, "admin"); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.pending) != 1 || m.pending["other"].ID != "other" {
-		t.Fatal(m.pending)
+	entries, _, err := m.loadPending(t.Context())
+	if err != nil || len(entries) != 1 || entries["other"].ID != "other" {
+		t.Fatal("pending transaction cleanup", err)
 	}
 	restarted := New(m.Store, m.Box, nil)
 	if _, err = restarted.Get(t.Context(), in.ID); !errors.Is(err, storage.ErrNotFound) {

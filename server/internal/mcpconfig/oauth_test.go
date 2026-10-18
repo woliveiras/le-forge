@@ -115,9 +115,11 @@ func authorizeFixture(t *testing.T, m *Manager) View {
 	if q.Get("resource") == "" || q.Get("code_challenge_method") != "S256" {
 		t.Fatal("missing resource/PKCE")
 	}
-	m.oauthMu.Lock()
-	p := m.pending[start.State]
-	m.oauthMu.Unlock()
+	entries, _, err := m.loadPending(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := entries[start.State]
 	hash := sha256.Sum256([]byte(p.Verifier))
 	if q.Get("code_challenge") != base64.RawURLEncoding.EncodeToString(hash[:]) {
 		t.Fatal("bad challenge")
@@ -299,9 +301,14 @@ func TestOAuthFailures(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		p := m.pending[s.State]
-		p.Expires = time.Now().Add(-time.Minute)
-		m.pending[s.State] = p
+		if e := m.updatePending(t.Context(), func(entries map[string]oauthPending) error {
+			p := entries[s.State]
+			p.Expires = time.Now().Add(-time.Minute)
+			entries[s.State] = p
+			return nil
+		}); e != nil {
+			t.Fatal(e)
+		}
 		if m.CaptureOAuth(s.State, s.Binding, "test-code", "", "") == nil {
 			t.Fatal("expired state accepted")
 		}

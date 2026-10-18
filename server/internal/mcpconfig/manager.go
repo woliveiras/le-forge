@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
@@ -79,8 +78,6 @@ type record struct {
 type Manager struct {
 	QuotaNow    func() time.Time // trusted clock injection for deterministic quota tests
 	OAuthClient *http.Client     // trusted test/platform injection, never user-supplied
-	oauthMu     sync.Mutex
-	pending     map[string]oauthPending
 	Store       storage.Store
 	Box         *secrets.Box
 	Bus         *events.Bus
@@ -388,16 +385,19 @@ func (m *Manager) Delete(ctx context.Context, id string, revision int64, actor s
 	if r.OAuth != nil && (r.OAuth.Status != "revoked" || r.OAuth.Revocation == "pending") {
 		return fmt.Errorf("%w: revoke OAuth access before deletion", ErrInvalid)
 	}
+	if err := m.updatePending(ctx, func(entries map[string]oauthPending) error {
+		for state, pending := range entries {
+			if pending.ID == id {
+				delete(entries, state)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
 	tombstone := record{Deleted: true, View: View{ID: id, Status: "deleted"}}
 	if _, err = m.save(ctx, tombstone, revision, actor, "mcp.connection.deleted"); err != nil {
 		return err
-	}
-	m.oauthMu.Lock()
-	defer m.oauthMu.Unlock()
-	for state, pending := range m.pending {
-		if pending.ID == id {
-			delete(m.pending, state)
-		}
 	}
 	return nil
 }

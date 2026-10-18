@@ -1322,3 +1322,13 @@ input and again after waiting for queue deliveries. A wake-up no longer relies o
 the asynchronous reconciler's cached state. Storage failures defer execution;
 paused deliveries wait for resume or are returned on cancellation. This preserves
 sandbox suspension and queued input when a message arrives immediately after pause.
+
+### Shared pending MCP OAuth transactions (2026-10-18)
+
+Pending browser authorizations now use encrypted shared storage with compare-and-set
+updates, preserving PKCE and the original session/browser binding across controller
+restart and routing. Capture and consumption are single-winner operations, with a
+shared 128-entry limit and ten-minute expiry. Storage/key failures refuse progress;
+expired entries are reclaimed on successful updates. A claimed exchange is never
+retried automatically after interruption. Live vendor consent remains separately
+pending; this delivery proves the protocol with TLS fixtures and durable storage.
