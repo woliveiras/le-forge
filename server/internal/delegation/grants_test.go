@@ -25,7 +25,7 @@ func TestInheritedGrantsPreserveEveryConstraintAndOwnTheirSlices(t *testing.T) {
 }
 func TestInheritedGrantsRejectAmplificationAndUnsupportedControls(t *testing.T) {
 	parent := []domain.ToolGrant{{Name: "*"}, {Name: "mcp.work.*"}, {Name: "filesystem.read"}}
-	for _, names := range [][]string{{"*"}, {"mcp.work.read"}, {"filesystem.write"}, {"filesystem.read", "filesystem.read"}, {"delegation.request"}, {"review.request"}, {"environment.propose"}, {"environment.status"}, {"bad"}, make([]string, 33)} {
+	for _, names := range [][]string{{"*"}, {"mcp.work.read"}, {"filesystem.write"}, {"filesystem.read", "filesystem.read"}, {"review.request"}, {"environment.propose"}, {"environment.status"}, {"bad"}, make([]string, 33)} {
 		if _, err := InheritGrants(parent, names); err == nil {
 			t.Fatalf("accepted %v", names)
 		}

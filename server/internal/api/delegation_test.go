@@ -57,9 +57,18 @@ func TestDelegationConfigurationAPI(t *testing.T) {
 			t.Fatal(c, body)
 		}
 	}
-	for _, body := range []string{`{}`, string(b) + ` {}`, strings.Replace(string(b), `"maxDepth":1`, `"maxDepth":2`, 1), strings.Replace(string(b), `"maxConcurrentChildren":4`, `"maxConcurrentChildren":99999`, 1)} {
+	for _, body := range []string{`{}`, string(b) + ` {}`, strings.Replace(string(b), `"maxDepth":1`, `"maxDepth":5`, 1), strings.Replace(string(b), `"maxConcurrentChildren":4`, `"maxConcurrentChildren":99999`, 1)} {
 		if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/delegation-policy", adminTok, body, map[string]string{"If-Match": "1"}); c != 400 {
 			t.Fatal(c, body)
 		}
+	}
+	p.MaxDepth = 2
+	b, _ = json.Marshal(p)
+	if c, _, _ := rawCall(t, "PUT", srv.URL+"/api/v1/delegation-policy", adminTok, string(b), map[string]string{"If-Match": "1"}); c != 200 {
+		t.Fatal("bounded recursion rejected", c)
+	}
+	var saved delegation.PolicyView
+	if c := call(t, srv, "GET", "/api/v1/delegation-policy", viewerTok, "", "", &saved); c != 200 || saved.Policy.MaxDepth != 2 || saved.Revision != 2 {
+		t.Fatal("recursive policy not persisted", c, saved)
 	}
 }

@@ -457,7 +457,8 @@ grant can request an installation analysis profile, follow its installation
 approval policy and receive the result. Children use the parent's model; the default
 analysis profile has no tools or workspace. Profiles may select an exact subset of
 parent grants with all constraints preserved, using the parent's workspace and
-gateway. Children have no parent conversation history, memory/emit or recursive delegation. Execution records, approval context,
+gateway. Children have no parent conversation history or memory/emit. Further delegation
+requires an inherited explicit capability and available configured depth (default one). Execution records, approval context,
 bounded shared-store capacity limits and parent links in Runs are implemented.
 See [delegation](delegation.md) for the precise contract and limitations.
 

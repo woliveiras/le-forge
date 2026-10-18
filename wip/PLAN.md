@@ -1301,3 +1301,16 @@ and provider OAuth used only for MCP access. New-install instructions refuse to
 overwrite existing `.env` credentials. No browser account-management feature or
 live authentication/secret change is claimed. Routine model/MCP/graph operation
 continues through the console after infrastructure bootstrap.
+
+### Bounded native recursive delegation (2026-10-18)
+
+The default depth remains one. Administrators can review a depth of up to four;
+profiles must explicitly inherit delegation.request at every generation. Native
+children share the root token ledger, preserve grant constraints and consume
+ancestor tool/output allowances. Tree admission remains bounded to 256 nodes and
+shared capacity; exhausted capacity rejects rather than waiting on an ancestor.
+Child cancellation propagates to active descendants and is shown throughout that
+subtree. Unit/integration/race tests cover depth denial, exact inclusive usage,
+shared-ledger settlement and cancellation during grandchild approval; browser
+coverage reviews the depth and displays a completed three-generation tree.
+External runtimes and a guaranteed monetary cap remain separate pending work.

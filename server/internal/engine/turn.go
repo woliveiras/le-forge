@@ -532,6 +532,7 @@ func (e *Engine) neighbours(ctx context.Context, graphID, node string, me, size 
 // door out of an agent: tools go through the gateway with this replica's
 // grants, model calls through the LLM registry with this node's model.
 type turnEnv struct {
+	budgetRootID string
 	executionCtx context.Context
 	toolMu       sync.Mutex
 	r            *replica
@@ -553,7 +554,7 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 	r.mu.Lock()
 	wd := r.workdir
 	r.mu.Unlock()
-	env := &turnEnv{r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
+	env := &turnEnv{budgetRootID: x.ID, r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
 		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
 		WorkspaceReadOnly: n.Workspace.ReadOnly, Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
 	}}

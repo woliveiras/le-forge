@@ -37,6 +37,17 @@ func (p *delegateProvider) Chat(ctx context.Context, r *llm.ChatRequest) (*llm.C
 		p.children++
 		p.request = r
 		p.mu.Unlock()
+		if p.mode == "recursive" {
+			for _, msg := range r.Messages {
+				if msg.Role == llm.RoleTool {
+					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Nested result: " + msg.Content}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+				}
+			}
+			if !strings.Contains(r.Messages[0].Content, "leaf") {
+				args, _ := json.Marshal(map[string]string{"template": p.profile, "objective": "leaf analysis"})
+				return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "nested", Name: "delegation.request", Arguments: args}}}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+			}
+		}
 		if strings.HasPrefix(p.mode, "inherit") {
 			for _, msg := range r.Messages {
 				if msg.Role == llm.RoleTool && p.mode != "inherit-repeat" {
@@ -781,5 +792,104 @@ func TestDelegationInheritedToolRejectionStopsChild(t *testing.T) {
 	child, err = r.store.GetExecution(r.ctx, approval.ExecutionID)
 	if err != nil || child.Status != domain.ExecFailed || child.ToolCalls != 1 || !strings.Contains(parent.Summary, "delegated tool call failed") {
 		t.Fatalf("%+v %+v %v", child, parent, err)
+	}
+}
+
+func TestDelegationRecursiveTreeSharesBudgetsAndDepth(t *testing.T) {
+	for _, depth := range []int{1, 2} {
+		t.Run(fmt.Sprint(depth), func(t *testing.T) {
+			r, p := delegationRig(t, "recursive")
+			p.profile = "recursive"
+			manager := delegation.Manager{Store: r.store}
+			policy := delegation.DefaultPolicy()
+			policy.ApprovalMode = "automatic"
+			policy.MaxDepth = depth
+			if _, err := manager.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+				t.Fatal(err)
+			}
+			profile := delegation.DefaultProfile()
+			profile.ID = "recursive"
+			profile.Tools = []string{"delegation.request"}
+			if _, err := manager.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+				t.Fatal(err)
+			}
+			deployDelegation(r, "[delegation.request]", "{turnTimeout: 10s, maxToolCalls: 8}")
+			root := finishedParent(t, r)
+			tree, err := (executioncontrol.Manager{Store: r.store}).Tree(r.ctx, root.ID)
+			if err != nil || len(tree.Nodes) != depth+1 {
+				t.Fatalf("%+v %v", tree, err)
+			}
+			if depth == 2 {
+				if !strings.Contains(root.Summary, "bounded child answer") {
+					t.Fatal(root.Summary)
+				}
+				child, grandchild := tree.Nodes[1].Execution, tree.Nodes[2].Execution
+				if child.Status != domain.ExecSucceeded || grandchild.Status != domain.ExecSucceeded || grandchild.ParentExecutionID != child.ID || child.Usage.InputTokens != 21 || root.Usage.InputTokens != 25 || root.Usage.OutputTokens != 11 {
+					t.Fatalf("root=%+v child=%+v grandchild=%+v", root, child, grandchild)
+				}
+			} else if tree.Nodes[1].Execution.Status != domain.ExecFailed {
+				t.Fatalf("depth bypass: %+v", tree.Nodes[1])
+			}
+			ledgers, err := r.store.ListSettings(r.ctx, delegation.BudgetPrefix)
+			if err != nil || len(ledgers) != 1 || ledgers[0].Key != delegation.BudgetPrefix+root.ID {
+				t.Fatalf("split tree ledger: %v %v", ledgers, err)
+			}
+			budget, err := manager.Budget(r.ctx, root.ID)
+			if err != nil || budget.Reserved != 0 || budget.Charged != root.Usage.InputTokens+root.Usage.OutputTokens {
+				t.Fatalf("budget %+v usage %+v err %v", budget, root.Usage, err)
+			}
+			leases, err := r.store.ListLeases(r.ctx, "delegation/")
+			if err != nil || len(leases) != 0 {
+				t.Fatalf("leaked capacity: %v %v", leases, err)
+			}
+		})
+	}
+}
+
+func TestDelegationRecursiveCancellationClosesGrandchildApproval(t *testing.T) {
+	r, p := delegationRig(t, "recursive")
+	p.profile = "recursive"
+	manager := delegation.Manager{Store: r.store}
+	policy := delegation.DefaultPolicy()
+	policy.MaxDepth = 2
+	if _, err := manager.SavePolicy(r.ctx, policy, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	profile := delegation.DefaultProfile()
+	profile.ID = "recursive"
+	profile.Tools = []string{"delegation.request"}
+	if _, err := manager.SaveProfile(r.ctx, profile, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	deployDelegation(r, "[delegation.request]", "{turnTimeout: 10s}")
+	first := delegationApproval(t, r)
+	if _, err := r.apr.Decide(r.ctx, first.ID, true, "operator", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	second := delegationApproval(t, r)
+	if second.ID == first.ID {
+		t.Fatal("missing grandchild approval")
+	}
+	control := executioncontrol.Manager{Store: r.store}
+	if _, err := control.Cancel(r.ctx, second.ExecutionID, "tree", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	root := finishedParent(t, r)
+	tree, err := control.Tree(r.ctx, root.ID)
+	if err != nil || len(tree.Nodes) != 3 {
+		t.Fatalf("%+v %v", tree, err)
+	}
+	for _, node := range tree.Nodes {
+		if node.Execution.Status != domain.ExecCancelled {
+			t.Fatalf("uncancelled descendant %+v", node.Execution)
+		}
+	}
+	approval, err := r.store.GetApproval(r.ctx, second.ID)
+	if err != nil || approval.Status != domain.ApprovalExpired {
+		t.Fatalf("%+v %v", approval, err)
+	}
+	budget, err := manager.Budget(r.ctx, root.ID)
+	if err != nil || budget.Reserved != 0 || budget.Charged != 13 {
+		t.Fatalf("%+v %v", budget, err)
 	}
 }

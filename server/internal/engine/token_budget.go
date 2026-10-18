@@ -55,7 +55,11 @@ func (t *turnEnv) reserveTokens(ctx context.Context, req *llm.ChatRequest) (*tok
 	if amount > limit {
 		return nil, delegation.ErrBudget
 	}
-	r := &tokenReservation{manager: m, root: t.x.ID, id: domain.NewID("tokens")}
+	root := t.budgetRootID
+	if root == "" {
+		root = t.x.ID
+	}
+	r := &tokenReservation{manager: m, root: root, id: domain.NewID("tokens")}
 	if e = m.ReserveTokens(ctx, r.root, r.id, limit, amount); e != nil {
 		return nil, e
 	}

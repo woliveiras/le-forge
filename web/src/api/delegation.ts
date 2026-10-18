@@ -14,6 +14,7 @@ export interface DelegationProfile { tools?: string[]; id: string; name: string;
 export interface DelegationPolicyView { policy: DelegationPolicy; revision: number; updatedBy?: string }
 export interface DelegationProfileView { profile: DelegationProfile; revision: number; updatedBy?: string }
 export const delegationLimits = [
+ ['maxDepth', 'Maximum delegation depth', 4],
  ['maxChildrenPerExecution', 'Children per parent', 32],
  ['maxConcurrentChildren', 'Concurrent children', 32],
  ['maxDurationSeconds', 'Duration including approval (seconds)', 600],
@@ -23,7 +24,7 @@ export const delegationLimits = [
  ['maxResultBytes', 'Result size (bytes)', 65536],
 ] as const;
 export function validDelegationPolicy(p: DelegationPolicy) {
- return p.maxDepth === 1 && ['required', 'automatic'].includes(p.approvalMode) && delegationLimits.every(([key,,max]) => Number.isInteger(p[key]) && p[key] >= 1 && p[key] <= max);
+ return ['required', 'automatic'].includes(p.approvalMode) && delegationLimits.every(([key,,max]) => Number.isInteger(p[key]) && p[key] >= 1 && p[key] <= max);
 }
 export function validDelegationProfile(p: DelegationProfile) {
  const bytes = (s: string) => new TextEncoder().encode(s).length;
@@ -31,5 +32,5 @@ export function validDelegationProfile(p: DelegationProfile) {
 }
 
 export function validDelegationTools(names: string[]) {
- return names.length <= 32 && new Set(names).size === names.length && names.every(name=>name.length<=256 && /^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+$/.test(name) && !['delegation.request','review.request','environment.propose','environment.status'].includes(name));
+ return names.length <= 32 && new Set(names).size === names.length && names.every(name=>name.length<=256 && /^[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+$/.test(name) && !['review.request','environment.propose','environment.status'].includes(name));
 }

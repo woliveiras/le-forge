@@ -16,7 +16,7 @@ func ValidateTools(names []string) error {
 	}
 	seen := map[string]bool{}
 	for _, name := range names {
-		if len(name) > 256 || !toolID.MatchString(name) || seen[name] || name == "delegation.request" || name == "review.request" || name == "environment.propose" || name == "environment.status" {
+		if len(name) > 256 || !toolID.MatchString(name) || seen[name] || name == "review.request" || name == "environment.propose" || name == "environment.status" {
 			return fmt.Errorf("invalid, duplicate or unsupported delegated capability %q", name)
 		}
 		seen[name] = true

@@ -13,7 +13,8 @@ Only these two fields are accepted. The selected installation profile uses the
 parent's resolved provider/model. The default analysis profile has no tools or
 workspace access and uses one inference request. Profiles can select an explicit
 subset of parent capabilities as described below. No profile gets durable memory,
-parent conversation history, message emission or recursive delegation. Children
+parent conversation history or message emission. Recursive delegation requires
+an inherited delegation grant and an increased installation depth limit. Children
 never edit the permanent graph.
 
 ## Installation profiles and policy
@@ -96,16 +97,15 @@ The child loop permits at most 16 calls (or the smaller remaining parent limit),
 uses a cumulative output allowance and reserves every additional model round in
 the root tree ledger. Empty, failed, truncated or oversized tool results stop the
 child rather than becoming a successful partial result. Tool-free profiles retain
-their single-call behavior. `delegation.request`, `environment.status`,
-`environment.propose` and `review.request` cannot be inherited: recursive execution
-and durable environment/review continuations need separate lifecycle support.
+their single-call behavior. `environment.status`, `environment.propose` and `review.request` cannot be
+inherited: durable environment/review continuations need separate lifecycle support.
 Platform memory and emit operations are never available to children.
 
 ## Bounded limits and recovery
 
 | Setting | Default | Allowed range |
 |---|---:|---:|
-| maxDepth | 1 | 1 only (no recursion) |
+| maxDepth | 1 | 1–4 (root is depth zero) |
 | maxChildrenPerExecution | 3 | 1–32 |
 | maxConcurrentChildren | 4 | 1–32 |
 | maxDurationSeconds | 120 | 1–600 |
@@ -117,7 +117,7 @@ The profile output allowance is also 1–4096 tokens. Durations include approval
 and respect the shorter parent deadline. Failed/rejected admitted requests count
 against the child count. Capacity includes approval waits and rejects exhausted
 requests without inference. Children cannot override installation limits.
-No automatic retry, recursion or durable continuation is provided.
+No automatic retry or durable continuation is provided.
 
 Parent cancellation propagates through the request context. Pending approvals
 are expired on cleanup; restart recovery interrupts unfinished children and
@@ -133,7 +133,7 @@ reported output over the limit is rejected. These are not a guaranteed monetary
 or provider-billing ceiling. Cumulative token admission is described below; hard billing ceilings require
 provider-specific enforcement and remain planned.
 
-Other runtimes/models, recursive children, external callbacks,
+Other runtimes/models, external callbacks,
 idempotent delegation requests and enforceable monetary ceilings
 remain planned. Native cumulative token admission is implemented below.
 No installation activation or
@@ -168,8 +168,13 @@ The tree shows persisted relationships, status, agent/profile, start/finish time
 duration and inclusive reported token usage. It is independent of the recent
 100-execution list and event-history window. Queries reject inconsistent families,
 cycles or more than 256 nodes / 16 levels rather than presenting a truncated tree.
-These read bounds do not enable recursive delegation: native children still have
-only profile-selected inherited capabilities and maximum delegation depth remains one.
+Native recursion is separately bounded to depth 1–4 (default 1), at most 256
+persisted tree nodes, and the existing shared child capacity. Every generation
+must inherit an explicit `delegation.request` grant to delegate further; profile
+selection never adds a missing capability. Each request follows the current
+approval policy. Nested calls share the original root token ledger and consume
+ancestor tool/output allowances. Capacity exhaustion rejects immediately rather
+than deadlocking ancestors that are waiting for children.
 
 Viewers can read; operators and administrators can request interruption after
 reviewing the target and scope. Approval or OAuth consent does not grant this
@@ -180,7 +185,7 @@ operator capability to agents.
 | GET /api/v1/executions/{id}/tree | viewer | Root/selected IDs and bounded nodes containing execution and optional cancellation metadata. |
 | POST /api/v1/executions/{id}/cancel | operator | Body `{"scope":"child","confirm":true}` or `{"scope":"tree","confirm":true}`; `child` requires a delegated execution. |
 
-A child stop affects that child only; its parent receives the tool error and may
+A child stop affects that child and its active descendants; its parent receives the tool error and may
 continue. A tree stop resolves the root even when requested from a child and
 cancels the root plus active descendants. Requests use immutable execution IDs;
 other trees, saved graph configuration, grants and future runs are unchanged.

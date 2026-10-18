@@ -89,10 +89,11 @@ func (m Manager) Tree(ctx context.Context, id string) (Tree, error) {
 	if e != nil {
 		return Tree{}, e
 	}
+	inherited := map[string]*Request{root.ID: rootRequest}
 	for len(queue) > 0 {
 		x := queue[0]
 		queue = queue[1:]
-		request := rootRequest
+		request := inherited[x.ID]
 		if request == nil {
 			request, e = m.Requested(ctx, x.ID)
 			if e != nil {
@@ -116,6 +117,7 @@ func (m Manager) Tree(ctx context.Context, id string) (Tree, error) {
 			}
 			seen[c.ID] = true
 			depths[c.ID] = depths[x.ID] + 1
+			inherited[c.ID] = request
 			queue = append(queue, c)
 		}
 	}

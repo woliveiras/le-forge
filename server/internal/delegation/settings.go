@@ -41,8 +41,8 @@ func (p Policy) Validate() error {
 	if p.ApprovalMode != "required" && p.ApprovalMode != "automatic" {
 		return errors.New("approvalMode must be required or automatic")
 	}
-	if p.MaxDepth != 1 {
-		return errors.New("only depth one is supported")
+	if p.MaxDepth < 1 || p.MaxDepth > 4 {
+		return errors.New("maxDepth must be between 1 and 4")
 	}
 	for _, v := range []struct {
 		name   string

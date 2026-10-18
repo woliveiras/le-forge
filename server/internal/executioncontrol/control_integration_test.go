@@ -143,3 +143,28 @@ func TestTreeRejectsOverflowAndCorruptRequests(t *testing.T) {
 		t.Fatal("corrupt request ignored")
 	}
 }
+
+func TestChildCancellationIsVisibleOnDescendantsNotSiblings(t *testing.T) {
+	m := manager(t)
+	ctx := context.Background()
+	put(t, m, "root", "", domain.ExecRunning)
+	put(t, m, "child", "root", domain.ExecRunning)
+	put(t, m, "sibling", "root", domain.ExecRunning)
+	put(t, m, "grandchild", "child", domain.ExecRunning)
+	if _, err := m.Cancel(ctx, "child", "child", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := m.Tree(ctx, "grandchild")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range tree.Nodes {
+		inherited := node.Execution.ID == "child" || node.Execution.ID == "grandchild"
+		if inherited && (node.Cancellation == nil || node.Cancellation.ExecutionID != "child") {
+			t.Fatalf("missing inherited cancellation %+v", node)
+		}
+		if !inherited && node.Cancellation != nil {
+			t.Fatalf("unrelated cancellation %+v", node)
+		}
+	}
+}

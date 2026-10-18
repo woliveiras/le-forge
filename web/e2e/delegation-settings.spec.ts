@@ -51,3 +51,33 @@ test('delegation settings enforce viewer access and stale policy conflicts',asyn
  const latest=await (await page.request.get('/api/v1/delegation-policy',{headers:admin})).json();expect((await page.request.put('/api/v1/delegation-policy',{headers:{...admin,'If-Match':String(latest.revision)},data:original.policy})).status()).toBe(200);
  }
 });
+
+test('reviewed depth permits a bounded recursive tree with one shared budget',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ const original=await (await page.request.get('/api/v1/delegation-policy',{headers:admin})).json();
+ try {
+  expect((await page.request.post('/api/v1/delegation-profiles',{headers:admin,data:{id:'browser-recursive',name:'Recursive analysis',instructions:'Delegate one bounded follow-up if needed.',enabled:true,maxOutputTokens:128,tools:['delegation.request']}})).status()).toBe(201);
+  await page.goto('/#/administration/delegation');
+  await page.getByLabel('Maximum delegation depth',{exact:true}).fill('2');
+  await page.getByRole('combobox',{name:'Approval mode',exact:true}).selectOption('automatic');
+  await page.getByRole('button',{name:'Review delegation policy',exact:true}).click();
+  await expect(page.getByRole('region',{name:'Confirm delegation policy'})).toContainText('Maximum delegation depth');
+  await page.getByRole('button',{name:'Confirm delegation policy',exact:true}).click();
+  await expect(page.getByText('Delegation policy saved. New requests use these settings.')).toBeVisible();
+  const id='recursive-browser';
+  expect((await page.request.post('/api/v1/graphs',{headers:admin,data:{metadata:{id,name:id},spec:{nodes:[{id:'parent',runtime:{kind:'native'},prompt:'delegation-fixture recursive-profile',model:{provider:'e2e',name:'fixture'},loop:{mode:'once'},tools:[{name:'delegation.request'}]}]}}})).status()).toBe(201);
+  await page.goto('/#/g/'+id+'/canvas');await page.getByRole('button',{name:'Run all',exact:true}).click();
+  let root:{id:string;summary:string}|undefined;
+  await expect.poll(async()=>{const xs=await(await page.request.get('/api/v1/graphs/'+id+'/executions',{headers:admin})).json();root=xs.find((x:{parentExecutionId?:string;status:string})=>!x.parentExecutionId&&x.status==='succeeded');return !!root;}).toBe(true);
+  expect(root!.summary).toContain('Recursive leaf completed');
+  const tree=await(await page.request.get('/api/v1/executions/'+root!.id+'/tree',{headers:admin})).json();
+  expect(tree.nodes).toHaveLength(3);expect(tree.nodes.every((n:{execution:{status:string}})=>n.execution.status==='succeeded')).toBe(true);expect(tree.budget.reserved).toBe(0);
+  await page.goto('/#/g/'+id+'/runs?execution='+tree.nodes[2].execution.id+'&section=tree');
+  const view=page.getByRole('region',{name:'Execution tree',exact:true});
+  for(const node of tree.nodes) await expect(view.getByRole('link',{name:'parent · '+node.execution.id})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Tree token budget',exact:true})).toContainText('Reserved: 0');
+ }finally{
+  const latest=await(await page.request.get('/api/v1/delegation-policy',{headers:admin})).json();
+  expect((await page.request.put('/api/v1/delegation-policy',{headers:{...admin,'If-Match':String(latest.revision)},data:original.policy})).status()).toBe(200);
+ }
+});

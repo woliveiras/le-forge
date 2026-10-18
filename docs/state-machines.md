@@ -142,8 +142,8 @@ stateDiagram-v2
 ## Dynamic delegation entities and states
 
 Delegation uses existing execution and approval records, not temporary graph
-nodes. This is the current native contract; other runtimes and recursive children
-remain separate capabilities.
+nodes. This is the current native contract; other runtimes remain separate capabilities; native recursion requires an explicit
+inherited grant and a configured depth of at most four.
 
 | Entity | Identity and authoritative fields |
 |---|---|
@@ -177,7 +177,7 @@ approvals. A child's tool approval can suspend work without changing the child's
 persisted execution status from `running`; inspect linked approvals for that wait.
 
 The parent can handle a failed/rejected/cancelled child and finish successfully.
-Stopping one child does not cancel its parent or siblings. Tree cancellation
+Stopping one child also cancels its active descendants, but not its parent or siblings. Tree cancellation
 checks the root request in every active descendant context. A request racing with
 completion can coexist with a terminal successful outcome; the UI must not turn
 an acknowledged request into a claim that work was forcibly killed.

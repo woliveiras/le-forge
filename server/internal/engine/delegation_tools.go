@@ -14,6 +14,7 @@ import (
 func (t *turnEnv) delegatedChat(ctx context.Context, x *domain.Execution, grants []domain.ToolGrant, req *llm.ChatRequest, provider string, first *tokenReservation, maxBytes int) (*llm.ChatResponse, error) {
 	node := *t.n
 	node.Tools = grants
+	node.Model.MaxTokens = req.MaxTokens
 	node.Limits.MaxToolCalls = 16
 	if t.n.Limits.MaxToolCalls > 0 {
 		node.Limits.MaxToolCalls = min(16, t.n.Limits.MaxToolCalls-t.toolCalls())
@@ -23,10 +24,13 @@ func (t *turnEnv) delegatedChat(ctx context.Context, x *domain.Execution, grants
 	}
 	child := newTurnEnv(t.r, t.gr, &node, x)
 	child.executionCtx = ctx
-	child.principal.Delegate = nil
+	child.budgetRootID = t.budgetRootID
 	defer func() {
 		x.ToolCalls = child.toolCalls()
+		descendants := child.usage()
+		x.Usage.Add(descendants)
 		t.mu.Lock()
+		t.use.Add(descendants)
 		t.calls += x.ToolCalls
 		t.mu.Unlock()
 	}()
@@ -36,7 +40,7 @@ func (t *turnEnv) delegatedChat(ctx context.Context, x *domain.Execution, grants
 		reservation := first
 		if round > 0 {
 			var err error
-			req.MaxTokens = allowance - x.Usage.OutputTokens
+			req.MaxTokens = allowance - x.Usage.OutputTokens - child.usage().OutputTokens
 			if req.MaxTokens <= 0 {
 				return nil, errors.New("delegation result exceeded its output limit")
 			}
@@ -69,13 +73,13 @@ func (t *turnEnv) delegatedChat(ctx context.Context, x *domain.Execution, grants
 		if response == nil {
 			return nil, errors.New("delegation returned no result")
 		}
-		if x.Usage.OutputTokens > allowance {
+		if x.Usage.OutputTokens+child.usage().OutputTokens > allowance {
 			return nil, errors.New("delegation result exceeded its output limit")
 		}
 		if len(response.Message.ToolCalls) == 0 || len(grants) == 0 {
 			return response, nil
 		}
-		if response.StopReason == "length" || x.Usage.OutputTokens >= allowance {
+		if response.StopReason == "length" || x.Usage.OutputTokens+child.usage().OutputTokens >= allowance {
 			return nil, errors.New("delegation result exceeded its output limit")
 		}
 		message := response.Message

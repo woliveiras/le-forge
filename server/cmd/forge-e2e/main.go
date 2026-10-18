@@ -39,6 +39,23 @@ func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { retur
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
 	if strings.Contains(r.System, "temporary analysis assistant") {
 		if len(r.Tools) != 0 {
+			recursive := false
+			for _, tool := range r.Tools {
+				if tool.Name == "delegation.request" {
+					recursive = true
+				}
+			}
+			if recursive {
+				for _, message := range r.Messages {
+					if message.Role == llm.RoleTool {
+						return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Nested fixture: " + message.Content}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+					}
+				}
+				if strings.Contains(r.Messages[0].Content, "leaf") {
+					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Recursive leaf completed"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+				}
+				return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "recursive-child", Name: "delegation.request", Arguments: json.RawMessage(`{"template":"browser-recursive","objective":"leaf"}`)}}}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
+			}
 			for _, message := range r.Messages {
 				if message.Role == llm.RoleTool {
 					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Delegated inherited tool completed"}, Usage: llm.Usage{InputTokens: 7, OutputTokens: 3}}, nil
@@ -55,6 +72,9 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 			}
 		}
 		profile := "analysis"
+		if strings.Contains(r.Messages[0].Content, "recursive-profile") {
+			profile = "browser-recursive"
+		}
 		if strings.Contains(r.Messages[0].Content, "inherited-profile") {
 			profile = "browser-inherited"
 		}
