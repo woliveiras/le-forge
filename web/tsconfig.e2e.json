@@ -10,7 +10,9 @@
     "e2e-real",
     "playwright.real.config.ts",
     "e2e-providers",
-    "playwright.providers.config.ts"
+    "playwright.providers.config.ts",
+    "e2e-provider-management",
+    "playwright.provider-management.config.ts"
   ],
   "compilerOptions": {
     "types": [

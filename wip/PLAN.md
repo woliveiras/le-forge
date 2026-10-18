@@ -1670,3 +1670,21 @@ save/reopen, discovery filtering, denied and allowed execution, invalid policy
 and viewer rejection. Unit tests cover rule validation, combined fields and
 schema matching; manager/store/gateway integration covers pre-dispatch denial,
 normalization, persisted policy, stale revisions and failed discovery.
+
+### Provider management E2E isolation (2026-10-18)
+
+The full combined browser run exposed test interference: managing providers
+atomically reloads the model registry, replacing the deterministic provider
+injected only into the main fixture's memory. Subsequent delegated journeys then
+failed with a missing provider. The provider-management scenario now runs in a
+fresh disposable backend through its own Playwright configuration, chained into
+the mandatory `test:e2e` script. Its assertions are unchanged; it is not skipped
+or weakened. E2E type checking includes the new directory/configuration. No
+production registry behavior or installation configuration changes are needed.
+
+Verification after isolation: the complete `make test-e2e` command passed
+78 main scenarios, one hosted-CIMD scenario and one provider-management scenario.
+The registry replacement unit tests and provider API/storage integration passed
+again. The provider browser test was moved unchanged, preserving every assertion.
+The earlier failed combined run is superseded by this complete successful run;
+no security check, test assertion or production authorization was relaxed.
