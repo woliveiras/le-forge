@@ -1292,3 +1292,12 @@ consumption entities without inventing new graph nodes or task records. It expla
 persisted approval waits, terminal outcomes, per-tool approvals, cancellation races,
 inclusive reported usage and ledger recovery. The implementation suites validate
 these boundaries; external runtimes and recursion are still pending.
+
+### Initial installation identity (2026-10-18)
+
+The bootstrap contract now explicitly distinguishes the initial admin token,
+named operator provisioning through installation tokenFile/OIDC configuration,
+and provider OAuth used only for MCP access. New-install instructions refuse to
+overwrite existing `.env` credentials. No browser account-management feature or
+live authentication/secret change is claimed. Routine model/MCP/graph operation
+continues through the console after infrastructure bootstrap.

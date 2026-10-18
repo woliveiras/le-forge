@@ -26,6 +26,37 @@ without loading `.env`. They verify volumes, restarts, network membership,
 publications, remote overrides and missing-credential rejection. They do not
 claim service reachability or a successful clean installation.
 
+## Initial identity and credentials
+
+A new Compose installation requires four independent bootstrap secrets: the
+LeForge administrator token, runtime shared secret, database password and Grafana
+administrator password. The [getting-started procedure](getting-started.md)
+creates them only when `.env` does not already exist, with owner-only permissions.
+Missing values stop Compose configuration. Do not substitute a checked-in default
+or reuse one secret for several services. Infrastructure bootstrap is the only
+shell step before normal console configuration.
+
+The initial LeForge identity is the configured administrator bearer token, not a
+user account created by a web signup form. Sign in locally, verify the admin role,
+then configure models, MCP connections and graph grants in the console. Connecting
+GitHub/Atlassian OAuth authorizes an MCP connection; it does not create a LeForge
+login identity. Grafana authentication is a separate service.
+
+For a named first operator, configure a distinct `auth.tokens` entry with role
+`operator` and a mounted `tokenFile`, or map the operator through the existing OIDC
+issuer/audience/role-claim configuration. An administrator must provision that
+identity through installation configuration and restart as required; there is no
+browser account-management screen or automatic elevation of the first visitor.
+Viewer/operator/admin permissions remain unchanged. Never hand out the bootstrap
+admin token as a shared operator credential. Keep a separately protected recovery
+admin identity and verify it before retiring old authentication material.
+
+Remote access additionally needs reviewed TLS ingress, the intended public URL
+and host/network exposure. OAuth callback URLs derive from the public URL and must
+match provider registration. Do not disable authentication to fix a callback,
+reverse-proxy or connectivity problem. Changes to real authentication settings,
+identity-provider applications or secret values are separate maintenance actions.
+
 ## Before maintenance
 
 Record the deployed source revision, image digest, Compose project name, enabled

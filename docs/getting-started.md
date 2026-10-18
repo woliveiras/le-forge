@@ -17,12 +17,21 @@ Requirements: Docker Engine (or Docker Desktop / Colima / Rancher Desktop /
 Podman with the compose plugin) and about 3 GB of free memory for the full
 stack.
 
+For a **new installation only**, create private bootstrap credentials. The
+no-clobber subshell refuses to overwrite an existing `.env`; reuse the existing
+secret set for upgrades. Never regenerate installation credentials as a repair
+step. Review the [initial identity contract](operations.md#initial-identity-and-credentials)
+before exposing the installation remotely.
+
 ```bash
-for name in LEFORGE_ADMIN_TOKEN LEFORGE_RUNTIME_SECRET POSTGRES_PASSWORD GRAFANA_ADMIN_PASSWORD; do
-  printf '%s=%s\n' "$name" "$(openssl rand -hex 32)"
-done > .env
-chmod 600 .env
-docker compose up -d --build
+(
+  set -C
+  umask 077
+  for name in LEFORGE_ADMIN_TOKEN LEFORGE_RUNTIME_SECRET POSTGRES_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+    value=$(openssl rand -hex 32) || exit 1
+    printf '%s=%s\n' "$name" "$value"
+  done > .env
+) && docker compose up -d --build
 docker compose ps              # forged, agents, nats, postgres, sandbox-daemon, otel-collector, prometheus, tempo, loki, grafana
 ```
 
@@ -51,7 +60,7 @@ to that command when agents should run commands in containers.
 isolation run their commands in containers there, never on your machine's
 Docker. `sandbox-image` builds the default sandbox image inside it on every
 `up` and then exits (status `Exited (0)` is expected). The console shows its
-state under **Integrations → Sandbox runtime**. See
+state under **Administration → Health**. See
 [sandbox runtime](sandbox-runtime.md).
 
 ### Prepare a project environment
@@ -67,7 +76,7 @@ when ready. No `.leforge/environment.yaml` is required.
 
 Compatible tasks reuse prepared images and cache seeds while retaining separate
 workspaces and writable caches. Setup runs per task. The agent panel explains
-readiness, reuse, build failures and capacity waiting. Use **Integrations** for
+readiness, reuse, build failures and capacity waiting. Use **Administration** for
 network policy, resource cleanup preview and confirmation. Reset affects a stopped
 graph's environment and preserves its workspace and shared resources needed by
 other tasks. See [environments and troubleshooting](environments.md), the
