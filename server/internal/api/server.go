@@ -38,6 +38,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
+	"github.com/woliveiras/le-forge/server/internal/repositoryimport"
 	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/secrets"
 	"github.com/woliveiras/le-forge/server/internal/storage"
@@ -50,19 +51,20 @@ import (
 var Version = "dev"
 
 type Deps struct {
-	MCP            *mcpconfig.Manager
-	Reviews        *review.Manager
-	PreviewGateway *review.Gateway
-	Config         *config.Config
-	Engine         *engine.Engine
-	Store          storage.Store
-	Broker         queue.Broker
-	Bus            *events.Bus
-	Approvals      *hitl.Service
-	Models         *llm.Registry
-	Providers      *llmconfig.Manager
-	Tools          *tools.Registry
-	Workspaces     *workspace.Manager
+	RepositoryImports *repositoryimport.Manager
+	MCP               *mcpconfig.Manager
+	Reviews           *review.Manager
+	PreviewGateway    *review.Gateway
+	Config            *config.Config
+	Engine            *engine.Engine
+	Store             storage.Store
+	Broker            queue.Broker
+	Bus               *events.Bus
+	Approvals         *hitl.Service
+	Models            *llm.Registry
+	Providers         *llmconfig.Manager
+	Tools             *tools.Registry
+	Workspaces        *workspace.Manager
 	// Environments is optional; without it the environment routes answer 404.
 	Environments *environment.Manager
 	Proposals    *environment.Proposals

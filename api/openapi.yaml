@@ -43,6 +43,74 @@ tags:
 security:
   - bearer: []
 paths:
+  /api/v1/repository-imports:
+    get:
+      summary: List durable public repository imports
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Import records; unfinished expired attempts are reconciled
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/RepositoryImport'}}
+    post:
+      summary: Confirm public HTTPS import or reuse a pinned snapshot
+      description: No task execution or permission changes. Shallow smart HTTP fetch, no host credentials or redirects; two active imports per process, three minutes and 128 MiB incoming transfer per attempt. Partial directories are retained. Matching URL/ref reuses the ready commit without refreshing HEAD.
+      x-leforge-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url, confirmed]
+              properties:
+                url: {type: string, maxLength: 2048, description: Public HTTPS clone URL without credentials, query or fragment; public DNS hostname required}
+                ref: {type: string, maxLength: 256, default: HEAD, description: HEAD, full refs/heads/ or refs/tags/ reference, or full commit hash}
+                confirmed: {type: boolean, const: true}
+                retry: {type: boolean, default: false}
+                revision: {type: integer, description: Current record revision required for explicit retry}
+      responses:
+        '202':
+          description: Existing ready/active import or new attempt
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RepositoryImport'}
+        '400': {description: Invalid URL/ref/body, missing confirmation or unavailable importer}
+        '403': {description: Administrator required}
+        '409': {description: Capacity exhausted, stale revision, retry required or prior attempt still finishing}
+  /api/v1/repository-imports/{iid}:
+    get:
+      summary: Inspect progress or reconcile an expired import
+      x-leforge-role: viewer
+      parameters:
+        - {in: path, name: iid, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Authoritative import state; live bytes are process-local until persisted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RepositoryImport'}
+        '404': {description: Import not found}
+        '409': {description: Concurrent reconciliation; reload current state}
+  /api/v1/repository-imports/{iid}/cancel:
+    post:
+      summary: Request cancellation before project publication
+      x-leforge-role: admin
+      parameters:
+        - {in: path, name: iid, required: true, schema: {type: string}}
+        - {in: header, name: If-Match, required: true, schema: {type: string}}
+      responses:
+        '202':
+          description: Cancellation state; partial files remain preserved
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RepositoryImport'}
+        '400': {description: Missing or invalid revision}
+        '403': {description: Administrator required}
+        '404': {description: Import not found}
+        '409': {description: Stale revision or import no longer cancellable}
   /api/v1/projects:
     get:
       summary: List explicitly registered server-side Git repositories
@@ -2112,9 +2180,28 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    RepositoryImport:
+      type: object
+      properties:
+        id: {type: string}
+        url: {type: string}
+        ref: {type: string}
+        state: {enum: [fetching, verifying, publishing, ready, cancel_requested, cancelled, failed, interrupted]}
+        message: {type: string}
+        revision: {type: integer}
+        attempt: {type: string}
+        projectId: {type: string}
+        commit: {type: string}
+        bytes: {type: integer, minimum: 0}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        deadline: {type: string, format: date-time}
     Project:
       type: object
       properties:
+        importId: {type: string}
+        repositoryUrl: {type: string}
+        repositoryRef: {type: string}
         executionMode: {enum: [workflow, local, sandbox]}
         id: {type: string}
         revision: {type: integer}

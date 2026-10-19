@@ -37,8 +37,9 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 **Status: Phase A task-flow implementation and the Phase B native bundle are delivered within the documented capability limits. macOS arm64 automated native qualification passed; external accounts, actual editor launch, optional real native sandbox and other platform smoke checks remain pending. No existing installation activation is claimed.**
 **New decision, 2026-10-19: prompt-first New task and task authorization modes
 are tracked as the next user-facing Release 1 increment. PROMPT-01 now delivers
-the prompt-first editor and PROMPT-02 adds durable request interpretation;
-import/admission and task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
+the prompt-first editor, PROMPT-02 adds durable request interpretation, and
+PROMPT-03 adds explicitly confirmed public repository imports; automatic admission
+and task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
 behavior or installation permission change is activated by this documentation.**
 
 Earlier UX delivery evidence remains historical evidence for existing screens, not
@@ -2303,3 +2304,55 @@ workflow/grants have automated coverage. `make test`, `make lint`, `make build`
 were attempted and blocked by the unavailable Docker socket; host equivalents
 were used. No installation activation, external credentials or live repository
 qualification is claimed. PROMPT-03 public repository import is next.
+
+### PROMPT-03 — Public repository snapshots (2026-10-19)
+
+Implemented explicit public URL import in Projects and task drafts, including a
+Prepare repository handoff from unresolved prompt drafts. Administrators confirm
+a canonical HTTPS clone URL and HEAD/full branch/tag/commit reference; import
+does not save/start a task or broaden grants. Ready projects select the pinned
+commit for the existing review/start/worktree flow. Shared workflows are unchanged.
+
+A dedicated persisted import record tracks fetching, verifying, publishing, ready,
+cancellation and failures. Same canonical URL/ref reuses one snapshot, including
+concurrent starts. Retry requires the current revision and creates a fresh directory;
+partial attempts and user checkouts are retained. Expired attempts reconcile after
+the stored deadline, including recovery of uncertain project publication without
+duplicate projects. Import shuts down before storage closes.
+
+The bounded transport validates public DNS addresses and pins the dial target,
+rejects redirects and credentials, and exposes only Git upload-pack via a private
+loopback bridge. Git inherits neither host configuration nor credential helpers.
+Import downloads shallow objects/metadata without checkout, hooks, submodules or
+LFS; managed task checkout also ignores host filters. Limits are two imports per
+process, three minutes and 128 MiB incoming transfer per attempt, not a global disk
+or expanded-worktree quota. Existing installation permissions are preserved.
+
+Evidence:
+- Go unit and real smart-HTTP Git/storage/API integration tests cover malformed
+  URLs/refs, public address filtering, transport/header restrictions, concurrent
+  reuse, capacity, audit failure, partial directories, cancellation, restart/retry,
+  uncertain publication and distinct worktrees. A checkout-filter regression
+  proves imported worktrees do not invoke host-configured filters.
+- `go test -p 2 ./...`, `go test -race ./internal/repositoryimport
+  ./internal/projectconfig`, `go vet ./...` and `go build ./...` passed on the host.
+- Web TypeScript checks, all 343 Vitest tests and `pnpm build` passed.
+- Chromium import/projects/task-draft journeys passed (18 tests); the final
+  import-only rerun passed all three journeys: import/reuse/reviewed execution,
+  persisted failure/retry, and cancellation/viewer denial. The two opt-in
+  deterministic prompt-interpretation browser journeys also passed.
+- `make test-native-browser` passed all eight disposable standalone journeys,
+  including the preinstalled Software Factory and independent task worktrees.
+- `make test-python` passed (15 SDK, 14 agent and 8 script tests).
+- `make test`, `make lint` and `make build` were attempted but their Docker
+  wrappers could not connect to the daemon. Initial simultaneous full suites
+  hit existing environment-test timeouts; unchanged tests passed on rerun with
+  reduced Go package concurrency and separate web execution.
+
+OpenAPI, workflow/product contracts and event/metric documentation describe the
+implemented boundaries. Live public hosts, corporate networking and platform
+qualification remain external acceptance. No installation activation, credential
+change, push or external account operation occurred. Ready HEAD reuse deliberately
+does not fetch a newer branch tip; choose another explicit ref/commit. Shared-store
+servers need access to the same managed project paths. Private Git authentication
+is PROMPT-04; automatic admission remains PROMPT-05.

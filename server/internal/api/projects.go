@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Server) projectRoutes() {
+	s.mux.Handle("GET /api/v1/repository-imports", s.wrap(route{"GET /api/v1/repository-imports", config.RoleViewer, s.listRepositoryImports}))
+	s.mux.Handle("POST /api/v1/repository-imports", s.wrap(route{"POST /api/v1/repository-imports", config.RoleAdmin, s.startRepositoryImport}))
+	s.mux.Handle("GET /api/v1/repository-imports/{iid}", s.wrap(route{"GET /api/v1/repository-imports/{iid}", config.RoleViewer, s.getRepositoryImport}))
+	s.mux.Handle("POST /api/v1/repository-imports/{iid}/cancel", s.wrap(route{"POST /api/v1/repository-imports/{iid}/cancel", config.RoleAdmin, s.cancelRepositoryImport}))
 	s.mux.Handle("PUT /api/v1/projects/{pid}/preferences", s.wrap(route{"PUT /api/v1/projects/{pid}/preferences", config.RoleAdmin, s.projectPreferences}))
 	s.mux.Handle("GET /api/v1/projects", s.wrap(route{"GET /api/v1/projects", config.RoleViewer, s.listProjects}))
 	s.mux.Handle("POST /api/v1/projects", s.wrap(route{"POST /api/v1/projects", config.RoleAdmin, s.createProject}))

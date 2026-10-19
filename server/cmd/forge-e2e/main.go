@@ -30,6 +30,8 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/llm"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig/mcptest"
+	"github.com/woliveiras/le-forge/server/internal/repositoryimport"
+	"github.com/woliveiras/le-forge/server/internal/repositoryimport/importtest"
 	"github.com/woliveiras/le-forge/server/internal/sandboxcapacity"
 )
 
@@ -228,6 +230,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	importFixture, err := importtest.New(ctx, filepath.Join(cfg.Workspaces.Root, ".import-fixture-remote"))
+	if err != nil {
+		return err
+	}
+	defer importFixture.Server.Close()
+	if err = a.RepositoryImports.Close(ctx); err != nil {
+		return err
+	}
+	imports, err := repositoryimport.New(repositoryimport.Options{Store: a.Store, Root: filepath.Join(cfg.Workspaces.Root, ".repositories"), Client: importFixture.Client, Log: a.Log})
+	if err != nil {
+		return err
+	}
+	a.RepositoryImports = imports
+	a.API.RepositoryImports = imports
 	quotaTime := time.Now()
 	a.MCP.QuotaNow = func() time.Time { return quotaTime }
 	fixtureRecovery := mcptest.NewRecovering()

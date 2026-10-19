@@ -5,7 +5,7 @@ The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Prompt-first tasks and authorization modes — incremental delivery
 
-**Decision: 2026-10-19. PROMPT-01 editor and PROMPT-02 interpretation are implemented; URL import,
+**Decision: 2026-10-19. PROMPT-01 editor, PROMPT-02 interpretation and PROMPT-03 public URL import are implemented;
 automatic start and authorization modes remain planned.** New task starts with
 the Request field, visible workflow/environment selectors and collapsed Review
 settings. A new draft derives an editable display title from the first prompt
@@ -40,9 +40,9 @@ revisions prevent a slow response from overwriting a newer edit. A process/netwo
 failure can leave a pending draft; inspect Tasks before submitting a new task.
 The API may return a storage failure after the initial draft was persisted.
 
-Repository URLs are references only in this delivery. Select a registered project
-and verify that it matches the requested repository before saving; no network Git
-operation or credential lookup occurs. URL import remains PROMPT-03. Resolving
+Resolve request identifies repository URLs without fetching them. Use Prepare repository
+to explicitly import a public repository, or select a registered project, then verify
+the project and pinned commit before saving. Resolving
 rebuilds entry/result/channel bindings; the current project/environment/title/issue
 settings are retained and normal review revalidates their compatibility. Only these
 whitelisted settings can accompany interpretation; they cannot add grants.
@@ -52,6 +52,57 @@ starts agents. Unresolved drafts cannot be admitted. Normal Review requirements
 continues to expose model, MCP connection, grant, environment and policy repair,
 followed by a separate explicit reviewed start. Model interpretation quality with
 live providers and human acceptance remain external validation, not fixture evidence.
+
+### Public repository imports (PROMPT-03)
+
+Open **Import from URL** in Projects, or **Prepare repository / Import repository
+from URL** in a task. An administrator confirms the download and chooses `HEAD`,
+a full `refs/heads/...` or `refs/tags/...` reference, or a full commit hash. Fetching
+arbitrary commits depends on the remote server allowing that request. A ready
+import records its immutable commit and project; **Use imported project** selects
+it without saving or starting the task. Review settings and explicitly start as
+before. Operators can select existing imported projects; only administrators can
+start, retry or cancel imports. No tools, grants or graph definitions are changed.
+
+The importer accepts public HTTPS smart Git HTTP endpoints on DNS hostnames.
+GitHub owner/repository URLs are normalized to clone URLs. Credentials, query
+strings, IP literals, private/reserved DNS addresses and redirects are rejected.
+Use a canonical clone URL. The transport pins validated public DNS addresses and
+does not inherit proxy credentials, Git credential helpers, host Git configuration
+or cookies. Authentication failures require a different public source or the future
+private-Git flow; they do not trigger a credential search.
+
+Each download is a shallow metadata/object snapshot in a new managed directory
+under the server workspace root's `.repositories` directory. Import does not check
+out files, run hooks, recurse into submodules, download LFS content, install
+dependencies or execute repository commands. Subsequent task admission creates an
+isolated worktree at the pinned commit using the existing project mechanism;
+managed checkout ignores host Git filters/configuration. Worktrees separate file
+changes, not operating-system authority. Native paths are on the host; Docker
+paths are on the server/container.
+
+States and byte progress are visible and persisted for resume: fetching, verifying,
+publishing, ready, cancel_requested, cancelled, failed and interrupted. Live bytes
+are available from the process performing the import; final bytes are persisted.
+There are at most two active imports per server process, with a three-minute
+network/process deadline and 128 MiB cumulative incoming transfer limit per attempt.
+These are not a global disk quota or an expanded-worktree size limit. Cancellation
+is available before publishing. Interrupted operations reconcile after their stored
+deadline; successful uncertain publication recovers the existing project.
+
+Identical canonical URL/reference requests reuse the same active operation or ready
+snapshot, including concurrent requests. Reusing `HEAD` does not refresh a moving
+branch: the displayed commit stays pinned. Choose a different explicit ref/commit
+for another snapshot. Failed/cancelled/interrupted imports require an explicit retry
+with the current revision and use a fresh directory. Partial attempts and existing
+checkouts are preserved, never overwritten or automatically deleted. Multi-server
+reuse requires access to the same managed project path. Retained attempts may need
+separately reviewed cleanup.
+
+Unit, real smart-HTTP Git/API integration and disposable Chromium tests cover import,
+reuse, cancellation, failure/retry, permissions and reviewed task execution. They do
+not qualify live public hosts, private authentication, corporate networks, Windows
+process handling or automatic task admission.
 
 ### Primary experience
 
@@ -79,12 +130,9 @@ reload, version-fenced and independently scoped from the reusable source graph.
 Prompt interpretation is untrusted input, never permission to add tools, connect
 accounts, override installation policy or alter shared workflow definitions.
 
-Remote URL import is still missing from New task. Reuse the existing clone and
-project/worktree foundations, adding managed import progress, cancellation,
-reference/commit selection, duplicate/reuse handling and explicit authentication
-for private repositories. MCP OAuth access does not automatically authorize Git
-clone. Start with public repository URLs; private authentication is a separate
-implementation task. Native work remains on the user's host; Docker paths remain
+Public URL import is available from New task and Projects after explicit confirmation.
+Private Git authentication remains a separate implementation task (PROMPT-04).
+MCP OAuth access does not automatically authorize Git clone. Native work remains on the user's host; Docker paths remain
 on the server/container. Worktrees separate changes, not OS authority.
 
 Keep the prompt, progress, required action, result and changes on the task page.

@@ -1,4 +1,4 @@
-export interface Project {executionMode?: "workflow"|"local"|"sandbox";id:string;revision:number;name:string;path:string;head:string;createdAt:string}
+export interface Project {importId?:string;repositoryUrl?:string;repositoryRef?:string;executionMode?: "workflow"|"local"|"sandbox";id:string;revision:number;name:string;path:string;head:string;createdAt:string}
 import type {Approval, ValidationResult, Execution, ToolGrant, ModelRef } from './types';
 export interface TaskInput {
  source?: {kind:"github"|"jira";connectionId:string;reference:string;cloudId?:string};
@@ -36,3 +36,5 @@ export interface TaskWorkspace {nodeId:string;replica:number;path:string;branch?
 export interface TaskProgress {environment?:import('./types').EnvironmentView;workspaces?:TaskWorkspace[];pendingApprovals?:Approval[]|null;workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
 
 export interface CleanupPreview {path:string;branch:string;head:string;status:string;clean:boolean;fingerprint:string}
+
+export interface RepositoryImportRecord {id:string;url:string;ref:string;state:string;message:string;revision:number;attempt:string;projectId?:string;commit?:string;bytes:number;createdAt:string;updatedAt:string;deadline:string}

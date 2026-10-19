@@ -35,6 +35,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/observability"
 	"github.com/woliveiras/le-forge/server/internal/queue"
 	"github.com/woliveiras/le-forge/server/internal/queue/brokers"
+	"github.com/woliveiras/le-forge/server/internal/repositoryimport"
 	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/runtime"
 	"github.com/woliveiras/le-forge/server/internal/runtime/echo"
@@ -51,20 +52,21 @@ import (
 
 // App is a running control plane.
 type App struct {
-	Config           *config.Config
-	Log              *slog.Logger
-	Store            storage.Store
-	Broker           queue.Broker
-	Bus              *events.Bus
-	Approvals        *hitl.Service
-	Models           *llm.Registry
-	Providers        *llmconfig.Manager
-	MCP              *mcpconfig.Manager
-	Tools            *tools.Registry
-	Gateway          *tools.Gateway
-	WorkspaceMonitor *tools.WorkspaceMonitor
-	WorkspaceJournal *workspacejournal.Importer
-	Engine           *engine.Engine
+	RepositoryImports *repositoryimport.Manager
+	Config            *config.Config
+	Log               *slog.Logger
+	Store             storage.Store
+	Broker            queue.Broker
+	Bus               *events.Bus
+	Approvals         *hitl.Service
+	Models            *llm.Registry
+	Providers         *llmconfig.Manager
+	MCP               *mcpconfig.Manager
+	Tools             *tools.Registry
+	Gateway           *tools.Gateway
+	WorkspaceMonitor  *tools.WorkspaceMonitor
+	WorkspaceJournal  *workspacejournal.Importer
+	Engine            *engine.Engine
 	// Environments builds project environments on the sandbox daemon.
 	Environments   *environment.Manager
 	Proposals      *environment.Proposals
@@ -255,8 +257,13 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if cfg.Auth.Disabled {
 		log.Warn("API authentication is DISABLED; never expose this instance beyond localhost")
 	}
+	a.RepositoryImports, err = repositoryimport.New(repositoryimport.Options{Store: a.Store, Root: filepath.Join(ws.Root, ".repositories"), Log: log})
+	if err != nil {
+		return nil, err
+	}
 	a.API = api.New(api.Deps{
-		Reviews: a.Reviews, PreviewGateway: a.PreviewGateway, MCP: a.MCP,
+		RepositoryImports: a.RepositoryImports,
+		Reviews:           a.Reviews, PreviewGateway: a.PreviewGateway, MCP: a.MCP,
 		Config: cfg, Engine: a.Engine, Store: a.Store, Broker: a.Broker, Bus: a.Bus, Approvals: a.Approvals,
 		Models: a.Models, Providers: a.Providers, Tools: a.Tools, Workspaces: ws, Auth: auth, Log: log,
 		Environments: a.Environments, Proposals: a.Proposals,
@@ -723,6 +730,11 @@ func (a *App) Run(ctx context.Context) error {
 
 func (a *App) Close(ctx context.Context) error {
 	var errs []error
+	if a.RepositoryImports != nil {
+		if err := a.RepositoryImports.Close(ctx); err != nil {
+			return err
+		}
+	}
 	if a.Broker != nil {
 		errs = append(errs, a.Broker.Close())
 	}

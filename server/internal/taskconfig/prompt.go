@@ -212,7 +212,7 @@ func (m Manager) ResolvePrompt(ctx context.Context, d *Draft, models *llm.Regist
 		return finish("needs_input", "The proposed input needs manual review. Check Review settings and save the draft.")
 	}
 	if proposal.Repository != "" && d.ProjectID == "" {
-		return finish("needs_repository", "Repository URL identified. Select a registered project in Review settings and save; automatic URL import is not available yet.")
+		return finish("needs_repository", "Repository URL identified. Import the public repository or select a registered project, then save the draft.")
 	}
 	return finish("resolved", "Request interpreted and draft saved. Review requirements before starting; permissions are unchanged.")
 }

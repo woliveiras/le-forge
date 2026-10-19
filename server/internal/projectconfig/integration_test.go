@@ -101,3 +101,52 @@ func TestRegisterAndCreateIndependentWorktrees(t *testing.T) {
 		t.Fatal("source HEAD changed")
 	}
 }
+
+func TestImportedWorktreeIgnoresHostCheckoutFilters(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	if err := os.Mkdir(repo, 0700); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	for name, data := range map[string]string{".gitattributes": "*.txt filter=host-only\n", "source.txt": "original\n"} {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", ".")
+	run("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
+	head := run("rev-parse", "HEAD")
+	config := filepath.Join(root, "host.gitconfig")
+	if err := os.WriteFile(config, []byte("[filter \"host-only\"]\n\tsmudge = false\n\trequired = true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
+	workspace := filepath.Join(root, "workspaces")
+	if err := os.Mkdir(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := Project{ID: "fixture", Input: Input{Path: canonical}, Head: head, ImportID: "fixture-import"}
+	path, err := CreateWorktree(t.Context(), &p, head, workspace, "task-run-imported")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(path, "source.txt"))
+	if err != nil || string(data) != "original\n" {
+		t.Fatalf("unexpected checkout: %q, %v", data, err)
+	}
+}

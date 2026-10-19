@@ -199,3 +199,14 @@ once for a newly persisted request, with normal graph/node/execution correlation
 It does not claim the worker has stopped; consult terminal execution records.
 Event-bus publication remains best effort; the persisted cancellation setting is
 authoritative. Payloads contain no objectives, model output or credentials.
+
+## Public repository imports
+
+`repository.import_transition` records attempted durable transitions with `importId`,
+`attempt`, `state` and `bytes`, plus the initiating actor. It is written before the
+compare-and-swap setting update, so an audit entry alone does not prove the update
+committed; the import record is authoritative. URLs, Git output and credentials are
+not event payloads. `repository.import` spans worker operations.
+`leforge_repository_imports_total{outcome}` uses bounded outcomes `ready`, `failed`,
+`cancelled` and `uncertain`; `leforge_repository_import_duration_seconds` records
+worker duration. No repository/attempt IDs are metric labels.

@@ -445,8 +445,10 @@ Review settings. A compatible configured workflow (initially Software Factory)
 can start on submit only when prerequisites and previously reviewed authority
 are satisfied. Missing inputs and approvals pause the durable task context.
 The same approval appears in the task and global inbox; hard policy denials
-remain denials. Remote URL import into New task and task-level authorization
-modes are not implemented by this documentation change.
+remain denials. PROMPT-03 adds explicitly confirmed public HTTPS repository imports
+from Projects and New task, with persisted progress, cancellation, safe retry and
+pinned project reuse. It does not start tasks, grant access or use host credentials.
+Private Git authentication and task-level authorization modes remain planned.
 
 Planned modes are **Ask for approval**, **Workspace access** and **Full access**.
 Full access preauthorizes a reviewed task scope, not all tools/accounts or a bypass

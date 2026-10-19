@@ -30,6 +30,9 @@ type Input struct {
 	Path string `json:"path"`
 }
 type Project struct {
+	ImportID      string `json:"importId,omitempty"`
+	RepositoryURL string `json:"repositoryUrl,omitempty"`
+	RepositoryRef string `json:"repositoryRef,omitempty"`
 	ExecutionMode string `json:"executionMode,omitempty"`
 	Input
 	ID        string    `json:"id"`
@@ -46,6 +49,9 @@ func Validate(in Input) error {
 	return nil
 }
 func git(ctx context.Context, dir string, args ...string) (string, error) {
+	return gitCommand(ctx, dir, false, args...)
+}
+func gitCommand(ctx context.Context, dir string, managed bool, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	argv := append([]string{"-c", "core.hooksPath=" + os.DevNull, "-c", "core.fsmonitor=false", "-C", dir}, args...)
@@ -55,6 +61,9 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 		if !strings.HasPrefix(e, "GIT_") {
 			cmd.Env = append(cmd.Env, e)
 		}
+	}
+	if managed {
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "XDG_CONFIG_HOME=" + dir, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_LFS_SKIP_SMUDGE=1"}
 	}
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 	b, err := cmd.Output()
@@ -178,7 +187,7 @@ func CreateWorktree(ctx context.Context, p *Project, commit, root, taskGraphID s
 		return "", err
 	}
 	branch := "leforge/" + taskGraphID
-	_, err := git(ctx, p.Path, "worktree", "add", "-b", branch, "--", dir, commit)
+	_, err := gitCommand(ctx, p.Path, p.ImportID != "", "worktree", "add", "-b", branch, "--", dir, commit)
 	if err != nil {
 		return "", err
 	}

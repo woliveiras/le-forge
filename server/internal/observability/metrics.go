@@ -11,6 +11,8 @@ import (
 const ns = "leforge"
 
 var (
+	RepositoryImports         = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "repository_imports_total", Help: "Public repository import attempts by bounded outcome."}, []string{"outcome"})
+	RepositoryImportSeconds   = promauto.NewHistogram(prometheus.HistogramOpts{Namespace: ns, Name: "repository_import_duration_seconds", Help: "Public repository import attempt duration."})
 	TreeBudgetOperations      = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "tree_budget_operations_total", Help: "Tree token budget operations by bounded operation and outcome."}, []string{"operation", "outcome"})
 	TreeBudgetSeconds         = promauto.NewHistogramVec(prometheus.HistogramOpts{Namespace: ns, Name: "tree_budget_operation_duration_seconds", Help: "Tree token budget CAS operation latency."}, []string{"operation"})
 	ReviewTransitions         = promauto.NewCounterVec(prometheus.CounterOpts{Namespace: ns, Name: "review_transitions_total", Help: "Human review and preview lifecycle transitions."}, []string{"action"})
