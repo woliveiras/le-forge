@@ -2,6 +2,8 @@ import {test,expect} from '@playwright/test';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {createServer} from 'node:http';
+import type {AddressInfo} from 'node:net';
 test('native profile authenticates, registers a local repo and executes a reviewed task in a worktree',async({page})=>{
  const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
  // Credential belongs only to the disposable native installation created by the wrapper.
@@ -150,4 +152,88 @@ test('stopped native task cleanup requires review and retains its branch and sou
  expect(()=>readFileSync(join(path!,'tracked.txt'),'utf8')).toThrow();expect(readFileSync(join(project.path,'dirty.txt'),'utf8')).toBe('preserve');
  const branch=`leforge/task-run-${task.id.slice(4)}`;expect(execFileSync('git',['-C',project.path,'rev-parse','--verify',`refs/heads/${branch}`],{encoding:'utf8'}).trim()).toBe(project.head);
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
+});
+
+test('configures a model and runs the preinstalled factory through its human handoff gate',async({page})=>{
+ test.setTimeout(120000);
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
+ const headers={Authorization:`Bearer ${token}`};
+ const calls:Record<string,number>={};
+ const upstream=createServer(async(req,res)=>{
+  res.setHeader('Content-Type','application/json');
+  if(req.url==='/v1/models'){res.end(JSON.stringify({data:[{id:'factory-fixture',object:'model'}]}));return;}
+  if(req.url!=='/v1/chat/completions'){res.writeHead(404);res.end('{}');return;}
+  let raw='';for await(const chunk of req)raw+=chunk;
+  const body=JSON.parse(raw) as {messages:{role:string;content?:string}[]};
+  const node=/node "([a-z]+)"/.exec(body.messages.find(m=>m.role==='system')?.content??'')?.[1];
+  let message:Record<string,unknown>={role:'assistant',content:node==='integrator'?'Factory fixture handoff complete. No tests or commits were performed.':'OK'};
+  let finish='stop';
+  if(node&&node!=='integrator'&&!body.messages.some(m=>m.role==='tool')){
+   calls[node]=(calls[node]??0)+1;
+   const types:Record<string,string>={planner:calls.planner===1?'research.question':'task.ready',researcher:'research.done',developer:'code.ready',reviewer:'review.approved',qa:'qa.ready'};
+   message={role:'assistant',content:null,tool_calls:[{id:`${node}-${calls[node]}`,type:'function',function:{name:'emit',arguments:JSON.stringify({type:types[node],payload:{title:'Synthetic factory validation',description:'No source mutation; inspect the retained worktree.'}})}}]};finish='tool_calls';
+  }
+  res.end(JSON.stringify({model:'factory-fixture',choices:[{message,finish_reason:finish}],usage:{prompt_tokens:12,completion_tokens:3}}));
+ });
+ await new Promise<void>(resolve=>upstream.listen(0,'127.0.0.1',resolve));
+ try {
+  await page.goto('/#/models');await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Add provider',exact:true}).click();
+  const form=page.getByRole('dialog',{name:'Add model provider'});
+  await form.getByLabel(/^Name/).fill('factory-fixture');await form.getByRole('combobox',{name:/^Type/}).selectOption('openai');
+  await form.getByLabel(/^Base URL/).fill(`http://127.0.0.1:${(upstream.address() as AddressInfo).port}/v1`);
+  await form.getByLabel(/^Default model/).fill('factory-fixture');await form.getByLabel(/^API key/).fill('synthetic-native-factory-key');
+  await form.getByRole('button',{name:'Add provider',exact:true}).click();
+  const card=page.getByRole('article',{name:'Provider factory-fixture',exact:true});await expect(card).toBeVisible();
+  await card.getByRole('button',{name:'Test connection',exact:true}).click();await expect(card).toContainText('Inference works with factory-fixture');
+  await card.getByRole('button',{name:'Make default',exact:true}).click();await expect(card.getByText('Default',{exact:true})).toBeVisible();
+  const factoryBefore=await(await page.request.get('/api/v1/graphs/software-factory',{headers})).json();
+  await page.goto('/#/tasks/new');
+  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Native factory acceptance');
+  await page.getByRole('textbox',{name:'Request',exact:true}).fill('Review the repository using the synthetic model. Do not change files.');
+  await page.getByRole('combobox',{name:'Project',exact:true}).selectOption({label:'Native repository'});
+  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('software-factory');
+  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);
+  const taskId=page.url().split('/').pop()!;
+  await page.getByRole('button',{name:'Review requirements'}).click();
+  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
+  await page.getByRole('button',{name:'Start task',exact:true}).click();
+  const decisions=page.getByRole('region',{name:'Task decisions'});
+  await expect(decisions.getByRole('button',{name:'Approve',exact:true})).toBeVisible({timeout:60000});
+  const before=await(await page.request.get(`/api/v1/tasks/${taskId}/progress`,{headers})).json();
+  expect(before.executions.some((e:{nodeId:string})=>e.nodeId==='integrator')).toBe(false);
+  await decisions.getByRole('button',{name:'Approve',exact:true}).click();
+  await expect(page.getByRole('status')).toHaveText('Task status: succeeded',{timeout:30000});
+  await expect(page.getByText('Factory fixture handoff complete. No tests or commits were performed.',{exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+  const after=await(await page.request.get('/api/v1/graphs/software-factory',{headers})).json();expect(after).toEqual(factoryBefore);
+  expect(readFileSync(join(root,'repo','tracked.txt'),'utf8')).toBe('original\n');expect(readFileSync(join(root,'repo','dirty.txt'),'utf8')).toBe('preserve');
+  expect(calls).toEqual({planner:2,researcher:1,developer:1,reviewer:1,qa:1});
+ } finally {await new Promise<void>((resolve,reject)=>upstream.close(error=>error?reject(error):resolve()));}
+});
+
+test('parallel native tasks keep independent worktrees and cancellation scopes',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();const headers={Authorization:`Bearer ${token}`};
+ const projects=await(await page.request.get('/api/v1/projects',{headers})).json();const project=projects.find((p:{name:string})=>p.name==='Native repository');
+ const graph={metadata:{id:'parallel-native',name:'Parallel native fixture'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ const drafts=await Promise.all(['First','Second'].map(async title=>{
+  const response=await page.request.post('/api/v1/tasks',{headers,data:{title,request:'Synthetic parallel task',outcome:'freeform',graphId:'parallel-native',graphVersion:1,nodeId:'worker',resultNodeId:'worker',projectId:project.id,baseCommit:project.head,executionMode:'local'}});
+  expect(response.status()).toBe(201);return response.json();
+ }));
+ const starts=await Promise.all(drafts.map(d=>page.request.post(`/api/v1/tasks/${d.id}/start`,{headers:{...headers,'If-Match':String(d.revision)},data:{confirm:true}})));
+ for(const response of starts)expect(response.status()).toBe(202);
+ for(const d of drafts)await expect.poll(async()=> (await(await page.request.get(`/api/v1/tasks/${d.id}/progress`,{headers})).json()).state).toBe('succeeded');
+ const states=await Promise.all(drafts.map(async d=>(await page.request.get(`/api/v1/tasks/${d.id}/progress`,{headers})).json()));
+ expect(states[0].workspacePath).not.toBe(states[1].workspacePath);
+ writeFileSync(join(states[0].workspacePath,'tracked.txt'),'first task only\n');
+ expect(readFileSync(join(states[1].workspacePath,'tracked.txt'),'utf8')).toBe('original\n');
+ expect((await page.request.post(`/api/v1/tasks/${drafts[0].id}/cancel`,{headers,data:{confirm:true}})).status()).toBe(202);
+ await expect.poll(async()=> (await(await page.request.get(`/api/v1/tasks/${drafts[0].id}/progress`,{headers})).json()).state).toBe('cancelled');
+ const retained=await(await page.request.get(`/api/v1/tasks/${drafts[1].id}/progress`,{headers})).json();expect(retained.state).toBe('succeeded');
+ await page.goto(`/#/tasks/${drafts[1].id}`);await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ expect(readFileSync(join(states[0].workspacePath,'tracked.txt'),'utf8')).toBe('first task only\n');
+ expect(readFileSync(join(root,'repo','dirty.txt'),'utf8')).toBe('preserve');
 });

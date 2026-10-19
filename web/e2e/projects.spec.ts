@@ -27,7 +27,7 @@ test('registers a repository and reviews a separate task worktree without touchi
   await expect(page.getByRole('article',{name:'Task requirements'})).toContainText(repo);
   await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
   await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
-  await expect(page.getByRole('article',{name:'Task progress'})).toContainText('Task worktree on the Forge server');
+  await expect(page.getByRole('article',{name:'Task progress'})).toContainText('Task workspace on the Forge server');
   expect(readFileSync(join(repo,'dirty.txt'),'utf8')).toBe('keep');
  }finally{rmSync(repo,{recursive:true,force:true});}
 });

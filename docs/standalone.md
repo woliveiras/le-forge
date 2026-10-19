@@ -1,7 +1,7 @@
 # Standalone Forge
 
-Status: initial native bundle/profile implemented on 2026-10-19; qualification
-evidence and remaining scope are recorded below. The existing Docker installation
+Status: native bundle and task flow qualified with automated macOS arm64
+checks on 2026-10-19; external/platform acceptance limits are recorded below. The existing Docker installation
 remains independent; no migration or activation is implied by this document.
 
 ## Dependency and capability contract
@@ -107,10 +107,11 @@ Review the entire workflow's grants and model settings before starting.
 
 For a first repository test:
 
-1. In Configuration → Models, configure a real available provider. The initial
+1. In Configuration → Models, configure a real available provider, test it and
+   choose Make default. The initial
    mock provider and echo runtime are synthetic plumbing tests, not real AI work.
-2. Open the preinstalled Software Factory, select that provider/model and review
-   its explicit tool grants. You can also create a different workflow. For manual code review, prefer scoped filesystem
+2. Review the preinstalled Software Factory and its explicit tool grants. Its
+   agents inherit the default provider/model unless individually overridden. You can also create a different workflow. For manual code review, prefer scoped filesystem
    tools; do not grant Git write or unrestricted shell actions unintentionally.
 3. Register your repository in Projects. New task lets you select that project,
    workflow, entry/result agents and a reviewed commit.
@@ -163,25 +164,22 @@ bundle. There is no automated cross-version migration or downgrade guarantee.
 Restart retains pending messages and approvals. Existing engine recovery may
 redeliver interrupted work; this does not guarantee exactly-once external effects.
 
-## Delivery requirements still pending
+## Final external acceptance
 
-- Full platform qualification, real-model work and remaining task UX features.
-- Cross-version upgrade qualification and native token-reservation reconciliation.
-  Offline backup/restore is implemented; external repository backups remain the
-  user’s responsibility.
-- Native capability information for environment/editor choices; no silent sandbox
-  fallback, secret import, existing Docker data migration or service activation.
-- Local MCP subprocess lifecycle and exact per-agent gateway grants.
-- Broader real-provider and cross-platform native qualification beyond the
-  disposable synthetic browser journey already recorded below.
+- Real-model work, authenticated vendor MCPs and corporate approval where needed.
+- Actual VS Code application launch and the user's review of resulting code.
+- Optional real sandbox setup and runtime isolation on the chosen Docker daemon.
+- Runtime smoke checks on macOS amd64 and Linux amd64/arm64. Windows is unsupported.
+- Backups of repositories outside the native profile remain the user's responsibility.
 
-The existing `make build` uses the Docker toolchain wrapper and is not evidence
-of a native distribution. See [task-workflows.md](task-workflows.md) for the UI and
-worktree behavior already delivered, and [deployment.md](deployment.md) for
-existing server operations. Phase A advanced task-flow work remains in progress. The native baseline enables
-a first independent local test without claiming the entire roadmap complete.
+Task flows, native capability checks, local MCP lifecycle, exact per-agent grants,
+reservation reconciliation and format-1 upgrade coverage are implemented. No silent
+sandbox fallback, secret import, Docker data migration or service activation occurs.
+The Docker-toolchain `make build` is separate from the `make build-native` bundle.
+See [task workflows](task-workflows.md) and [server operations](deployment.md).
+This closes neither the external acceptance above nor unrelated Release 1 backlog.
 
-## Qualification evidence (2026-10-19)
+## Initial baseline evidence (2026-10-19; extended by the qualification below)
 
 The darwin/arm64 bundle built successfully and its executable was inspected as
 Mach-O arm64. Native Go integration tests exercised authentication, durable draft
@@ -195,8 +193,8 @@ source files. This is explicitly synthetic execution, not real model/MCP evidenc
 `make lint`, `make build`, `make build-native`, `make test-e2e` (85 main cases,
 1 hosted CIMD and 1 isolated provider case) and `make test-native-browser` (1 case).
 The existing installation was not rebuilt, restarted, migrated or configured.
-The remaining task-flow, stdio MCP and operational items in PLAN/TASKS are still
-pending; this bundle permits an initial native test rather than closing them.
+These initial counts describe the baseline delivery; current task-flow, stdio MCP
+and operational coverage is recorded in the subsequent sections.
 
 Offline recovery evidence: native unit tests cover active-instance refusal,
 non-overwrite, cancellation, path traversal, destination symlink aliases, corrupt
@@ -288,3 +286,30 @@ block removal; preserve or handle them yourself before reviewing again. Locked
 worktrees and changed reviews are rejected. Forge never uses force removal and
 keeps the branch, task history and registered source repository. This removes one
 checkout at a time; it does not delete database records or other task worktrees.
+
+
+## Automated native qualification (2026-10-19)
+
+Eight Chromium journeys run against a freshly initialized disposable profile using
+the production native binary and bundled UI. They cover initial login, Software
+Factory as the only preinstalled stopped graph, project registration, worktree
+execution and diff inspection, independent agent worktrees, editor URI review,
+MCP stdio failure/repair, preparation errors, reviewed cleanup and retained branches.
+Parallel starts produce independent worktrees; cancelling one task preserves the
+other task, both retained checkouts and the original dirty source.
+A real loopback HTTP model fixture is configured through the Models UI and made
+default. The unchanged Software Factory then routes a task through all six agents,
+waits at its human approval gate and retains the final result after reload. Original
+tracked and dirty source files remain intact. This is synthetic model behavior,
+not a claim that an actual model produced correct software.
+
+Native storage/lifecycle integration and `make test-native-upgrade` separately cover
+restart, reservation reconciliation, backup/restore and format-1 upgrade preservation.
+`make test-e2e` retains the disposable server-mode regression suite. Neither fixture
+mode validates Docker daemon isolation or real provider credentials.
+
+For your first manual test, use a new `--data-dir` and the sequence above. Final
+external checks remain: your model/MCP accounts, VS Code application launch and
+human review, optional real sandbox configuration, and runtime smoke checks on
+other supported build targets. The existing Docker profile is not imported,
+restarted or migrated by these commands.

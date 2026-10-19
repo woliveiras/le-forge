@@ -250,8 +250,7 @@ OS permissions. No commit, push, merge, source reset or cleanup is automatic.
 
 The UI explains server versus container paths and links worktree background
 information. A container-mounted repository still runs commands in the container;
-this delivery does not pretend it is the user's host. Native packaging and explicit editor handoff are delivered below; preferred
-environment configuration and explicit project updates remain pending. Existing file/diff inspection is linked from task progress.
+this delivery does not pretend it is the user's host. Native packaging and explicit editor handoff are delivered below; reviewed project execution preferences are available. Existing file/diff inspection is linked from task progress.
 
 ## Structured input and retained outputs (2026-10-19)
 
@@ -260,8 +259,9 @@ routing condition. Message type and bounded JSON payload are reviewed explicitly
 channel type filters are validated before admission. Request prose remains task
 context and is not silently converted into a provider-specific schema. For the
 Software Factory example, select `requests`, type `feature.request`, and provide
-the documented `title` and `description` payload. Its external agent runtime must
-still be configured and available; a template is not a runtime availability proof.
+the documented `title` and `description` payload. The Docker example requires its external runtime; the preinstalled native variant
+uses native agents and the configured default model. A template is not a runtime
+availability proof.
 
 The existing engine publishes the input once after the durable task claim, before
 starting workers, preserving message approval gates. An uncertain publication

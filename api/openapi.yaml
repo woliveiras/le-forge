@@ -75,6 +75,32 @@ paths:
               schema: {$ref: '#/components/schemas/Project'}
         '400': {description: Invalid path, unavailable repository or Git failure}
         '403': {description: Administrator required}
+  /api/v1/projects/{pid}/preferences:
+    put:
+      summary: Save an explicitly reviewed execution preference without changing tasks or grants
+      x-leforge-role: admin
+      parameters:
+        - {in: path, name: pid, required: true, schema: {type: string}}
+        - {in: header, name: If-Match, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [executionMode]
+              properties:
+                executionMode: {enum: [workflow, local, sandbox]}
+      responses:
+        '200':
+          description: Updated suggestion; task admission still revalidates capabilities and permissions
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {description: Invalid preference, missing revision or local mode unavailable in this profile}
+        '403': {description: Administrator required}
+        '409': {description: Stale project revision}
   /api/v1/tasks:
     get:
       summary: List persisted task drafts (does not list historical agent turns)
@@ -173,6 +199,9 @@ paths:
                   validation: {type: object}
                   blockers: {type: array, items: {type: string}}
                   canStart: {type: boolean}
+                  canPrepareEnvironment: {type: boolean}
+                  environmentDefinition: {type: object}
+                  environment: {type: object}
                   executionGraphId: {type: string}
                   grants: {type: array, items: {type: object}}
                   model: {type: object}
@@ -198,6 +227,9 @@ paths:
                   task: {$ref: '#/components/schemas/TaskDraft'}
                   state: {type: string}
                   workspacePath: {type: string}
+                  workspaces: {type: array, items: {type: object}, description: Prepared agent/replica paths and exact Git inspection scope}
+                  environment: {type: object}
+                  pendingApprovals: {type: array, items: {type: object}}
                   executions: {type: array, items: {type: object}}
                   result: {type: object}
                   blockers: {type: array, items: {type: string}}
@@ -224,6 +256,72 @@ paths:
         '403': {description: Administrator required}
         '409': {description: Stale revision or ownership conflict}
         '422': {description: Unsupported or invalid workflow requirements}
+  /api/v1/tasks/{tid}/prepare-environment:
+    post:
+      summary: Prepare the task-owned environment without starting agents
+      x-leforge-role: admin
+      parameters:
+        - {in: path, name: tid, required: true, schema: {type: string}}
+        - {in: header, name: If-Match, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [confirm], properties: {confirm: {const: true}}}
+      responses:
+        '202':
+          description: Preparation requested; review build state and explicitly start separately
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '400': {description: Missing confirmation or revision}
+        '403': {description: Administrator required}
+        '409': {description: Stale revision or uncertain preparation ownership}
+        '422': {description: Invalid workflow or environment requirements}
+  /api/v1/tasks/{tid}/cleanup:
+    parameters:
+      - {in: path, name: tid, required: true, schema: {type: string}}
+      - {in: query, name: node, schema: {type: string}, description: Omit for the shared task worktree}
+      - {in: query, name: replica, schema: {type: integer, minimum: 0, default: 0}}
+    get:
+      summary: Preview a stopped registered-project task worktree for explicit cleanup
+      x-leforge-role: admin
+      responses:
+        '200':
+          description: Current path, branch, HEAD, Git status, cleanliness and review fingerprint
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path: {type: string}
+                  branch: {type: string}
+                  head: {type: string}
+                  status: {type: string}
+                  clean: {type: boolean}
+                  fingerprint: {type: string}
+        '403': {description: Administrator required}
+        '404': {description: Task or worktree unavailable}
+        '409': {description: Task not stopped or workspace ownership conflict}
+    post:
+      summary: Revalidate a clean worktree review and remove only its checkout; retain branch and history
+      x-leforge-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm, fingerprint]
+              properties:
+                confirm: {const: true}
+                fingerprint: {type: string, minLength: 64, maxLength: 64}
+      responses:
+        '200': {description: Reviewed checkout removed; branch and source retained}
+        '400': {description: Invalid or absent explicit confirmation}
+        '403': {description: Administrator required}
+        '409': {description: Changed review, dirty checkout, running task or ownership conflict}
   /api/v1/tasks/{tid}/cancel:
     post:
       summary: Stop only the task execution copy while retaining its data
@@ -1980,6 +2078,7 @@ components:
     Project:
       type: object
       properties:
+        executionMode: {enum: [workflow, local, sandbox]}
         id: {type: string}
         revision: {type: integer}
         name: {type: string}
@@ -2021,7 +2120,7 @@ components:
       properties:
         id: {type: string}
         revision: {type: integer, minimum: 1}
-        status: {enum: [draft, preparing, starting, running, interrupted, cancel_requested, cancelled]}
+        status: {enum: [draft, preparing, environment_build_requested, environment_pending, environment_cancel_requested, starting, running, interrupted, cancel_requested, cancelled]}
         executionGraphId: {type: string}
         launchError: {type: string}
         observedState: {type: string, description: Optional list projection; persisted admission status is separate}

@@ -2078,3 +2078,21 @@ completion claim into passing tests or remote synchronization. Native browser
 qualification covers the labels while inspecting actual disposable-worktree diffs;
 no remote query or mutation was introduced. Full Phase A regression and external
 editor/human acceptance remain separate checks.
+
+### LOCAL-07a — Native production-binary qualification (2026-10-19)
+
+Eight disposable-profile Chromium journeys now qualify the standalone flow on
+macOS arm64. Software Factory is the first and only seeded graph, initially stopped.
+The browser configures a loopback HTTP model fixture as default; the existing factory
+then processes the selected repository task, waits for its handoff approval and
+retains its final result. The user does not create a graph. Independent parallel
+tasks and cancellation preserve both task worktrees and the original dirty source.
+MCP stdio repair, preparation failures, cleanup review and editor URI confirmation
+remain covered. Native lifecycle/storage unit/integration and the format-1 upgrade
+qualification also passed. The fixture model is not real-model acceptance.
+
+Production installation data was not read, migrated or activated. Actual model/MCP
+accounts, VS Code application launch/user review, optional real native sandbox and
+other platform runtime checks remain explicitly pending under LOCAL-07b. The native
+bundle is suitable for a separately initialized local test, not a claim that all
+unrelated Release 1 backlog or external acceptance is complete.
