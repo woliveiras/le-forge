@@ -31,3 +31,20 @@ func TestPrepareRejectsUnsupportedLaunches(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareChannelBinding(t *testing.T) {
+	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 1}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}, Channels: []domain.Channel{{ID: "requests", To: []string{"worker"}, Types: []string{"feature.*"}}}}}
+	d := &taskconfig.Draft{ID: "tsk_x", Input: taskconfig.Input{GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker", ChannelID: "requests", MessageType: "feature.request", PayloadJSON: `{"title":"test"}`}}
+	if _, b, e := Prepare(d, g); e != nil || len(b) > 0 {
+		t.Fatal(b, e)
+	}
+	d.MessageType = "other"
+	if _, b, e := Prepare(d, g); e != nil || len(b) == 0 {
+		t.Fatal(b, e)
+	}
+	d.MessageType = "feature.request"
+	g.Spec.Channels[0].From = "worker"
+	if _, b, e := Prepare(d, g); e != nil || len(b) == 0 {
+		t.Fatal(b, e)
+	}
+}

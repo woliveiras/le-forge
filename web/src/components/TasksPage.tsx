@@ -35,7 +35,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
   </section>;
 }
 function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean}) {
-  const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit}:empty);
+  const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
   const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
   const [review,setReview] = useState<TaskReview>();
@@ -79,10 +79,14 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
           <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
         {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}
-        <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,nodeId:'',resultNodeId:''});}}>
+        <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,nodeId:'',resultNodeId:'',channelId:undefined,messageType:undefined,payloadJson:undefined});}}>
           <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
           {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}
         </select></label>
+        <label>Input delivery<select value={input.channelId??''} onChange={e=>{const c=selected?.spec.channels?.find(c=>c.id===e.target.value);change({channelId:c?.id,messageType:c?'task.request':undefined,payloadJson:c?JSON.stringify({title:input.title,description:input.request},null,2):undefined,...(c?{nodeId:c.to?.[0]??''}:{})});}}>
+          <option value="">Direct agent instruction</option>{selected?.spec.channels?.filter(c=>!c.from&&c.to?.length===1&&(!c.type||c.type==='queue')&&!c.when).map(c=><option key={c.id} value={c.id}>{c.id} → {c.to?.[0]}</option>)}
+        </select></label>
+        {input.channelId&&<><label>Message type<input required maxLength={128} value={input.messageType??''} onChange={e=>change({messageType:e.target.value})}/></label><label>Input payload (JSON)<textarea required rows={6} maxLength={16384} value={input.payloadJson??''} onChange={e=>change({payloadJson:e.target.value})}/></label><p>The selected channel receives this JSON. Request text is retained for context; it is not sent separately. Check the workflow's expected message type and fields.</p></>}
         <label>Entry agent<select required value={input.nodeId} onChange={e=>change({nodeId:e.target.value})}>
           <option value="">Select entry agent</option>{input.nodeId&&!selected?.spec.nodes.some(n=>n.id===input.nodeId)&&<option value={input.nodeId}>{input.nodeId} (unavailable)</option>}
           {selected?.spec.nodes.filter(n=>!n.disabled).map(n=><option key={n.id} value={n.id}>{n.name||n.id}</option>)}
@@ -103,7 +107,7 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
       {review.blockers.map(b=><p key={b}>{b}</p>)}
       {[...(review.validation.errors??[]),...(review.validation.warnings??[])].map((v,i)=><p key={i}>{v.path}: {v.message}</p>)}
       {review.project&&<p>Project: {review.project.name} · Source: {review.project.path} · Base: {input.baseCommit} · Task worktree: {review.workspacePath}. Commands use the workflow's configured isolation and permissions.</p>}
-      <p>Execution copy: {review.executionGraphId}. Starting runs the whole workflow with a fresh managed workspace. Your request goes to the entry agent; the selected result agent supplies the result.</p>
+      <p>Execution copy: {review.executionGraphId}. Starting runs the whole workflow with a fresh managed workspace. Input goes through the selected channel or directly to the entry agent; the selected result agent supplies the result.</p>
       <p>Entry agent model: {review.model?.provider||'runtime default'} / {review.model?.name||'runtime default'}. Isolation: {review.isolation||'process'}. Process execution uses the server machine and is not a sandbox.</p>
       <p>Tool permissions remain unchanged. Every call still passes gateway policies and approvals.</p>
       <details><summary>All workflow agents and permissions</summary>{review.agents?.map(agent=><section key={agent.id}><h3>{agent.id}</h3><p>{agent.model?.provider} / {agent.model?.name} · {agent.isolation}</p><pre>{JSON.stringify(agent.grants??[],null,2)}</pre></section>)}</details>
@@ -149,7 +153,7 @@ function TaskTracking({task,canControl}:{task:TaskDraft;canControl:boolean}) {
         <ul>{progress?.executions.map(x=><li key={x.id}><a href={`#/g/${encodeURIComponent(x.graphId)}/runs?execution=${encodeURIComponent(x.id)}&section=result`}>{x.nodeId}: {x.status}</a></li>)}</ul>
       </details>
       {canControl&&progress?.state!=='cancelled'&&<><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Stop this task's execution copy and retain its data.</label><Btn disabled={busy||!confirmed} onClick={()=>void cancel()}>Stop task</Btn></>}
-      <p>No automatic commit, push or workspace deletion is performed.</p>
+      <p>Task completion does not itself commit, push or delete the workspace. Agent actions still depend on the workflow grants and approvals.</p>
     </article>
   </>;
 }

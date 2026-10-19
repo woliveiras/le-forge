@@ -59,3 +59,20 @@ func TestFailuresDoNotAppearSuccessful(t *testing.T) {
 		}
 	}
 }
+
+func TestChannelInputValidation(t *testing.T) {
+	in := good()
+	in.ChannelID = "requests"
+	in.MessageType = "feature.request"
+	in.PayloadJSON = `{"title":"test"}`
+	if err := Validate(in); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*Input){func(i *Input) { i.PayloadJSON = "invalid" }, func(i *Input) { i.MessageType = "" }, func(i *Input) { i.ChannelID = "" }, func(i *Input) { i.PayloadJSON = strings.Repeat(" ", 16385) + "{}" }} {
+		bad := in
+		change(&bad)
+		if Validate(bad) == nil {
+			t.Fatal("invalid channel input accepted")
+		}
+	}
+}

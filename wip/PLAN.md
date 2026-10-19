@@ -1816,3 +1816,13 @@ container mounts are never described as host execution. Project editing/deletion
 environment preferences and automatic editor handoff remain pending.
 The preceding execution-copy increment additionally passed hosted CIMD and isolated
 provider-management browser suites. No existing installation/data was changed.
+
+### Structured task ingress evidence — 2026-10-19
+
+FLOW-03d adds reviewed external queue/type/JSON binding while preserving existing
+message approval gates and no-replay task admission. Progress distinguishes retained
+consumerless output from queued work and shows rejected/expired message gates as
+failure after settlement. Runtime preflight errors remain blocking while ordinary
+graph warnings stay informational. Unit/engine/API tests, five browser cases,
+`CI=true make test`, lint and build passed. Software Factory payload compatibility
+is documented; no external runtime or provider validation is inferred from it.

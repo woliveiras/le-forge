@@ -47,6 +47,18 @@ func (e *Engine) Validate(g *domain.Graph) *graph.Report {
 	return rep
 }
 
+// ValidateForStart keeps informational graph warnings distinct from runtime
+// requirements that prevent admission. It does not create or start a graph.
+func (e *Engine) ValidateForStart(ctx context.Context, g *domain.Graph) *graph.Report {
+	report := graph.Validate(g, e.KnownRuntimes())
+	if report.Valid {
+		pre := e.preflight(ctx, g, "")
+		report.Errors = append(report.Errors, pre.Errors...)
+		report.Valid = report.Valid && pre.Valid
+	}
+	return report
+}
+
 // preflight checks what must hold before nodes run: every node that talks
 // to a model must resolve to a usable provider, and nodes that run commands
 // in the graph's environment need it built from the current definition.

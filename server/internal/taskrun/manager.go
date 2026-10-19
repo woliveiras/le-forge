@@ -72,6 +72,20 @@ func Prepare(d *taskconfig.Draft, source *domain.Graph) (*domain.Graph, []string
 	if n := g.Node(d.NodeID); n == nil || n.Disabled {
 		blockers = append(blockers, "Select an enabled entry agent.")
 	}
+	if d.ChannelID != "" {
+		c := g.Channel(d.ChannelID)
+		if c == nil || c.From != "" || c.Type != domain.ChannelQueue || len(c.To) != 1 || c.To[0] != d.NodeID || c.When != "" {
+			blockers = append(blockers, "Select an external queue channel with exactly the selected entry agent and no routing condition.")
+		} else if len(c.Types) > 0 {
+			matches := false
+			for _, filter := range c.Types {
+				matches = matches || domain.GlobMatch(filter, d.MessageType)
+			}
+			if !matches {
+				blockers = append(blockers, "The message type does not match the input channel.")
+			}
+		}
+	}
 	result := g.Node(d.ResultNodeID)
 	if result == nil || result.Disabled {
 		blockers = append(blockers, "Select an enabled result agent.")
@@ -114,11 +128,8 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	if err != nil {
 		return nil, err
 	}
-	report := m.Engine.Validate(g)
+	report := m.Engine.ValidateForStart(ctx, g)
 	for _, issue := range report.Errors {
-		blockers = append(blockers, issue.Path+": "+issue.Message)
-	}
-	for _, issue := range report.Warnings {
 		blockers = append(blockers, issue.Path+": "+issue.Message)
 	}
 	if d.Status != "draft" {
@@ -216,10 +227,17 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 	if _, _, err = m.Engine.SaveGraph(ctx, g, 0, actor); err != nil {
 		return fail(err)
 	}
-	// Stable input ID avoids duplicate insertion. The owned graph has never run.
-	input := &domain.OperatorMessage{ID: "task-input-" + id, GraphID: g.Metadata.ID, NodeID: d.NodeID, Replica: 0, Text: d.Request, Author: actor, CreatedAt: time.Now().UTC()}
-	if err = m.Store.PutOperatorMessageOnce(ctx, input); err != nil {
-		return fail(err)
+	// Dispatch input once after the durable claim. An uncertain publish never
+	// causes task-API replay; prepared queues remain stopped for inspection.
+	if d.ChannelID != "" {
+		if _, err = m.Engine.Inject(ctx, g.Metadata.ID, d.ChannelID, d.MessageType, json.RawMessage(d.PayloadJSON), d.NodeID, nil, actor); err != nil {
+			return fail(err)
+		}
+	} else {
+		input := &domain.OperatorMessage{ID: "task-input-" + id, GraphID: g.Metadata.ID, NodeID: d.NodeID, Replica: 0, Text: d.Request, Author: actor, CreatedAt: time.Now().UTC()}
+		if err = m.Store.PutOperatorMessageOnce(ctx, input); err != nil {
+			return fail(err)
+		}
 	}
 	d, err = tm.Transition(ctx, d, "starting", actor)
 	if err != nil {
@@ -296,6 +314,9 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 	}
 	for _, ch := range st.Channels {
 		for _, q := range ch.Groups {
+			if q.Node == "" {
+				continue
+			} // Retained terminal/audit output is not runnable work.
 			if q.Pending > 0 || q.InFlight > 0 {
 				active = true
 			}
@@ -310,6 +331,20 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 				workersActive = true
 				active = true
 			}
+		}
+	}
+	approvals, err := m.Store.ListApprovals(ctx, storage.ApprovalFilter{GraphID: d.ExecutionGraphID, Limit: 1000})
+	if err != nil {
+		return nil, err
+	}
+	if len(approvals) >= 1000 {
+		v.Blockers = append(v.Blockers, "Approval history exceeds this bounded view; completion cannot be inferred.")
+		return v, nil
+	}
+	for _, approval := range approvals {
+		if approval.Kind == domain.ApprovalMessage && (approval.Status == domain.ApprovalRejected || approval.Status == domain.ApprovalExpired) {
+			failed = true
+			v.Blockers = append(v.Blockers, "A workflow message approval was rejected or expired.")
 		}
 	}
 	if st.ApprovalsPending > 0 {
@@ -329,7 +364,7 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 		v.Blockers = append(v.Blockers, "Start outcome is unresolved. No automatic replay will occur.")
 		return v, nil
 	}
-	if !active && len(xs) > 0 {
+	if !active && (len(xs) > 0 || failed) {
 		if failed {
 			v.State = "failed"
 		} else if v.Result != nil && v.Result.Status == domain.ExecSucceeded {

@@ -21,6 +21,9 @@ var validID = regexp.MustCompile(`^tsk_[a-z0-9]{1,80}$`)
 var ErrInvalid = errors.New("invalid task")
 
 type Input struct {
+	ChannelID    string `json:"channelId,omitempty"`
+	MessageType  string `json:"messageType,omitempty"`
+	PayloadJSON  string `json:"payloadJson,omitempty"`
 	ProjectID    string `json:"projectId,omitempty"`
 	BaseCommit   string `json:"baseCommit,omitempty"`
 	Title        string `json:"title"`
@@ -66,6 +69,13 @@ func Validate(in Input) error {
 	}
 	if (in.ProjectID == "") != (in.BaseCommit == "") || len(in.ProjectID) > 128 || len(in.BaseCommit) > 64 {
 		return fmt.Errorf("%w: project and full base commit must be supplied together", ErrInvalid)
+	}
+	if in.ChannelID != "" {
+		if len(in.ChannelID) > 128 || len(in.MessageType) > 128 || strings.TrimSpace(in.MessageType) == "" || strings.ContainsRune(in.MessageType, 0) || len(in.PayloadJSON) > 16384 || !json.Valid([]byte(in.PayloadJSON)) {
+			return fmt.Errorf("%w: channel requires a message type and valid bounded JSON payload", ErrInvalid)
+		}
+	} else if in.MessageType != "" || in.PayloadJSON != "" {
+		return fmt.Errorf("%w: payload requires an input channel", ErrInvalid)
 	}
 	switch in.Outcome {
 	case "understand", "implement", "investigate", "review", "freeform":

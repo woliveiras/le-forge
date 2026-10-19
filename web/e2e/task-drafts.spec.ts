@@ -61,3 +61,19 @@ test('reviews and starts an owned task, retains its result after reload and stop
  await page.getByRole('button',{name:'Stop task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
 });
+
+test('reviews structured channel input and reports the declared result with retained output',async({page})=>{
+ const graph={metadata:{id:'task-channel-flow',name:'Task channel flow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'event'}}],channels:[{id:'requests',to:['worker'],types:['feature.*']},{id:'result',from:'worker'}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Structured task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain fixture');
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-channel-flow');
+ await page.getByRole('combobox',{name:'Input delivery',exact:true}).selectOption('requests');
+ await page.getByRole('textbox',{name:'Message type',exact:true}).fill('feature.request');
+ await page.getByRole('textbox',{name:'Input payload (JSON)',exact:true}).fill('{"title":"Explicit input"}');
+ await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();
+ await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await expect(page.getByText('echoed 1 message(s)',{exact:true})).toBeVisible();
+});

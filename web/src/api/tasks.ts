@@ -1,6 +1,9 @@
 export interface Project {id:string;revision:number;name:string;path:string;head:string;createdAt:string}
 import type { ValidationResult, Execution, ToolGrant, ModelRef } from './types';
 export interface TaskInput {
+  channelId?: string;
+  messageType?: string;
+  payloadJson?: string;
   projectId?: string;
   baseCommit?: string;
   title: string;

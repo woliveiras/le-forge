@@ -55,7 +55,7 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) error {
 }
 func (s *Server) saveTask(w http.ResponseWriter, r *http.Request) error {
 	var in taskconfig.Input
-	r.Body = http.MaxBytesReader(w, r.Body, 24*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, 48*1024)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&in); err != nil {

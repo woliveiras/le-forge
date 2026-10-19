@@ -253,3 +253,23 @@ information. A container-mounted repository still runs commands in the container
 this delivery does not pretend it is the user's host. Native packaging, automatic
 editor handoff, preferred environment configuration and explicit project updates
 remain pending. Existing file/diff inspection is linked from task progress.
+
+## Structured input and retained outputs (2026-10-19)
+
+Tasks can select an external queue ingress with exactly one entry agent and no
+routing condition. Message type and bounded JSON payload are reviewed explicitly;
+channel type filters are validated before admission. Request prose remains task
+context and is not silently converted into a provider-specific schema. For the
+Software Factory example, select `requests`, type `feature.request`, and provide
+the documented `title` and `description` payload. Its external agent runtime must
+still be configured and available; a template is not a runtime availability proof.
+
+The existing engine publishes the input once after the durable task claim, before
+starting workers, preserving message approval gates. An uncertain publication
+leaves the copy stopped for inspection rather than replaying the task submission.
+Retained audit/terminal output groups with no consumer do not count as runnable
+work. Rejected or expired message approvals produce a failed observed outcome
+once active work settles, including when no turn has begun. Informational graph
+warnings are displayed separately from runtime requirements that block start.
+Task completion itself never invokes commit/push, but an agent may perform actions
+already authorized by its workflow grants; review those grants before starting.

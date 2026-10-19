@@ -1998,6 +1998,9 @@ components:
         graphVersion: {type: integer, minimum: 1}
         nodeId: {type: string, minLength: 1, maxLength: 128}
         resultNodeId: {type: string, maxLength: 128}
+        channelId: {type: string, maxLength: 128}
+        messageType: {type: string, maxLength: 128}
+        payloadJson: {type: string, maxLength: 16384, description: Valid JSON text sent only through the selected ingress channel}
         projectId: {type: string}
         baseCommit: {type: string, description: Full immutable commit identifier; required with projectId}
     TaskDraft:
@@ -2017,6 +2020,9 @@ components:
         graphVersion: {type: integer}
         nodeId: {type: string}
         resultNodeId: {type: string}
+        channelId: {type: string}
+        messageType: {type: string}
+        payloadJson: {type: string}
         projectId: {type: string}
         baseCommit: {type: string}
         createdBy: {type: string}

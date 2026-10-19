@@ -144,3 +144,63 @@ func TestTaskAdmissionRejectsUnreviewedAndStaleRequests(t *testing.T) {
 		t.Fatal(c, v)
 	}
 }
+
+func TestTaskChannelInputAndRetainedOutput(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	doc := `{"metadata":{"id":"task-channel"},"spec":{"nodes":[{"id":"worker","runtime":{"kind":"echo"},"loop":{"mode":"event"}}],"channels":[{"id":"requests","to":["worker"],"types":["feature.*"]},{"id":"result","from":"worker"}]}}`
+	if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", doc, nil); c != 201 {
+		t.Fatal(c)
+	}
+	input := taskconfig.Input{Title: "Channel task", Request: "Explain", Outcome: "freeform", GraphID: "task-channel", GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker", ChannelID: "requests", MessageType: "feature.request", PayloadJSON: `{"title":"structured input"}`}
+	body, _ := json.Marshal(input)
+	var d taskconfig.Draft
+	if c := call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", string(body), &d); c != 201 {
+		t.Fatal(c)
+	}
+	if c := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); c != 202 {
+		t.Fatal(c)
+	}
+	waitFor(t, 5*time.Second, "channel result", func() bool {
+		var v taskrun.View
+		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
+		return v.State == "succeeded" && v.Result != nil && v.Result.Summary == "echoed 1 message(s)"
+	})
+	if c := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); c != 202 {
+		t.Fatal(c)
+	}
+	xs, err := a.Store.ListExecutions(t.Context(), storage.ExecutionFilter{GraphID: taskrun.ExecutionID(d.ID)})
+	if err != nil || len(xs) != 1 {
+		t.Fatal("duplicate channel input", len(xs), err)
+	}
+}
+
+func TestTaskMessageRejectionIsNotReportedAsRunningForever(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	doc := `{"metadata":{"id":"task-held"},"spec":{"nodes":[{"id":"worker","runtime":{"kind":"echo"},"loop":{"mode":"event"}}],"channels":[{"id":"requests","to":["worker"],"approval":true}]}}`
+	if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", doc, nil); c != 201 {
+		t.Fatal(c)
+	}
+	input := taskconfig.Input{Title: "Held task", Request: "Explain", Outcome: "freeform", GraphID: "task-held", GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker", ChannelID: "requests", MessageType: "feature.request", PayloadJSON: `{}`}
+	body, _ := json.Marshal(input)
+	var d taskconfig.Draft
+	call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", string(body), &d)
+	if c := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); c != 202 {
+		t.Fatal(c)
+	}
+	approvals, err := a.Store.ListApprovals(t.Context(), storage.ApprovalFilter{GraphID: taskrun.ExecutionID(d.ID), Status: domain.ApprovalPending})
+	if err != nil || len(approvals) != 1 {
+		t.Fatal(approvals, err)
+	}
+	var v taskrun.View
+	call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
+	if len(v.Blockers) == 0 {
+		t.Fatal("missing action needed")
+	}
+	if c := call(t, srv, "POST", "/api/v1/approvals/"+approvals[0].ID+"/reject", adminTok, "application/json", `{}`, nil); c != 200 {
+		t.Fatal(c)
+	}
+	waitFor(t, 5*time.Second, "rejected task", func() bool {
+		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
+		return v.State == "failed" && len(v.Executions) == 0
+	})
+}

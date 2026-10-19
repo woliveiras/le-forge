@@ -58,3 +58,17 @@ func TestPreflightWarnsOnSaveAndBlocksStart(t *testing.T) {
 		t.Fatalf("broken node start: %v", err)
 	}
 }
+
+func TestAdmissionValidationSeparatesWarningsFromRequirements(t *testing.T) {
+	dir := t.TempDir()
+	r := newRig(t, openStore(t, dir), memory.New(), dir, "i1")
+	report := r.eng.ValidateForStart(r.ctx, preflightGraph())
+	if report.Valid || len(report.Errors) != 1 {
+		t.Fatal(report)
+	}
+	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "warning"}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "echo", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}, Channels: []domain.Channel{{ID: "audit", From: "echo"}}}}
+	report = r.eng.ValidateForStart(r.ctx, g)
+	if !report.Valid || len(report.Errors) != 0 || len(report.Warnings) == 0 {
+		t.Fatal(report)
+	}
+}
