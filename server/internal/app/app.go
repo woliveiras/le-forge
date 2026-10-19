@@ -133,6 +133,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("llm providers: %w", err)
 	}
 	a.MCP = mcpconfig.New(a.Store, box, a.Bus)
+	a.MCP.AllowLocalProcesses = cfg.NativeProfile
 	a.Tools = tools.Builtin(tools.BuiltinConfig{AllowPrivateNetworks: cfg.Tools.AllowPrivateNetworks})
 	a.Gateway = tools.NewGateway(a.Tools, a.Approvals, a.Bus)
 	a.Gateway.ResolveTool = a.MCP.Resolve

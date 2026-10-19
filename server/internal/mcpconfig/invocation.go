@@ -79,12 +79,18 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	if len(grant.Paths) > 0 || len(grant.Commands) > 0 {
 		return nil, fmt.Errorf("%w: workspace constraints cannot authorize remote MCP operations", tools.ErrDenied)
 	}
-	u, err := url.Parse(r.Endpoint)
-	if err != nil {
-		return nil, tools.ErrDenied
-	}
-	if err = tools.CheckHost(grant, u.Hostname()); err != nil {
-		return nil, err
+	if r.LocalProcess != nil {
+		if !t.m.AllowLocalProcesses || len(grant.Hosts) > 0 {
+			return nil, fmt.Errorf("%w: local MCP process unavailable or incompatible host constraint", tools.ErrDenied)
+		}
+	} else {
+		u, err := url.Parse(r.Endpoint)
+		if err != nil {
+			return nil, tools.ErrDenied
+		}
+		if err = tools.CheckHost(grant, u.Hostname()); err != nil {
+			return nil, err
+		}
 	}
 	var obj map[string]json.RawMessage
 	if len(inv.Args) > 64<<10 || json.Unmarshal(inv.Args, &obj) != nil || obj == nil {
@@ -121,7 +127,7 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 	}
 	callctx, cancel := context.WithTimeout(credentialContext(ctx, r.View), 15*time.Second)
 	defer cancel()
-	raw, err := t.m.Call(callctx, r.Endpoint, token, t.tool.Name, inv.Args)
+	raw, err := t.m.callConnection(callctx, r, token, t.tool.Name, inv.Args)
 	if err != nil {
 		if saveErr := t.m.noteOAuthUnauthorized(ctx, r, err); saveErr != nil {
 			return nil, saveErr

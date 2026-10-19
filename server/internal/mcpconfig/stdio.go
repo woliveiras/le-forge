@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // processSpec is deliberately internal: registering host commands requires a
@@ -116,7 +117,7 @@ func processOperation(ctx context.Context, spec processSpec, action func(rpcCall
 				Result  json.RawMessage `json:"result"`
 				Error   json.RawMessage `json:"error"`
 			}
-			if json.Unmarshal(raw, &envelope) != nil || envelope.JSONRPC != "2.0" {
+			if !utf8.Valid(raw) || json.Unmarshal(raw, &envelope) != nil || envelope.JSONRPC != "2.0" {
 				return nil, discoveryError("invalid MCP process response")
 			}
 			if envelope.Method != "" {

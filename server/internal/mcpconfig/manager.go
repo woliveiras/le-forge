@@ -31,22 +31,24 @@ type Credential struct {
 	Clear    bool   `json:"clear,omitempty"`
 }
 type Input struct {
-	ArgumentPolicy     []ArgumentRule    `json:"argumentPolicy,omitempty"`
-	AtlassianPolicy    *AtlassianPolicy  `json:"atlassianPolicy,omitempty"`
-	TransportProfile   string            `json:"transportProfile,omitempty"`
-	MetadataHeaders    map[string]string `json:"metadataHeaders,omitempty"`
-	CredentialType     string            `json:"credentialType,omitempty"`
-	TemplateParameters map[string]string `json:"templateParameters,omitempty"`
-	CallsPerMinute     int               `json:"callsPerMinute,omitempty"`
-	OAuth              *OAuthConfig      `json:"oauth,omitempty"`
-	OAuthClientSecret  *Credential       `json:"oauthClientSecret,omitempty"`
-	Template           *TemplateRef      `json:"template,omitempty"`
-	ID                 string            `json:"id"`
-	Name               string            `json:"name"`
-	Service            string            `json:"service"`
-	Endpoint           string            `json:"endpoint"`
-	Enabled            bool              `json:"enabled"`
-	Credential         *Credential       `json:"credential,omitempty"`
+	LocalProcess       *LocalProcess      `json:"localProcess,omitempty"`
+	ProcessEnvironment *map[string]string `json:"processEnvironment,omitempty"`
+	ArgumentPolicy     []ArgumentRule     `json:"argumentPolicy,omitempty"`
+	AtlassianPolicy    *AtlassianPolicy   `json:"atlassianPolicy,omitempty"`
+	TransportProfile   string             `json:"transportProfile,omitempty"`
+	MetadataHeaders    map[string]string  `json:"metadataHeaders,omitempty"`
+	CredentialType     string             `json:"credentialType,omitempty"`
+	TemplateParameters map[string]string  `json:"templateParameters,omitempty"`
+	CallsPerMinute     int                `json:"callsPerMinute,omitempty"`
+	OAuth              *OAuthConfig       `json:"oauth,omitempty"`
+	OAuthClientSecret  *Credential        `json:"oauthClientSecret,omitempty"`
+	Template           *TemplateRef       `json:"template,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Service            string             `json:"service"`
+	Endpoint           string             `json:"endpoint"`
+	Enabled            bool               `json:"enabled"`
+	Credential         *Credential        `json:"credential,omitempty"`
 }
 type Tool struct {
 	Name        string          `json:"name"`
@@ -54,6 +56,8 @@ type Tool struct {
 	InputSchema json.RawMessage `json:"inputSchema"`
 }
 type View struct {
+	LocalProcess         *LocalProcess     `json:"localProcess,omitempty"`
+	EnvironmentKeys      []string          `json:"environmentKeys,omitempty"`
 	ArgumentPolicy       []ArgumentRule    `json:"argumentPolicy,omitempty"`
 	AtlassianPolicy      *AtlassianPolicy  `json:"atlassianPolicy,omitempty"`
 	TransportProfile     string            `json:"transportProfile,omitempty"`
@@ -80,28 +84,33 @@ type View struct {
 	UpdatedBy            string            `json:"updatedBy"`
 }
 type record struct {
-	Deleted            bool                `json:"deleted,omitempty"`
-	Registration       *clientRegistration `json:"registration,omitempty"`
-	OAuthClientSealed  string              `json:"oauthClientSealed,omitempty"`
-	OAuthRefreshSealed string              `json:"oauthRefreshSealed,omitempty"`
-	OAuthMeta          oauthMetadata       `json:"oauthMetadata,omitempty"`
+	ProcessEnvironmentSealed string              `json:"processEnvironmentSealed,omitempty"`
+	Deleted                  bool                `json:"deleted,omitempty"`
+	Registration             *clientRegistration `json:"registration,omitempty"`
+	OAuthClientSealed        string              `json:"oauthClientSealed,omitempty"`
+	OAuthRefreshSealed       string              `json:"oauthRefreshSealed,omitempty"`
+	OAuthMeta                oauthMetadata       `json:"oauthMetadata,omitempty"`
 	View
 	Sealed string `json:"sealed,omitempty"`
 }
 type Manager struct {
-	QuotaNow    func() time.Time // trusted clock injection for deterministic quota tests
-	OAuthClient *http.Client     // trusted test/platform injection, never user-supplied
-	Store       storage.Store
-	Box         *secrets.Box
-	Bus         *events.Bus
-	Discover    func(context.Context, string, string) ([]Tool, error)
-	Call        func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error)
+	AllowLocalProcesses bool             // native launcher capability, never a request field
+	QuotaNow            func() time.Time // trusted clock injection for deterministic quota tests
+	OAuthClient         *http.Client     // trusted test/platform injection, never user-supplied
+	Store               storage.Store
+	Box                 *secrets.Box
+	Bus                 *events.Bus
+	Discover            func(context.Context, string, string) ([]Tool, error)
+	Call                func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error)
 }
 
 func New(store storage.Store, box *secrets.Box, bus *events.Bus) *Manager {
 	return &Manager{Store: store, Box: box, Bus: bus, Discover: Discover, Call: Call}
 }
 func validate(in Input) error {
+	if err := validateLocalProcess(in); err != nil {
+		return err
+	}
 	if err := validateArgumentPolicy(in.ArgumentPolicy); err != nil {
 		return err
 	}
@@ -142,7 +151,7 @@ func validate(in Input) error {
 	if !identifier.MatchString(in.ID) || len(strings.TrimSpace(in.Name)) == 0 || len(in.Name) > 120 {
 		return fmt.Errorf("%w: valid id and display name required", ErrInvalid)
 	}
-	if e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || (u.RawQuery != "" || u.ForceQuery) && !flatAtlassianEndpoint(in.Endpoint) || u.Fragment != "" || len(in.Endpoint) > 2048 {
+	if in.LocalProcess == nil && (e != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || (u.RawQuery != "" || u.ForceQuery) && !flatAtlassianEndpoint(in.Endpoint) || u.Fragment != "" || len(in.Endpoint) > 2048) {
 		return fmt.Errorf("%w: endpoint must be HTTPS without user info or fragment; only Atlassian v2 tools=all is an allowed query", ErrInvalid)
 	}
 	switch in.Service {
@@ -227,6 +236,9 @@ func (m *Manager) save(ctx context.Context, r record, rev int64, actor, event st
 	return r.View, nil
 }
 func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor string) (View, error) {
+	if in.LocalProcess != nil && !m.AllowLocalProcesses {
+		return View{}, fmt.Errorf("%w: local processes require the native installation", ErrInvalid)
+	}
 	if e := validate(in); e != nil {
 		return View{}, e
 	}
@@ -246,6 +258,9 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 		if r.Revision != revision {
 			return View{}, storage.ErrConflict
 		}
+	}
+	if err := m.updateProcess(&r, in); err != nil {
+		return View{}, err
 	}
 	if (r.Endpoint != "" && r.Endpoint != in.Endpoint || credentialKind(r.CredentialType) != credentialKind(in.CredentialType) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders)) && r.Sealed != "" && r.OAuth == nil && in.OAuth == nil && (in.Credential == nil || !in.Credential.Clear && in.Credential.Value == "") {
 		return View{}, fmt.Errorf("%w: replace or clear the credential when changing endpoint, credential type or metadata headers", ErrInvalid)
@@ -284,7 +299,8 @@ func (m *Manager) Put(ctx context.Context, in Input, revision int64, actor strin
 			}
 		}
 	}
-	changed := !reflect.DeepEqual(r.ArgumentPolicy, in.ArgumentPolicy) || !reflect.DeepEqual(r.AtlassianPolicy, in.AtlassianPolicy) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	changed := !reflect.DeepEqual(r.LocalProcess, in.LocalProcess) || in.ProcessEnvironment != nil || !reflect.DeepEqual(r.ArgumentPolicy, in.ArgumentPolicy) || !reflect.DeepEqual(r.AtlassianPolicy, in.AtlassianPolicy) || !reflect.DeepEqual(r.MetadataHeaders, in.MetadataHeaders) || r.CredentialType != in.CredentialType || r.Endpoint != in.Endpoint || in.Credential != nil || r.Enabled != in.Enabled || oauthChanged
+	r.LocalProcess = in.LocalProcess
 	r.ArgumentPolicy = in.ArgumentPolicy
 	r.AtlassianPolicy = in.AtlassianPolicy
 	r.TransportProfile = in.TransportProfile
@@ -339,7 +355,7 @@ func (m *Manager) Refresh(ctx context.Context, id, actor string) (View, error) {
 	opctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	started := time.Now()
-	catalog, discoverErr := m.Discover(credentialContext(opctx, r.View), r.Endpoint, token)
+	catalog, discoverErr := m.discoverConnection(credentialContext(opctx, r.View), r, token)
 	if r.OAuth != nil {
 		var detail *DiscoveryError
 		if errors.As(discoverErr, &detail) && detail.Reason == "MCP HTTP status 401" {

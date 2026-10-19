@@ -15,7 +15,7 @@ remains independent; no migration or activation is implied by this document.
 | Native agents | Existing in-process runtime, configured model provider | Same gateway and permissions |
 | Models | Explicit cloud provider or separately available local inference service | Existing provider configuration |
 | External runtimes | Optional separately configured runtime endpoint; Python/agent frameworks are not silently installed | Existing optional agent services |
-| MCP | Existing explicitly registered HTTP connections; local stdio is pending LOCAL-05 | Existing remote HTTP connections |
+| MCP | Explicit HTTP connections and reviewed native stdio processes | Existing remote HTTP connections |
 | Sandboxes | Optional compatible Docker runtime; never required for process execution | Existing dedicated sandbox daemon and policy controls |
 | Observability | Structured logs, API history and protected metrics; optional exporters | Existing optional collectors/dashboards |
 
@@ -219,3 +219,38 @@ restored and restarted through the real launcher. The tree API reports released
 undispatched reservations, conservative estimated charging for dispatched calls
 without outcomes, unchanged foreign reservations, and unchanged totals after a
 second restart. This is recovery evidence, not actual provider billing evidence.
+
+## Explicit local MCP processes
+
+In the native installation, open **Connections → New connection** and choose
+**Local process (stdio)**. Enter an absolute executable path, working directory,
+and one argument per line. Install the MCP server independently; Forge does not
+run package installers or import another application's MCP configuration.
+
+Review the executable and arguments before checking the host-execution consent.
+Saving an enabled connection starts that process to discover tools. Discovery
+never grants tools: select exact tool permissions in each agent's configuration.
+The existing gateway approval, argument-policy, quota and audit paths also apply
+to local MCP calls. HTTP connections remain available independently.
+
+No parent environment variables are inherited. Supply required variables as an
+explicit JSON object in **Environment values (JSON)**, including `PATH` if the
+server needs to find additional executables. Put credentials there, not in command
+arguments. Values are encrypted at rest and never returned after saving; only
+variable names are displayed. Blank keeps existing values and `{}` clears them.
+Changing launch settings requires replacing or clearing previously stored values.
+Connection types cannot be changed in place between HTTP and local processes.
+
+This implementation uses session-based MCP 2025-06-18 and starts a fresh process
+for each discovery or tool call. It bounds operations to 15 seconds, discards
+child stderr and rejects malformed/oversized responses and credential echoes.
+Calls with uncertain outcomes are not automatically replayed. Unix process groups
+are terminated after each operation; Windows lifecycle support is not qualified.
+A failed check remains visible and can be retried after explicit configuration
+repair. Disabled/deleted connections cannot supply tools to new calls.
+
+The process runs with the Forge OS user's authority. Agent tool grants control
+which MCP operations can be dispatched; they do not sandbox the MCP executable.
+Host/path/command grant constraints cannot be silently reinterpreted as process
+confinement. Docker/server profiles reject local-process registration and execution.
+Remote vendor MCP compatibility and real credentials remain external validation.

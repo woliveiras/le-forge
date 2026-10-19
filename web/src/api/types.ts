@@ -658,7 +658,10 @@ export interface MCPOAuthConfig { registrationMode?: string; issuer: string; cli
 export interface MCPOAuth extends MCPOAuthConfig { registrationStatus?: string; registrationDiagnostic?: {code: string; httpStatus?: number}; effectiveRegistrationMode?: string; status: string; expiresAt?: string; grantedScopes?: string[]; clientSecretConfigured: boolean; revocation?: string }
 export interface MCPArgumentRule { tool: string; argument: string; values: string[] }
 export interface MCPAtlassianPolicy { products: ('jira'|'confluence')[]; cloudIds: string[] }
+export interface MCPLocalProcess { command:string; args:string[]; directory:string }
 export interface MCPConnection {
+ localProcess?: MCPLocalProcess;
+ environmentKeys?: string[];
  argumentPolicy?: MCPArgumentRule[];
  atlassianPolicy?: MCPAtlassianPolicy;
  transportProfile?: 'stateless-2026-07-28';
@@ -674,6 +677,8 @@ export interface MCPConnection {
   lastTest?: string; updatedAt: string; updatedBy: string;
 }
 export interface MCPConnectionInput {
+ localProcess?: MCPLocalProcess;
+ processEnvironment?: Record<string,string>;
  argumentPolicy?: MCPArgumentRule[];
  atlassianPolicy?: MCPAtlassianPolicy;
  transportProfile?: 'stateless-2026-07-28';

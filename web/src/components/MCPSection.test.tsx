@@ -126,3 +126,28 @@ it('preserves an explicit stateless transport when editing and saving',async()=>
  await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
  expect(backend.find('PUT','/api/v1/mcp/connections/team')[0].body).toMatchObject({transportProfile:'stateless-2026-07-28'});
 });
+
+it('reviews native process configuration before saving and keeps environment values write-only',async()=>{
+ let saved:MCPConnection|undefined;
+ const backend=fakeApi({'GET /api/v1/info':()=>({nativeProfile:true}), 'GET /api/v1/mcp/connections':()=>saved?[saved]:[],
+ 'POST /api/v1/mcp/connections':({body})=>{const value=body as {localProcess:MCPConnection['localProcess']};saved={...connection,id:'local',name:'Local process',service:'generic',endpoint:'',localProcess:value.localProcess,environmentKeys:['FIXTURE_KEY']};return saved;},
+ 'POST /api/v1/mcp/connections/local/tools/refresh':()=>{saved={...saved!,status:'ready',revision:2,tools:[{name:'inspect',inputSchema:{type:'object'}}]};return saved;}});
+ render(<MCPSection role="admin"/>);
+ await userEvent.selectOptions(await screen.findByLabelText('Connection transport'),'stdio');
+ await userEvent.type(screen.getByLabelText('Connection ID'),'local');await userEvent.type(screen.getByLabelText('Connection name'),'Local process');
+ await userEvent.type(screen.getByLabelText('Executable path'),'/usr/local/bin/node');await userEvent.type(screen.getByLabelText('Working directory'),'/tmp/fixture');
+ await userEvent.type(screen.getByLabelText('Process arguments'),'/tmp/fixture/server.js');
+ await userEvent.click(screen.getByLabelText('Environment values (JSON)'));await userEvent.paste('{"FIXTURE_KEY":"synthetic-key"}');
+ expect((screen.getByRole('button',{name:'Save MCP connection'}) as HTMLButtonElement).disabled).toBe(true);
+ await userEvent.click(screen.getByRole('checkbox',{name:'I reviewed this process and allow it to run on the Forge host.'}));
+ await userEvent.type(screen.getByLabelText('Process arguments'),' --changed');
+ expect((screen.getByRole('button',{name:'Save MCP connection'}) as HTMLButtonElement).disabled).toBe(true);
+ await userEvent.click(screen.getByRole('checkbox',{name:'I reviewed this process and allow it to run on the Forge host.'}));
+ await userEvent.click(screen.getByRole('button',{name:'Save MCP connection'}));
+ expect(await screen.findByText('mcp.local.inspect')).toBeTruthy();
+ expect(backend.find('POST','/api/v1/mcp/connections')[0].body).toMatchObject({endpoint:'',localProcess:{command:'/usr/local/bin/node'},processEnvironment:{FIXTURE_KEY:'synthetic-key'}});
+ await userEvent.click(screen.getByRole('button',{name:'Edit Local process'}));
+ expect((screen.getByLabelText('Environment values (JSON)') as HTMLInputElement).value).toBe('');
+ expect(screen.getByText('Stored variable names: FIXTURE_KEY')).toBeTruthy();
+ expect(document.body.textContent).not.toContain('synthetic-key');
+});

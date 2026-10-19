@@ -1,3 +1,4 @@
+import { LocalMCPFields, parseProcessEnvironment } from './LocalMCPFields';
 import {MCPArgumentPolicyFields} from './MCPArgumentPolicyFields';
 import {MCPAtlassianPolicyFields} from './MCPAtlassianPolicyFields';
 import { MCPMetadataFields } from './MCPMetadataFields';
@@ -18,9 +19,14 @@ import { Badge, Btn, ErrorBox, JsonView, fmtDateTime } from './common';
 const empty: MCPConnectionInput = {id:'',name:'',service:'generic',endpoint:'',enabled:true};
 export function MCPSection({role,connectQuery,oauthQuery,presentation,connectionID,tab='overview'}:{role?:string;connectQuery?:string;oauthQuery?:string;presentation?:'create'|'detail';connectionID?:string;tab?:ConnectionTab}) {
   const list=useAsync(api.mcpConnections,[]);
+  const info=useAsync(api.info,[]);
+  const [environment,setEnvironment]=useState('');
+  const [reviewedProcess,setReviewedProcess]=useState('');
+
   const [editing,setEditing]=useState(presentation!=='detail');
   const [toolSearch,setToolSearch]=useState('');
   const [input,setInput]=useState<MCPConnectionInput>(empty);
+  const processFingerprint=JSON.stringify([input.localProcess,environment]);
   const [revision,setRevision]=useState<number>();
   const [gitlabInstance,setGitlabInstance]=useState('https://gitlab.com');
   const [token,setToken]=useState('');
@@ -35,13 +41,14 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
   const [deleting,setDeleting]=useState<MCPConnection>();
   const [deleteID,setDeleteID]=useState('');
   const admin=role==='admin';const operator=admin||role==='operator';
-  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setInput(c?{id:c.id,name:c.name,service:c.service,transportProfile:c.transportProfile,atlassianPolicy:c.atlassianPolicy,argumentPolicy:c.argumentPolicy,credentialType:c.credentialType,metadataHeaders:c.metadataHeaders,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setCredentialEmail('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
+  const edit=(c?:MCPConnection)=>{setEditing(!!c||presentation!=='detail');setEnvironment('');setReviewedProcess('');setInput(c?{localProcess:c.localProcess,id:c.id,name:c.name,service:c.service,transportProfile:c.transportProfile,atlassianPolicy:c.atlassianPolicy,argumentPolicy:c.argumentPolicy,credentialType:c.credentialType,metadataHeaders:c.metadataHeaders,endpoint:c.endpoint,enabled:c.enabled,callsPerMinute:c.callsPerMinute,template:c.template,templateParameters:c.templateParameters,oauth:c.oauth?{registrationMode:c.oauth.registrationMode,issuer:c.oauth.issuer,clientId:c.oauth.clientId,scopes:c.oauth.scopes}:undefined}:empty);setRevision(c?.revision);setGitlabInstance(c?.service==='gitlab'?c.endpoint.replace(/\/api\/v4\/mcp$/, ''):'https://gitlab.com');setToken('');setCredentialEmail('');setClientSecret('');setClearClientSecret(false);setClear(false);setError(undefined);};
   function applyDefaults(){try{setInput({...input,...oauthDefaults(input.service,gitlabInstance),credentialType:undefined,template:undefined,templateParameters:undefined});setToken('');setCredentialEmail('');setClientSecret('');setClear(false);setClearClientSecret(!!revision);setError(undefined);}catch(e){setError(errorMessage(e));}}
   async function save(){
+    if(input.localProcess&&reviewedProcess!==processFingerprint){setError('Review the local process before saving.');return;}
     setBusy(true);setError(undefined);setSavedID(undefined);setSaveProgress('Saving connection…');
     try {
-      const result=await saveAndDiscover({...input,atlassianPolicy:input.atlassianPolicy?{...input.atlassianPolicy,cloudIds:input.atlassianPolicy.cloudIds.map(id=>id.trim()).filter(Boolean)}:undefined,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token,...(input.credentialType==='basic'?{username:credentialEmail}:{})}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision,c=>{
-        setToken('');setCredentialEmail('');setClientSecret('');setSavedID(c.id);setEditing(false);
+      const result=await saveAndDiscover({...input,processEnvironment:input.localProcess?parseProcessEnvironment(environment):undefined,atlassianPolicy:input.atlassianPolicy?{...input.atlassianPolicy,cloudIds:input.atlassianPolicy.cloudIds.map(id=>id.trim()).filter(Boolean)}:undefined,oauth:input.oauth?{...input.oauth,scopes:input.oauth.scopes.filter(Boolean)}:undefined,credential:input.oauth?undefined:clear?{clear:true}:token?{value:token,...(input.credentialType==='basic'?{username:credentialEmail}:{})}:undefined,oauthClientSecret:input.oauth?(clearClientSecret?{clear:true}:clientSecret?{value:clientSecret}:undefined):undefined},revision,c=>{
+        setEnvironment('');setReviewedProcess('');setToken('');setCredentialEmail('');setClientSecret('');setSavedID(c.id);setEditing(false);
         setSaveProgress(canDiscover(c)?'Connection saved. Discovering tools…':c.enabled?'Connection saved. Authorization required before tool discovery.':'Connection saved. Disabled connections are not tested.');
       });
       await list.reload();
@@ -89,6 +96,8 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
       <label>Connection calls per minute<input type="number" min={0} max={60000} step={1} value={input.callsPerMinute??0} onChange={e=>setInput({...input,callsPerMinute:Number(e.target.value)})}/></label>
       <p>0 means unlimited. A fixed UTC-minute quota is shared by all agents and replicas using this connection. Admitted calls count even if they fail; approval refusals do not consume it.</p>
       <label>Connection name<input required maxLength={120} value={input.name} onChange={e=>setInput({...input,name:e.target.value})}/></label>
+      {!revision&&info.data?.nativeProfile&&<label>Connection transport<select value={input.localProcess?'stdio':'http'} onChange={e=>{setInput({...empty,id:input.id,name:input.name,...(e.target.value==='stdio'?{localProcess:{command:'',args:[],directory:''}}:{})});setEnvironment('');setReviewedProcess('');setToken('');setClear(false);}}><option value="http">Remote HTTP</option><option value="stdio">Local process (stdio)</option></select></label>}
+      {input.localProcess?<LocalMCPFields value={input.localProcess} onChange={localProcess=>setInput({...input,localProcess})} environment={environment} onEnvironment={setEnvironment} reviewed={reviewedProcess===processFingerprint} onReview={checked=>setReviewedProcess(checked?processFingerprint:'')} storedKeys={list.data?.find(c=>c.id===input.id)?.environmentKeys}/>:<>
       <label>Service<select disabled={!!input.template} value={input.service} onChange={e=>setInput({...input,service:e.target.value})}>{serviceOptions.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <MCPServiceGuide service={input.service}/>
       <MCPAtlassianPolicyFields input={input} onChange={setInput}/>
@@ -121,18 +130,19 @@ export function MCPSection({role,connectQuery,oauthQuery,presentation,connection
       <p className="muted small">Leave blank to keep the existing credential. Changing the endpoint requires replacing or clearing its credential.</p>
       <label><input type="checkbox" checked={clear} onChange={e=>{setClear(e.target.checked);setToken('');setCredentialEmail('');}}/>Clear stored credential</label></>}
       <MCPMetadataFields input={input} onChange={setInput}/>
+      </>}
       <label><input type="checkbox" checked={input.enabled} onChange={e=>setInput({...input,enabled:e.target.checked})}/>Connection enabled</label>
-      <div className="btn-row"><Btn type="submit" disabled={busy} tone="primary">Save MCP connection</Btn>{revision&&<Btn disabled={busy} onClick={()=>edit()}>Cancel connection edit</Btn>}{presentation==='create'&&<a href="#/connections">Cancel</a>}</div>
+      <div className="btn-row"><Btn type="submit" disabled={busy||!!input.localProcess&&reviewedProcess!==processFingerprint} tone="primary">Save MCP connection</Btn>{revision&&<Btn disabled={busy} onClick={()=>edit()}>Cancel connection edit</Btn>}{presentation==='create'&&<a href="#/connections">Cancel</a>}</div>
     </form>}
     <div className={presentation ? "connection-detail" : "cards"}>{(list.data??[]).filter(c=>!presentation||(presentation==='detail'&&c.id===connectionID)).map(c=><article className="card" key={c.id} aria-label={`MCP ${c.name}`}>
-      {presentation ? <h2>{tab==='settings'?'Connection settings':tab==='overview'?'Connection overview':connectionTabTitles[tab]}</h2> : <h3>{c.name} <Badge>{c.status}</Badge></h3>}<p>{c.service} · {c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
-      <p>{c.credentialConfigured?'Credential configured':'No credential'} · revision {c.revision} · catalogue {c.toolsRevision}</p>
+      {presentation ? <h2>{tab==='settings'?'Connection settings':tab==='overview'?'Connection overview':connectionTabTitles[tab]}</h2> : <h3>{c.name} <Badge>{c.status}</Badge></h3>}<p>{c.localProcess?'Local process · '+c.localProcess.command:c.service+' · '+c.endpoint}</p>{c.template&&<p>Template: {c.template.id} v{c.template.version}</p>}
+      <p>{c.localProcess?(c.environmentKeys?.length?'Environment configured':'No environment values'):(c.credentialConfigured?'Credential configured':'No credential')} · revision {c.revision} · catalogue {c.toolsRevision}</p>
       {!!c.argumentPolicy?.length&&<p>Tool argument restrictions: {c.argumentPolicy.length} rules. Only listed tools with matching arguments are eligible.</p>}
       {c.atlassianPolicy&&<p>Atlassian read boundary: {c.atlassianPolicy.products.join(', ')} · {c.atlassianPolicy.cloudIds.length} allowed sites. Exact agent grants remain required.</p>}
       <p>Connection quota: {c.callsPerMinute?`${c.callsPerMinute} calls per UTC minute`:'Unlimited'}</p>
       {(!presentation||tab==='overview')&&c.oauth&&<MCPOAuthActions key={c.revision} connection={c} canManage={admin} onChanged={list.reload}/>}
       {(!presentation||tab==='overview'||tab==='tools')&&<section aria-label="Connection readiness">
-        <p>Connection checks discover available tools. No agent is needed and no tool is executed.</p>
+        <p>Connection checks discover available tools. No agent is needed and no tool is called. Local connections launch the reviewed process for discovery.</p>
         {c.status==='ready'?<p role="status">{c.tools.length} tools discovered. Grant access to agents before they can use them.</p>:
          !c.enabled?<p>Connection disabled. Discovery is paused.</p>:
          c.oauth&&c.oauth.status!=='authorized'?<p>Authorize this connection to discover its tools.</p>:

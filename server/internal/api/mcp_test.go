@@ -394,3 +394,19 @@ func TestDatabricksTemplatePersistsReviewedParameters(t *testing.T) {
 		t.Fatal("invalid profile persisted")
 	}
 }
+
+func TestLocalMCPRegistrationRequiresNativeCapabilityAndAdministrator(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	body := `{"id":"local","name":"Local fixture","service":"generic","endpoint":"","enabled":false,"localProcess":{"command":"/nonexistent-fixture","args":[],"directory":"/tmp"}}`
+	for _, token := range []string{viewerTok, operatorTok} {
+		if code := call(t, srv, "POST", "/api/v1/mcp/connections", token, "application/json", body, nil); code != 403 {
+			t.Fatal(code)
+		}
+	}
+	if code := call(t, srv, "POST", "/api/v1/mcp/connections", adminTok, "application/json", body, nil); code != 422 {
+		t.Fatal("server profile accepted host process", code)
+	}
+	if views, err := a.MCP.List(t.Context()); err != nil || len(views) != 0 {
+		t.Fatal("rejected process persisted", views, err)
+	}
+}

@@ -73,3 +73,35 @@ test('preinstalled factory supplies editable task inputs without creating anothe
  const after=await(await page.request.get('/api/v1/graphs/software-factory',{headers})).json();expect(after).toEqual(before);
  expect(await(await page.request.get('/api/v1/graphs/software-factory/executions',{headers})).json()).toEqual([]);
 });
+
+test('native MCP process is reviewed, discovered and repaired without granting agent tools',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
+ const headers={Authorization:`Bearer ${token}`};
+ const script=join(root,'mcp-fixture.cjs');
+ writeFileSync(script,`const readline=require('node:readline');
+readline.createInterface({input:process.stdin}).on('line',line=>{const r=JSON.parse(line);if(!r.id)return;let result;
+if(r.method==='initialize')result={protocolVersion:'2025-06-18',capabilities:{tools:{}}};
+if(r.method==='tools/list')result={tools:[{name:'inspect',description:'Synthetic inspection fixture',inputSchema:{type:'object'}}]};
+if(r.method==='tools/call')result={content:[{type:'text',text:'fixture'}]};
+process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`);
+ const graphsBefore=await(await page.request.get('/api/v1/graphs',{headers})).json();
+ await page.goto('/#/connections/new');await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByLabel('Connection transport').selectOption('stdio');
+ await page.getByLabel('Connection ID',{exact:true}).fill('local-fixture');await page.getByLabel('Connection name',{exact:true}).fill('Local fixture');
+ await page.getByLabel('Executable path',{exact:true}).fill(join(root,'missing-executable'));await page.getByLabel('Working directory',{exact:true}).fill(root);await page.getByLabel('Process arguments',{exact:true}).fill(script);
+ await page.getByLabel('Environment values (JSON)').fill('{"FIXTURE_KEY":"synthetic-native-mcp-secret"}');
+ await expect(page.getByRole('button',{name:'Save MCP connection',exact:true})).toBeDisabled();
+ await page.getByRole('checkbox',{name:'I reviewed this process and allow it to run on the Forge host.'}).check();await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page).toHaveURL(/connections\/c\/local-fixture/);await expect(page.getByText('Discovery failed: MCP process could not start')).toBeVisible();
+ await page.getByRole('link',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Edit Local fixture',exact:true}).click();
+ await expect(page.getByLabel('Environment values (JSON)')).toHaveValue('');
+ await page.getByLabel('Executable path',{exact:true}).fill(process.execPath);await page.getByLabel('Environment values (JSON)').fill('{}');
+ await page.getByRole('checkbox',{name:'I reviewed this process and allow it to run on the Forge host.'}).check();await page.getByRole('button',{name:'Save MCP connection',exact:true}).click();
+ await expect(page.getByText('1 tools discovered. Grant access to agents before they can use them.')).toBeVisible();
+ await page.getByRole('link',{name:'View discovered tools',exact:true}).click();await expect(page.getByText('mcp.local-fixture.inspect',{exact:true})).toBeVisible();
+ await page.reload();await expect(page.getByText('mcp.local-fixture.inspect',{exact:true})).toBeVisible();
+ const publicRecord=await(await page.request.get('/api/v1/mcp/connections/local-fixture',{headers})).text();expect(publicRecord).not.toContain('synthetic-native-mcp-secret');expect(publicRecord).not.toContain('processEnvironmentSealed');
+ expect(await(await page.request.get('/api/v1/graphs',{headers})).json()).toEqual(graphsBefore);
+ expect(await page.evaluate(()=>JSON.stringify([localStorage,sessionStorage]))).not.toContain('synthetic-native-mcp-secret');
+});

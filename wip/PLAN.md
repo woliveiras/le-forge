@@ -1930,9 +1930,9 @@ Executable and working directory must be absolute; no shell expansion or parent
 environment inheritance occurs. Processes are scoped to an operation, with a
 15-second deadline, bounded frames/catalogues and Unix process-group teardown.
 Child stderr is discarded and environment echoes are rejected. HTTP discovery
-shares the same protocol/catalogue validator. This foundation does not expose
-commands to the API or grant tools: native-only reviewed registration, encrypted
-environment values, gateway authorization and browser coverage remain pending.
+shares the same protocol/catalogue validator. The transport itself grants no tools. LOCAL-05b adds native-only reviewed
+registration, encrypted environment values, gateway authorization and browser
+coverage.
 Windows is rejected until process-tree teardown is qualified.
 
 
@@ -1943,3 +1943,16 @@ terminal execution is persisted or published. Deferred cleanup still covers
 earlier exits. Unit and deterministic storage-boundary integration tests cover
 success/failure and keep other executions authorized independently. This closes
 the completion/revocation race observed by the existing external callback test.
+
+
+### Reviewed native MCP registration
+
+LOCAL-05b connects the stdio transport to native-only administrator registration,
+write-only encrypted environment values and the existing discovery/gateway paths.
+The interface reviews host execution before save/discovery; process edits cannot
+inherit old environment credentials without explicit replacement or clearing.
+Each call rechecks exact agent grants, revision, status and quota. No tools are
+automatically granted and no external application configuration is imported.
+Real-subprocess/storage/gateway integration and production-native browser fixtures
+cover failure, repair, revocation and credential visibility. HTTP and Docker
+behavior remain separate; vendor acceptance stays in the final validation round.
