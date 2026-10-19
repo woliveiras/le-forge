@@ -169,7 +169,7 @@ export const api = {
   tasks: (after?: string) => request<TaskPage>(`${V1}/tasks`, {query:{after,limit:50}}),
   task: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}`),
   taskAuthorization: (id:string) => request<import('./tasks').TaskAuthorization>(`${V1}/tasks/${encodeURIComponent(id)}/authorization`),
-  saveTaskAuthorization: (id:string,mode:import('./tasks').AuthorizationMode,scope:string,revision:number) => request(`${V1}/tasks/${encodeURIComponent(id)}/authorization`,{method:'PUT',headers:{'If-Match':String(revision)},body:{mode,scope,confirm:true}}),
+  saveTaskAuthorization: (id:string,mode:import('./tasks').AuthorizationMode,scope:string,revision:number,remember=false,preferenceRevision=0) => request(`${V1}/tasks/${encodeURIComponent(id)}/authorization`,{method:'PUT',headers:{'If-Match':String(revision)},body:{mode,scope,confirm:true,remember,preferenceRevision}}),
   resolveTaskPrompt: (input:TaskInput,id?:string,revision?:number) => request<TaskDraft>(`${V1}/tasks/prompt`, {method:'POST',body:{request:input.request,graphId:input.graphId,id,revision,settings:{title:input.title,executionMode:input.executionMode,projectId:input.projectId,baseCommit:input.baseCommit,source:input.source}}}),
   submitTaskPrompt: (input:TaskInput,key:string,id?:string,revision?:number) => request<{task:TaskDraft;review?:TaskReview}>(`${V1}/tasks/submit`, {method:'POST',body:{key,confirm:true,request:input.request,graphId:input.graphId,id,revision,settings:{title:input.title,executionMode:input.executionMode,projectId:input.projectId,baseCommit:input.baseCommit,source:input.source}}}),
   repositoryImports: () => request<import('./tasks').RepositoryImportRecord[]>(`${V1}/repository-imports`),

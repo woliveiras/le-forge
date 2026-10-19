@@ -41,3 +41,9 @@ func Approval(mode Mode, capability, isolation string, mandatory bool) (bool, er
 		return false, nil
 	}
 }
+
+// Reduction reduces automatic execution; Ask requires fresh human decisions.
+func Reduction(from, to Mode) bool {
+	rank := map[Mode]int{Ask: 0, Workspace: 1, Full: 2}
+	return Valid(from) && Valid(to) && rank[to] < rank[from]
+}

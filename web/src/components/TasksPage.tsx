@@ -210,6 +210,7 @@ function TaskTracking({task,canControl,canDecide,nativeProfile}:{task:TaskDraft;
       <h2>{task.title}</h2><p>{task.request}</p>
       <p role="status">{progress?`Task status: ${progress.state}`:'Loading progress…'}</p>
       <ErrorBox error={error}/><Btn onClick={()=>setRefresh(x=>x+1)}>Refresh task</Btn>
+      <TaskAuthorization taskId={task.id} canEdit={canControl&&["running","starting"].includes(current.status)} running onChanged={()=>setRefresh(x=>x+1)}/>
       {current.launchError&&<p>{current.launchError}</p>}
       {progress?.blockers.map(b=><p key={b}>{b}</p>)}
       {graph&&<TaskDecisions graphId={graph} approvals={error?undefined:progress?.pendingApprovals} canDecide={canDecide} canAdmin={canControl} onChanged={()=>setRefresh(x=>x+1)}/>}

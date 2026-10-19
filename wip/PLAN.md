@@ -2474,3 +2474,17 @@ TypeScript; 21 focused Vitest tests; one Chromium task-authorization journey cov
 all three modes, reload and start. Initial browser test found revision-zero parsing
 in the shared parser; a strict endpoint-specific parser fixes it. One unrelated full
 Vitest resource-cleanup test timed out under parallel load; focused rerun passed.
+
+
+### AUTH-03 — Suggestions and live reduction
+
+Project preferences are explicit CAS-protected suggestions, never reused consent.
+Running task modes can only reduce automatic authorization; execution seals survive
+reduction. Waiting approvals revalidate the consent revision, subsequent calls see
+new limits and cancellation denies new calls. Existing stop cancels execution,
+without a rollback claim for in-flight effects. Audit intents/automatic decisions
+retain task and revision evidence without request payloads.
+
+Verified: focused Go policy, storage/gateway and API tests; 15 focused Vitest tests;
+Chromium mode/reload/start/live reduction journey including denied expansion.
+Live credentials and installation activation remain deferred.

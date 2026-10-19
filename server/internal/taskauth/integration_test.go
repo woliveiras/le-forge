@@ -171,3 +171,80 @@ func TestDependencyFailureDenies(t *testing.T) {
 		t.Fatal("ignored dependency failure")
 	}
 }
+
+func TestReductionDuringApprovalAndCancellation(t *testing.T) {
+	m, d, p := setup(t)
+	review, _ := m.Review(t.Context(), d.ID)
+	if _, err := m.Save(t.Context(), d.ID, Full, review.Scope, 0, "admin", true); err != nil {
+		t.Fatal(err)
+	}
+	launch(t, m, d, p)
+	tool := &sampleTool{}
+	reg := tools.NewRegistry()
+	reg.Register(tool)
+	p.Grants[0].RequiresApproval = true
+	ap := &approver{onWait: func() {
+		r, err := m.Review(t.Context(), d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = m.Save(t.Context(), d.ID, Ask, r.Scope, r.Record.Revision, "admin", true); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	gw := tools.NewGateway(reg, ap, nil)
+	gw.TaskAuthorization = m.Check
+	if _, err := gw.Invoke(t.Context(), p, tool.Name(), nil); !errors.Is(err, tools.ErrDenied) || tool.calls != 0 {
+		t.Fatal(err, tool.calls)
+	}
+	ap.onWait = nil
+	if _, err := gw.Invoke(t.Context(), p, tool.Name(), nil); err != nil || tool.calls != 1 {
+		t.Fatal(err, tool.calls)
+	}
+	r, _ := m.Review(t.Context(), d.ID)
+	if _, err := m.Save(t.Context(), d.ID, Full, r.Scope, r.Record.Revision, "admin", true); !errors.Is(err, storage.ErrConflict) {
+		t.Fatal("expanded live mode", err)
+	}
+	current, _ := (taskconfig.Manager{Store: m.Store}).Get(t.Context(), d.ID)
+	if _, err := (taskconfig.Manager{Store: m.Store}).Transition(t.Context(), current, "cancel_requested", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.Invoke(t.Context(), p, tool.Name(), nil); !errors.Is(err, tools.ErrDenied) || tool.calls != 1 {
+		t.Fatal(err, tool.calls)
+	}
+}
+func TestPreferenceIsOnlySuggestion(t *testing.T) {
+	m, d, _ := setup(t)
+	in := d.Input
+	in.ProjectID = "project"
+	in.BaseCommit = strings.Repeat("a", 40)
+	d, err := (taskconfig.Manager{Store: m.Store}).Save(t.Context(), d.ID, in, d.Revision, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, _ := m.Review(t.Context(), d.ID)
+	if _, err = m.Save(t.Context(), d.ID, Full, review.Scope, 0, "admin", true); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.Remember(t.Context(), d.ID, Full, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.Remember(t.Context(), d.ID, Full, 0, "admin"); !errors.Is(err, storage.ErrConflict) {
+		t.Fatal(err)
+	}
+	next, err := (taskconfig.Manager{Store: m.Store}).Save(t.Context(), "", in, 0, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err = m.Review(t.Context(), next.ID)
+	if err != nil || review.Record != nil || review.Preference == nil || review.Preference.Mode != Full {
+		t.Fatal(review, err)
+	}
+	if err = m.Ensure(t.Context(), next.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	review, _ = m.Review(t.Context(), next.ID)
+	if review.Record.Mode != Ask {
+		t.Fatal("suggestion silently expanded scope")
+	}
+}

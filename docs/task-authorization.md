@@ -36,4 +36,10 @@ Existing execution copies without consent retain their existing grant behavior.
 The server seals the normalized execution copy before agents start, checks its
 version and specification on each gateway call, and rechecks consent after approval
 and environment preparation. Stale scope is denied, never silently refreshed.
-Preferences and live reduction remain AUTH-03; integrated qualification is PROMPT-07.
+AUTH-03 adds optional project suggestions, explicitly confirmed with the consent
+save. Suggestions never preauthorize another task. Live changes only reduce automatic
+execution (Full → Workspace/Ask, Workspace → Ask); concurrent stale changes fail.
+Waiting calls refuse a decision made under an earlier consent revision. Stop task
+uses the existing execution-copy cancellation flow. In-flight effects are not rolled
+back. Preference-save failures are reported separately from an already saved task
+consent. Integrated qualification remains PROMPT-07.

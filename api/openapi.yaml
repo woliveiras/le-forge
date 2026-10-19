@@ -2151,7 +2151,7 @@ paths:
       responses:
         '200': {description: Scope digest, reviewed capabilities and optional consent record}
     put:
-      summary: Confirm task authorization (admin only)
+      summary: Confirm draft consent or reduce running task authorization (admin only)
       parameters:
         - {name: If-Match, in: header, required: true, schema: {type: integer, minimum: 0}, description: Consent revision; zero creates the initial record}
       requestBody:
@@ -2164,6 +2164,8 @@ paths:
               required: [mode, scope, confirm]
               properties:
                 mode: {type: string, enum: [ask, workspace, full]}
+                remember: {type: boolean, default: false, description: Save a project suggestion; never automatic consent}
+                preferenceRevision: {type: integer, minimum: 0}
                 scope: {type: string}
                 confirm: {type: boolean, enum: [true]}
       responses:

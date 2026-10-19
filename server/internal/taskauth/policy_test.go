@@ -26,3 +26,14 @@ func TestApproval(t *testing.T) {
 		})
 	}
 }
+
+func TestReduction(t *testing.T) {
+	for _, from := range []Mode{Ask, Workspace, Full, "bad"} {
+		for _, to := range []Mode{Ask, Workspace, Full, "bad"} {
+			want := (from == Full && (to == Ask || to == Workspace)) || (from == Workspace && to == Ask)
+			if Reduction(from, to) != want {
+				t.Fatal(from, to)
+			}
+		}
+	}
+}

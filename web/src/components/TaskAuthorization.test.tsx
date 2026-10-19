@@ -13,7 +13,7 @@ describe('Task authorization',()=>{
  expect(screen.getByText(/Native commands can access/)).toBeTruthy();
  expect((screen.getByRole('button',{name:'Confirm authorization'}) as HTMLButtonElement).disabled).toBe(true);
  fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Confirm authorization'}));
- await waitFor(()=>expect(api.saveTaskAuthorization).toHaveBeenCalledWith('tsk_1','full','reviewed',0));
+ await waitFor(()=>expect(api.saveTaskAuthorization).toHaveBeenCalledWith('tsk_1','full','reviewed',0,false,0));
  });
  it('shows failure and does not grant controls to a reader',async()=>{
  vi.mocked(api.taskAuthorization).mockRejectedValue(new Error('Offline'));
@@ -25,4 +25,12 @@ describe('Task authorization',()=>{
  render(<TaskAuthorization taskId="tsk_1" canEdit onChanged={changed}/>);await screen.findByText('Isolation: process');
  fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Confirm authorization'}));await screen.findByText('Stale scope');expect(changed).not.toHaveBeenCalled();
  });
+});
+it('keeps project preferences as suggestions and prevents full access while running',async()=>{
+ vi.mocked(api.taskAuthorization).mockResolvedValue({scope:'reviewed',projectId:'p',preference:{mode:'full',revision:1},record:{taskId:'tsk_1',mode:'full',scope:'reviewed',actor:'admin',policyVersion:1,revision:3}});
+ render(<TaskAuthorization taskId="tsk_1" canEdit running onChanged={()=>{}}/>);
+ await screen.findByText(/Project suggestion: full/);
+ expect((screen.getByLabelText('Authorization mode') as HTMLSelectElement).value).toBe('ask');
+ expect((screen.getByRole('option',{name:'Full access'}) as HTMLOptionElement).disabled).toBe(true);
+ expect(screen.queryByLabelText('Remember this mode as a project suggestion')).toBeNull();
 });

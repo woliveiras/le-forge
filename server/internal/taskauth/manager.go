@@ -32,7 +32,13 @@ type AgentScope struct {
 	Isolation domain.IsolationMode `json:"isolation"`
 	Grants    []domain.ToolGrant   `json:"grants"`
 }
+type Preference struct {
+	Mode     Mode  `json:"mode"`
+	Revision int64 `json:"revision"`
+}
 type Review struct {
+	ProjectID    string        `json:"projectId,omitempty"`
+	Preference   *Preference   `json:"preference,omitempty"`
 	Capabilities []AgentScope  `json:"capabilities"`
 	Record       *Record       `json:"record,omitempty"`
 	Scope        string        `json:"scope"`
@@ -62,10 +68,24 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	}
 	sum := sha256.Sum256(b)
 	graph.Normalize(g)
-	r := &Review{Scope: hex.EncodeToString(sum[:]), Agents: g.Spec.Nodes}
+	r := &Review{ProjectID: d.ProjectID, Scope: hex.EncodeToString(sum[:]), Agents: g.Spec.Nodes}
 	for _, n := range g.Spec.Nodes {
 		if !n.Disabled {
 			r.Capabilities = append(r.Capabilities, AgentScope{ID: n.ID, Isolation: n.Isolation.Mode, Grants: n.Tools})
+		}
+	}
+	if d.ProjectID != "" {
+		pref, e := m.Store.GetSetting(ctx, preferenceKey(d.ProjectID))
+		if e != nil && !errors.Is(e, storage.ErrNotFound) {
+			return nil, e
+		}
+		if e == nil {
+			var p Preference
+			if json.Unmarshal(pref.Value, &p) != nil || !Valid(p.Mode) {
+				return nil, ErrInvalid
+			}
+			p.Revision = pref.Revision
+			r.Preference = &p
 		}
 	}
 	setting, err := m.Store.GetSetting(ctx, prefix+id)
@@ -91,7 +111,8 @@ func (m Manager) Save(ctx context.Context, id string, mode Mode, scope string, r
 	if err != nil {
 		return nil, err
 	}
-	if d.Status != "draft" && d.Status != "environment_pending" {
+	running := d.Status == "running" || d.Status == "starting"
+	if d.Status != "draft" && d.Status != "environment_pending" && !running {
 		return nil, storage.ErrConflict
 	}
 	review, err := m.Review(ctx, id)
@@ -99,6 +120,9 @@ func (m Manager) Save(ctx context.Context, id string, mode Mode, scope string, r
 		return nil, err
 	}
 	if scope != review.Scope {
+		return nil, storage.ErrConflict
+	}
+	if running && (review.Record == nil || !Reduction(review.Record.Mode, mode) || review.Record.Scope != scope) {
 		return nil, storage.ErrConflict
 	}
 	if mode == Workspace {
@@ -114,6 +138,9 @@ func (m Manager) Save(ctx context.Context, id string, mode Mode, scope string, r
 		}
 	}
 	rec := &Record{TaskID: id, Mode: mode, Scope: scope, Actor: actor, PolicyVersion: PolicyVersion}
+	if running {
+		rec.ExecutionScope = review.Record.ExecutionScope
+	}
 	if err = m.Store.AppendEvent(ctx, domain.NewEvent("task.authorization_requested", d.GraphID, map[string]any{"taskId": id, "mode": mode, "scope": scope, "expectedRevision": revision}).WithActor(actor)); err != nil {
 		return nil, err
 	}
@@ -205,5 +232,37 @@ func (m Manager) Bind(ctx context.Context, id string, g *domain.Graph) error {
 		return err
 	}
 	_, err = m.Store.PutSetting(ctx, prefix+id, b, rec.Revision, rec.Actor)
+	return err
+}
+
+func preferenceKey(project string) string {
+	sum := sha256.Sum256([]byte(project))
+	return "tasks/authorization-preferences/" + hex.EncodeToString(sum[:])
+}
+
+// Remember stores a suggestion, never consent for another task. CAS prevents lost updates.
+func (m Manager) Remember(ctx context.Context, id string, mode Mode, revision int64, actor string) error {
+	d, err := (taskconfig.Manager{Store: m.Store}).Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.ProjectID == "" || !Valid(mode) {
+		return ErrInvalid
+	}
+	review, err := m.Review(ctx, id)
+	if err != nil {
+		return err
+	}
+	if review.Record == nil || review.Record.Mode != mode || review.Record.Scope != review.Scope {
+		return ErrDenied
+	}
+	if err = m.Store.AppendEvent(ctx, domain.NewEvent("task.authorization_preference_requested", d.GraphID, map[string]any{"taskId": id, "mode": mode, "expectedRevision": revision}).WithActor(actor)); err != nil {
+		return err
+	}
+	b, err := json.Marshal(Preference{Mode: mode})
+	if err != nil {
+		return err
+	}
+	_, err = m.Store.PutSetting(ctx, preferenceKey(d.ProjectID), b, revision, actor)
 	return err
 }
