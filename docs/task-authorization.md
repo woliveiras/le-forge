@@ -30,5 +30,10 @@ operations may finish; stopping requests cancellation and does not roll back
 external effects. Auditing records actor, revisions and decisions, not prompts or
 credentials. No automatic mode expansion or replay is permitted.
 
-Implementation status: policy contract only (AUTH-01). Runtime/UI enforcement,
-preferences and integrated qualification are tracked separately in TASKS.md.
+AUTH-01/02 are implemented. New tasks default to Ask at admission. Save or resolve
+a draft to review capabilities and explicitly confirm another mode before starting.
+Existing execution copies without consent retain their existing grant behavior.
+The server seals the normalized execution copy before agents start, checks its
+version and specification on each gateway call, and rechecks consent after approval
+and environment preparation. Stale scope is denied, never silently refreshed.
+Preferences and live reduction remain AUTH-03; integrated qualification is PROMPT-07.

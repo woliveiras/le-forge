@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/taskauth"
 	"log/slog"
 	"net"
 	"net/http"
@@ -138,6 +139,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	a.MCP.AllowLocalProcesses = cfg.NativeProfile
 	a.Tools = tools.Builtin(tools.BuiltinConfig{AllowPrivateNetworks: cfg.Tools.AllowPrivateNetworks})
 	a.Gateway = tools.NewGateway(a.Tools, a.Approvals, a.Bus)
+	a.Gateway.TaskAuthorization = (taskauth.Manager{Store: a.Store}).Check
 	a.Gateway.ResolveTool = a.MCP.Resolve
 
 	ws, err := workspace.NewManager(cfg.Workspaces.Root, cfg.Workspaces.HostRoot, cfg.Workspaces.AllowAbsolute)

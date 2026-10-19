@@ -2459,3 +2459,18 @@ separate AUTH tasks; prompt submission does not implement Full access.
 ### AUTH-01 — Task authorization contract
 
 Defined precedence and three modes in docs/task-authorization.md and a pure server policy evaluator. Mandatory approvals and exact grants remain ceilings; native shell is denied in Workspace access. Runtime binding and UI remain AUTH-02. Validation: `go test ./internal/taskauth` (policy success/denial/mandatory-gate cases). Documentation/pure policy only; gateway integration coverage follows with wiring in AUTH-02.
+
+
+### AUTH-02 — Gateway and task consent
+
+Added admin-only revision-fenced task consent with reviewed capability digest and
+execution-copy seal. New tasks default to Ask; existing copies retain their grants.
+Gateway checks consent after grants and rechecks after waiting/preparation, without
+bypassing mandatory gates. UI confirms scope explicitly; Workspace rejects native
+shell. Source/workflow changes invalidate consent. No installation activation.
+
+Verified: `go test ./internal/taskauth ./internal/taskrun ./internal/tools ./internal/api ./internal/app`;
+TypeScript; 21 focused Vitest tests; one Chromium task-authorization journey covering
+all three modes, reload and start. Initial browser test found revision-zero parsing
+in the shared parser; a strict endpoint-specific parser fixes it. One unrelated full
+Vitest resource-cleanup test timed out under parallel load; focused rerun passed.

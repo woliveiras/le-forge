@@ -558,7 +558,7 @@ func newTurnEnv(r *replica, gr *graphRun, n *domain.Node, x *domain.Execution) *
 	wd := r.workdir
 	r.mu.Unlock()
 	env := &turnEnv{budgetRootID: x.ID, r: r, gr: gr, n: n, x: x, principal: &tools.Principal{
-		GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
+		GraphVersion: gr.g.Metadata.Version, GraphID: gr.g.Metadata.ID, NodeID: n.ID, Replica: r.index, ExecutionID: x.ID,
 		WorkspaceReadOnly: n.Workspace.ReadOnly, Grants: n.Tools, Workdir: wd, Sandbox: r.sandbox, Actor: fmt.Sprintf("agent:%s#%d", n.ID, r.index),
 	}}
 	if delegationRuntime(n.Runtime.Kind) {

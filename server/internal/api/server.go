@@ -117,6 +117,8 @@ func (s *Server) routes() {
 		{"POST /api/v1/tasks/submit", A, s.submitTaskPrompt},
 		{"GET /api/v1/tasks/{tid}", R, s.getTask},
 		{"PUT /api/v1/tasks/{tid}", O, s.saveTask},
+		{"GET /api/v1/tasks/{tid}/authorization", R, s.taskAuthorization},
+		{"PUT /api/v1/tasks/{tid}/authorization", A, s.taskAuthorization},
 		{"GET /api/v1/tasks/{tid}/review", R, s.reviewTask},
 		{"GET /api/v1/tasks/{tid}/progress", R, s.taskProgress},
 		{"POST /api/v1/tasks/{tid}/{action}", A, s.taskAction},

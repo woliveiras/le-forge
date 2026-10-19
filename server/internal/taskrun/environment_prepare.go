@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/taskauth"
 	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
@@ -104,6 +105,9 @@ func (m Manager) PrepareEnvironment(ctx context.Context, id string, revision int
 }
 
 func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Draft, revision int64, actor string) (*taskconfig.Draft, error) {
+	if err := (taskauth.Manager{Store: m.Store}).Ensure(ctx, d.ID, actor); err != nil {
+		return nil, err
+	}
 	if d.Revision != revision {
 		return nil, storage.ErrConflict
 	}
@@ -137,6 +141,9 @@ func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Dra
 		if err = m.Store.PutOperatorMessageOnce(ctx, input); err != nil {
 			return fail(err)
 		}
+	}
+	if err = (taskauth.Manager{Store: m.Store}).Bind(ctx, d.ID, g); err != nil {
+		return fail(err)
 	}
 	if err = m.Engine.GraphAction(ctx, g.Metadata.ID, "start", actor); err != nil {
 		return fail(err)

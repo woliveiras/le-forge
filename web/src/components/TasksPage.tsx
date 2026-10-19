@@ -1,3 +1,4 @@
+import {TaskAuthorization} from "./TaskAuthorization";
 import {RepositoryImport} from './RepositoryImport';
 import {TaskIssueSource} from "./TaskIssueSource";
 import {TaskEnvironment} from './TaskEnvironment';
@@ -127,7 +128,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
         </select></label>
         <p>Environment selection is checked against the workflow; it does not change agent isolation or permissions. Local worktrees use the native Forge host and do not isolate processes or network access. <a href="https://woliveiras.com/posts/why-git-worktrees-matter-coding-agents/" target="_blank" rel="noreferrer">About worktrees</a></p>
         {input.executionMode==='sandbox'&&<p>Sandbox requires all enabled agents to use Docker isolation and the configured Docker/Colima daemon to be available. Forge never falls back to local execution.</p>}
-        <p>Authorization: existing workflow permissions and installation approval policies. Task authorization modes are not available yet.</p>
+        <p>New tasks ask for tool approval by default. Save or resolve your request to review and confirm Workspace access or Full access. Mandatory workflow approvals and installation restrictions always apply.</p>
         <ErrorBox error={projects.error}/>
         <details open={settingsOpen} onToggle={e=>setSettingsOpen(e.currentTarget.open)}>
           <summary>Review settings</summary>
@@ -163,6 +164,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       <div className="row"><Btn type="submit" tone="primary" disabled={!canEdit||busy}>Save draft</Btn><Btn disabled={!saved||dirty||busy} onClick={()=>void inspect()}>Review requirements</Btn></div>
       <p role="status">{dirty?'Unsaved changes':saved?'Draft saved. No agents have been started.':'Save this request to resume it later.'}</p>
     </form>
+    {saved&&<TaskAuthorization key={`${saved.id}:${saved.revision}`} taskId={saved.id} canEdit={canStart} onChanged={()=>{setReview(undefined);setConfirmed(false);}}/>}
     {review&&<article className="card" aria-label="Task requirements"><h2>Requirements</h2>
       <p>Current workflow version: {review.currentGraphVersion} · Requested environment: {review.task.executionMode||'workflow'}</p>
       {review.blockers.map(b=><p key={b}>{b}</p>)}

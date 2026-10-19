@@ -40,11 +40,12 @@ type Tool interface {
 type Principal struct {
 	Delegate func(context.Context, json.RawMessage) (*Result, error)
 
-	GraphID     string
-	NodeID      string
-	Replica     int
-	ExecutionID string
-	Grants      []domain.ToolGrant
+	GraphVersion int
+	GraphID      string
+	NodeID       string
+	Replica      int
+	ExecutionID  string
+	Grants       []domain.ToolGrant
 	// Workdir is the replica's workspace root (host path). Filesystem tools
 	// are jailed to it.
 	Workdir           string

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/woliveiras/le-forge/server/internal/projectconfig"
+	"github.com/woliveiras/le-forge/server/internal/taskauth"
 	"github.com/woliveiras/le-forge/server/internal/workspace"
 	"path/filepath"
 	"strings"
@@ -261,6 +262,9 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 	if len(blockers) > 0 {
 		return nil, taskconfig.ErrInvalid
 	}
+	if err = (taskauth.Manager{Store: m.Store}).Ensure(ctx, d.ID, actor); err != nil {
+		return nil, err
+	}
 	d.ExecutionGraphID = g.Metadata.ID
 	d, err = tm.Transition(ctx, d, "preparing", actor)
 	if err != nil {
@@ -292,6 +296,9 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 		}
 	}
 	if _, _, err = m.Engine.SaveGraph(ctx, g, 0, actor); err != nil {
+		return fail(err)
+	}
+	if err = (taskauth.Manager{Store: m.Store}).Bind(ctx, d.ID, g); err != nil {
 		return fail(err)
 	}
 	// Dispatch input once after the durable claim. An uncertain publish never

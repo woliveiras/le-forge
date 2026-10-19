@@ -24,7 +24,8 @@ const maxAuditArgBytes = 2 << 10
 // is looked up, authorised against the caller's grants, rate limited,
 // optionally held for human approval, executed, audited, measured and traced.
 type Gateway struct {
-	Registry *Registry
+	Registry          *Registry
+	TaskAuthorization func(context.Context, *Principal, Tool, bool) (bool, string, error)
 	// ResolveTool resolves dynamic tools; errors fail closed. Configured at startup.
 	ResolveTool func(context.Context, string) (Tool, error)
 	Approver    Approver
@@ -125,7 +126,18 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 		g.audit(ctx, p, domain.EvToolDenied, name, args, outcome, 0, err)
 		return nil, err
 	}
-	if grant.RequiresApproval {
+	required, consent := grant.RequiresApproval, ""
+	if g.TaskAuthorization != nil {
+		var e error
+		required, consent, e = g.TaskAuthorization(ctx, p, t, required)
+		if e != nil {
+			outcome = "denied"
+			err = fmt.Errorf("%w: task consent unavailable or stale", ErrDenied)
+			g.audit(ctx, p, domain.EvToolDenied, name, nil, outcome, 0, err)
+			return nil, err
+		}
+	}
+	if required {
 		if rerr := g.approve(ctx, p, name, args); rerr != nil {
 			outcome = "rejected"
 			if errors.Is(rerr, ErrDenied) {
@@ -143,6 +155,18 @@ func (g *Gateway) Invoke(ctx context.Context, p *Principal, name string, args js
 			result := &Result{Content: prepareErr.Error(), IsError: true}
 			g.cap(result)
 			return result, nil
+		}
+	}
+	if g.TaskAuthorization != nil {
+		_, current, e := g.TaskAuthorization(ctx, p, t, grant.RequiresApproval)
+		if e != nil || current != consent {
+			outcome = "denied"
+			err = fmt.Errorf("%w: task consent changed while waiting; retry under current permissions", ErrDenied)
+			g.audit(ctx, p, domain.EvToolDenied, name, nil, outcome, 0, err)
+			return nil, err
+		}
+		if consent != "" {
+			g.audit(ctx, p, "task.authorization_decision", name, nil, consent, 0, nil)
 		}
 	}
 	g.audit(ctx, p, domain.EvToolInvoked, name, args, "started", 0, nil)

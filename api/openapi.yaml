@@ -2143,6 +2143,35 @@ paths:
         "422":
           description: Invalid connection or MCP grant
 
+  /tasks/{tid}/authorization:
+    parameters:
+      - {name: tid, in: path, required: true, schema: {type: string}}
+    get:
+      summary: Review current task consent and capability scope
+      responses:
+        '200': {description: Scope digest, reviewed capabilities and optional consent record}
+    put:
+      summary: Confirm task authorization (admin only)
+      parameters:
+        - {name: If-Match, in: header, required: true, schema: {type: integer, minimum: 0}, description: Consent revision; zero creates the initial record}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode, scope, confirm]
+              properties:
+                mode: {type: string, enum: [ask, workspace, full]}
+                scope: {type: string}
+                confirm: {type: boolean, enum: [true]}
+      responses:
+        '200': {description: Persisted consent; grants and mandatory gates unchanged}
+        '400': {description: Invalid confirmation or unsupported native workspace confinement}
+        '403': {description: Administrator required}
+        '409': {description: Stale task scope or consent revision}
+
 components:
   securitySchemes:
     bearer:
