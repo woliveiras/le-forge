@@ -18,3 +18,10 @@ it('keeps viewer registration disabled',()=>{
  expect(screen.getByLabelText('Repository path').closest('fieldset')?.disabled).toBe(true);
  expect((screen.getByRole('button',{name:'Register project'}) as HTMLButtonElement).disabled).toBe(true);
 });
+
+it('reviews a native preference and preserves selection on a stale update',async()=>{
+ const backend=fakeApi({'GET /api/v1/projects':()=>[{id:'p',revision:2,name:'Repo',path:'/fixture',head:'abc'}],'PUT /api/v1/projects/p/preferences':()=>apiError(409,'Project changed; refresh projects','conflict')});
+ render(<ProjectsPage canEdit nativeProfile/>);
+ await screen.findByText('Repo');await userEvent.selectOptions(screen.getByLabelText('Preferred execution environment'),'local');await userEvent.click(screen.getByRole('button',{name:'Save environment preference'}));await screen.findByText('Project changed; refresh projects');
+ expect(backend.find('PUT','/api/v1/projects/p/preferences')[0].body).toEqual({executionMode:'local'});expect(backend.find('PUT','/api/v1/projects/p/preferences')[0].headers['If-Match']).toBe('2');expect((screen.getByLabelText('Preferred execution environment') as HTMLSelectElement).value).toBe('local');
+});

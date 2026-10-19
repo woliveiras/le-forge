@@ -188,7 +188,7 @@ function Shell() {
           onNavigate={view => go(view === 'administration' ? {view, section: 'health'} : {view})} />
         <main>
           <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
-          {route.view === 'projects' && <ProjectsPage canEdit={info.data?.identity?.role==='admin'}/>}
+          {route.view === 'projects' && <ProjectsPage nativeProfile={info.data?.nativeProfile===true} canEdit={info.data?.identity?.role==='admin'}/>}
           {route.view === 'tasks' && <TasksPage key={route.taskId ?? (route.create ? 'new' : 'list')} id={route.taskId} create={route.create} info={info.data} graphs={list}/>}
           {route.view === 'graphs' && (
             <GraphList

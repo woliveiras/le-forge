@@ -164,6 +164,7 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 
 export const api = {
   projects: () => request<Project[]>(`${V1}/projects`),
+  saveProjectPreference: (id:string,revision:number,executionMode:string)=>request<Project>(`${V1}/projects/${enc(id)}/preferences`,{method:'PUT',headers:{'If-Match':String(revision)},body:{executionMode}}),
   createProject: (input:{name:string;path:string}) => request<Project>(`${V1}/projects`,{method:'POST',body:input}),
   tasks: (after?: string) => request<TaskPage>(`${V1}/tasks`, {query:{after,limit:50}}),
   task: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}`),

@@ -1,4 +1,4 @@
-export interface Project {id:string;revision:number;name:string;path:string;head:string;createdAt:string}
+export interface Project {executionMode?: "workflow"|"local"|"sandbox";id:string;revision:number;name:string;path:string;head:string;createdAt:string}
 import type {Approval, ValidationResult, Execution, ToolGrant, ModelRef } from './types';
 export interface TaskInput {
   executionMode?: "workflow"|"local"|"sandbox";

@@ -41,6 +41,14 @@ func TestRegisterAndCreateIndependentWorktrees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	oldRevision := p.Revision
+	p, err = (Manager{Store: s}).SetExecutionPreference(t.Context(), p.ID, "local", p.Revision, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = (Manager{Store: s}).SetExecutionPreference(t.Context(), p.ID, "sandbox", oldRevision, "admin"); err == nil {
+		t.Fatal("stale preference accepted")
+	}
 	if err = s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -52,6 +60,9 @@ func TestRegisterAndCreateIndependentWorktrees(t *testing.T) {
 	p, err = (Manager{Store: s}).Get(t.Context(), p.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if p.ExecutionMode != "local" || p.Revision <= oldRevision {
+		t.Fatal("preference not retained", p)
 	}
 	workspace := filepath.Join(root, "workspaces")
 	if err = os.Mkdir(workspace, 0700); err != nil {

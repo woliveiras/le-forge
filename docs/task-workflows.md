@@ -368,3 +368,8 @@ unavailable daemon blocks sandbox admission without affecting local tasks.
 Selection does not rewrite the workflow or grant tools; review agent environment
 settings when a workflow is incompatible. Task-owned environment builds are still
 a separate pending step, so workflows requiring them remain blocked explicitly.
+
+Administrators can save a **Preferred execution environment** on the Projects
+page. It is suggested when a project is selected for a task; it does not change
+existing drafts or bypass workflow/capability validation. Concurrent edits require
+refreshing the project before saving again.

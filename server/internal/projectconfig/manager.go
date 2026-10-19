@@ -30,6 +30,7 @@ type Input struct {
 	Path string `json:"path"`
 }
 type Project struct {
+	ExecutionMode string `json:"executionMode,omitempty"`
 	Input
 	ID        string    `json:"id"`
 	Revision  int64     `json:"revision"`
@@ -182,4 +183,32 @@ func CreateWorktree(ctx context.Context, p *Project, commit, root, taskGraphID s
 		return "", err
 	}
 	return dir, nil
+}
+
+func ValidExecutionPreference(mode string) bool {
+	return mode == "workflow" || mode == "local" || mode == "sandbox"
+}
+
+// Preferences are suggestions for future drafts, never execution authority.
+func (m Manager) SetExecutionPreference(ctx context.Context, id, mode string, revision int64, actor string) (*Project, error) {
+	if !ValidExecutionPreference(mode) {
+		return nil, fmt.Errorf("%w: invalid execution preference", ErrInvalid)
+	}
+	p, err := m.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if revision < 1 || p.Revision != revision {
+		return nil, storage.ErrConflict
+	}
+	p.ExecutionMode = mode
+	if err = m.Store.AppendEvent(ctx, domain.NewEvent("project.execution_preference_requested", "", map[string]any{"projectId": id, "mode": mode}).WithActor(actor)); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	p.Revision, err = m.Store.PutSetting(ctx, prefix+id, b, revision, actor)
+	return p, err
 }

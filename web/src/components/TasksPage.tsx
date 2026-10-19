@@ -84,7 +84,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
         <label>Title<input maxLength={200} required value={input.title} onChange={e=>change({title:e.target.value})}/></label>
         <label>Request<textarea required rows={6} maxLength={16384} value={input.request} onChange={e=>change({request:e.target.value})}/></label>
         <ErrorBox error={projects.error}/>
-        <label>Project<select value={input.projectId??''} onChange={e=>{const p=projects.data?.find(p=>p.id===e.target.value);change({projectId:p?.id,baseCommit:p?.head});}}>
+        <label>Project<select value={input.projectId??''} onChange={e=>{const p=projects.data?.find(p=>p.id===e.target.value);change({projectId:p?.id,baseCommit:p?.head,executionMode:p?.executionMode??'workflow'});}}>
           <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
         {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}

@@ -16,3 +16,16 @@ func TestValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestExecutionPreferenceValidation(t *testing.T) {
+	for _, mode := range []string{"workflow", "local", "sandbox"} {
+		if !ValidExecutionPreference(mode) {
+			t.Fatal(mode)
+		}
+	}
+	for _, mode := range []string{"", "host", "LOCAL", "local;run"} {
+		if ValidExecutionPreference(mode) {
+			t.Fatal(mode)
+		}
+	}
+}

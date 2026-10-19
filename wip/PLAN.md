@@ -2035,3 +2035,12 @@ isolation for each enabled agent and a successful bounded read-only daemon probe
 Selection never changes grants or downgrades isolation. Local work does not probe
 or require Docker. Project preference persistence and task-owned environment
 build preparation remain separate implementation tasks.
+
+
+### Remembered project environment preference
+
+FLOW-05b adds an explicit administrator setting on each registered project.
+Optimistic concurrency preserves competing edits; project path and base commit
+remain unchanged. Selecting a project suggests the saved mode for a new draft,
+without rewriting existing drafts or granting execution. Native-only local
+preferences and all task admission checks remain enforced server-side.

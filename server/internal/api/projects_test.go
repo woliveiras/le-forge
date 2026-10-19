@@ -2,11 +2,13 @@ package api_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/projectconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
 	"github.com/woliveiras/le-forge/server/internal/workspace"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -189,5 +191,58 @@ func TestTaskCleanupRequiresStoppedScopeAndReview(t *testing.T) {
 	cmd := exec.Command("git", "-C", repo, "rev-parse", "--verify", "refs/heads/"+preview.Branch)
 	if b, e := cmd.CombinedOutput(); e != nil {
 		t.Fatal("branch lost", e, string(b))
+	}
+}
+
+func TestProjectPreferencesPreserveAuthorizationAndRevision(t *testing.T) {
+	srv, _ := setupApp(t, nil)
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "initial"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if b, e := cmd.CombinedOutput(); e != nil {
+			t.Fatal(e, string(b))
+		}
+	}
+	b, _ := json.Marshal(projectconfig.Input{Name: "Preference fixture", Path: repo})
+	var p projectconfig.Project
+	call(t, srv, "POST", "/api/v1/projects", adminTok, "application/json", string(b), &p)
+	update := func(token, mode string, revision int64) int {
+		t.Helper()
+		req, err := http.NewRequest("PUT", srv.URL+"/api/v1/projects/"+p.ID+"/preferences", strings.NewReader(`{"executionMode":"`+mode+`"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("If-Match", fmt.Sprint(revision))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		return res.StatusCode
+	}
+	for _, tok := range []string{operatorTok, viewerTok} {
+		if code := update(tok, "sandbox", p.Revision); code != 403 {
+			t.Fatal(code)
+		}
+	}
+	if code := update(adminTok, "local", p.Revision); code != 400 {
+		t.Fatal("non-native local preference", code)
+	}
+	if code := update(adminTok, "invalid", p.Revision); code != 400 {
+		t.Fatal(code)
+	}
+	if code := update(adminTok, "sandbox", p.Revision); code != 200 {
+		t.Fatal(code)
+	}
+	if code := update(adminTok, "workflow", p.Revision); code != 409 {
+		t.Fatal("stale write", code)
+	}
+	var projects []projectconfig.Project
+	call(t, srv, "GET", "/api/v1/projects", viewerTok, "", "", &projects)
+	if len(projects) != 1 || projects[0].ExecutionMode != "sandbox" || projects[0].Path != p.Path || projects[0].Head != p.Head {
+		t.Fatal(projects)
 	}
 }
