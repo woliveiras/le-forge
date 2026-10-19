@@ -1966,3 +1966,14 @@ and unsupported-format rejection without persistent changes. The native lifecycl
 contract is qualified for this format-1 path; unknown future migrations remain
 fail-closed and require their own approved procedure. No user installation was
 upgraded. The automated qualifier is `make test-native-upgrade`.
+
+
+### Contextual task decisions
+
+FLOW-06a projects pending approvals from the owned execution graph into task
+progress and renders the existing approval cards in context. The inbox and
+server-side decision permissions are unchanged; viewers cannot decide and
+environment decisions remain administrator-only. Missing/error telemetry is
+not presented as an empty approval list. Activity and diagnostics are loaded
+on demand within the task page, retaining access to detailed runs and evidence.
+Dependency repair and broader child/test aggregation remain separate follow-ups.

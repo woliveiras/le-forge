@@ -1,3 +1,5 @@
+import {TaskDecisions} from './TaskDecisions';
+import {TaskActivity} from './TaskActivity';
 import {useEffect, useState} from 'react';
 import {api, errorMessage} from '../api/client';
 import type {GraphSummary, Info} from '../api/types';
@@ -70,7 +72,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     try{setSaved(await api.startTask(saved.id,review.task.revision));setReview(undefined);}
     catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
-  if(saved&&saved.status!=='draft')return <TaskTracking task={saved} canControl={canStart} nativeProfile={nativeProfile}/>;
+  if(saved&&saved.status!=='draft')return <TaskTracking task={saved} canControl={canStart} canDecide={canEdit} nativeProfile={nativeProfile}/>;
   return <>
     <a href="#/tasks">Back to tasks</a>
     <form className="card form" aria-label="Task request" onSubmit={e=>{e.preventDefault();void save();}}>
@@ -125,8 +127,9 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
   </>;
 }
 
-function TaskTracking({task,canControl,nativeProfile}:{task:TaskDraft;canControl:boolean;nativeProfile:boolean}) {
+function TaskTracking({task,canControl,canDecide,nativeProfile}:{task:TaskDraft;canControl:boolean;canDecide:boolean;nativeProfile:boolean}) {
   const [progress,setProgress]=useState<TaskProgress>();
+  const [showDiagnostics,setShowDiagnostics]=useState(false);
   const [error,setError]=useState<string>();
   const [busy,setBusy]=useState(false);
   const [confirmed,setConfirmed]=useState(false);
@@ -151,6 +154,7 @@ function TaskTracking({task,canControl,nativeProfile}:{task:TaskDraft;canControl
       <ErrorBox error={error}/><Btn onClick={()=>setRefresh(x=>x+1)}>Refresh task</Btn>
       {current.launchError&&<p>{current.launchError}</p>}
       {progress?.blockers.map(b=><p key={b}>{b}</p>)}
+      {graph&&<TaskDecisions graphId={graph} approvals={error?undefined:progress?.pendingApprovals} canDecide={canDecide} canAdmin={canControl} onChanged={()=>setRefresh(x=>x+1)}/>}
       {progress?.workspacePath&&<WorkspaceHandoff path={progress.workspacePath} nativeProfile={nativeProfile}/>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
@@ -159,6 +163,7 @@ function TaskTracking({task,canControl,nativeProfile}:{task:TaskDraft;canControl
       <details><summary>Workflow and executions</summary><p>Source: {task.graphId} · Version {task.graphVersion} · Execution copy: {graph||'not prepared'}</p>
         <ul>{progress?.executions.map(x=><li key={x.id}><a href={`#/g/${encodeURIComponent(x.graphId)}/runs?execution=${encodeURIComponent(x.id)}&section=result`}>{x.nodeId}: {x.status}</a></li>)}</ul>
       </details>
+      {graph&&<details onToggle={e=>setShowDiagnostics(e.currentTarget.open)}><summary>Activity and diagnostics</summary>{showDiagnostics&&<TaskActivity graphId={graph} role={canControl?'admin':canDecide?'operator':'viewer'}/>}</details>}
       {canControl&&progress?.state!=='cancelled'&&<><label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>Stop this task's execution copy and retain its data.</label><Btn disabled={busy||!confirmed} onClick={()=>void cancel()}>Stop task</Btn></>}
       <p>Task completion does not itself commit, push or delete the workspace. Agent actions still depend on the workflow grants and approvals.</p>
     </article>

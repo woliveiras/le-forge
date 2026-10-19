@@ -250,12 +250,13 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 }
 
 type View struct {
-	WorkspacePath string              `json:"workspacePath,omitempty"`
-	Task          *taskconfig.Draft   `json:"task"`
-	State         string              `json:"state"`
-	Executions    []*domain.Execution `json:"executions"`
-	Result        *domain.Execution   `json:"result,omitempty"`
-	Blockers      []string            `json:"blockers"`
+	PendingApprovals []*domain.Approval  `json:"pendingApprovals"`
+	WorkspacePath    string              `json:"workspacePath,omitempty"`
+	Task             *taskconfig.Draft   `json:"task"`
+	State            string              `json:"state"`
+	Executions       []*domain.Execution `json:"executions"`
+	Result           *domain.Execution   `json:"result,omitempty"`
+	Blockers         []string            `json:"blockers"`
 }
 
 func (m Manager) View(ctx context.Context, id string) (*View, error) {
@@ -341,7 +342,11 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 		v.Blockers = append(v.Blockers, "Approval history exceeds this bounded view; completion cannot be inferred.")
 		return v, nil
 	}
+	v.PendingApprovals = []*domain.Approval{}
 	for _, approval := range approvals {
+		if approval.Status == domain.ApprovalPending {
+			v.PendingApprovals = append(v.PendingApprovals, approval)
+		}
 		if approval.Kind == domain.ApprovalMessage && (approval.Status == domain.ApprovalRejected || approval.Status == domain.ApprovalExpired) {
 			failed = true
 			v.Blockers = append(v.Blockers, "A workflow message approval was rejected or expired.")

@@ -103,3 +103,29 @@ test('previews a synthetic example and runs it only after explicit review',async
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
 });
+
+test('keeps task approvals contextual and preserves viewer restrictions and decision outcomes',async({page})=>{
+ const graph={metadata:{id:'task-decision-flow',name:'Task decision flow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'event'}}],channels:[{id:'requests',to:['worker'],approval:true,types:['feature.request']}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>{if(!localStorage.getItem('leforgeToken'))localStorage.setItem('leforgeToken','e2e-admin-token');});
+ for(const decision of ['approve','reject']) {
+  const response=await page.request.post('/api/v1/tasks',{headers,data:{title:`Decision ${decision}`,request:'Explain fixture',outcome:'freeform',graphId:'task-decision-flow',graphVersion:1,nodeId:'worker',resultNodeId:'worker',channelId:'requests',messageType:'feature.request',payloadJson:'{}'}});
+  expect(response.status()).toBe(201);const draft=await response.json();
+  expect((await page.request.post(`/api/v1/tasks/${draft.id}/start`,{headers:{...headers,'If-Match':String(draft.revision)},data:{confirm:true}})).status()).toBe(202);
+  await page.goto(`/#/tasks/${draft.id}`);const taskURL=page.url();
+  const decisions=page.getByRole('region',{name:'Task decisions',exact:true});
+  await expect(decisions.getByRole('heading',{name:'Your decision is needed'})).toBeVisible();
+  await decisions.getByRole('button',{name:decision==='approve'?'Approve':'Reject',exact:true}).click();
+  await expect(page).toHaveURL(taskURL);
+  await expect(page.getByRole('status')).toHaveText(`Task status: ${decision==='approve'?'succeeded':'failed'}`);
+  await expect(decisions).toContainText('No pending approvals in the latest task snapshot.');
+  await page.reload();await expect(page.getByRole('status')).toHaveText(`Task status: ${decision==='approve'?'succeeded':'failed'}`);
+  await page.getByText('Activity and diagnostics',{exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Task activity',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Task events'})).toBeVisible();
+ }
+ const viewerResponse=await page.request.post('/api/v1/tasks',{headers,data:{title:'Viewer decision',request:'Explain fixture',outcome:'freeform',graphId:'task-decision-flow',graphVersion:1,nodeId:'worker',resultNodeId:'worker',channelId:'requests',messageType:'feature.request',payloadJson:'{}'}});
+ const viewerTask=await viewerResponse.json();expect((await page.request.post(`/api/v1/tasks/${viewerTask.id}/start`,{headers:{...headers,'If-Match':String(viewerTask.revision)},data:{confirm:true}})).status()).toBe(202);
+ await page.evaluate(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));await page.goto(`/#/tasks/${viewerTask.id}`);await page.reload();
+ const decisions=page.getByRole('region',{name:'Task decisions',exact:true});await expect(decisions).toContainText('Waiting for an authorized operator to decide.');await expect(decisions.getByRole('button',{name:'Approve',exact:true})).toHaveCount(0);
+});

@@ -1,5 +1,5 @@
 export interface Project {id:string;revision:number;name:string;path:string;head:string;createdAt:string}
-import type { ValidationResult, Execution, ToolGrant, ModelRef } from './types';
+import type {Approval, ValidationResult, Execution, ToolGrant, ModelRef } from './types';
 export interface TaskInput {
   channelId?: string;
   messageType?: string;
@@ -29,4 +29,4 @@ export interface TaskDraft extends TaskInput {
 export interface TaskPage {items: TaskDraft[]; next?: string}
 export interface TaskReview {project?:Project;workspacePath?:string;task: TaskDraft; currentGraphVersion: number; validation: ValidationResult; blockers: string[]; canStart: boolean; agents?: {id:string;model:ModelRef;grants:ToolGrant[];isolation:string}[]; executionGraphId: string; grants: ToolGrant[]; model: ModelRef; isolation: string}
 
-export interface TaskProgress {workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
+export interface TaskProgress {pendingApprovals?:Approval[]|null;workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
