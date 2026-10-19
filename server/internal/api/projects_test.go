@@ -119,3 +119,75 @@ func TestProjectTaskWorktreeThroughAPI(t *testing.T) {
 		t.Fatal("dirty source changed", err)
 	}
 }
+
+func TestTaskCleanupRequiresStoppedScopeAndReview(t *testing.T) {
+	srv, _ := setupApp(t, nil)
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "initial"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if b, e := cmd.CombinedOutput(); e != nil {
+			t.Fatal(e, string(b))
+		}
+	}
+	b, _ := json.Marshal(projectconfig.Input{Name: "Cleanup fixture", Path: repo})
+	var p projectconfig.Project
+	if code := call(t, srv, "POST", "/api/v1/projects", adminTok, "application/json", string(b), &p); code != 201 {
+		t.Fatal(code)
+	}
+	call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", taskGraph, nil)
+	var input taskconfig.Input
+	if err := json.Unmarshal([]byte(taskBody), &input); err != nil {
+		t.Fatal(err)
+	}
+	input.ProjectID = p.ID
+	input.BaseCommit = p.Head
+	input.ResultNodeID = input.NodeID
+	b, _ = json.Marshal(input)
+	var d taskconfig.Draft
+	call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", string(b), &d)
+	if code := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); code != 202 {
+		t.Fatal(code)
+	}
+	waitFor(t, 5*time.Second, "completion", func() bool {
+		var v taskrun.View
+		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", adminTok, "", "", &v)
+		return v.State == "succeeded"
+	})
+	endpoint := "/api/v1/tasks/" + d.ID + "/cleanup"
+	if code := call(t, srv, "GET", endpoint, adminTok, "", "", nil); code != 409 {
+		t.Fatal("running graph cleanup", code)
+	}
+	call(t, srv, "POST", "/api/v1/tasks/"+d.ID+"/cancel", adminTok, "application/json", `{"confirm":true}`, nil)
+	waitFor(t, 5*time.Second, "cancelled", func() bool {
+		var v taskrun.View
+		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", adminTok, "", "", &v)
+		return v.State == "cancelled"
+	})
+	var preview projectconfig.CleanupPreview
+	if code := call(t, srv, "GET", endpoint, adminTok, "", "", &preview); code != 200 || !preview.Clean {
+		t.Fatal(code, preview)
+	}
+	body := `{"confirm":true,"fingerprint":"` + preview.Fingerprint + `"}`
+	for _, tok := range []string{operatorTok, viewerTok} {
+		if code := call(t, srv, "POST", endpoint, tok, "application/json", body, nil); code != 403 {
+			t.Fatal(code)
+		}
+	}
+	if code := call(t, srv, "POST", endpoint, adminTok, "application/json", `{"confirm":false}`, nil); code != 400 {
+		t.Fatal(code)
+	}
+	if code := call(t, srv, "GET", endpoint+"?node=unknown", adminTok, "", "", nil); code != 404 {
+		t.Fatal(code)
+	}
+	if code := call(t, srv, "POST", endpoint, adminTok, "application/json", body, nil); code != 200 {
+		t.Fatal(code)
+	}
+	if _, err := os.Stat(preview.Path); !os.IsNotExist(err) {
+		t.Fatal("checkout not removed", err)
+	}
+	cmd := exec.Command("git", "-C", repo, "rev-parse", "--verify", "refs/heads/"+preview.Branch)
+	if b, e := cmd.CombinedOutput(); e != nil {
+		t.Fatal("branch lost", e, string(b))
+	}
+}

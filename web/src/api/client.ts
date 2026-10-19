@@ -170,6 +170,8 @@ export const api = {
   saveTask: (input: TaskInput, id?: string, revision?: number) => request<TaskDraft>(`${V1}/tasks${id ? '/'+enc(id) : ''}`, {method:id?'PUT':'POST',body:input,headers:id?{'If-Match':String(revision)}:undefined}),
   taskProgress: (id: string) => request<TaskProgress>(`${V1}/tasks/${enc(id)}/progress`),
   startTask: (id: string, revision: number) => request<TaskDraft>(`${V1}/tasks/${enc(id)}/start`, {method:'POST',body:{confirm:true},headers:{'If-Match':String(revision)}}),
+  previewTaskCleanup: (id:string,node='',replica=0) => request<import('./tasks').CleanupPreview>(`${V1}/tasks/${enc(id)}/cleanup?node=${enc(node)}&replica=${replica}`),
+  cleanupTaskWorkspace: (id:string,node:string,replica:number,fingerprint:string) => request<{removed:boolean}>(`${V1}/tasks/${enc(id)}/cleanup?node=${enc(node)}&replica=${replica}`,{method:'POST',body:{confirm:true,fingerprint}}),
   cancelTask: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}/cancel`, {method:'POST',body:{confirm:true}}),
   reviewTask: (id: string) => request<TaskReview>(`${V1}/tasks/${enc(id)}/review`),
   delegationPolicy: () => request<DelegationPolicyView>(`${V1}/delegation-policy`),

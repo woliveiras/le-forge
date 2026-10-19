@@ -7,6 +7,7 @@ import type {GraphSummary, Info} from '../api/types';
 import type {TaskDraft, TaskInput, TaskReview, TaskProgress} from '../api/tasks';
 import {useAsync} from '../hooks/useData';
 import {Btn, ErrorBox} from './common';
+import {TaskCleanup} from './TaskCleanup';
 import {WorkspaceHandoff} from './WorkspaceHandoff';
 import {SyntheticTaskExample} from './SyntheticTaskExample';
 import {TaskEvidence} from './TaskEvidence';
@@ -158,6 +159,7 @@ function TaskTracking({task,canControl,canDecide,nativeProfile}:{task:TaskDraft;
       {progress?.blockers.map(b=><p key={b}>{b}</p>)}
       {graph&&<TaskDecisions graphId={graph} approvals={error?undefined:progress?.pendingApprovals} canDecide={canDecide} canAdmin={canControl} onChanged={()=>setRefresh(x=>x+1)}/>}
       {progress?.workspacePath&&<WorkspaceHandoff path={progress.workspacePath} nativeProfile={nativeProfile}/>}
+      {canControl&&progress?.state==='cancelled'&&current.projectId&&<TaskCleanup taskId={task.id} workspaces={progress.workspaces??[]} onChanged={()=>setRefresh(x=>x+1)}/>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
       {graph&&<TaskEvidence key={graph} graphId={graph} workspaces={progress?.workspaces??[]} nativeProfile={nativeProfile} executions={progress?.executions??[]} role={canControl?'admin':canDecide?'operator':'viewer'}/>}

@@ -116,6 +116,8 @@ func (s *Server) routes() {
 		{"GET /api/v1/tasks/{tid}/review", R, s.reviewTask},
 		{"GET /api/v1/tasks/{tid}/progress", R, s.taskProgress},
 		{"POST /api/v1/tasks/{tid}/{action}", A, s.taskAction},
+		{"GET /api/v1/tasks/{tid}/cleanup", A, s.taskCleanup},
+		{"POST /api/v1/tasks/{tid}/cleanup", A, s.taskCleanup},
 		{"GET /api/v1/delegation-policy", R, s.delegationPolicy},
 		{"PUT /api/v1/delegation-policy", A, s.delegationPolicy},
 		{"GET /api/v1/delegation-profiles", R, s.delegationProfiles},

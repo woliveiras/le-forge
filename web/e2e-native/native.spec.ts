@@ -126,3 +126,23 @@ test('native task preparation failure is actionable and preserves the blocking f
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: blocked');expect(readFileSync(obstruction,'utf8')).toBe('preserve');
  expect(await(await page.request.get(`/api/v1/graphs/${graphId}/executions`,{headers})).json()).toEqual([]);
 });
+
+test('stopped native task cleanup requires review and retains its branch and source',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();const headers={Authorization:`Bearer ${token}`};
+ const projects=await(await page.request.get('/api/v1/projects',{headers})).json();const project=projects.find((p:{name:string})=>p.name==='Native repository');expect(project).toBeTruthy();
+ const graph={metadata:{id:'native-cleanup'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ const response=await page.request.post('/api/v1/tasks',{headers,data:{title:'Reviewed cleanup',request:'Synthetic cleanup check',outcome:'freeform',graphId:graph.metadata.id,graphVersion:1,nodeId:'worker',resultNodeId:'worker',projectId:project.id,baseCommit:project.head}});expect(response.status()).toBe(201);const task=await response.json();
+ expect((await page.request.post(`/api/v1/tasks/${task.id}/start`,{headers:{...headers,'If-Match':String(task.revision)},data:{confirm:true}})).status()).toBe(202);
+ await page.goto(`/#/tasks/${task.id}`);await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await expect(page.getByText('Review workspace cleanup',{exact:true})).toHaveCount(0);
+ await page.getByRole('checkbox',{name:"Stop this task's execution copy and retain its data."}).check();await page.getByRole('button',{name:'Stop task',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
+ await page.getByText('Review workspace cleanup',{exact:true}).click();await page.getByRole('button',{name:'Preview cleanup',exact:true}).click();
+ const preview=page.getByRole('region',{name:'Workspace cleanup preview'});await expect(preview).toContainText('Working tree clean.');await expect(page.getByRole('button',{name:'Remove reviewed checkout'})).toBeDisabled();
+ const path=await preview.locator('code').textContent();expect(path).toContain('task-run-');
+ await page.getByRole('checkbox',{name:'I stopped external writers and authorize removal of this clean checkout, keeping its branch.'}).check();await page.getByRole('button',{name:'Remove reviewed checkout'}).click();await expect(page.getByText('Checkout removed. Its branch and task history were retained.')).toBeVisible();
+ expect(()=>readFileSync(join(path!,'tracked.txt'),'utf8')).toThrow();expect(readFileSync(join(project.path,'dirty.txt'),'utf8')).toBe('preserve');
+ const branch=`leforge/task-run-${task.id.slice(4)}`;expect(execFileSync('git',['-C',project.path,'rev-parse','--verify',`refs/heads/${branch}`],{encoding:'utf8'}).trim()).toBe(project.head);
+ await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
+});

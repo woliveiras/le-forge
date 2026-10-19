@@ -143,3 +143,42 @@ func (s *Server) taskAction(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 202, d)
 	return nil
 }
+
+func (s *Server) taskCleanup(w http.ResponseWriter, r *http.Request) error {
+	node := r.URL.Query().Get("node")
+	replica := 0
+	if raw := r.URL.Query().Get("replica"); raw != "" {
+		var err error
+		replica, err = strconv.Atoi(raw)
+		if err != nil || replica < 0 {
+			return badRequest("invalid replica")
+		}
+	}
+	if r.Method == http.MethodGet {
+		preview, err := s.taskRunner().PreviewCleanup(r.Context(), r.PathValue("tid"), node, replica)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, 200, preview)
+		return nil
+	}
+	var in struct {
+		Confirm     bool   `json:"confirm"`
+		Fingerprint string `json:"fingerprint"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil || !in.Confirm || len(in.Fingerprint) != 64 {
+		return badRequest("review and explicit cleanup confirmation are required")
+	}
+	var extra any
+	if dec.Decode(&extra) != io.EOF {
+		return badRequest("expected one JSON object")
+	}
+	if err := s.taskRunner().Cleanup(r.Context(), r.PathValue("tid"), node, replica, in.Fingerprint, identityFrom(r.Context()).Name); err != nil {
+		return err
+	}
+	writeJSON(w, 200, map[string]bool{"removed": true})
+	return nil
+}

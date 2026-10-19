@@ -2014,3 +2014,13 @@ FLOW-06c distinguishes a failed replica setup before any execution from a runnin
 task. The task becomes visibly blocked, retains its data and directs users to
 Activity and diagnostics. It does not infer terminal completion or replay work.
 Unit, API and native browser fixtures cover the real filesystem failure boundary.
+
+
+### Reviewed native task worktree cleanup
+
+LOCAL-04a completes the registered-project worktree lifecycle with explicit
+administrator preview/confirmation after task cancellation. Cleanup retains
+branches and history, rejects dirty/untracked/ignored files and revalidates the
+checkout binding and review fingerprint before non-force Git removal. Locked
+checkouts fail safely. The user must stop independent external writers first.
+Only disposable repositories were removed in automated validation.

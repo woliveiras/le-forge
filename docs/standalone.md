@@ -276,3 +276,15 @@ migration and recovery procedure. The current launcher refuses unknown formats
 before opening the database. To recover an old snapshot, preserve the failed
 profile separately and use the documented restore procedure at the original,
 absent path. Never overwrite or delete the failed profile as an automatic repair.
+
+
+### Cleaning a finished task worktree
+
+Stop the task and wait for **cancelled**, then expand **Review workspace cleanup**.
+Select the shared worktree or an agent replica, inspect the path, retained branch,
+commit and status, and confirm removal only after stopping external writers.
+Only administrators can request cleanup. Modified, untracked and ignored files
+block removal; preserve or handle them yourself before reviewing again. Locked
+worktrees and changed reviews are rejected. Forge never uses force removal and
+keeps the branch, task history and registered source repository. This removes one
+checkout at a time; it does not delete database records or other task worktrees.

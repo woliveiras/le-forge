@@ -31,3 +31,5 @@ export interface TaskReview {project?:Project;workspacePath?:string;task: TaskDr
 
 export interface TaskWorkspace {nodeId:string;replica:number;path:string;branch?:string;inspectionNode:string;subdir:string}
 export interface TaskProgress {workspaces?:TaskWorkspace[];pendingApprovals?:Approval[]|null;workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
+
+export interface CleanupPreview {path:string;branch:string;head:string;status:string;clean:boolean;fingerprint:string}
