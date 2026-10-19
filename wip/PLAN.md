@@ -1836,3 +1836,19 @@ macOS arm64 is the initial qualification target; other target builds need their
 own smoke evidence. Native initialization, locking, occupied-port handling,
 operational recovery and stdio MCP remain implementation tasks. This was a read-only
 architecture audit alongside Phase A, not installation activation or completion.
+
+### Initial native test baseline — 2026-10-19
+
+LOCAL-02 now packages the host binary and UI, initializes a separate private
+SQLite/filesystem-queue profile, and starts/stops it in the foreground without
+Docker. Startup locks the data directory and reserves listeners before starting
+agents. Configuration does not silently import another installation's environment.
+The native production-binary browser journey proved login, repository registration,
+reviewed task/worktree execution, reload and file inspection with a synthetic echo
+runtime. Tests, lint, standard/native builds and browser regressions all passed
+(303 frontend tests, Go/Python, 85 main browser cases plus hosted CIMD/provider and
+native cases). The user's first native test can now use docs/standalone.md.
+This baseline was delivered after the core Phase A task/project/channel flow;
+advanced Phase A items and LOCAL-03–07 remain explicitly open. Neither full roadmap
+completion nor real-provider/stdio qualification is claimed. No current installation
+or persistent user data was changed, and no push or release was performed.

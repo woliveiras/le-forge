@@ -23,3 +23,6 @@ web/test-results-providers/
 
 # Compiled React fixture for real sandbox preview tests.
 web/preview-fixture-dist/
+
+# Generated native distribution bundles (not installation data).
+/dist/native/

@@ -1,5 +1,6 @@
-# LeForge developer tasks. Only Docker is required: Go runs in a container
-# via scripts/go.sh. Python (3.10+) and Node (20+) are used locally if present.
+# LeForge developer tasks. Standard Go targets use Docker via scripts/go.sh.
+# build-native and test-native-browser use the installed host Go toolchain.
+# Python and Node/pnpm run locally for their corresponding suites.
 
 GO        := ./scripts/go.sh
 COMPOSE   := docker compose
@@ -108,3 +109,11 @@ test-preview: ## Real sandbox preview gateway, HTTP client and lifecycle checks
 .PHONY: test-workspace-journal
 test-workspace-journal: ## Kernel process/transient/offline journal tests in the dedicated Linux daemon
 	./scripts/test-workspace-journal.sh
+
+.PHONY: build-native
+build-native: ## Build the current host's native bundle without Docker; does not initialize or start it
+	./scripts/build-native.sh
+
+.PHONY: test-native-browser
+test-native-browser: ## Chromium against a disposable production native profile; no Docker required
+	./scripts/test-native-browser.sh

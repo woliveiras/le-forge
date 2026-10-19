@@ -59,7 +59,9 @@ isolation:
   mode: process
 ```
 
-The [without-Docker setup](docs/getting-started.md#5-run-without-docker) uses
+The [native bundle and private profile](docs/standalone.md#initial-native-bundle)
+provide explicit initialization and foreground start without Docker. The existing
+[manual without-Docker setup](docs/getting-started.md#5-run-without-docker) uses
 SQLite and filesystem queues, so it does not require the Compose services.
 Install the project's tools on that host: for a React project, Node and the
 chosen package manager must be available to LeForge. Commands start in the

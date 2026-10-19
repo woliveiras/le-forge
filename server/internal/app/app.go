@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -583,6 +584,28 @@ func (a *App) loadGraph(ctx context.Context, file string) error {
 
 // Run serves until ctx is cancelled, then shuts down gracefully.
 func (a *App) Run(ctx context.Context) error {
+	// Reserve every listener before admitting any agents. An occupied console,
+	// callback or preview port must not start background work without a UI.
+	publicListener, err := net.Listen("tcp", a.Config.Server.Addr)
+	if err != nil {
+		return fmt.Errorf("console listener: %w", err)
+	}
+	defer publicListener.Close()
+	var previewListener, internalListener net.Listener
+	if a.PreviewGateway != nil {
+		previewListener, err = net.Listen("tcp", a.Config.Preview.Addr)
+		if err != nil {
+			return fmt.Errorf("preview listener: %w", err)
+		}
+		defer previewListener.Close()
+	}
+	if a.API.InternalHandler() != nil {
+		internalListener, err = net.Listen("tcp", a.Config.Server.InternalAddr)
+		if err != nil {
+			return fmt.Errorf("callback listener: %w", err)
+		}
+		defer internalListener.Close()
+	}
 	if err := a.Engine.Start(ctx); err != nil {
 		return err
 	}
@@ -638,9 +661,9 @@ func (a *App) Run(ctx context.Context) error {
 		previewServer = &http.Server{Addr: a.Config.Preview.Addr, Handler: a.PreviewGateway, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 		go func() {
 			if a.Config.Preview.TLSCert != "" {
-				errc <- previewServer.ListenAndServeTLS(a.Config.Preview.TLSCert, a.Config.Preview.TLSKey)
+				errc <- previewServer.ServeTLS(previewListener, a.Config.Preview.TLSCert, a.Config.Preview.TLSKey)
 			} else {
-				errc <- previewServer.ListenAndServe()
+				errc <- previewServer.Serve(previewListener)
 			}
 		}()
 	}
@@ -649,13 +672,13 @@ func (a *App) Run(ctx context.Context) error {
 		internal = &http.Server{Addr: a.Config.Server.InternalAddr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
 		go func() {
 			a.Log.Info("callback API listening", "addr", a.Config.Server.InternalAddr)
-			errc <- internal.ListenAndServe()
+			errc <- internal.Serve(internalListener)
 		}()
 	}
 	go func() {
 		a.Log.Info("listening", "addr", a.Config.Server.Addr, "queue", a.Broker.Name(), "storage", a.Store.Name(),
 			"providers", strings.Join(a.Models.Names(), ","), "default_provider", a.Models.DefaultName())
-		errc <- srv.ListenAndServe()
+		errc <- srv.Serve(publicListener)
 	}()
 	select {
 	case err := <-errc:
