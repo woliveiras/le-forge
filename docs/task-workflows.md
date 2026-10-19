@@ -726,3 +726,16 @@ Git history; task completion does not infer a commit. Remote push state is not
 verified by this screen and no network fetch is performed to infer it. The task
 lifecycle never commits or pushes automatically; existing granted agent tools
 remain visible in the pre-start review.
+
+
+## Following a prompt task
+
+The task page shows the request, current stage, next action, result and workspace
+changes together. Pending approvals use the same durable IDs as the global inbox;
+approval resumes the existing workflow, while rejection remains in decision history.
+Stopping preserves files/history and requests cancellation, without undoing external
+effects. A refresh error does not imply success. Tool outcomes, traces, usage and
+delegation trees remain available under evidence and diagnostics. Review configuration
+when a mandatory policy denies an operation; approval cannot override that denial.
+Task authorization modes and their native limitations are documented in
+[Task authorization](task-authorization.md).

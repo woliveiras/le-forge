@@ -2488,3 +2488,16 @@ retain task and revision evidence without request payloads.
 Verified: focused Go policy, storage/gateway and API tests; 15 focused Vitest tests;
 Chromium mode/reload/start/live reduction journey including denied expansion.
 Live credentials and installation activation remain deferred.
+
+
+### PROMPT-06 — Task journey and decision history
+
+Task tracking now explains the current stage and next action, prioritizes pending
+decisions, distinguishes cancellation/failure/review, and suppresses stale progress
+claims after refresh failure. Durable decision history includes rejected requests;
+the task and global inbox share approval IDs. Existing in-page result, workspace
+diffs, tool evidence, execution tree and diagnostics remain available. Mandatory
+denials point to configuration, without a bypass. Stale consent is a review blocker.
+
+Verified: taskrun/API Go suites; 22 focused UI tests; two Chromium journeys approve
+and reject the same durable workflow gate and verify reload/history/result states.

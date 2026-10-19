@@ -1,3 +1,4 @@
+import {TaskJourney} from "./TaskJourney";
 import {TaskAuthorization} from "./TaskAuthorization";
 import {RepositoryImport} from './RepositoryImport';
 import {TaskIssueSource} from "./TaskIssueSource";
@@ -209,6 +210,7 @@ function TaskTracking({task,canControl,canDecide,nativeProfile}:{task:TaskDraft;
     <article className="card" aria-label="Task progress">
       <h2>{task.title}</h2><p>{task.request}</p>
       <p role="status">{progress?`Task status: ${progress.state}`:'Loading progress…'}</p>
+      <TaskJourney progress={progress} error={error}/>
       <ErrorBox error={error}/><Btn onClick={()=>setRefresh(x=>x+1)}>Refresh task</Btn>
       <TaskAuthorization taskId={task.id} canEdit={canControl&&["running","starting"].includes(current.status)} running onChanged={()=>setRefresh(x=>x+1)}/>
       {current.launchError&&<p>{current.launchError}</p>}

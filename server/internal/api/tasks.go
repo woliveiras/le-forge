@@ -12,12 +12,13 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/graph"
+	"github.com/woliveiras/le-forge/server/internal/taskauth"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
 )
 
 func taskError(err error) error {
-	if errors.Is(err, taskconfig.ErrInvalid) {
+	if errors.Is(err, taskconfig.ErrInvalid) || errors.Is(err, taskauth.ErrInvalid) {
 		return &engine.ValidationError{Report: &graph.Report{Errors: []graph.Issue{{Path: "task", Message: err.Error()}}}}
 	}
 	return err

@@ -199,6 +199,9 @@ func TestTaskMessageRejectionIsNotReportedAsRunningForever(t *testing.T) {
 	}
 	var v taskrun.View
 	call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
+	if len(v.Decisions) != 1 || v.Decisions[0].ID != approvals[0].ID {
+		t.Fatal("decision identity missing", v.Decisions)
+	}
 	if len(v.PendingApprovals) != 1 || v.PendingApprovals[0].ID != approvals[0].ID || v.PendingApprovals[0].GraphID != taskrun.ExecutionID(d.ID) {
 		t.Fatal("missing scoped pending approval", v.PendingApprovals)
 	}
@@ -210,7 +213,7 @@ func TestTaskMessageRejectionIsNotReportedAsRunningForever(t *testing.T) {
 	}
 	waitFor(t, 5*time.Second, "rejected task", func() bool {
 		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
-		return v.State == "failed" && len(v.Executions) == 0 && v.PendingApprovals != nil && len(v.PendingApprovals) == 0
+		return v.State == "failed" && len(v.Executions) == 0 && v.PendingApprovals != nil && len(v.PendingApprovals) == 0 && len(v.Decisions) == 1 && v.Decisions[0].ID == approvals[0].ID && v.Decisions[0].Status == domain.ApprovalRejected
 	})
 }
 

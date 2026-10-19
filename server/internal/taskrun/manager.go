@@ -199,6 +199,15 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 			r.WorkspacePath = filepath.Join(m.Workspaces.Root, g.Metadata.ID)
 		}
 	}
+	if source.Metadata.Version == d.GraphVersion {
+		consent, consentErr := (taskauth.Manager{Store: m.Store}).Review(ctx, d.ID)
+		if consentErr != nil {
+			return nil, consentErr
+		}
+		if consent.Record != nil && consent.Record.Scope != consent.Scope {
+			r.Blockers = append(r.Blockers, "Task authorization is stale. Review and confirm its current scope before starting.")
+		}
+	}
 	r.CanStart = len(r.Blockers) == 0
 	r.EnvironmentDefinition = g.Spec.Environment
 	if g.Spec.Environment != nil && d.Status == "draft" {
@@ -357,6 +366,7 @@ func workspaceScopes(g *domain.Graph, st *engine.GraphStatus) []WorkspaceScope {
 }
 
 type View struct {
+	Decisions        []*domain.Approval  `json:"decisions"`
 	Environment      *environment.View   `json:"environment,omitempty"`
 	Workspaces       []WorkspaceScope    `json:"workspaces"`
 	PendingApprovals []*domain.Approval  `json:"pendingApprovals"`
@@ -462,6 +472,7 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 		v.Blockers = append(v.Blockers, "Approval history exceeds this bounded view; completion cannot be inferred.")
 		return v, nil
 	}
+	v.Decisions = approvals
 	v.PendingApprovals = []*domain.Approval{}
 	for _, approval := range approvals {
 		if approval.Status == domain.ApprovalPending {

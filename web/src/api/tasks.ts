@@ -34,7 +34,7 @@ export interface TaskPage {items: TaskDraft[]; next?: string}
 export interface TaskReview {canPrepareEnvironment?:boolean;environmentDefinition?:import('./types').EnvironmentSpec;environment?:import('./types').EnvironmentView;project?:Project;workspacePath?:string;task: TaskDraft; currentGraphVersion: number; validation: ValidationResult; blockers: string[]; canStart: boolean; agents?: {id:string;model:ModelRef;grants:ToolGrant[];isolation:string}[]; executionGraphId: string; grants: ToolGrant[]; model: ModelRef; isolation: string}
 
 export interface TaskWorkspace {nodeId:string;replica:number;path:string;branch?:string;inspectionNode:string;subdir:string}
-export interface TaskProgress {environment?:import('./types').EnvironmentView;workspaces?:TaskWorkspace[];pendingApprovals?:Approval[]|null;workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
+export interface TaskProgress {decisions?:Approval[];environment?:import('./types').EnvironmentView;workspaces?:TaskWorkspace[];pendingApprovals?:Approval[]|null;workspacePath?:string; task: TaskDraft; state: string; executions: Execution[]; result?: Execution; blockers: string[] }
 
 export interface CleanupPreview {path:string;branch:string;head:string;status:string;clean:boolean;fingerprint:string}
 
