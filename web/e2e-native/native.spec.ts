@@ -28,3 +28,15 @@ test('native profile authenticates, registers a local repo and executes a review
  // Inspect the handoff target without launching an external editor during tests.
  await page.getByRole('link',{name:'Workspace files',exact:true}).click();await expect(page).toHaveURL(/task-run-.*\/files/);
 });
+
+test('native first-use example needs no external account or model',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
+ await page.goto('/#/tasks');await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('button',{name:'Preview example'}).click();
+ await page.getByRole('checkbox',{name:'Create the synthetic workflow and task draft.'}).check();await page.getByRole('button',{name:'Prepare example'}).click();
+ await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');
+ await page.getByRole('button',{name:'Review requirements'}).click();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+});

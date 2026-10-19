@@ -26,3 +26,5 @@ web/preview-fixture-dist/
 
 # Generated native distribution bundles (not installation data).
 /dist/native/
+
+/web/test-results-native/

@@ -32,6 +32,8 @@ test('saves and resumes a reviewed request without starting or changing the work
 
 test('viewer cannot save a task through the UI or API',async({page})=>{
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));
+ await page.goto('/#/tasks');
+ await expect(page.getByRole('button',{name:'Preview example'})).toHaveCount(0);
  await page.goto('/#/tasks/new');
  await expect(page.getByRole('button',{name:'Save draft'})).toBeDisabled();
  expect((await page.request.post('/api/v1/tasks',{headers:{Authorization:'Bearer e2e-viewer-token'},data:{}})).status()).toBe(403);
@@ -76,4 +78,26 @@ test('reviews structured channel input and reports the declared result with reta
  await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await expect(page.getByText('echoed 1 message(s)',{exact:true})).toBeVisible();
+});
+
+test('previews a synthetic example and runs it only after explicit review',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks');
+ await page.getByRole('button',{name:'Preview example'}).click();
+ await expect(page.getByRole('button',{name:'Prepare example'})).toBeDisabled();
+ await page.getByRole('checkbox',{name:'Create the synthetic workflow and task draft.'}).check();
+ await page.getByRole('button',{name:'Prepare example'}).click();
+ await expect(page).toHaveURL(/#\/tasks\/tsk_/);
+ await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');
+ const id=page.url().split('/').pop()!;
+ const draft=await(await page.request.get(`/api/v1/tasks/${id}`,{headers})).json();
+ expect(draft.status).toBe('draft');
+ expect(await(await page.request.get(`/api/v1/graphs/${draft.graphId}/executions`,{headers})).json()).toEqual([]);
+ const graph=await(await page.request.get(`/api/v1/graphs/${draft.graphId}`,{headers})).json();
+ expect(graph.graph.spec.nodes[0].runtime.kind).toBe('echo');expect(graph.graph.spec.nodes[0].tools??[]).toEqual([]);
+ await page.getByRole('button',{name:'Review requirements'}).click();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
+ await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
 });

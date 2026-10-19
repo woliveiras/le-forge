@@ -72,6 +72,12 @@ Ctrl-C and start it again to retain state. SQLite and filesystem queues need no
 separate services. Preview serving is initially disabled; optional preview/sandbox
 qualification remains pending. No Docker services or existing volumes are changed.
 
+For a first synthetic test, open Tasks → Preview example, confirm preparation,
+then Review requirements → Start task. This saves an echo-only workflow and draft;
+it uses no model, repository, tools or connected account and does not perform AI
+analysis. Nothing starts during preparation. If preparation fails, inspect Tasks
+and the linked example workflow before retrying; partial records are retained.
+
 For a first repository test:
 
 1. In Configuration → Models, configure a real available provider. The initial

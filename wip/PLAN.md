@@ -1872,3 +1872,12 @@ loopback session after same-computer confirmation. Server/container profiles do
 not advertise host editor links. No editor installation detection is claimed;
 browser automation validates the link without launching VS Code. Diff/test
 aggregation and the final human review remain open.
+
+
+### Synthetic first-use path
+
+FLOW-03e supplies a deliberate example from Tasks, using only the existing echo
+runtime and authorized graph/task APIs. Preparation saves records after consent;
+execution still requires review. The example's scope is explicit, with no account,
+model or repository dependency. This enables an immediate native plumbing test
+while real-provider, issue-source and advanced environment journeys remain open.

@@ -5,6 +5,7 @@ import type {TaskDraft, TaskInput, TaskReview, TaskProgress} from '../api/tasks'
 import {useAsync} from '../hooks/useData';
 import {Btn, ErrorBox} from './common';
 import {WorkspaceHandoff} from './WorkspaceHandoff';
+import {SyntheticTaskExample} from './SyntheticTaskExample';
 
 export const taskOutcomes = [
   {id:'understand',label:'Understand a repository',description:'Explain architecture, dependencies and areas that need attention.'},
@@ -26,6 +27,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
       {!create&&!id&&info?.identity?.role!=='viewer'&&info?.identity?.role&&<a className="btn primary" href="#/tasks/new">New task</a>}
     </header>
     {id||create ? <TaskEditor key={id??'new'} draft={detail.data} graphs={graphs.filter(g=>!g.graph.metadata.id.startsWith('task-run-'))} nativeProfile={info?.nativeProfile===true} canStart={info?.identity?.role==='admin'} canEdit={info?.identity?.role==='admin'||info?.identity?.role==='operator'}/> : <>
+      {info?.identity?.role==='admin'&&<SyntheticTaskExample/>}
       <ErrorBox error={list.error}/>
       <Btn onClick={()=>void list.reload()} disabled={list.loading}>Refresh tasks</Btn>
       {!list.loading&&!list.error&&list.data?.items.length===0&&<p>No task drafts yet. Create a request using one of your existing workflows.</p>}
