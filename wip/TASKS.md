@@ -780,6 +780,8 @@ approvals, diagnostics and graph controls. Do not recreate global onboarding.
   - [x] FLOW-07c — Inline selected-execution tool evidence, token usage and expandable execution tree/interruption reuse existing run components and permission checks. Bounded history and unavailable telemetry are explicit; completion is never treated as passing tests. Component tests cover exact scope/denied outcomes and real browser integration exercises evidence and terminal tree controls. `CI=true make test` passed (322 frontend plus Go/Python), lint/build passed and six task browser journeys passed. Broader workspace coverage and final manual editor acceptance remain distinct.
   - [x] FLOW-07d — Select prepared agent/replica workspaces for read-only Git inspection and native editor handoff, preserving exact scope and unavailable-snapshot states. Fix task-root/replica Git ref collisions with a separate replica branch namespace. Unit and real Git/API integration cover known scopes, unknown-node rejection, independent changes and preserved source files; four production native browser journeys passed. `CI=true make test` passed (325 frontend plus Go/Python), lint/build passed. Manual editor/vendor acceptance remains pending.
 
+  - [x] FLOW-07e — Explicit test/commit/push verification labels distinguish recorded commands and local Git history from unverified remote state. No automatic commit, push or remote fetch. Four component tests and six production native browser journeys passed, including real worktree inspection; final full regression is tracked separately.
+
 ### 10b. Phase B — Standalone Forge on the User's Machine (after Phase A)
 
 Baseline already present: SQLite and filesystem queue defaults, existing storage

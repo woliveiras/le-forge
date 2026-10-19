@@ -2069,3 +2069,12 @@ normal per-call gateway controls apply. UI retains unavailable grants for repair
 URL hostnames do not verify Jira cloud ownership; GitHub Enterprise URL mapping
 is outside the current selector. Issue content is untrusted data. Real vendor
 qualification remains in final external acceptance, separate from TLS fixtures.
+
+### FLOW-07e — Explicit delivery evidence states (2026-10-19)
+
+The task review now labels test, commit and push verification separately. It points
+to real local history and recorded tool results without upgrading an agent's
+completion claim into passing tests or remote synchronization. Native browser
+qualification covers the labels while inspecting actual disposable-worktree diffs;
+no remote query or mutation was introduced. Full Phase A regression and external
+editor/human acceptance remain separate checks.

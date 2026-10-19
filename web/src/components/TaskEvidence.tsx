@@ -17,6 +17,11 @@ export function TaskEvidence({graphId,executions,role,workspaces=[],nativeProfil
   return <section aria-label="Review task evidence">
     <h3>Changes and checks</h3>
     <p>Inspect the current working tree, diff and history. A completed agent run is not proof that tests passed or that changes were committed or pushed.</p>
+    <dl aria-label="Delivery verification">
+      <dt>Tests</dt><dd>Not independently verified. Review recorded commands and their outcomes below.</dd>
+      <dt>Commits</dt><dd>Not inferred from task completion. Inspect local Git history for the selected workspace.</dd>
+      <dt>Push</dt><dd>Remote state not verified. No automatic push is performed on task completion.</dd>
+    </dl>
     <label>Workspace to review<select value={workspaceKey} onChange={e=>setWorkspaceKey(e.target.value)}><option value="">Shared task workspace</option>{workspaces.map(x=><option key={JSON.stringify([x.nodeId,x.replica])} value={JSON.stringify([x.nodeId,x.replica])}>{x.nodeId} · replica {x.replica}{x.branch?` · ${x.branch}`:''}</option>)}</select></label>
     {workspaceKey&&!scope&&<p>The selected workspace is absent from this snapshot. Select an available workspace before inspecting.</p>}
     {scope&&<WorkspaceHandoff key={scope.path} path={scope.path} nativeProfile={nativeProfile}/>}

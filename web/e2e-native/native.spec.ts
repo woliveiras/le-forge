@@ -28,6 +28,7 @@ test('native profile authenticates, registers a local repo and executes a review
  await expect(page.getByRole('combobox',{name:'Execution environment',exact:true})).toHaveValue('local');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');await page.reload();await expect(page.getByRole('combobox',{name:'Execution environment',exact:true})).toHaveValue('local');await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await expect(page.getByText('Remote state not verified. No automatic push is performed on task completion.')).toBeVisible();
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  expect(readFileSync(join(repo,'dirty.txt'),'utf8')).toBe('preserve');
  await expect(page.getByRole('link',{name:'Open in VS Code',exact:true})).toHaveCount(0);

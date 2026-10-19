@@ -408,3 +408,13 @@ Contracts reviewed against the [GitHub MCP tool catalogue](https://github.com/gi
 and [Atlassian supported tools](https://developer.atlassian.com/cloud/rovo-mcp/guides/supported-tools/).
 Catalogue availability depends on the server version, account and scopes. Automated
 TLS fixture/browser coverage does not qualify a real Jira site or GitHub account.
+
+### Delivery verification
+
+Task evidence labels test verification, commits and push separately. Tests are
+not independently verified merely because an agent completed. Inspect recorded
+commands and results. Local commits are observable through the selected worktree's
+Git history; task completion does not infer a commit. Remote push state is not
+verified by this screen and no network fetch is performed to infer it. The task
+lifecycle never commits or pushes automatically; existing granted agent tools
+remain visible in the pre-start review.

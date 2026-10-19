@@ -8,6 +8,8 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 it('loads Git evidence only on request and keeps every call read-only',async()=>{
  const backend=fakeApi({'GET /api/v1/graphs/task-run-fixture/git/status':()=>({repository:true,directory:'/fixture',branch:'task',content:' M file.txt'}),'GET /api/v1/graphs/task-run-fixture/events':()=>[],'GET /api/v1/graphs/task-run-fixture/executions':()=>[]});
  render(<TaskEvidence graphId="task-run-fixture" executions={[{id:'exec-fixture',nodeId:'worker',status:'succeeded'} as Execution]}/>);
+ expect(screen.getByText('Remote state not verified. No automatic push is performed on task completion.')).toBeTruthy();
+ expect(screen.getByText('Not inferred from task completion. Inspect local Git history for the selected workspace.')).toBeTruthy();
  expect(backend.calls).toHaveLength(0);expect(screen.getByRole('link',{name:/worker.*Tool calls/}).getAttribute('href')).toBe('#/g/task-run-fixture/runs?execution=exec-fixture&section=tools');
  await userEvent.click(screen.getByRole('button',{name:'Inspect changes'}));await screen.findByText('M file.txt');
  expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
