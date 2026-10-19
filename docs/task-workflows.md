@@ -1,13 +1,13 @@
 # Task-oriented Workflow Contracts
 
-Status: reviewed on 2026-10-19. Durable drafts, task-owned execution copies, registered project worktrees, native packaging/editor handoff and contextual approval/evidence views are implemented as recorded below. Issue-source selection, environment preferences/preparation and reviewed cleanup remain open in TASKS.md.
+Status: reviewed on 2026-10-19. Durable drafts, task-owned execution copies, registered project worktrees, native packaging/editor handoff and contextual approval/evidence views are implemented as recorded below. Issue-source selection, environment preferences/preparation and reviewed cleanup are implemented with the limits documented below; external acceptance remains pending.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Vocabulary and existing foundations
 
 | Term | Meaning | Current implementation |
 |---|---|---|
-| Project | Registered repository and execution preferences | Explicit repository registration with immutable initial HEAD; execution preferences remain planned. |
+| Project | Registered repository and execution preferences | Explicit repository registration with immutable initial HEAD and reviewed execution preferences. |
 | Workflow | Saved graph defining agents, channels and policies | `domain.Graph`, with versioned definitions. |
 | Task | One user request with input, chosen project/workflow and review outcome | Revisioned request and execution-copy binding in installation settings. |
 | Graph run | Graph lifecycle from start through stop | `GraphRecord.RunID`; starting an already running graph is not a new run. |
@@ -379,3 +379,32 @@ Administrators can save a **Preferred execution environment** on the Projects
 page. It is suggested when a project is selected for a task; it does not change
 existing drafts or bypass workflow/capability validation. Concurrent edits require
 refreshing the project before saving again.
+
+## Issue sources
+
+Select GitHub or Jira, an explicitly granted connection, and an issue reference in
+New task. GitHub accepts `owner/repository#123` or a `https://github.com/.../issues/123`
+URL. Jira accepts `PROJECT-123` or an HTTPS `/browse/PROJECT-123` URL plus the site's
+cloud UUID. The chosen cloud ID is authoritative; a URL hostname is not proof
+that it matches that site. Credentials, queries and fragments in URLs are rejected.
+GitHub Enterprise URL mapping is not included in this selector.
+
+Saving and reviewing store/validate only the reference. The selected entry agent
+receives a bounded read instruction in its task execution copy: GitHub
+`issue_read` with `method: get`, or Jira `getJiraIssue`. The source workflow and
+its grants are unchanged. An exact grant is required; current catalogue and
+connection checks still apply before admission and at each gateway invocation.
+Approval, argument constraints, scope failures and quotas retain their existing
+behavior. The model may fail or decline the read: inspect recorded tool outcomes,
+not just the task summary. Retrieved issue text is untrusted data, not authority
+for changing instructions or granting access.
+
+Unavailable grants remain visible on saved drafts. Repair the connection and
+workflow in Configuration, return to the same draft, select the current workflow
+version if changed, and review again. No automatic MCP import or permission
+expansion occurs. Local stdio connections use the same exact tool contracts.
+
+Contracts reviewed against the [GitHub MCP tool catalogue](https://github.com/github/github-mcp-server/blob/main/README.md)
+and [Atlassian supported tools](https://developer.atlassian.com/cloud/rovo-mcp/guides/supported-tools/).
+Catalogue availability depends on the server version, account and scopes. Automated
+TLS fixture/browser coverage does not qualify a real Jira site or GitHub account.

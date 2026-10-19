@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,6 +38,17 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	for _, message := range r.Messages {
+		if match := regexp.MustCompile(`Task issue source: read using (mcp\.[a-z0-9_-]+\.[A-Za-z_]+) with arguments (\{[^\n]+\})\.`).FindStringSubmatch(message.Content); match != nil {
+			for _, result := range r.Messages {
+				if result.Role == llm.RoleTool {
+					return &llm.ChatResponse{Message: llm.ChatMessage{Content: "Issue result: " + result.Content}, StopReason: "stop"}, nil
+				}
+			}
+			return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "issue-read", Name: match[1], Arguments: json.RawMessage(match[2])}}}, StopReason: "tool_calls"}, nil
+		}
+	}
+
 	if strings.Contains(r.System, "temporary analysis assistant") {
 		if len(r.Tools) != 0 {
 			recursive := false
@@ -196,6 +208,8 @@ func run() error {
 	defer fixtureRecovery.Close()
 	fixtureFlat := mcptest.NewAtlassianFlat()
 	defer fixtureFlat.Close()
+	fixtureIssues := mcptest.NewIssues()
+	defer fixtureIssues.Close()
 	fixtureMCP := mcptest.New()
 	defer fixtureMCP.Close()
 	fixtureOAuth := mcptest.NewOAuth("")
@@ -242,6 +256,10 @@ func run() error {
 		defer fixture.Close()
 	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if endpoint == "https://issues.fixture.invalid/mcp" {
+			return mcpconfig.DiscoverWithClient(ctx, fixtureIssues.URL, token, fixtureIssues.Client())
+		}
+
 		if fixture := headerFixtures[endpoint]; fixture != nil {
 			return mcpconfig.DiscoverWithClient(ctx, fixture.URL, token, fixture.Client())
 		}
@@ -257,6 +275,10 @@ func run() error {
 		return mcpconfig.DiscoverWithClient(ctx, fixtureMCP.URL, token, fixtureMCP.Client())
 	}
 	a.MCP.Call = func(ctx context.Context, endpoint, token, name string, args json.RawMessage) (json.RawMessage, error) {
+		if endpoint == "https://issues.fixture.invalid/mcp" {
+			return mcpconfig.CallWithClient(ctx, fixtureIssues.URL, token, name, args, fixtureIssues.Client())
+		}
+
 		if fixture := headerFixtures[endpoint]; fixture != nil {
 			return mcpconfig.CallWithClient(ctx, fixture.URL, token, name, args, fixture.Client())
 		}

@@ -21,19 +21,20 @@ var validID = regexp.MustCompile(`^tsk_[a-z0-9]{1,80}$`)
 var ErrInvalid = errors.New("invalid task")
 
 type Input struct {
-	ExecutionMode string `json:"executionMode,omitempty"`
-	ChannelID     string `json:"channelId,omitempty"`
-	MessageType   string `json:"messageType,omitempty"`
-	PayloadJSON   string `json:"payloadJson,omitempty"`
-	ProjectID     string `json:"projectId,omitempty"`
-	BaseCommit    string `json:"baseCommit,omitempty"`
-	Title         string `json:"title"`
-	Request       string `json:"request"`
-	Outcome       string `json:"outcome"`
-	GraphID       string `json:"graphId"`
-	GraphVersion  int    `json:"graphVersion"`
-	NodeID        string `json:"nodeId"`
-	ResultNodeID  string `json:"resultNodeId,omitempty"`
+	Source        *IssueSource `json:"source,omitempty"`
+	ExecutionMode string       `json:"executionMode,omitempty"`
+	ChannelID     string       `json:"channelId,omitempty"`
+	MessageType   string       `json:"messageType,omitempty"`
+	PayloadJSON   string       `json:"payloadJson,omitempty"`
+	ProjectID     string       `json:"projectId,omitempty"`
+	BaseCommit    string       `json:"baseCommit,omitempty"`
+	Title         string       `json:"title"`
+	Request       string       `json:"request"`
+	Outcome       string       `json:"outcome"`
+	GraphID       string       `json:"graphId"`
+	GraphVersion  int          `json:"graphVersion"`
+	NodeID        string       `json:"nodeId"`
+	ResultNodeID  string       `json:"resultNodeId,omitempty"`
 }
 type Draft struct {
 	ObservedState string `json:"observedState,omitempty"`
@@ -55,6 +56,11 @@ type Page struct {
 type Manager struct{ Store storage.Store }
 
 func Validate(in Input) error {
+	if in.Source != nil {
+		if _, _, err := in.Source.ReadCall(); err != nil {
+			return err
+		}
+	}
 	switch in.ExecutionMode {
 	case "", "workflow", "local", "sandbox":
 	default:

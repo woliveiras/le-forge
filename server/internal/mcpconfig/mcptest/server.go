@@ -9,12 +9,15 @@ import (
 	"sync/atomic"
 )
 
-func New() *httptest.Server { return newServer(false, nil) }
+func New() *httptest.Server { return newServer(false, nil, false) }
 
 // NewRecovering expires every first session before dispatch to exercise recovery.
-func NewRecovering() *httptest.Server                           { return newServer(true, nil) }
-func NewWithHeaders(headers map[string]string) *httptest.Server { return newServer(false, headers) }
-func newServer(recovering bool, headers map[string]string) *httptest.Server {
+func NewRecovering() *httptest.Server { return newServer(true, nil, false) }
+func NewWithHeaders(headers map[string]string) *httptest.Server {
+	return newServer(false, headers, false)
+}
+func NewIssues() *httptest.Server { return newServer(false, nil, true) }
+func newServer(recovering bool, headers map[string]string, issues bool) *httptest.Server {
 	var sessions atomic.Int64
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		valid := true
@@ -67,12 +70,32 @@ func newServer(recovering bool, headers map[string]string) *httptest.Server {
 			w.WriteHeader(202)
 			return
 		case "tools/call":
+			if issues {
+				args, _ := q.Params["arguments"].(map[string]any)
+				validIssue := q.Params["name"] == "issue_read" && args["method"] == "get" && args["owner"] == "octocat" && args["repo"] == "Hello-World" && args["issue_number"] == float64(42)
+				validIssue = validIssue || q.Params["name"] == "getJiraIssue" && args["issueIdOrKey"] == "APP-42" && args["cloudId"] == "11111111-2222-3333-4444-555555555555"
+				if !validIssue {
+					http.Error(w, "invalid fixture issue", 400)
+					return
+				}
+				result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "Issue fixture read completed"}}}
+				break
+			}
+
 			if (!recovering && r.Header.Get("Mcp-Session-Id") != "fixture-session") || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
 				w.WriteHeader(400)
 				return
 			}
 			result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "MCP fixture search completed"}}}
 		case "tools/list":
+			if issues {
+				result = map[string]any{"tools": []any{
+					map[string]any{"name": "issue_read", "inputSchema": map[string]any{"type": "object", "required": []string{"method", "owner", "repo", "issue_number"}}},
+					map[string]any{"name": "getJiraIssue", "inputSchema": map[string]any{"type": "object", "required": []string{"cloudId", "issueIdOrKey"}}},
+				}}
+				break
+			}
+
 			if (!recovering && r.Header.Get("Mcp-Session-Id") != "fixture-session") || r.Header.Get("MCP-Protocol-Version") != "2025-06-18" {
 				w.WriteHeader(400)
 				return

@@ -1986,11 +1986,23 @@ components:
         path: {type: string}
         head: {type: string}
         createdAt: {type: string, format: date-time}
+    TaskIssueSource:
+      type: object
+      additionalProperties: false
+      required: [kind, connectionId, reference]
+      description: Reference only; save/review never fetches content or grants tools. The entry agent reads through the gateway during execution.
+      properties:
+        kind: {enum: [github, jira]}
+        connectionId: {type: string, pattern: '^[a-z][a-z0-9_-]{0,63}$'}
+        reference: {type: string, maxLength: 512, description: GitHub owner/repository#number or HTTPS issue URL; Jira KEY-number or HTTPS browse URL without credentials/query/fragment}
+        cloudId: {type: string, format: uuid, description: Required only for Jira; selected cloud UUID is authoritative, URL hostname is not a verified site binding}
     TaskDraftInput:
       type: object
       additionalProperties: false
       required: [title, request, outcome, graphId, graphVersion, nodeId]
       properties:
+        source: {$ref: '#/components/schemas/TaskIssueSource'}
+        executionMode: {enum: [workflow, local, sandbox]}
         title: {type: string, minLength: 1, maxLength: 200, description: Also bounded to 200 UTF-8 bytes}
         request: {type: string, minLength: 1, maxLength: 16384, description: Also bounded to 16384 UTF-8 bytes; untrusted instructions}
         outcome: {enum: [understand, implement, investigate, review, freeform]}
@@ -2013,6 +2025,8 @@ components:
         executionGraphId: {type: string}
         launchError: {type: string}
         observedState: {type: string, description: Optional list projection; persisted admission status is separate}
+        source: {$ref: '#/components/schemas/TaskIssueSource'}
+        executionMode: {enum: [workflow, local, sandbox]}
         title: {type: string}
         request: {type: string}
         outcome: {type: string}

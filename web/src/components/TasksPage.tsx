@@ -1,3 +1,4 @@
+import {TaskIssueSource} from "./TaskIssueSource";
 import {TaskEnvironment} from './TaskEnvironment';
 import {TaskRequirementRepairs} from './TaskRequirementRepairs';
 import {TaskDecisions} from './TaskDecisions';
@@ -45,7 +46,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
   </section>;
 }
 function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean;nativeProfile:boolean}) {
-  const [input,setInput] = useState<TaskInput>(()=>draft?{executionMode:draft.executionMode,title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
+  const [input,setInput] = useState<TaskInput>(()=>draft?{source:draft.source,executionMode:draft.executionMode,title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
   const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
   const [review,setReview] = useState<TaskReview>();
@@ -113,6 +114,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
           <option value="">Select entry agent</option>{input.nodeId&&!selected?.spec.nodes.some(n=>n.id===input.nodeId)&&<option value={input.nodeId}>{input.nodeId} (unavailable)</option>}
           {selected?.spec.nodes.filter(n=>!n.disabled).map(n=><option key={n.id} value={n.id}>{n.name||n.id}</option>)}
         </select></label>
+        <TaskIssueSource source={input.source} grants={selected?.spec.nodes.find(n=>n.id===input.nodeId)?.tools??selected?.spec.defaults?.tools??[]} onChange={source=>change({source})}/>
         <label>Result agent<select value={input.resultNodeId??''} onChange={e=>change({resultNodeId:e.target.value})}>
           <option value="">Select result agent before starting</option>
           {selected?.spec.nodes.filter(n=>!n.disabled).map(n=><option key={n.id} value={n.id}>{n.name||n.id}</option>)}

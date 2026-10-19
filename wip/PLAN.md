@@ -2058,3 +2058,14 @@ cancellation retain data, images, caches and diagnostics. Remote-instance builds
 cannot be cancelled locally. Agent-origin approvals remain graph-bound and cannot
 be transferred implicitly to a task copy. Interrupted preparation is retained
 for inspection without automatic replay.
+
+### FLOW-04 — Issue references through existing MCP grants (2026-10-19)
+
+Task drafts now retain a bounded GitHub/Jira issue reference and explicit connection;
+Jira also requires the selected site's cloud UUID. Save/review never fetch content.
+Preparation adds the read request only to the task-owned entry agent, with no new
+grants. Exact `issue_read`/`getJiraIssue` grants, current catalogue validation and
+normal per-call gateway controls apply. UI retains unavailable grants for repair.
+URL hostnames do not verify Jira cloud ownership; GitHub Enterprise URL mapping
+is outside the current selector. Issue content is untrusted data. Real vendor
+qualification remains in final external acceptance, separate from TLS fixtures.

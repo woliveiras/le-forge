@@ -40,7 +40,9 @@ func TestDraftSurvivesStoreRestart(t *testing.T) {
 			if _, err := s.SaveGraph(ctx, g, 0); err != nil {
 				t.Fatal(err)
 			}
-			draft, err := (Manager{Store: s}).Save(ctx, "", good(), 0, "operator")
+			input := good()
+			input.Source = &IssueSource{Kind: "github", ConnectionID: "personal", Reference: "octocat/Hello-World#42"}
+			draft, err := (Manager{Store: s}).Save(ctx, "", input, 0, "operator")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +61,7 @@ func TestDraftSurvivesStoreRestart(t *testing.T) {
 			defer s.Close()
 			m := Manager{Store: s}
 			loaded, err := m.Get(ctx, draft.ID)
-			if err != nil || loaded.Request != draft.Request || loaded.Revision != 1 {
+			if err != nil || loaded.Request != draft.Request || loaded.Revision != 1 || loaded.Source == nil || *loaded.Source != *draft.Source {
 				t.Fatal(loaded, err)
 			}
 			updated := good()

@@ -179,3 +179,45 @@ test('failed task environment remains inspectable and can be stopped without exe
  await page.getByRole('checkbox',{name:"Stop this task's execution copy and retain its data."}).check();await page.getByRole('button',{name:'Stop task',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
  const progress=await(await page.request.get(`/api/v1/tasks/${task.id}/progress`,{headers})).json();expect(await(await page.request.get(`/api/v1/graphs/${progress.task.executionGraphId}/executions`,{headers})).json()).toEqual([]);
 });
+
+test('retains an issue source through missing-grant repair without fetching or starting',async({page})=>{
+ const graph={metadata:{id:'task-issue-draft',name:'Issue draft'},spec:{nodes:[{id:'reader',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ const response=await page.request.post('/api/v1/tasks',{headers,data:{title:'Investigate issue',request:'Explain the reported problem',outcome:'investigate',graphId:'task-issue-draft',graphVersion:1,nodeId:'reader',resultNodeId:'reader',source:{kind:'github',connectionId:'personal',reference:'octocat/Hello-World#42'}}});
+ expect(response.status()).toBe(201);const draft=await response.json();
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto(`/#/tasks/${draft.id}`);
+ await expect(page.getByRole('combobox',{name:'Issue connection',exact:true})).toHaveValue('personal');
+ await expect(page.getByRole('textbox',{name:'Issue reference',exact:true})).toHaveValue('octocat/Hello-World#42');
+ await page.getByRole('button',{name:'Review requirements'}).click();
+ await expect(page.getByRole('article',{name:'Task requirements'})).toContainText('mcp.personal.issue_read');
+ await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ await page.reload();await expect(page.getByRole('textbox',{name:'Issue reference',exact:true})).toHaveValue('octocat/Hello-World#42');
+ expect(await(await page.request.get('/api/v1/graphs/task-issue-draft/executions',{headers})).json()).toEqual([]);
+});
+
+for(const kind of ['github','jira'] as const) test(`reads a selected ${kind} issue through the task agent gateway`,async({page})=>{
+ const id=`issue-source-${kind}`;const tool=kind==='github'?'issue_read':'getJiraIssue';
+ expect((await page.request.post('/api/v1/mcp/connections',{headers,data:{id,name:id,service:'generic',endpoint:'https://issues.fixture.invalid/mcp',enabled:true,credential:{value:'fixture-mcp-token'}}})).status()).toBe(201);
+ expect((await page.request.post(`/api/v1/mcp/connections/${id}/tools/refresh`,{headers})).ok()).toBeTruthy();
+ expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:id},spec:{nodes:[{id:'reader',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},prompt:'Read the task issue source.',isolation:{mode:'process'},loop:{mode:'once'},tools:[{name:`mcp.${id}.${tool}`}]}]}}})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill(`Read ${kind} issue`);
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Investigate the selected issue.');
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(id);
+ await page.getByRole('combobox',{name:'Issue service',exact:true}).selectOption(kind);
+ await page.getByRole('combobox',{name:'Issue connection',exact:true}).selectOption(id);
+ await page.getByRole('textbox',{name:'Issue reference',exact:true}).fill(kind==='github'?'https://github.com/octocat/Hello-World/issues/42':'APP-42');
+ if(kind==='jira')await page.getByRole('textbox',{name:'Jira cloud ID',exact:true}).fill('11111111-2222-3333-4444-555555555555');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);
+ await page.getByRole('button',{name:'Review requirements'}).click();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
+ await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await expect(page.getByText(/Issue result:.*Issue fixture read completed/)).toBeVisible();
+ const taskId=page.url().split('/').pop()!;
+ const progress=await(await page.request.get(`/api/v1/tasks/${taskId}/progress`,{headers})).json();
+ const events=await(await page.request.get(`/api/v1/graphs/${progress.task.executionGraphId}/events`,{headers})).json();
+ expect(events.some((e:{type:string;data:{tool?:string;outcome?:string}})=>e.type==='tool.completed'&&e.data.tool===`mcp.${id}.${tool}`&&e.data.outcome==='ok')).toBeTruthy();
+});

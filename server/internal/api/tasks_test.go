@@ -109,3 +109,33 @@ func TestTaskDraftValidationAndRoles(t *testing.T) {
 		t.Fatal(string(encoded))
 	}
 }
+
+func TestTaskIssueSourcePersistsWithoutAuthority(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", taskGraph, nil); c != 201 {
+		t.Fatal(c)
+	}
+	body := strings.Replace(taskBody, `"title":`, `"source":{"kind":"github","connectionId":"personal","reference":"octocat/Hello-World#42"},"resultNodeId":"reader","title":`, 1)
+	var d taskconfig.Draft
+	if c := call(t, srv, "POST", "/api/v1/tasks", operatorTok, "application/json", body, &d); c != 201 {
+		t.Fatal(c)
+	}
+	var review struct {
+		CanStart bool     `json:"canStart"`
+		Blockers []string `json:"blockers"`
+	}
+	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", viewerTok, "", "", &review); c != 200 || review.CanStart || !strings.Contains(strings.Join(review.Blockers, " "), "mcp.personal.issue_read") {
+		t.Fatal(c, review)
+	}
+	loaded, err := (taskconfig.Manager{Store: a.Store}).Get(t.Context(), d.ID)
+	if err != nil || loaded.Source == nil || loaded.Source.Reference != "octocat/Hello-World#42" {
+		t.Fatal(loaded, err)
+	}
+	if c := call(t, srv, "POST", "/api/v1/tasks", operatorTok, "application/json", strings.Replace(body, "octocat/Hello-World#42", "https://user:secret@github.com/o/r/issues/1", 1), nil); c != 422 {
+		t.Fatal(c)
+	}
+	xs, err := a.Store.ListExecutions(t.Context(), storage.ExecutionFilter{GraphID: "task-fixture"})
+	if err != nil || len(xs) != 0 {
+		t.Fatal(xs, err)
+	}
+}

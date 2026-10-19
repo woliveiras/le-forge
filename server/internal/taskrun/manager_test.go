@@ -88,3 +88,19 @@ func TestPrepareRetainsExplicitEnvironmentWithoutMutatingSource(t *testing.T) {
 		t.Fatal("source environment mutated")
 	}
 }
+
+func TestIssueSourceRequiresExactEntryGrantAndPreservesTemplate(t *testing.T) {
+	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 1}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "reader", Runtime: domain.RuntimeRef{Kind: domain.RuntimeNative}, Prompt: "Original"}}}}
+	d := &taskconfig.Draft{ID: "tsk_issue", Input: taskconfig.Input{GraphVersion: 1, NodeID: "reader", ResultNodeID: "reader", Source: &taskconfig.IssueSource{Kind: "github", ConnectionID: "personal", Reference: "owner/repo#7"}}}
+	if _, b, e := Prepare(d, g); e != nil || len(b) == 0 {
+		t.Fatal(b, e)
+	}
+	g.Spec.Nodes[0].Tools = []domain.ToolGrant{{Name: "mcp.personal.issue_read", RequiresApproval: true}}
+	prepared, b, e := Prepare(d, g)
+	if e != nil || len(b) != 0 {
+		t.Fatal(b, e)
+	}
+	if prepared.Spec.Nodes[0].Prompt == "Original" || g.Spec.Nodes[0].Prompt != "Original" || !prepared.Spec.Nodes[0].Tools[0].RequiresApproval {
+		t.Fatal("source/grants changed or instructions absent")
+	}
+}
