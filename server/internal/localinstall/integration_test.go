@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/delegation"
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/storage/stores"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"io"
 	"net"
@@ -146,6 +148,32 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 		t.Fatal("missing durable gate", c)
 	}
 	stop(cancel, done)
+	// Simulate a crashed native worker using only this disposable stopped profile.
+	ledger, err := stores.Open(t.Context(), stores.Config{Type: "sqlite", DSN: filepath.Join(root, "leforge.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	budgets := delegation.Manager{Store: ledger}
+	for _, id := range []string{"native-crashed", "foreign-active"} {
+		instance := "leforge-native"
+		if id == "foreign-active" {
+			instance = "foreign-worker"
+		}
+		if err := ledger.PutExecution(t.Context(), &domain.Execution{ID: id, GraphID: "software-factory", NodeID: "planner", Status: domain.ExecRunning, Instance: instance, StartedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		for _, call := range []string{"pending", "dispatched"} {
+			if err := budgets.ReserveTokens(t.Context(), id, call, 100, 30); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := budgets.DispatchTokens(t.Context(), id, "dispatched"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := ledger.Close(); err != nil {
+		t.Fatal(err)
+	}
 	archive := filepath.Join(filepath.Dir(root), "native-backup.tar.gz")
 	if err = Backup(t.Context(), root, archive); err != nil {
 		t.Fatal(err)
@@ -161,7 +189,25 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 		t.Fatal("factory edit lost on restart", code)
 	}
 
-	defer stop(cancel, done)
+	defer func() { stop(cancel, done) }()
+	checkBudgets := func() {
+		t.Helper()
+		for _, id := range []string{"native-crashed", "foreign-active"} {
+			var tree struct {
+				Budget delegation.BudgetView `json:"budget"`
+			}
+			if code := request("GET", "/api/v1/executions/"+id+"/tree", "", &tree); code != 200 {
+				t.Fatal(code)
+			}
+			if id == "native-crashed" && (tree.Budget.Reserved != 0 || tree.Budget.Charged != 30 || tree.Budget.Estimated != 30) {
+				t.Fatal("native reservation recovery", tree.Budget)
+			}
+			if id == "foreign-active" && tree.Budget.Reserved != 60 {
+				t.Fatal("foreign reservation changed", tree.Budget)
+			}
+		}
+	}
+	checkBudgets()
 	var restored taskconfig.Draft
 	if c := request("GET", "/api/v1/tasks/"+draft.ID, "", &restored); c != 200 || restored.Title != draft.Title || restored.Revision != draft.Revision {
 		t.Fatal("lost draft on restart", c)
@@ -197,6 +243,9 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 		t.Fatal(c)
 	}
 	waitExecutions(2)
+	stop(cancel, done)
+	cancel, done = start()
+	checkBudgets()
 	res, err := http.Get(base + "/api/v1/tasks")
 	if err != nil {
 		t.Fatal(err)

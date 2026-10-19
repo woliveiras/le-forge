@@ -212,3 +212,10 @@ nine relevant browser cases and two native production-binary journeys. Earlier
 full browser regression in this delivery passed 86 main cases plus hosted CIMD
 and isolated provider cases. Actual VS Code launch, a real model, local stdio MCP,
 optional native sandbox and other OS/architecture smoke checks remain unverified.
+
+Native reservation recovery is qualified with a disposable SQLite profile: a
+simulated crashed native execution and a foreign active worker are archived,
+restored and restarted through the real launcher. The tree API reports released
+undispatched reservations, conservative estimated charging for dispatched calls
+without outcomes, unchanged foreign reservations, and unchanged totals after a
+second restart. This is recovery evidence, not actual provider billing evidence.

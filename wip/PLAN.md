@@ -1913,3 +1913,11 @@ Ambiguous fields remain user choices. Generated JSON follows title/request edits
 only until customized. The native Software Factory first-task test persists and
 reloads these inputs through the production API without executing the workflow
 or mutating grants. External model/vendor validation remains deferred.
+
+
+### Native token recovery evidence
+
+LOCAL-03b qualifies the existing budget reconciler through the production native
+launcher and restored SQLite profile, including a second restart and a foreign
+worker whose reservations must remain intact. No model calls or real billing were
+used. Cross-version upgrade qualification remains distinct and open.
