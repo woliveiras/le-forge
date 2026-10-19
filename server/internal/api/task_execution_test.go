@@ -11,6 +11,8 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -264,5 +266,41 @@ func TestTaskConnectionRepairPreservesUnsubmittedDraft(t *testing.T) {
 	xs, err := a.Store.ListExecutions(t.Context(), storage.ExecutionFilter{GraphID: taskrun.ExecutionID(d.ID)})
 	if err != nil || len(xs) != 0 {
 		t.Fatal("review dispatched execution", xs, err)
+	}
+}
+
+func TestTaskPreparationFailureIsVisibleWithoutExecution(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	var g domain.Graph
+	if err := json.Unmarshal([]byte(taskGraph), &g); err != nil {
+		t.Fatal(err)
+	}
+	g.Spec.Nodes[0].Workspace.Mode = domain.WorkspaceWorktree
+	b, _ := json.Marshal(g)
+	if code := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", string(b), nil); code != 201 {
+		t.Fatal(code)
+	}
+	var d taskconfig.Draft
+	body := strings.Replace(taskBody, `"nodeId":"reader"`, `"nodeId":"reader","resultNodeId":"reader"`, 1)
+	if code := call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", body, &d); code != 201 {
+		t.Fatal(code)
+	}
+	path := filepath.Join(a.Config.Workspaces.Root, ".worktrees", taskrun.ExecutionID(d.ID), "reader-0")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("preserve blocking file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); code != 202 {
+		t.Fatal(code)
+	}
+	waitFor(t, 5*time.Second, "visible preparation failure", func() bool {
+		var v taskrun.View
+		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
+		return v.State == "blocked" && len(v.Executions) == 0 && strings.Contains(strings.Join(v.Blockers, " "), "failed during preparation")
+	})
+	if b, err := os.ReadFile(path); err != nil || string(b) != "preserve blocking file" {
+		t.Fatal("existing data changed", err)
 	}
 }

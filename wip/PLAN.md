@@ -2006,3 +2006,11 @@ explicit native editor handoff. Missing snapshots do not silently switch scope.
 Task replica branches use `leforge-replicas/<graph>/<node>-<replica>` to avoid
 Git ref collisions with the task root branch `leforge/<graph>`. Ordinary workflow
 branch names and existing files are unchanged. No cleanup, commit or push occurs.
+
+
+### Preparation failure visibility
+
+FLOW-06c distinguishes a failed replica setup before any execution from a running
+task. The task becomes visibly blocked, retains its data and directs users to
+Activity and diagnostics. It does not infer terminal completion or replay work.
+Unit, API and native browser fixtures cover the real filesystem failure boundary.

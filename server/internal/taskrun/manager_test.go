@@ -58,3 +58,18 @@ func TestWorkspaceScopesOnlyKnownPreparedReplicas(t *testing.T) {
 		t.Fatalf("unexpected scopes: %+v", scopes)
 	}
 }
+
+func TestPreparationFailureRequiresFailedReplicaInScope(t *testing.T) {
+	st := &engine.GraphStatus{GraphID: "task", Nodes: []engine.NodeStatus{{Replicas: []*domain.ReplicaStatus{nil, {GraphID: "other", State: domain.ReplicaFailed}, {GraphID: "task", State: domain.ReplicaStarting}}}}}
+	if preparationFailed(st) {
+		t.Fatal("foreign or starting replica treated as failed")
+	}
+	st.Nodes[0].Replicas[2].State = domain.ReplicaFailed
+	if !preparationFailed(st) {
+		t.Fatal("missing failure")
+	}
+	st.Nodes[0].Replicas[2].State = domain.ReplicaCompleted
+	if preparationFailed(st) {
+		t.Fatal("completed replica treated as failed")
+	}
+}

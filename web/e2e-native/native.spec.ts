@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 test('native profile authenticates, registers a local repo and executes a reviewed task in a worktree',async({page})=>{
  const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
@@ -111,4 +111,18 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});`)
  const publicRecord=await(await page.request.get('/api/v1/mcp/connections/local-fixture',{headers})).text();expect(publicRecord).not.toContain('synthetic-native-mcp-secret');expect(publicRecord).not.toContain('processEnvironmentSealed');
  expect(await(await page.request.get('/api/v1/graphs',{headers})).json()).toEqual(graphsBefore);
  expect(await page.evaluate(()=>JSON.stringify([localStorage,sessionStorage]))).not.toContain('synthetic-native-mcp-secret');
+});
+
+test('native task preparation failure is actionable and preserves the blocking file',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();const headers={Authorization:`Bearer ${token}`};
+ const graph={metadata:{id:'native-setup-failure'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},workspace:{mode:'worktree'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ const response=await page.request.post('/api/v1/tasks',{headers,data:{title:'Preparation failure',request:'Synthetic setup check',outcome:'freeform',graphId:graph.metadata.id,graphVersion:1,nodeId:'worker',resultNodeId:'worker'}});expect(response.status()).toBe(201);const task=await response.json();
+ const graphId=`task-run-${task.id.slice(4)}`;const obstruction=join(root,'state','workspaces','.worktrees',graphId,'worker-0');mkdirSync(dirname(obstruction),{recursive:true});writeFileSync(obstruction,'preserve');
+ expect((await page.request.post(`/api/v1/tasks/${task.id}/start`,{headers:{...headers,'If-Match':String(task.revision)},data:{confirm:true}})).status()).toBe(202);
+ await page.goto(`/#/tasks/${task.id}`);await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: blocked');await expect(page.getByText(/An agent failed during preparation/)).toBeVisible();
+ await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: blocked');expect(readFileSync(obstruction,'utf8')).toBe('preserve');
+ expect(await(await page.request.get(`/api/v1/graphs/${graphId}/executions`,{headers})).json()).toEqual([]);
 });

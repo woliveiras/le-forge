@@ -404,6 +404,11 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 		v.Blockers = append(v.Blockers, "Start outcome is unresolved. No automatic replay will occur.")
 		return v, nil
 	}
+	if len(xs) == 0 && !workersActive && preparationFailed(st) {
+		v.State = "blocked"
+		v.Blockers = append(v.Blockers, "An agent failed during preparation. No execution was recorded. Open Activity and diagnostics to inspect the failure; stop this task before preparing a replacement.")
+		return v, nil
+	}
 	if !active && (len(xs) > 0 || failed) {
 		if failed {
 			v.State = "failed"
@@ -447,4 +452,15 @@ func (m Manager) Cancel(ctx context.Context, id, actor string) (*taskconfig.Draf
 		return nil, err
 	}
 	return d, nil
+}
+
+func preparationFailed(st *engine.GraphStatus) bool {
+	for _, n := range st.Nodes {
+		for _, r := range n.Replicas {
+			if r != nil && r.GraphID == st.GraphID && r.State == domain.ReplicaFailed {
+				return true
+			}
+		}
+	}
+	return false
 }
