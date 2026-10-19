@@ -189,7 +189,7 @@ type Observability struct {
 	ServiceName  string `yaml:"serviceName"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"` // http://otel-collector:4318
 	LogLevel     string `yaml:"logLevel"`
-	LogFormat    string `yaml:"logFormat"` // json | text
+	LogFormat    string `yaml:"logFormat"` // json | text | console
 	GrafanaURL   string `yaml:"grafanaUrl"`
 	// TraceSampleRatio in [0,1] (default 1).
 	TraceSampleRatio float64 `yaml:"traceSampleRatio"`

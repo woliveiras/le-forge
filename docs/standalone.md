@@ -78,6 +78,21 @@ it uses no model, repository, tools or connected account and does not perform AI
 analysis. Nothing starts during preparation. If preparation fails, inspect Tasks
 and the linked example workflow before retrying; partial records are retained.
 
+## Terminal feedback and stopping
+
+`forged --local` defaults to readable console logs: startup identifies the data
+folder, readiness prints the browser URL, and Ctrl-C reports agent draining,
+HTTP stream closure, storage/queue cleanup and elapsed time. Use
+`forged --local --log-format json` for structured collection, or `--log-format text`
+for standard key/value logs. This presentation override does not rewrite the profile;
+server deployments retain their configured format (JSON by default).
+
+Browser event streams are cancelled after agents drain, so an open browser does
+not hold graceful HTTP shutdown until its timeout. HTTP shutdown errors are
+reported and remaining connections closed. Wait for the final stopped message
+before restarting the same profile. Existing profiles need no reinitialization:
+run the updated binary with `--local` and the same optional `--data-dir`.
+
 ## Software Factory on first launch
 
 The native launcher seeds Software Factory once, stopped, before serving the UI.

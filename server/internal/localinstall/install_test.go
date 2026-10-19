@@ -91,3 +91,9 @@ func TestMissingAssetsAndPrivateDirectory(t *testing.T) {
 		t.Fatal("shared data root accepted")
 	}
 }
+
+func TestInvalidLogFormatDoesNotOpenProfile(t *testing.T) {
+	if err := RunWithLogFormat(t.Context(), "/nonexistent-profile", "invalid"); err == nil || err.Error() != "log format must be console, text or json" {
+		t.Fatal(err)
+	}
+}

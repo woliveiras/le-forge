@@ -182,16 +182,25 @@ func Open(root string) (*config.Config, func(), error) {
 	c.NativeProfile = true
 	return c, release, nil
 }
-func Run(ctx context.Context, root string) error {
+func Run(ctx context.Context, root string) error { return RunWithLogFormat(ctx, root, "console") }
+
+// RunWithLogFormat changes presentation only, without rewriting the saved profile.
+func RunWithLogFormat(ctx context.Context, root, format string) error {
+	if format != "console" && format != "json" && format != "text" {
+		return errors.New("log format must be console, text or json")
+	}
+
 	c, release, err := Open(root)
 	if err != nil {
 		return err
 	}
 	defer release()
+	c.Observability.LogFormat = format
 	a, err := app.New(ctx, c)
 	if err != nil {
 		return err
 	}
+	a.Log.Info("Starting local Forge", "data_directory", root, "storage", c.Storage.Type, "queue", c.Queue.Type)
 	err = seedFactory(ctx, a)
 	if err == nil {
 		err = a.Run(ctx)

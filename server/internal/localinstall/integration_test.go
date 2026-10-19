@@ -19,6 +19,28 @@ import (
 )
 
 func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
+	output, err := os.CreateTemp(t.TempDir(), "native-console")
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := os.Stdout
+	os.Stdout = output
+	defer func() {
+		os.Stdout = original
+		defer output.Close()
+		data, err := os.ReadFile(output.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"INFO   Starting local Forge", "Forge is ready. Open", "closing browser streams", "Forge stopped; persistent data is retained"} {
+			if !strings.Contains(string(data), want) {
+				t.Errorf("missing console message %q", want)
+			}
+		}
+		if strings.Contains(string(data), `"msg":`) {
+			t.Error("native default emitted JSON logs")
+		}
+	}()
 	root, web := fixture(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -147,7 +169,31 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 	if c := request("GET", "/api/v1/approvals?status=pending", "", &held); c != 200 || len(held) != 1 {
 		t.Fatal("missing durable gate", c)
 	}
+	// An authenticated browser keeps SSE open while the service is stopped.
+	streamRequest, err := http.NewRequest("GET", base+"/api/v1/events/stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamRequest.Header.Set("Authorization", "Bearer "+token)
+	streamResponse, err := http.DefaultClient.Do(streamRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer streamResponse.Body.Close()
+	if streamResponse.StatusCode != 200 {
+		t.Fatal(streamResponse.StatusCode)
+	}
+	streamClosed := make(chan error, 1)
+	go func() { _, err := io.Copy(io.Discard, streamResponse.Body); streamClosed <- err }()
 	stop(cancel, done)
+	select {
+	case err := <-streamClosed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("event stream outlived shutdown")
+	}
 	// Simulate a crashed native worker using only this disposable stopped profile.
 	ledger, err := stores.Open(t.Context(), stores.Config{Type: "sqlite", DSN: filepath.Join(root, "leforge.db")})
 	if err != nil {

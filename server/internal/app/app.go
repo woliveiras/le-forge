@@ -650,7 +650,12 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}()
 	defer func() { stopReviews(); <-reviewDone }()
+	// Keep callbacks alive while turns drain, then cancel long-lived HTTP streams.
+	httpCtx, stopHTTP := context.WithCancel(context.Background())
+	defer stopHTTP()
+	baseContext := func(net.Listener) context.Context { return httpCtx }
 	srv := &http.Server{
+		BaseContext:       baseContext,
 		Addr:              a.Config.Server.Addr,
 		Handler:           a.API.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -659,7 +664,7 @@ func (a *App) Run(ctx context.Context) error {
 	errc := make(chan error, 3)
 	var previewServer *http.Server
 	if a.PreviewGateway != nil {
-		previewServer = &http.Server{Addr: a.Config.Preview.Addr, Handler: a.PreviewGateway, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+		previewServer = &http.Server{BaseContext: baseContext, Addr: a.Config.Preview.Addr, Handler: a.PreviewGateway, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 		go func() {
 			if a.Config.Preview.TLSCert != "" {
 				errc <- previewServer.ServeTLS(previewListener, a.Config.Preview.TLSCert, a.Config.Preview.TLSKey)
@@ -670,15 +675,21 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	var internal *http.Server
 	if h := a.API.InternalHandler(); h != nil {
-		internal = &http.Server{Addr: a.Config.Server.InternalAddr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
+		internal = &http.Server{BaseContext: baseContext, Addr: a.Config.Server.InternalAddr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
 		go func() {
 			a.Log.Info("callback API listening", "addr", a.Config.Server.InternalAddr)
 			errc <- internal.Serve(internalListener)
 		}()
 	}
 	go func() {
-		a.Log.Info("listening", "addr", a.Config.Server.Addr, "queue", a.Broker.Name(), "storage", a.Store.Name(),
-			"providers", strings.Join(a.Models.Names(), ","), "default_provider", a.Models.DefaultName())
+		if a.Config.NativeProfile {
+			a.Log.Info("Forge is ready. Open " + a.Config.Server.PublicURL)
+			a.Log.Info("Press Ctrl+C to stop. Your tasks and workspaces are retained.")
+		}
+		if !a.Config.NativeProfile {
+			a.Log.Info("listening", "addr", a.Config.Server.Addr, "queue", a.Broker.Name(), "storage", a.Store.Name(),
+				"providers", strings.Join(a.Models.Names(), ","), "default_provider", a.Models.DefaultName())
+		}
 		errc <- srv.Serve(publicListener)
 	}()
 	select {
@@ -688,24 +699,26 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	case <-ctx.Done():
 	}
-	a.Log.Info("shutting down")
+	started := time.Now()
+	a.Log.Info("Stopping Forge; waiting for active agents", "timeout", "60s")
 	sctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	// Drain turns first, while the listeners are still up: an external agent
 	// finishing its turn still needs the callback API.
 	a.Engine.Shutdown(sctx)
-	_ = srv.Shutdown(sctx)
-	if previewServer != nil {
-		_ = previewServer.Shutdown(sctx)
-	}
-	if internal != nil {
-		_ = internal.Shutdown(sctx)
-	}
+	a.Log.Info("Agents stopped; closing browser streams and HTTP listeners", "elapsed", time.Since(started).Round(time.Millisecond))
+	stopHTTP()
+	httpErr := errors.Join(shutdownHTTP(sctx, srv), shutdownHTTP(sctx, previewServer), shutdownHTTP(sctx, internal))
 	stopHistory()
 	<-historyDone
 	stopReviews()
 	<-reviewDone
-	return a.Close(sctx)
+	a.Log.Info("Closing storage, queues and telemetry", "elapsed", time.Since(started).Round(time.Millisecond))
+	err = errors.Join(httpErr, a.Close(sctx))
+	if err == nil {
+		a.Log.Info("Forge stopped; persistent data is retained", "elapsed", time.Since(started).Round(time.Millisecond))
+	}
+	return err
 }
 
 func (a *App) Close(ctx context.Context) error {
@@ -720,4 +733,16 @@ func (a *App) Close(ctx context.Context) error {
 		errs = append(errs, a.shutdownObs(ctx))
 	}
 	return errors.Join(errs...)
+}
+
+// shutdownHTTP closes leftover connections on timeout rather than leaving handlers
+// alive against closed storage. Preserve the timeout for the caller's diagnostics.
+func shutdownHTTP(ctx context.Context, server *http.Server) error {
+	if server == nil {
+		return nil
+	}
+	if err := server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("HTTP shutdown: %w", errors.Join(err, server.Close()))
+	}
+	return nil
 }

@@ -2114,3 +2114,24 @@ Software Factory already present. Existing Docker services/data were not changed
 LOCAL-07b and final developer/vendor acceptance remain open. Other Release 1
 backlog (including separately scoped provider boundaries and monetary limits) is
 not silently declared complete by this task/native delivery; Release 2 is untouched.
+
+
+### Native terminal feedback and browser-stream shutdown (2026-10-19)
+
+Native startup defaults to a readable console view with the browser URL and data
+location. Shutdown reports agent draining, HTTP stream closure and persistent
+resource cleanup with elapsed times. Explicit JSON/text presentation remains
+available without rewriting saved profiles; server defaults are unchanged.
+An active browser SSE stream reproduced a shutdown timeout in the native lifecycle
+integration test. Cancelling request contexts after agents drain fixes that case;
+HTTP shutdown failures close remaining connections and are returned to the caller.
+The user's earlier process exited before a stack sample could be collected, so its
+specific blocking stack was not confirmed. No live user profile was changed.
+
+Validation: host `go test ./...`, `go vet ./...`, `go build ./...`,
+`CI=true make test-python test-web` (332 web tests), `make test-native-browser`
+(eight journeys), formatting/diff checks and `make build-native` passed.
+A production-binary disposable-profile smoke confirmed readiness, readable logs
+and successful SIGINT shutdown with retained data. Standard `make test`,
+`make lint` and `make build` were attempted but could not reach the Docker socket;
+the host equivalents above were run instead. No installation was activated.

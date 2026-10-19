@@ -42,7 +42,9 @@ func Setup(ctx context.Context, c Config) (*slog.Logger, func(context.Context) e
 	_ = level.UnmarshalText([]byte(strings.ToUpper(orDefault(c.LogLevel, "info"))))
 	var stdout slog.Handler
 	opts := &slog.HandlerOptions{Level: level}
-	if c.LogFormat == "text" {
+	if c.LogFormat == "console" {
+		stdout = newConsoleHandler(os.Stdout, level)
+	} else if c.LogFormat == "text" {
 		stdout = slog.NewTextHandler(os.Stdout, opts)
 	} else {
 		stdout = slog.NewJSONHandler(os.Stdout, opts)

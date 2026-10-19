@@ -19,6 +19,7 @@ import (
 )
 
 func main() {
+	logFormat := flag.String("log-format", "", "log presentation: console, text or json (native default: console)")
 	cfgPath := flag.String("config", "", "path to forge.yaml (or LEFORGE_CONFIG)")
 	version := flag.Bool("version", false, "print version and exit")
 	local := flag.Bool("local", false, "start an initialized native profile (no Docker required)")
@@ -105,7 +106,11 @@ func main() {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		if err = localinstall.Run(ctx, root); err != nil {
+		format := *logFormat
+		if format == "" {
+			format = "console"
+		}
+		if err = localinstall.RunWithLogFormat(ctx, root, format); err != nil {
 			fmt.Fprintln(os.Stderr, "native startup:", err)
 			os.Exit(1)
 		}
@@ -115,6 +120,13 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "config:", err)
 		os.Exit(2)
+	}
+	if *logFormat != "" {
+		if *logFormat != "console" && *logFormat != "text" && *logFormat != "json" {
+			fmt.Fprintln(os.Stderr, "log format must be console, text or json")
+			os.Exit(2)
+		}
+		cfg.Observability.LogFormat = *logFormat
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
