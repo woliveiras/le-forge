@@ -21,6 +21,8 @@ var validID = regexp.MustCompile(`^tsk_[a-z0-9]{1,80}$`)
 var ErrInvalid = errors.New("invalid task")
 
 type Input struct {
+	ProjectID    string `json:"projectId,omitempty"`
+	BaseCommit   string `json:"baseCommit,omitempty"`
 	Title        string `json:"title"`
 	Request      string `json:"request"`
 	Outcome      string `json:"outcome"`
@@ -61,6 +63,9 @@ func Validate(in Input) error {
 	}
 	if len(in.ResultNodeID) > 128 || !utf8.ValidString(in.ResultNodeID) || strings.ContainsRune(in.ResultNodeID, 0) {
 		return fmt.Errorf("%w: invalid result agent", ErrInvalid)
+	}
+	if (in.ProjectID == "") != (in.BaseCommit == "") || len(in.ProjectID) > 128 || len(in.BaseCommit) > 64 {
+		return fmt.Errorf("%w: project and full base commit must be supplied together", ErrInvalid)
 	}
 	switch in.Outcome {
 	case "understand", "implement", "investigate", "review", "freeform":

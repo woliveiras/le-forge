@@ -35,7 +35,8 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
   </section>;
 }
 function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean}) {
-  const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId}:empty);
+  const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit}:empty);
+  const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
   const [review,setReview] = useState<TaskReview>();
   const [error,setError] = useState<string>();
@@ -73,6 +74,11 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
         <p>{taskOutcomes.find(o=>o.id===input.outcome)?.description}</p>
         <label>Title<input maxLength={200} required value={input.title} onChange={e=>change({title:e.target.value})}/></label>
         <label>Request<textarea required rows={6} maxLength={16384} value={input.request} onChange={e=>change({request:e.target.value})}/></label>
+        <ErrorBox error={projects.error}/>
+        <label>Project<select value={input.projectId??''} onChange={e=>{const p=projects.data?.find(p=>p.id===e.target.value);change({projectId:p?.id,baseCommit:p?.head});}}>
+          <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select></label>
+        {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}
         <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,nodeId:'',resultNodeId:''});}}>
           <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
           {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}
@@ -96,6 +102,7 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
       <p>Current workflow version: {review.currentGraphVersion}</p>
       {review.blockers.map(b=><p key={b}>{b}</p>)}
       {[...(review.validation.errors??[]),...(review.validation.warnings??[])].map((v,i)=><p key={i}>{v.path}: {v.message}</p>)}
+      {review.project&&<p>Project: {review.project.name} · Source: {review.project.path} · Base: {input.baseCommit} · Task worktree: {review.workspacePath}. Commands use the workflow's configured isolation and permissions.</p>}
       <p>Execution copy: {review.executionGraphId}. Starting runs the whole workflow with a fresh managed workspace. Your request goes to the entry agent; the selected result agent supplies the result.</p>
       <p>Entry agent model: {review.model?.provider||'runtime default'} / {review.model?.name||'runtime default'}. Isolation: {review.isolation||'process'}. Process execution uses the server machine and is not a sandbox.</p>
       <p>Tool permissions remain unchanged. Every call still passes gateway policies and approvals.</p>
@@ -134,6 +141,7 @@ function TaskTracking({task,canControl}:{task:TaskDraft;canControl:boolean}) {
       <ErrorBox error={error}/><Btn onClick={()=>setRefresh(x=>x+1)}>Refresh task</Btn>
       {current.launchError&&<p>{current.launchError}</p>}
       {progress?.blockers.map(b=><p key={b}>{b}</p>)}
+      {progress?.workspacePath&&<p>Task worktree on the Forge server: <code>{progress.workspacePath}</code>. Review this directory in your editor when it is accessible on your machine.</p>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
       {graph&&<nav aria-label="Task evidence"><a href={`#/g/${encodeURIComponent(graph)}/runs`}>Execution details</a> · <a href={`#/g/${encodeURIComponent(graph)}/files`}>Workspace files</a> · <a href="#/approvals">Approvals</a></nav>}

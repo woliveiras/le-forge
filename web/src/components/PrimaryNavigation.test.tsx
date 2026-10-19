@@ -4,12 +4,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { PrimaryNavigation } from './PrimaryNavigation';
 
 afterEach(cleanup);
-it('groups destinations without enabling planned projects', async () => {
+it('groups destinations with projects available', async () => {
   const navigate = vi.fn();
   render(<PrimaryNavigation active="graphs" pending={2} onNavigate={navigate}/>);
   expect((screen.getByRole('button', {name:'Tasks'}) as HTMLButtonElement).disabled).toBe(false);
-  expect((screen.getByRole('button', {name:'Projects'}) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', {name:'Projects'}) as HTMLButtonElement).disabled).toBe(false);
   expect(screen.getByRole('button', {name:'Workflows'}).getAttribute('aria-current')).toBe('page');
+  await userEvent.click(screen.getByRole('button',{name:'Projects'}));
+  expect(navigate).toHaveBeenCalledWith('projects');
   const work = screen.getByRole('region', {name:'Work'});
   await userEvent.click(within(work).getByRole('button', {name:'Approvals 2'}));
   expect(navigate).toHaveBeenCalledWith('approvals');

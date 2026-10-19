@@ -1803,3 +1803,16 @@ and the 83-case main browser suite passed. Hosted OAuth/provider browser results
 are recorded separately. This is an incremental FLOW-03 delivery, not completion
 of all task/project flows or standalone readiness. See docs/task-workflows.md for
 current restrictions. The existing installation was not changed.
+
+### Project/worktree foundation evidence — 2026-10-19
+
+FLOW-03c connects explicit project registration to task review and admission.
+Repository paths are resolved on the server, full base commits are verified, and
+unique task branches/worktrees preserve source dirty files. Two-worktree isolation,
+SQLite reopen, API role/error cases and the browser journey passed. All unit and
+integration suites, lint and build passed (303 frontend tests); six focused browser
+cases passed. Native-only UX remains gated by the forthcoming installation work;
+container mounts are never described as host execution. Project editing/deletion,
+environment preferences and automatic editor handoff remain pending.
+The preceding execution-copy increment additionally passed hosted CIMD and isolated
+provider-management browser suites. No existing installation/data was changed.

@@ -1,3 +1,4 @@
+import {ProjectsPage} from './components/ProjectsPage';
 import { TasksPage } from './components/TasksPage';
 import { PrimaryNavigation } from './components/PrimaryNavigation';
 import { runSection, type RunSection } from './components/runPresentation';
@@ -25,6 +26,7 @@ import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
  */
 type Route =
   | { view: 'graphs' }
+  | { view: 'projects' }
   | { view: 'tasks'; taskId?: string; create?: boolean }
   | { view: 'approvals' }
   | { view: 'connections'; connectionID?: string; connectionTab?: ConnectionTab; create?: boolean; history?: boolean; connectQuery?: string; oauthQuery?: string }
@@ -36,6 +38,7 @@ type Route =
 export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
   const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'projects') return {view:'projects'};
   if (parts[0] === 'tasks') return {view:'tasks', ...(parts[1] === 'new' ? {create:true} : parts[1] ? {taskId:decodeURIComponent(parts[1])} : {})};
   if (parts[0] === 'approvals') return { view: 'approvals' };
   if (parts[0] === 'skills') return { view: 'skills' };
@@ -56,6 +59,7 @@ export function parseRoute(hash: string): Route {
 }
 
 export function routeHash(r: Route): string {
+  if (r.view === 'projects') return '#/projects';
   if (r.view === 'tasks') return r.create ? '#/tasks/new' : r.taskId ? `#/tasks/${encodeURIComponent(r.taskId)}` : '#/tasks';
   if (r.view === 'approvals') return '#/approvals';
   if (r.view === 'skills') return '#/skills';
@@ -184,6 +188,7 @@ function Shell() {
           onNavigate={view => go(view === 'administration' ? {view, section: 'health'} : {view})} />
         <main>
           <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
+          {route.view === 'projects' && <ProjectsPage canEdit={info.data?.identity?.role==='admin'}/>}
           {route.view === 'tasks' && <TasksPage key={route.taskId ?? (route.create ? 'new' : 'list')} id={route.taskId} create={route.create} info={info.data} graphs={list}/>}
           {route.view === 'graphs' && (
             <GraphList

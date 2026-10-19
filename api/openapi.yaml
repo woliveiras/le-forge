@@ -43,6 +43,38 @@ tags:
 security:
   - bearer: []
 paths:
+  /api/v1/projects:
+    get:
+      summary: List explicitly registered server-side Git repositories
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Registered repository metadata; no secrets or automatic execution
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/Project'}}
+    post:
+      summary: Register a repository root after reading its Git metadata
+      x-leforge-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, path]
+              properties:
+                name: {type: string, maxLength: 200}
+                path: {type: string, maxLength: 4096, description: Absolute path on the Forge server}
+      responses:
+        '201':
+          description: Registered immutable project and initial HEAD commit
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {description: Invalid path, unavailable repository or Git failure}
+        '403': {description: Administrator required}
   /api/v1/tasks:
     get:
       summary: List persisted task drafts (does not list historical agent turns)
@@ -146,6 +178,8 @@ paths:
                   model: {type: object}
                   isolation: {type: string}
                   agents: {type: array, items: {type: object}}
+                  project: {$ref: '#/components/schemas/Project'}
+                  workspacePath: {type: string}
         '404': {description: Task or workflow not found}
   /api/v1/tasks/{tid}/progress:
     get:
@@ -163,6 +197,7 @@ paths:
                 properties:
                   task: {$ref: '#/components/schemas/TaskDraft'}
                   state: {type: string}
+                  workspacePath: {type: string}
                   executions: {type: array, items: {type: object}}
                   result: {type: object}
                   blockers: {type: array, items: {type: string}}
@@ -1942,6 +1977,15 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    Project:
+      type: object
+      properties:
+        id: {type: string}
+        revision: {type: integer}
+        name: {type: string}
+        path: {type: string}
+        head: {type: string}
+        createdAt: {type: string, format: date-time}
     TaskDraftInput:
       type: object
       additionalProperties: false
@@ -1954,6 +1998,8 @@ components:
         graphVersion: {type: integer, minimum: 1}
         nodeId: {type: string, minLength: 1, maxLength: 128}
         resultNodeId: {type: string, maxLength: 128}
+        projectId: {type: string}
+        baseCommit: {type: string, description: Full immutable commit identifier; required with projectId}
     TaskDraft:
       type: object
       required: [id, revision, status, title, request, outcome, graphId, graphVersion, nodeId, createdBy, updatedBy, createdAt, updatedAt]
@@ -1971,6 +2017,8 @@ components:
         graphVersion: {type: integer}
         nodeId: {type: string}
         resultNodeId: {type: string}
+        projectId: {type: string}
+        baseCommit: {type: string}
         createdBy: {type: string}
         updatedBy: {type: string}
         createdAt: {type: string, format: date-time}

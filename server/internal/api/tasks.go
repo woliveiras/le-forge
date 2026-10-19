@@ -89,7 +89,7 @@ func (s *Server) saveTask(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (s *Server) taskRunner() taskrun.Manager {
-	return taskrun.Manager{Store: s.Store, Engine: s.Engine}
+	return taskrun.Manager{Store: s.Store, Engine: s.Engine, Workspaces: s.Workspaces}
 }
 func (s *Server) reviewTask(w http.ResponseWriter, r *http.Request) error {
 	v, err := s.taskRunner().Review(r.Context(), r.PathValue("tid"))

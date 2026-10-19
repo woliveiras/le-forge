@@ -1,4 +1,4 @@
-import type {TaskInput, TaskDraft, TaskPage, TaskReview, TaskProgress} from './tasks';
+import type {TaskInput, TaskDraft, TaskPage, TaskReview, TaskProgress, Project} from './tasks';
 import type { ExecutionTree, CancelScope, Cancellation } from './executionTree';
 import type { DelegationPolicy, DelegationPolicyView, DelegationProfile, DelegationProfileView } from './delegation';
 import type { MCPHistoryPage, MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
@@ -163,6 +163,8 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  projects: () => request<Project[]>(`${V1}/projects`),
+  createProject: (input:{name:string;path:string}) => request<Project>(`${V1}/projects`,{method:'POST',body:input}),
   tasks: (after?: string) => request<TaskPage>(`${V1}/tasks`, {query:{after,limit:50}}),
   task: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}`),
   saveTask: (input: TaskInput, id?: string, revision?: number) => request<TaskDraft>(`${V1}/tasks${id ? '/'+enc(id) : ''}`, {method:id?'PUT':'POST',body:input,headers:id?{'If-Match':String(revision)}:undefined}),

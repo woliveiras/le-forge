@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/projectconfig"
+	"github.com/woliveiras/le-forge/server/internal/workspace"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,8 +23,9 @@ import (
 const GraphPrefix = "task-run-"
 
 type Manager struct {
-	Store  storage.Store
-	Engine *engine.Engine
+	Workspaces *workspace.Manager
+	Store      storage.Store
+	Engine     *engine.Engine
 }
 type AgentRequirements struct {
 	ID        string               `json:"id"`
@@ -30,16 +34,18 @@ type AgentRequirements struct {
 	Isolation domain.IsolationMode `json:"isolation"`
 }
 type Review struct {
-	Agents              []AgentRequirements  `json:"agents"`
-	Task                *taskconfig.Draft    `json:"task"`
-	CurrentGraphVersion int                  `json:"currentGraphVersion"`
-	Validation          *graph.Report        `json:"validation"`
-	Blockers            []string             `json:"blockers"`
-	CanStart            bool                 `json:"canStart"`
-	ExecutionGraphID    string               `json:"executionGraphId"`
-	Grants              []domain.ToolGrant   `json:"grants"`
-	Model               domain.ModelRef      `json:"model"`
-	Isolation           domain.IsolationMode `json:"isolation"`
+	Project             *projectconfig.Project `json:"project,omitempty"`
+	WorkspacePath       string                 `json:"workspacePath,omitempty"`
+	Agents              []AgentRequirements    `json:"agents"`
+	Task                *taskconfig.Draft      `json:"task"`
+	CurrentGraphVersion int                    `json:"currentGraphVersion"`
+	Validation          *graph.Report          `json:"validation"`
+	Blockers            []string               `json:"blockers"`
+	CanStart            bool                   `json:"canStart"`
+	ExecutionGraphID    string                 `json:"executionGraphId"`
+	Grants              []domain.ToolGrant     `json:"grants"`
+	Model               domain.ModelRef        `json:"model"`
+	Isolation           domain.IsolationMode   `json:"isolation"`
 }
 
 func ExecutionID(id string) string { return GraphPrefix + strings.TrimPrefix(id, "tsk_") }
@@ -69,6 +75,9 @@ func Prepare(d *taskconfig.Draft, source *domain.Graph) (*domain.Graph, []string
 	result := g.Node(d.ResultNodeID)
 	if result == nil || result.Disabled {
 		blockers = append(blockers, "Select an enabled result agent.")
+	}
+	if d.ProjectID != "" && g.Spec.Workspace.Repo != "" {
+		blockers = append(blockers, "This workflow already selects a remote repository. Use a workflow without a repository override.")
 	}
 	if g.Spec.Workspace.Path != "" {
 		blockers = append(blockers, "This workflow uses an existing workspace path. Task-owned local project workspaces are not available yet.")
@@ -116,6 +125,22 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 		blockers = append(blockers, "This task has already been submitted. Start is not repeated.")
 	}
 	r := &Review{Task: d, CurrentGraphVersion: source.Metadata.Version, Validation: report, Blockers: blockers, CanStart: len(blockers) == 0, ExecutionGraphID: g.Metadata.ID, Grants: []domain.ToolGrant{}}
+	if d.ProjectID != "" {
+		project, e := (projectconfig.Manager{Store: m.Store}).Get(ctx, d.ProjectID)
+		if e != nil {
+			return nil, e
+		}
+		r.Project = project
+		if e = projectconfig.Verify(ctx, project, d.BaseCommit); e != nil {
+			r.Blockers = append(r.Blockers, e.Error())
+		}
+		if m.Workspaces == nil {
+			r.Blockers = append(r.Blockers, "Task workspaces are unavailable.")
+		} else {
+			r.WorkspacePath = filepath.Join(m.Workspaces.Root, g.Metadata.ID)
+		}
+	}
+	r.CanStart = len(r.Blockers) == 0
 	for _, n := range g.Spec.Nodes {
 		if !n.Disabled {
 			r.Agents = append(r.Agents, AgentRequirements{ID: n.ID, Model: n.Model, Grants: n.Tools, Isolation: n.Isolation.Mode})
@@ -176,6 +201,18 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 		}
 		return fail(err)
 	}
+	if d.ProjectID != "" {
+		project, e := (projectconfig.Manager{Store: m.Store}).Get(ctx, d.ProjectID)
+		if e != nil {
+			return fail(e)
+		}
+		if m.Workspaces == nil {
+			return fail(errors.New("task workspaces unavailable"))
+		}
+		if _, e = projectconfig.CreateWorktree(ctx, project, d.BaseCommit, m.Workspaces.Root, g.Metadata.ID); e != nil {
+			return fail(e)
+		}
+	}
 	if _, _, err = m.Engine.SaveGraph(ctx, g, 0, actor); err != nil {
 		return fail(err)
 	}
@@ -195,11 +232,12 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 }
 
 type View struct {
-	Task       *taskconfig.Draft   `json:"task"`
-	State      string              `json:"state"`
-	Executions []*domain.Execution `json:"executions"`
-	Result     *domain.Execution   `json:"result,omitempty"`
-	Blockers   []string            `json:"blockers"`
+	WorkspacePath string              `json:"workspacePath,omitempty"`
+	Task          *taskconfig.Draft   `json:"task"`
+	State         string              `json:"state"`
+	Executions    []*domain.Execution `json:"executions"`
+	Result        *domain.Execution   `json:"result,omitempty"`
+	Blockers      []string            `json:"blockers"`
 }
 
 func (m Manager) View(ctx context.Context, id string) (*View, error) {
@@ -208,6 +246,9 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 		return nil, err
 	}
 	v := &View{Task: d, State: d.Status, Executions: []*domain.Execution{}, Blockers: []string{}}
+	if d.ProjectID != "" && d.ExecutionGraphID == ExecutionID(d.ID) && m.Workspaces != nil {
+		v.WorkspacePath = filepath.Join(m.Workspaces.Root, d.ExecutionGraphID)
+	}
 	if d.ExecutionGraphID == "" {
 		return v, nil
 	}

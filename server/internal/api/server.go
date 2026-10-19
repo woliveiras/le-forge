@@ -220,6 +220,7 @@ func (s *Server) routes() {
 	} else {
 		s.mux.Handle("GET /metrics", promhttp.Handler())
 	}
+	s.projectRoutes()
 	s.internalRoutes()
 	if dir := s.Config.Server.WebDir; dir != "" {
 		s.mux.Handle("GET /", spa(dir))

@@ -229,3 +229,27 @@ and retains queued messages, workspace files and history. It does not restart
 retained messages. Generated summaries remain distinct from tool outcomes, with
 links to execution details and workspace inspection. This increment does not
 complete FLOW-03, FLOW-06 or the standalone installation.
+
+## Registered project worktrees (2026-10-19)
+
+Projects registers an absolute repository root on the Forge server, with admin
+write/viewer read checks. Registration resolves symlinks, verifies Git and records
+an immutable initial HEAD; it does not start agents or copy uncommitted files.
+The task explicitly selects a project and full commit. Review and admission
+recheck the registered path and commit. A workflow with its own repository/path
+override cannot silently replace this choice.
+
+Admission creates `leforge/task-run-<id>` in the managed task workspace from the
+reviewed commit. Existing directories or branches cause an error, never force
+replacement. Failure preserves partial resources for inspection. Source dirty
+files and HEAD remain unchanged; different tasks have different worktrees and
+branches. Git hooks and fsmonitor are disabled for these management commands;
+repository-configured checkout filters can still run, so task start authorizes
+local repository processing under the server OS account. Worktrees do not isolate
+OS permissions. No commit, push, merge, source reset or cleanup is automatic.
+
+The UI explains server versus container paths and links worktree background
+information. A container-mounted repository still runs commands in the container;
+this delivery does not pretend it is the user's host. Native packaging, automatic
+editor handoff, preferred environment configuration and explicit project updates
+remain pending. Existing file/diff inspection is linked from task progress.
