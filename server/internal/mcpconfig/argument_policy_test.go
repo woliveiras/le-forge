@@ -119,3 +119,127 @@ func TestArgumentPolicyGatewayPersistenceAndChanges(t *testing.T) {
 		t.Fatal("failed discovery retained authority", err)
 	}
 }
+
+func TestArgumentCombinations(t *testing.T) {
+	good := ArgumentRule{Tool: "read", Arguments: []string{"workspace", "repo"}, Combinations: [][]string{{"team-a", "one"}, {"team-b", "two"}}}
+	if err := validateArgumentPolicy([]ArgumentRule{good}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		args    string
+		allowed bool
+	}{
+		{`{"workspace":"team-a","repo":"one"}`, true}, {`{"workspace":"team-b","repo":"two"}`, true},
+		{`{"workspace":"team-a","repo":"two"}`, false}, {`{"workspace":"team-b","repo":"one"}`, false},
+		{`{"workspace":"team-a"}`, false}, {`{"workspace":null,"repo":"one"}`, false},
+		{`{"workspace":["team-a"],"repo":"one"}`, false}, {`{"workspace":"TEAM-A","repo":"one"}`, false},
+	} {
+		var args map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(tc.args), &args); err != nil {
+			t.Fatal(err)
+		}
+		if argumentPolicyAllows([]ArgumentRule{good}, restrictedRead(), args) != tc.allowed {
+			t.Fatal(tc.args)
+		}
+	}
+	for _, mutate := range []func(*ArgumentRule){
+		func(r *ArgumentRule) { r.Argument = "repo" }, func(r *ArgumentRule) { r.Values = []string{"one"} },
+		func(r *ArgumentRule) { r.Arguments = []string{"repo"} }, func(r *ArgumentRule) { r.Arguments = []string{"repo", "repo"} },
+		func(r *ArgumentRule) { r.Arguments = []string{"workspace", "nested.repo"} },
+		func(r *ArgumentRule) { r.Combinations = nil }, func(r *ArgumentRule) { r.Combinations = [][]string{{"a"}} },
+		func(r *ArgumentRule) { r.Combinations = [][]string{{"a", "b"}, {"a", "b"}} },
+		func(r *ArgumentRule) { r.Combinations = [][]string{{"a", " "}} },
+		func(r *ArgumentRule) { r.Combinations = [][]string{{"a", "b\n"}} },
+		func(r *ArgumentRule) { r.Combinations = make([][]string, 33) },
+		func(r *ArgumentRule) { r.Arguments = make([]string, 9) },
+	} {
+		bad := good
+		mutate(&bad)
+		if validateArgumentPolicy([]ArgumentRule{bad}) == nil {
+			t.Fatal("invalid combination accepted", bad)
+		}
+	}
+	if validateArgumentPolicy([]ArgumentRule{good, good}) == nil {
+		t.Fatal("duplicate tuple rule")
+	}
+	for _, schema := range []string{`{"properties":{"workspace":{"type":"string"}}}`, `{"properties":{"workspace":{"type":"string"},"repo":{"type":"number"}}}`} {
+		if argumentPolicyTool([]ArgumentRule{good}, Tool{Name: "read", InputSchema: json.RawMessage(schema)}) {
+			t.Fatal("schema bypass")
+		}
+	}
+	var args map[string]json.RawMessage
+	json.Unmarshal([]byte(`{"workspace":"team-b","repo":"two"}`), &args)
+	if argumentPolicyAllows([]ArgumentRule{good, {Tool: "read", Argument: "repo", Values: []string{"one"}}}, restrictedRead(), args) {
+		t.Fatal("independent constraint bypassed")
+	}
+}
+
+func TestArgumentCombinationsGatewayPersistence(t *testing.T) {
+	m := testManager(t)
+	m.Discover = func(context.Context, string, string) ([]Tool, error) { return []Tool{restrictedRead()}, nil }
+	calls := 0
+	m.Call = func(context.Context, string, string, string, json.RawMessage) (json.RawMessage, error) {
+		calls++
+		return json.RawMessage(`{"content":[]}`), nil
+	}
+	rule := ArgumentRule{Tool: "read", Arguments: []string{"workspace", "repo"}, Combinations: [][]string{{"team-a", "one"}, {"team-b", "two"}}}
+	in := Input{ID: "tuple", Name: "Tuple", Service: "generic", Endpoint: "https://example.com/mcp", Enabled: true, ArgumentPolicy: []ArgumentRule{rule}}
+	if _, err := m.Put(t.Context(), in, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	view, err := m.Refresh(t.Context(), in.ID, "admin")
+	if err != nil || len(view.Tools) != 1 {
+		t.Fatal(view, err)
+	}
+	stored, err := m.Get(t.Context(), in.ID)
+	if err != nil || len(stored.ArgumentPolicy[0].Combinations) != 2 {
+		t.Fatal(stored, err)
+	}
+	gateway := tools.NewGateway(tools.NewRegistry(), nil, nil)
+	gateway.ResolveTool = m.Resolve
+	p := &tools.Principal{GraphID: "test", NodeID: "reader", Grants: []domain.ToolGrant{{Name: "mcp.tuple.read"}}}
+	valid := json.RawMessage(`{"workspace":"team-a","repo":"one"}`)
+	for _, args := range []string{`{"workspace":"team-a","repo":"two"}`, `{"workspace":"team-b","repo":"one"}`, `{"repo":"one"}`} {
+		if _, err := gateway.Invoke(t.Context(), p, "mcp.tuple.read", json.RawMessage(args)); !errors.Is(err, tools.ErrDenied) {
+			t.Fatal("cross tuple dispatch", err)
+		}
+	}
+	if calls != 0 {
+		t.Fatal("denied calls reached remote")
+	}
+	if _, err := gateway.Invoke(t.Context(), p, "mcp.tuple.read", valid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gateway.Invoke(t.Context(), &tools.Principal{GraphID: "test", NodeID: "ungranted"}, "mcp.tuple.read", valid); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal("missing grant accepted", err)
+	}
+	stale, err := m.Resolve(t.Context(), "mcp.tuple.read")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.ArgumentPolicy[0].Combinations = [][]string{{"team-b", "two"}}
+	saved, err := m.Put(t.Context(), in, view.Revision, "admin")
+	if err != nil || len(saved.Tools) != 0 {
+		t.Fatal(saved, err)
+	}
+	if _, err := stale.Invoke(t.Context(), &tools.Invocation{Principal: p, Args: valid}); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal("stale tuple authority", err)
+	}
+	if _, err := m.Refresh(t.Context(), in.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gateway.Invoke(t.Context(), p, "mcp.tuple.read", valid); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal("removed tuple accepted", err)
+	}
+	if calls != 1 {
+		t.Fatal(calls)
+	}
+	m.Discover = func(context.Context, string, string) ([]Tool, error) { return nil, errors.New("fixture unavailable") }
+	failed, err := m.Refresh(t.Context(), in.ID, "admin")
+	if err != nil || failed.Status != "unavailable" {
+		t.Fatal(failed, err)
+	}
+	if _, err := gateway.Invoke(t.Context(), p, "mcp.tuple.read", json.RawMessage(`{"workspace":"team-b","repo":"two"}`)); !errors.Is(err, tools.ErrDenied) {
+		t.Fatal("unavailable catalogue accepted", err)
+	}
+}

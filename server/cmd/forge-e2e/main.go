@@ -107,7 +107,12 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 			}
 		}
 		toolName := "mcp.runtime.search"
-		if strings.Contains(r.Messages[0].Content, "mcp-argument-policy-fixture") {
+		callArgs := json.RawMessage(`{"query":"issue"}`)
+		if strings.Contains(r.Messages[0].Content, "mcp-argument-policy-fixture-tuples") {
+			toolName = "mcp.tuple-policy.search"
+			callArgs = json.RawMessage(`{"query":"issue","workspace":"team-a"}`)
+		}
+		if strings.Contains(r.Messages[0].Content, "mcp-argument-policy-fixture") && !strings.Contains(r.Messages[0].Content, "fixture-tuples") {
 			toolName = "mcp.argument-policy.search"
 		}
 		if strings.Contains(r.Messages[0].Content, "mcp-quota-fixture") {
@@ -119,7 +124,7 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 		if strings.Contains(r.Messages[0].Content, "mcp-oauth-call-fixture") {
 			toolName = "mcp.oauth-browser.search"
 		}
-		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: toolName, Arguments: json.RawMessage(`{"query":"issue"}`)}}}, StopReason: "tool_calls"}, nil
+		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: toolName, Arguments: callArgs}}}, StopReason: "tool_calls"}, nil
 	}
 	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "git-inspect-fixture") {
 		return gitInspectionResponse(r), nil

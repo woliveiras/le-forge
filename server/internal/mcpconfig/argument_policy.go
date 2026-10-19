@@ -7,12 +7,14 @@ import (
 	"unicode"
 )
 
-// ArgumentRule is an exact, case-sensitive constraint on a top-level string.
+// ArgumentRule constrains either one top-level string or a complete string tuple.
 // Rules for one tool are ANDed. Once configured, unlisted tools are excluded.
 type ArgumentRule struct {
-	Tool     string   `json:"tool"`
-	Argument string   `json:"argument"`
-	Values   []string `json:"values"`
+	Tool         string     `json:"tool"`
+	Argument     string     `json:"argument,omitempty"`
+	Values       []string   `json:"values,omitempty"`
+	Arguments    []string   `json:"arguments,omitempty"`
+	Combinations [][]string `json:"combinations,omitempty"`
 }
 
 func validateArgumentPolicy(rules []ArgumentRule) error {
@@ -21,6 +23,17 @@ func validateArgumentPolicy(rules []ArgumentRule) error {
 	}
 	seen := map[string]bool{}
 	for _, r := range rules {
+		if len(r.Arguments) > 0 || len(r.Combinations) > 0 {
+			if err := validateCombinations(r); err != nil {
+				return err
+			}
+			key := r.Tool + "/@combinations"
+			if seen[key] {
+				return fmt.Errorf("%w: duplicate combination rule", ErrInvalid)
+			}
+			seen[key] = true
+			continue
+		}
 		key := r.Tool + "/" + r.Argument
 		if !toolName.MatchString(r.Tool) || !toolName.MatchString(r.Argument) || seen[key] || len(r.Values) < 1 || len(r.Values) > 32 {
 			return fmt.Errorf("%w: argument rules require unique tool/argument names and 1–32 values", ErrInvalid)
@@ -52,8 +65,14 @@ func argumentPolicyTool(rules []ArgumentRule, tool Tool) bool {
 	for _, r := range rules {
 		if r.Tool == tool.Name {
 			found = true
-			if schema.Properties[r.Argument].Type != "string" {
-				return false
+			fields := r.Arguments
+			if len(fields) == 0 {
+				fields = []string{r.Argument}
+			}
+			for _, field := range fields {
+				if schema.Properties[field].Type != "string" {
+					return false
+				}
 			}
 		}
 	}
@@ -65,6 +84,30 @@ func argumentPolicyAllows(rules []ArgumentRule, tool Tool, args map[string]json.
 	}
 	for _, r := range rules {
 		if r.Tool != tool.Name {
+			continue
+		}
+		if len(r.Arguments) > 0 {
+			matched := false
+			for _, combination := range r.Combinations {
+				if len(combination) != len(r.Arguments) {
+					return false
+				}
+				all := true
+				for i, field := range r.Arguments {
+					var value string
+					if json.Unmarshal(args[field], &value) != nil || value != combination[i] {
+						all = false
+						break
+					}
+				}
+				if all {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
 			continue
 		}
 		var value string
@@ -83,4 +126,39 @@ func argumentPolicyAllows(rules []ArgumentRule, tool Tool, args map[string]json.
 		}
 	}
 	return true
+}
+
+// Combinations constrain a whole tuple; independently allowed values must never
+// turn into a Cartesian product of resources from different reviewed tuples.
+func validateCombinations(r ArgumentRule) error {
+	if !toolName.MatchString(r.Tool) || r.Argument != "" || len(r.Values) != 0 || len(r.Arguments) < 2 || len(r.Arguments) > 8 || len(r.Combinations) < 1 || len(r.Combinations) > 32 {
+		return fmt.Errorf("%w: combination rules require 2–8 arguments and 1–32 combinations, without independent values", ErrInvalid)
+	}
+	fields := map[string]bool{}
+	for _, field := range r.Arguments {
+		if !toolName.MatchString(field) || fields[field] {
+			return fmt.Errorf("%w: combination argument names must be distinct", ErrInvalid)
+		}
+		fields[field] = true
+	}
+	seen := map[string]bool{}
+	for _, combination := range r.Combinations {
+		if len(combination) != len(r.Arguments) {
+			return fmt.Errorf("%w: each combination must supply every argument", ErrInvalid)
+		}
+		for _, value := range combination {
+			if value == "" || len(value) > 256 || strings.TrimSpace(value) != value || strings.ContainsFunc(value, unicode.IsControl) {
+				return fmt.Errorf("%w: invalid combination value", ErrInvalid)
+			}
+		}
+		key, err := json.Marshal(combination)
+		if err != nil {
+			return fmt.Errorf("%w: invalid combination", ErrInvalid)
+		}
+		if seen[string(key)] {
+			return fmt.Errorf("%w: duplicate combination", ErrInvalid)
+		}
+		seen[string(key)] = true
+	}
+	return nil
 }

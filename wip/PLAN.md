@@ -2135,3 +2135,27 @@ A production-binary disposable-profile smoke confirmed readiness, readable logs
 and successful SIGINT shutdown with retained data. Standard `make test`,
 `make lint` and `make build` were attempted but could not reach the Docker socket;
 the host equivalents above were run instead. No installation was activated.
+
+
+### Paired MCP resource arguments (2026-10-19)
+
+Extend the existing exact argument policy with optional complete combinations.
+An administrator can constrain a reviewed tool to specific workspace/repository
+(or other string-argument) tuples without allowing cross-pairs. All independent
+rules, exact agent grants, approvals and connection revision checks continue to
+apply. No vendor ownership, query parsing, returned-content filtering or live
+qualification is inferred from a tuple match. External provider validation stays
+in the final acceptance phase; no live connection is changed by development.
+
+Delivered as a backward-compatible optional rule with 2–8 named arguments and
+1–32 complete distinct combinations. Tests cover both allowed pairs, cross-pair
+and malformed-input denial, conjunction with independent rules, schema drift,
+persistence, stale invocation authority, ungranted calls and discovery failure.
+Two Chromium journeys verify existing rules and the new editor through real
+backend/gateway execution; the first browser attempt exposed a textarea locator
+issue, fixed by selecting its accessible textbox role without weakening assertions.
+Host `go test ./...`, `go test -race ./internal/mcpconfig`, `go vet ./...`,
+`go build ./...`, tagged E2E harness tests, TypeScript checks and
+`CI=true make test-python test-web` passed (333 web tests). `make test`,
+`make lint` and `make build` were attempted but the Docker socket was unavailable;
+no daemon or user installation was started. External validation remains pending.

@@ -101,7 +101,7 @@ func newServer(recovering bool, headers map[string]string, issues bool) *httptes
 				return
 			}
 			if q.Params["cursor"] == nil {
-				result = map[string]any{"tools": []any{map[string]any{"name": "search", "description": "Search fixture issues", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"query": map[string]string{"type": "string"}}}}}, "nextCursor": "second"}
+				result = map[string]any{"tools": []any{map[string]any{"name": "search", "description": "Search fixture issues", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"query": map[string]string{"type": "string"}, "workspace": map[string]string{"type": "string"}}}}}, "nextCursor": "second"}
 			} else {
 				result = map[string]any{"tools": []any{map[string]any{"name": "read_issue", "description": "Read fixture issue", "inputSchema": map[string]string{"type": "object"}}}}
 			}

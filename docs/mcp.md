@@ -802,11 +802,26 @@ stale references. Existing agent grants, host restrictions and approvals still
 apply. Removing all rules removes this additional boundary; review that change
 as carefully as adding a grant.
 
-For a reviewed tool with `workspace` and `repo` string arguments, one rule can
-allow workspace `team-a` and another can allow repository `project-one`. Use
-separate connections for different workspace/repository pairs: multiple values
-form independent allowed sets, not paired tuples. Values are visible connection
-metadata, so never put credentials in them.
+For a reviewed tool with `workspace` and `repo` string arguments, independent
+rules allow every combination of their allowed values. To restrict complete
+pairs instead, select **Add combination rule**, enter the argument names in
+order, and add each allowed combination. For example, allow only
+`team-a / project-one` and `team-b / project-two`: neither cross-pair is allowed.
+Every field must match the same row. Existing independent rules still apply
+alongside the combination rule, and all tool grants remain explicit.
+
+The API representation is an argument-policy entry such as:
+
+```json
+{"tool":"read","arguments":["workspace","repo"],"combinations":[["team-a","project-one"],["team-b","project-two"]]}
+```
+
+A combination rule accepts 2–8 distinct top-level string arguments and 1–32
+complete, distinct rows. One combination rule per tool is allowed; it cannot
+also contain the single-argument `argument`/`values` fields. The same 256-byte
+value bound and whitespace/control-character exclusions apply. Saving clears
+discovery and stale invocation authority just as for independent rules.
+Values are visible connection metadata, so never put credentials in them.
 
 These are request constraints, not vendor authorization or a semantic content
 filter. Do not infer Jira project membership from an issue-key prefix, Confluence

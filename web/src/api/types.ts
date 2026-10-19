@@ -656,7 +656,7 @@ export interface MCPTemplateRef { id: string; version: number }
 export interface MCPTemplate extends MCPTemplateRef { parameters?: {name:string;label:string;default:string;options?:string[];inputType?:'url'|'text'}[]; authenticationModes?: string[]; name: string; service: string; endpoint: string; authentication: string; guidance: string; source: string; reviewedAt: string; validation: string }
 export interface MCPOAuthConfig { registrationMode?: string; issuer: string; clientId: string; scopes: string[] }
 export interface MCPOAuth extends MCPOAuthConfig { registrationStatus?: string; registrationDiagnostic?: {code: string; httpStatus?: number}; effectiveRegistrationMode?: string; status: string; expiresAt?: string; grantedScopes?: string[]; clientSecretConfigured: boolean; revocation?: string }
-export interface MCPArgumentRule { tool: string; argument: string; values: string[] }
+export interface MCPArgumentRule { tool: string; argument?: string; values?: string[]; arguments?: string[]; combinations?: string[][] }
 export interface MCPAtlassianPolicy { products: ('jira'|'confluence')[]; cloudIds: string[] }
 export interface MCPLocalProcess { command:string; args:string[]; directory:string }
 export interface MCPConnection {
