@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type NavigationDestination = 'graphs' | 'approvals' | 'connections' | 'models' | 'skills' | 'administration';
+export type NavigationDestination = 'tasks' | 'graphs' | 'approvals' | 'connections' | 'models' | 'skills' | 'administration';
 
 const configuration: { destination: NavigationDestination; label: string }[] = [
   { destination: 'graphs', label: 'Workflows' },
@@ -22,9 +22,9 @@ export function PrimaryNavigation({ active, pending, onNavigate }: {
   return <nav className="primary-navigation" aria-label="Main navigation">
     <section className="navigation-group" aria-labelledby="work-navigation-label">
       <h2 id="work-navigation-label" className="navigation-label">Work</h2>
-      <button type="button" disabled aria-describedby="planned-work-navigation">Tasks</button>
+      <button type="button" className={`approvals-btn ${active === 'tasks' ? 'on' : ''}`} aria-current={active === 'tasks' ? 'page' : undefined} onClick={() => onNavigate('tasks')}>Tasks</button>
       <button type="button" disabled aria-describedby="planned-work-navigation">Projects</button>
-      <p id="planned-work-navigation" className="navigation-hint">Tasks and projects are not available yet.</p>
+      <p id="planned-work-navigation" className="navigation-hint">Projects are not available yet.</p>
       <button type="button" className={`approvals-btn ${active === 'approvals' ? 'on' : ''}`} aria-current={active === 'approvals' ? 'page' : undefined} onClick={() => onNavigate('approvals')}>
         Approvals {pending > 0 && <span className="count">{pending}</span>}
       </button>

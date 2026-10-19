@@ -424,10 +424,9 @@ resource admission and safe reset; see the acceptance evidence for coverage and 
 
 ### User-initiated tasks — FLOW-01 design contract
 
-**Design completed 2026-10-19; implementation pending.** The reviewed contract is
+**Design completed 2026-10-19; draft persistence/review implemented, task execution pending.** The reviewed contract is
 in [Task-oriented workflow contracts](task-workflows.md). It supersedes the
-previous preliminary graph-scoped task endpoint proposal. No task/project API is
-implemented by this documentation change; OpenAPI remains the implemented API.
+previous preliminary graph-scoped task endpoint proposal. The draft list/create/read/update and review endpoints are now implemented under `/api/v1/tasks`; project and task execution APIs remain planned. OpenAPI remains the implemented API.
 
 A task is a durable user request, a workflow is an existing versioned graph, and
 an execution is one agent turn. Project registration and task/run bindings need

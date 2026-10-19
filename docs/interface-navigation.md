@@ -5,7 +5,8 @@ introduce roles or change API permissions.
 
 | Group | Destination | Scope |
 | --- | --- | --- |
-| Work | Tasks / Projects | Disabled and explicitly labeled unavailable until their task/project flows are implemented. Existing Runs remains agent execution history. |
+| Work | Tasks (`#/tasks`) | Persisted request drafts and requirements preview; execution admission is pending. Existing Runs remains agent execution history. |
+| Work | Projects | Disabled until project registration is implemented. |
 | Work | Approvals | Existing approval and application-review flows, including pending count |
 | Configuration | Workflows (`#/graphs`) | Existing graph editor, activity, files, messages and advanced YAML |
 | Configuration | Connections (`#/connections`) | Installation MCP connections, OAuth setup, discovered tools and call history |

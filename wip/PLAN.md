@@ -1777,3 +1777,14 @@ The registry replacement unit tests and provider API/storage integration passed
 again. The provider browser test was moved unchanged, preserving every assertion.
 The earlier failed combined run is superseded by this complete successful run;
 no security check, test assertion or production authorization was relaxed.
+
+### FLOW-03a — Durable task drafts (2026-10-19)
+
+The first FLOW-03 increment implements request drafts and requirement previews,
+not execution admission. Settings CAS persists explicit graph versions/entry
+agents, pagination and audit intent without duplicating the scheduler. The browser
+supports save/reload/edit/review and denies viewer writes. SQLite/filesystem
+reopen tests, API tests, component tests and four browser cases passed. Full
+make test/lint/build checks passed (300 frontend tests); no installed deployment
+was performed. Independent task execution, launch deduplication/reconciliation,
+channel bindings and standalone work remain pending; FLOW-03 is not complete.

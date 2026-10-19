@@ -1,3 +1,4 @@
+import type {TaskInput, TaskDraft, TaskPage, TaskReview} from './tasks';
 import type { ExecutionTree, CancelScope, Cancellation } from './executionTree';
 import type { DelegationPolicy, DelegationPolicyView, DelegationProfile, DelegationProfileView } from './delegation';
 import type { MCPHistoryPage, MCPConnection, MCPConnectionInput, MCPTemplate } from './types';
@@ -162,6 +163,10 @@ function graphBody(g: GraphInput): Pick<RequestOptions, 'body' | 'raw'> {
 }
 
 export const api = {
+  tasks: (after?: string) => request<TaskPage>(`${V1}/tasks`, {query:{after,limit:50}}),
+  task: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}`),
+  saveTask: (input: TaskInput, id?: string, revision?: number) => request<TaskDraft>(`${V1}/tasks${id ? '/'+enc(id) : ''}`, {method:id?'PUT':'POST',body:input,headers:id?{'If-Match':String(revision)}:undefined}),
+  reviewTask: (id: string) => request<TaskReview>(`${V1}/tasks/${enc(id)}/review`),
   delegationPolicy: () => request<DelegationPolicyView>(`${V1}/delegation-policy`),
   saveDelegationPolicy: (policy: DelegationPolicy, revision: number) => request<DelegationPolicyView>(`${V1}/delegation-policy`, {method:'PUT', body:policy, headers:{'If-Match':`"${revision}"`}}),
   delegationProfiles: () => request<DelegationProfileView[]>(`${V1}/delegation-profiles`),

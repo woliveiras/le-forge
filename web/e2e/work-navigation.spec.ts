@@ -5,7 +5,7 @@ test('groups navigation, supports keyboard disclosure and preserves legacy links
   await page.goto('/#/integrations');
   const nav = page.getByRole('navigation',{name:'Main navigation'});
   await expect(nav.getByRole('button',{name:'Connections',exact:true})).toHaveAttribute('aria-current','page');
-  await expect(nav.getByRole('button',{name:'Tasks',exact:true})).toBeDisabled();
+  await expect(nav.getByRole('button',{name:'Tasks',exact:true})).toBeEnabled();
   await expect(nav.getByRole('button',{name:'Projects',exact:true})).toBeDisabled();
   const toggle = nav.getByRole('button',{name:'Configuration',exact:true});
   await toggle.focus(); await page.keyboard.press('Enter');

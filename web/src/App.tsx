@@ -1,3 +1,4 @@
+import { TasksPage } from './components/TasksPage';
 import { PrimaryNavigation } from './components/PrimaryNavigation';
 import { runSection, type RunSection } from './components/runPresentation';
 import { agentSection, type AgentSection } from './components/agentSettingsModel';
@@ -24,6 +25,7 @@ import { EventStreamProvider, useEventStream } from './hooks/useEventStream';
  */
 type Route =
   | { view: 'graphs' }
+  | { view: 'tasks'; taskId?: string; create?: boolean }
   | { view: 'approvals' }
   | { view: 'connections'; connectionID?: string; connectionTab?: ConnectionTab; create?: boolean; history?: boolean; connectQuery?: string; oauthQuery?: string }
   | { view: 'models' }
@@ -34,6 +36,7 @@ type Route =
 export function parseRoute(hash: string): Route {
   const [path, qs] = hash.replace(/^#/, '').split('?');
   const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'tasks') return {view:'tasks', ...(parts[1] === 'new' ? {create:true} : parts[1] ? {taskId:decodeURIComponent(parts[1])} : {})};
   if (parts[0] === 'approvals') return { view: 'approvals' };
   if (parts[0] === 'skills') return { view: 'skills' };
   if (parts[0] === 'models') return { view: 'models' };
@@ -53,6 +56,7 @@ export function parseRoute(hash: string): Route {
 }
 
 export function routeHash(r: Route): string {
+  if (r.view === 'tasks') return r.create ? '#/tasks/new' : r.taskId ? `#/tasks/${encodeURIComponent(r.taskId)}` : '#/tasks';
   if (r.view === 'approvals') return '#/approvals';
   if (r.view === 'skills') return '#/skills';
   if (r.view === 'connections') {
@@ -180,6 +184,7 @@ function Shell() {
           onNavigate={view => go(view === 'administration' ? {view, section: 'health'} : {view})} />
         <main>
           <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
+          {route.view === 'tasks' && <TasksPage key={route.taskId ?? (route.create ? 'new' : 'list')} id={route.taskId} create={route.create} info={info.data} graphs={list}/>}
           {route.view === 'graphs' && (
             <GraphList
               graphs={list}

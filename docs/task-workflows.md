@@ -1,7 +1,6 @@
 # Task-oriented Workflow Contracts
 
-Status: FLOW-01 design reviewed against code on 2026-10-19. All new task/project
-behavior below is planned. This document is not an implemented API specification.
+Status: FLOW-01 design reviewed against code on 2026-10-19. FLOW-03 draft persistence and requirement review are implemented as recorded below; execution admission and project behavior remain planned. OpenAPI documents only delivered endpoints.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Vocabulary and existing foundations
@@ -179,3 +178,27 @@ relevant browser E2E, make test, make lint and make build. This design-only deli
 requires documentation/link checks, not new runtime tests. Human walkthrough,
 external provider consent and clean native installation remain final acceptance;
 no implementation, deployment or external validation is claimed here.
+
+## FLOW-03 foundation — durable drafts (2026-10-19)
+
+Implemented: operator/admin creation and revision-protected editing of drafts,
+viewer reads, bounded cursor listing, explicit saved workflow version and enabled
+entry-agent selection, five editable outcome choices, reload/resume and a read-only
+requirements preview. Drafts use existing installation settings CAS storage under
+`tasks/drafts/`; no new database service or execution engine is introduced. The
+UI saves on explicit request, not automatically; save before leaving an unsaved
+form. A stale graph version or revision does not overwrite the draft.
+
+The review endpoint returns current graph/provider/environment validation plus
+blockers. `canStart` is always false. No task start/cancel endpoint exists yet.
+Saving/reviewing never injects a message, starts an agent, modifies a graph or grants
+a tool. The task form currently targets an agent; channel bindings, registered
+projects, current effective grant presentation, isolated admission, idempotent
+start, authoritative result association and recovery remain pending.
+
+`task.draft_save_requested` records metadata-only mutation intent before storage
+CAS. Audit failure blocks the save. This event does not claim a save succeeded;
+the revisioned draft is the authoritative outcome. History contains no request
+body in this event. SQLite and filesystem reopen tests prove draft persistence;
+API tests prove revision/version errors and viewer denial. This foundation is not
+full FLOW-03 completion or standalone installation acceptance.

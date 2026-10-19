@@ -108,6 +108,11 @@ func (s *Server) routes() {
 	O := config.RoleOperator
 	A := config.RoleAdmin
 	routes := []route{
+		{"GET /api/v1/tasks", R, s.listTasks},
+		{"POST /api/v1/tasks", O, s.saveTask},
+		{"GET /api/v1/tasks/{tid}", R, s.getTask},
+		{"PUT /api/v1/tasks/{tid}", O, s.saveTask},
+		{"GET /api/v1/tasks/{tid}/review", R, s.reviewTask},
 		{"GET /api/v1/delegation-policy", R, s.delegationPolicy},
 		{"PUT /api/v1/delegation-policy", A, s.delegationPolicy},
 		{"GET /api/v1/delegation-profiles", R, s.delegationProfiles},

@@ -43,6 +43,105 @@ tags:
 security:
   - bearer: []
 paths:
+  /api/v1/tasks:
+    get:
+      summary: List persisted task drafts (does not list historical agent turns)
+      x-leforge-role: viewer
+      parameters:
+        - {in: query, name: after, schema: {type: string}, description: Opaque cursor returned by the preceding page}
+        - {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+      responses:
+        '200':
+          description: Draft page in stable ID order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/TaskDraft'}}
+                  next: {type: string}
+        '422': {description: Invalid cursor or limit}
+    post:
+      summary: Save a new task draft without starting agents or changing grants
+      x-leforge-role: operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TaskDraftInput'}
+      responses:
+        '201':
+          description: Persisted draft
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '400': {description: Malformed or unexpected JSON fields}
+        '403': {description: Operator role required}
+        '404': {description: Workflow not found}
+        '409': {description: Selected workflow version changed}
+        '422': {description: Invalid request or unavailable entry agent}
+  /api/v1/tasks/{tid}:
+    parameters:
+      - {in: path, name: tid, required: true, schema: {type: string}}
+    get:
+      summary: Read a task draft
+      x-leforge-role: viewer
+      responses:
+        '200':
+          description: Persisted draft
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '404': {description: Draft not found}
+    put:
+      summary: Update a task draft with revision protection
+      x-leforge-role: operator
+      parameters:
+        - {in: header, name: If-Match, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TaskDraftInput'}
+      responses:
+        '200':
+          description: Updated draft
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '400': {description: Invalid JSON or missing revision}
+        '403': {description: Operator role required}
+        '404': {description: Draft or workflow not found}
+        '409': {description: Stale draft or workflow version}
+        '422': {description: Invalid draft}
+  /api/v1/tasks/{tid}/review:
+    get:
+      summary: Preview current workflow requirements without admitting execution
+      x-leforge-role: viewer
+      parameters:
+        - {in: path, name: tid, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Current validation and blockers; canStart is always false until task admission is implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [task, currentGraphVersion, validation, blockers, canStart]
+                properties:
+                  task: {$ref: '#/components/schemas/TaskDraft'}
+                  currentGraphVersion: {type: integer}
+                  validation: {type: object}
+                  blockers: {type: array, items: {type: string}}
+                  canStart: {const: false}
+        '404': {description: Task or workflow not found}
   /api/v1/delegation-policy:
     get:
       summary: Read the effective native delegation policy
@@ -1780,6 +1879,34 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
   schemas:
+    TaskDraftInput:
+      type: object
+      additionalProperties: false
+      required: [title, request, outcome, graphId, graphVersion, nodeId]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200, description: Also bounded to 200 UTF-8 bytes}
+        request: {type: string, minLength: 1, maxLength: 16384, description: Also bounded to 16384 UTF-8 bytes; untrusted instructions}
+        outcome: {enum: [understand, implement, investigate, review, freeform]}
+        graphId: {type: string, minLength: 1, maxLength: 128}
+        graphVersion: {type: integer, minimum: 1}
+        nodeId: {type: string, minLength: 1, maxLength: 128}
+    TaskDraft:
+      type: object
+      required: [id, revision, status, title, request, outcome, graphId, graphVersion, nodeId, createdBy, updatedBy, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        revision: {type: integer, minimum: 1}
+        status: {const: draft}
+        title: {type: string}
+        request: {type: string}
+        outcome: {type: string}
+        graphId: {type: string}
+        graphVersion: {type: integer}
+        nodeId: {type: string}
+        createdBy: {type: string}
+        updatedBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     ExecutionCancellation:
       type: object
       required: [executionId, rootExecutionId, scope, actor, requestedAt]
