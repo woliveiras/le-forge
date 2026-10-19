@@ -101,6 +101,12 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 		}
 	}
 	cancel, done := start()
+	var info struct {
+		NativeProfile bool `json:"nativeProfile"`
+	}
+	if status := request("GET", "/api/v1/info", "", &info); status != 200 || !info.NativeProfile {
+		t.Fatal("native capability missing", status)
+	}
 	if c := request("GET", "/", "", nil); c != 200 {
 		t.Fatal(c)
 	}

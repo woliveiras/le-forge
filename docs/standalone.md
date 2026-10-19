@@ -81,7 +81,9 @@ For a first repository test:
    tools; do not grant Git write or unrestricted shell actions unintentionally.
 3. Register your repository in Projects. New task lets you select that project,
    workflow, entry/result agents and a reviewed commit.
-4. Review and start. Open the task worktree path shown in progress in VS Code.
+4. Review and start. Task progress offers Open in VS Code after you confirm that
+   Forge and the browser are on the same computer and VS Code is installed.
+   Alternatively, open the displayed worktree path manually.
    Dirty files in the original checkout are not copied or overwritten.
 5. Inspect results, diffs and tests before your own commit/push. Task completion
    itself performs neither action; agent permissions remain those you reviewed.

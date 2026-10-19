@@ -273,3 +273,17 @@ once active work settles, including when no turn has begun. Informational graph
 warnings are displayed separately from runtime requirements that block start.
 Task completion itself never invokes commit/push, but an agent may perform actions
 already authorized by its workflow grants; review those grants before starting.
+
+
+### Native editor handoff
+
+Task progress offers an encoded `vscode://file` link only when the API identifies
+an actual native-profile launch, the browser uses a loopback hostname, and the
+user confirms that browser and Forge run on the same computer with VS Code
+installed. This confirmation is local to that displayed workspace and is not a
+permission grant. A tunnel can also use loopback; it must not be mistaken for
+same-computer execution. Server/container installations continue to display their
+server-side path without a host-editor link. Opening the editor is explicit and
+does not commit, push, clean up or change tool permissions. The UI does not claim
+to detect an installed editor. Browser tests inspect the link without launching
+an external application.

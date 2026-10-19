@@ -20,6 +20,8 @@ import (
 )
 
 type Config struct {
+	// NativeProfile is set only by the native launcher, never by YAML or environment.
+	NativeProfile bool          `yaml:"-" json:"-"`
 	Preview       Preview       `yaml:"preview"`
 	Instance      string        `yaml:"instance"`
 	Server        Server        `yaml:"server"`

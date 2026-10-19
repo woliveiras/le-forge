@@ -2306,6 +2306,9 @@ components:
         defaultProvider: {type: string}
         runtimes: {type: array, items: {type: string}}
         grafanaUrl: {type: string}
+        nativeProfile:
+          type: boolean
+          description: True only when started through the native profile launcher. Does not prove the browser is on the same computer.
         identity:
           type: object
           description: "Caller identity. NOTE: currently serialised with Go field names (Name, Role)."

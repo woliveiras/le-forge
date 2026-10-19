@@ -122,6 +122,9 @@ func TestAPIFlow(t *testing.T) {
 	}
 	var info map[string]any
 	call(t, srv, "GET", "/api/v1/info", viewerTok, "", "", &info)
+	if info["nativeProfile"] != false {
+		t.Fatal("standard server advertised native host execution")
+	}
 	if id, _ := info["identity"].(map[string]any); id["role"] != "viewer" {
 		t.Fatalf("identity: %v", info["identity"])
 	}

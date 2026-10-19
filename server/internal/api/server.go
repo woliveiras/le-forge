@@ -440,7 +440,8 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) error {
 		"queue": s.Broker.Name(), "storage": s.Store.Name(),
 		"providers": s.Models.Names(), "defaultProvider": s.Models.DefaultName(),
 		"runtimes": rts, "grafanaUrl": s.Config.Observability.GrafanaURL,
-		"identity": identityFrom(r.Context()),
+		"identity":      identityFrom(r.Context()),
+		"nativeProfile": s.Config.NativeProfile,
 	})
 	return nil
 }

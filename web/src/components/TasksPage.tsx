@@ -4,6 +4,7 @@ import type {GraphSummary, Info} from '../api/types';
 import type {TaskDraft, TaskInput, TaskReview, TaskProgress} from '../api/tasks';
 import {useAsync} from '../hooks/useData';
 import {Btn, ErrorBox} from './common';
+import {WorkspaceHandoff} from './WorkspaceHandoff';
 
 export const taskOutcomes = [
   {id:'understand',label:'Understand a repository',description:'Explain architecture, dependencies and areas that need attention.'},
@@ -24,7 +25,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
     <header className="page-head"><div><h1>{create?'New task':id?'Task':'Tasks'}</h1><p className="muted">Prepare a request and review the workflow before execution.</p></div>
       {!create&&!id&&info?.identity?.role!=='viewer'&&info?.identity?.role&&<a className="btn primary" href="#/tasks/new">New task</a>}
     </header>
-    {id||create ? <TaskEditor key={id??'new'} draft={detail.data} graphs={graphs.filter(g=>!g.graph.metadata.id.startsWith('task-run-'))} canStart={info?.identity?.role==='admin'} canEdit={info?.identity?.role==='admin'||info?.identity?.role==='operator'}/> : <>
+    {id||create ? <TaskEditor key={id??'new'} draft={detail.data} graphs={graphs.filter(g=>!g.graph.metadata.id.startsWith('task-run-'))} nativeProfile={info?.nativeProfile===true} canStart={info?.identity?.role==='admin'} canEdit={info?.identity?.role==='admin'||info?.identity?.role==='operator'}/> : <>
       <ErrorBox error={list.error}/>
       <Btn onClick={()=>void list.reload()} disabled={list.loading}>Refresh tasks</Btn>
       {!list.loading&&!list.error&&list.data?.items.length===0&&<p>No task drafts yet. Create a request using one of your existing workflows.</p>}
@@ -34,7 +35,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
     </>}
   </section>;
 }
-function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean}) {
+function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean;nativeProfile:boolean}) {
   const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
   const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
@@ -65,7 +66,7 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
     try{setSaved(await api.startTask(saved.id,review.task.revision));setReview(undefined);}
     catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
-  if(saved&&saved.status!=='draft')return <TaskTracking task={saved} canControl={canStart}/>;
+  if(saved&&saved.status!=='draft')return <TaskTracking task={saved} canControl={canStart} nativeProfile={nativeProfile}/>;
   return <>
     <a href="#/tasks">Back to tasks</a>
     <form className="card form" aria-label="Task request" onSubmit={e=>{e.preventDefault();void save();}}>
@@ -119,7 +120,7 @@ function TaskEditor({draft,graphs,canEdit,canStart}:{draft?:TaskDraft;graphs:Gra
   </>;
 }
 
-function TaskTracking({task,canControl}:{task:TaskDraft;canControl:boolean}) {
+function TaskTracking({task,canControl,nativeProfile}:{task:TaskDraft;canControl:boolean;nativeProfile:boolean}) {
   const [progress,setProgress]=useState<TaskProgress>();
   const [error,setError]=useState<string>();
   const [busy,setBusy]=useState(false);
@@ -145,7 +146,7 @@ function TaskTracking({task,canControl}:{task:TaskDraft;canControl:boolean}) {
       <ErrorBox error={error}/><Btn onClick={()=>setRefresh(x=>x+1)}>Refresh task</Btn>
       {current.launchError&&<p>{current.launchError}</p>}
       {progress?.blockers.map(b=><p key={b}>{b}</p>)}
-      {progress?.workspacePath&&<p>Task worktree on the Forge server: <code>{progress.workspacePath}</code>. Review this directory in your editor when it is accessible on your machine.</p>}
+      {progress?.workspacePath&&<WorkspaceHandoff path={progress.workspacePath} nativeProfile={nativeProfile}/>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
       {graph&&<nav aria-label="Task evidence"><a href={`#/g/${encodeURIComponent(graph)}/runs`}>Execution details</a> · <a href={`#/g/${encodeURIComponent(graph)}/files`}>Workspace files</a> · <a href="#/approvals">Approvals</a></nav>}

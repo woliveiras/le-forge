@@ -1863,3 +1863,12 @@ native production HTTP integration evidence covers queue/approval/draft recovery
 archive integrity and failure preservation. This does not close cross-version
 upgrade qualification or native token-reservation recovery. No existing Docker
 installation or user profile is migrated or activated.
+
+
+### Native editor handoff
+
+FLOW-07a exposes the worktree path and an explicit VS Code handoff for a native
+loopback session after same-computer confirmation. Server/container profiles do
+not advertise host editor links. No editor installation detection is claimed;
+browser automation validates the link without launching VS Code. Diff/test
+aggregation and the final human review remain open.

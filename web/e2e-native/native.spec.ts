@@ -22,5 +22,9 @@ test('native profile authenticates, registers a local repo and executes a review
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  expect(readFileSync(join(repo,'dirty.txt'),'utf8')).toBe('preserve');
+ await expect(page.getByRole('link',{name:'Open in VS Code',exact:true})).toHaveCount(0);
+ await page.getByRole('checkbox',{name:'Forge and this browser are on the same computer, with VS Code installed.'}).check();
+ await expect(page.getByRole('link',{name:'Open in VS Code',exact:true})).toHaveAttribute('href',/^vscode:\/\/file.*task-run-/);
+ // Inspect the handoff target without launching an external editor during tests.
  await page.getByRole('link',{name:'Workspace files',exact:true}).click();await expect(page).toHaveURL(/task-run-.*\/files/);
 });

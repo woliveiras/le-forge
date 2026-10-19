@@ -179,6 +179,7 @@ func Open(root string) (*config.Config, func(), error) {
 	if _, err = os.Stat(filepath.Join(c.Server.WebDir, "index.html")); err != nil {
 		return fail(errors.New("native web assets are unavailable"))
 	}
+	c.NativeProfile = true
 	return c, release, nil
 }
 func Run(ctx context.Context, root string) error {

@@ -397,6 +397,7 @@ export interface LeForgeEvent {
 }
 
 export interface Info {
+  nativeProfile?: boolean;
   version: string;
   instance: string;
   queue: string;
