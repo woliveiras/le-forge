@@ -11,6 +11,8 @@ test('saves and resumes a reviewed request without starting or changing the work
  await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain why the parser rejects this input.');
  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-draft-flow');
  await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');
+ // Explicitly clear the suggested result to retain invalid-input coverage.
+ await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();
  await expect(page).toHaveURL(/#\/tasks\/tsk_/);
  await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');

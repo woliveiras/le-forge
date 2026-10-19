@@ -25,7 +25,7 @@ it('preserves request on conflict and sends no tool grants',async()=>{
  await userEvent.click(screen.getByRole('button',{name:'Save draft'}));
  await screen.findByText('Workflow changed');
  expect((screen.getByLabelText('Request') as HTMLTextAreaElement).value).toBe('Check the parser');
- expect(backend.find('POST','/api/v1/tasks')[0].body).toEqual({title:'Investigate a bug',request:'Check the parser',outcome:'freeform',graphId:'factory',graphVersion:1,nodeId:'worker',resultNodeId:''});
+ expect(backend.find('POST','/api/v1/tasks')[0].body).toEqual({title:'Investigate a bug',request:'Check the parser',outcome:'freeform',graphId:'factory',graphVersion:1,nodeId:'worker',resultNodeId:'worker'});
  expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(1);
 });
 it('renders viewer fields read-only and reports loading failures',async()=>{

@@ -1903,3 +1903,13 @@ Git writes, pushes and shell commands are not granted by this template. QA repor
 outstanding checks without claiming synthetic evidence as real test success.
 The existing Docker example remains unchanged. External model acceptance stays
 at the end of the plan, separately from automated fixture coverage.
+
+
+### Short first-task path
+
+FLOW-03f adds editable goal instructions and derives unambiguous entry/channel,
+literal message type and terminal-result suggestions from the chosen graph.
+Ambiguous fields remain user choices. Generated JSON follows title/request edits
+only until customized. The native Software Factory first-task test persists and
+reloads these inputs through the production API without executing the workflow
+or mutating grants. External model/vendor validation remains deferred.

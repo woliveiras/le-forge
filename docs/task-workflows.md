@@ -316,3 +316,17 @@ For registered-project tasks, Git inspection resolves the source repository only
 from the persisted task/project binding, verifies graph ownership and expected
 workspace location, and retains the existing bounded private metadata snapshot.
 Changing a worktree's `.git` pointer cannot select arbitrary external metadata.
+
+
+### Reviewed workflow input suggestions
+
+Choosing a workflow suggests its entry only when there is one eligible external
+queue channel (or one enabled agent with no ingress), and its result only when
+there is one terminal agent. A single literal message type is filled; wildcard
+or ambiguous types remain an explicit choice. Suggestions use the actual graph,
+not its name or template label. All fields remain editable and backend review
+still validates the saved version, input contract, runtime and grants.
+Generated title/description JSON tracks request edits only while it still equals
+the generated payload; customized JSON is preserved. Goal presets provide editable
+initial instructions, and switching goals never replaces a customized request.
+These instructions are not permission restrictions or new tool grants.

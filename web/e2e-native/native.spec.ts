@@ -53,3 +53,23 @@ test('native first-use example needs no external account or model',async({page})
  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
 });
+
+test('preinstalled factory supplies editable task inputs without creating another workflow',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
+ const headers={Authorization:`Bearer ${token}`};
+ const before=await(await page.request.get('/api/v1/graphs/software-factory',{headers})).json();
+ await page.goto('/#/tasks/new');await page.getByLabel('API token').fill(token);await page.getByRole('button',{name:'Continue',exact:true}).click();
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('software-factory');
+ await expect(page.getByRole('combobox',{name:'Entry agent',exact:true})).toHaveValue('planner');
+ await expect(page.getByRole('combobox',{name:'Result agent',exact:true})).toHaveValue('integrator');
+ await expect(page.getByRole('combobox',{name:'Input delivery',exact:true})).toHaveValue('requests');
+ await expect(page.getByRole('textbox',{name:'Message type',exact:true})).toHaveValue('feature.request');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Factory draft');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Inspect a future change');
+ expect(JSON.parse(await page.getByRole('textbox',{name:'Input payload (JSON)',exact:true}).inputValue())).toEqual({title:'Factory draft',description:'Inspect a future change'});
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');await page.reload();
+ await expect(page.getByRole('combobox',{name:'Entry agent',exact:true})).toHaveValue('planner');
+ await page.getByRole('button',{name:'Review requirements'}).click();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ const after=await(await page.request.get('/api/v1/graphs/software-factory',{headers})).json();expect(after).toEqual(before);
+ expect(await(await page.request.get('/api/v1/graphs/software-factory/executions',{headers})).json()).toEqual([]);
+});

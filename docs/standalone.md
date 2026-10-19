@@ -98,9 +98,11 @@ execution. It does not claim tests passed. A human approval gates the final revi
 handoff. No agent receives Git write or shell permission in this default template;
 commits and pushes remain manual. The Docker/Python example is unchanged.
 
-For a task using this workflow, select the registered project and Software Factory,
-entry `planner`, input channel `requests`, message type `feature.request`, and
-result agent `integrator`. Supply the request as JSON with `title` and `description`.
+For a task using this workflow, select the registered project and Software Factory.
+New task suggests entry `planner`, input channel `requests`, message type
+`feature.request` and result agent `integrator` from its unambiguous graph structure.
+Title and request populate the initial JSON with `title` and `description`; you can
+edit all fields, and customized JSON is preserved.
 Review the entire workflow's grants and model settings before starting.
 
 For a first repository test:
