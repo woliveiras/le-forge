@@ -41,6 +41,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/review"
 	"github.com/woliveiras/le-forge/server/internal/secrets"
 	"github.com/woliveiras/le-forge/server/internal/storage"
+	"github.com/woliveiras/le-forge/server/internal/taskrun"
 	"github.com/woliveiras/le-forge/server/internal/tools"
 	"github.com/woliveiras/le-forge/server/internal/workspace"
 )
@@ -113,6 +114,8 @@ func (s *Server) routes() {
 		{"GET /api/v1/tasks/{tid}", R, s.getTask},
 		{"PUT /api/v1/tasks/{tid}", O, s.saveTask},
 		{"GET /api/v1/tasks/{tid}/review", R, s.reviewTask},
+		{"GET /api/v1/tasks/{tid}/progress", R, s.taskProgress},
+		{"POST /api/v1/tasks/{tid}/{action}", A, s.taskAction},
 		{"GET /api/v1/delegation-policy", R, s.delegationPolicy},
 		{"PUT /api/v1/delegation-policy", A, s.delegationPolicy},
 		{"GET /api/v1/delegation-profiles", R, s.delegationProfiles},
@@ -237,6 +240,10 @@ func (s *Server) wrap(rt route) http.Handler {
 				return
 			}
 			r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, id))
+		}
+		if r.Method != http.MethodGet && strings.HasPrefix(r.PathValue("id"), taskrun.GraphPrefix) {
+			writeErr(w, 409, "conflict", "Task execution copies are immutable; use task controls.", nil)
+			return
 		}
 		if err := rt.h(w, r); err != nil {
 			s.writeError(w, r, err)
@@ -500,6 +507,9 @@ func (s *Server) createGraph(w http.ResponseWriter, r *http.Request) error {
 	id := g.Metadata.ID
 	if id == "" {
 		id = graph.Slug(g.Metadata.Name)
+	}
+	if strings.HasPrefix(id, taskrun.GraphPrefix) {
+		return badRequest("task-run- is reserved for task execution copies")
 	}
 	if _, err := s.Store.GetGraph(r.Context(), id, 0); err == nil {
 		return fmt.Errorf("%w: graph %q already exists (use PUT to update)", engine.ErrConflict, id)

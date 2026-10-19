@@ -1,0 +1,334 @@
+// Package taskrun binds reviewed user requests to owned graph execution scopes.
+// It reuses the engine and never retries a possibly dispatched start.
+package taskrun
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/engine"
+	"github.com/woliveiras/le-forge/server/internal/graph"
+	"github.com/woliveiras/le-forge/server/internal/storage"
+	"github.com/woliveiras/le-forge/server/internal/taskconfig"
+)
+
+const GraphPrefix = "task-run-"
+
+type Manager struct {
+	Store  storage.Store
+	Engine *engine.Engine
+}
+type AgentRequirements struct {
+	ID        string               `json:"id"`
+	Model     domain.ModelRef      `json:"model"`
+	Grants    []domain.ToolGrant   `json:"grants"`
+	Isolation domain.IsolationMode `json:"isolation"`
+}
+type Review struct {
+	Agents              []AgentRequirements  `json:"agents"`
+	Task                *taskconfig.Draft    `json:"task"`
+	CurrentGraphVersion int                  `json:"currentGraphVersion"`
+	Validation          *graph.Report        `json:"validation"`
+	Blockers            []string             `json:"blockers"`
+	CanStart            bool                 `json:"canStart"`
+	ExecutionGraphID    string               `json:"executionGraphId"`
+	Grants              []domain.ToolGrant   `json:"grants"`
+	Model               domain.ModelRef      `json:"model"`
+	Isolation           domain.IsolationMode `json:"isolation"`
+}
+
+func ExecutionID(id string) string { return GraphPrefix + strings.TrimPrefix(id, "tsk_") }
+
+// Prepare returns a deep snapshot with a fresh managed workspace. It never
+// attaches the source graph's mutable workspace to a task.
+func Prepare(d *taskconfig.Draft, source *domain.Graph) (*domain.Graph, []string, error) {
+	b, err := json.Marshal(source)
+	if err != nil {
+		return nil, nil, err
+	}
+	var g domain.Graph
+	if err = json.Unmarshal(b, &g); err != nil {
+		return nil, nil, err
+	}
+	graph.Normalize(&g)
+	blockers := []string{}
+	if strings.HasPrefix(source.Metadata.ID, GraphPrefix) {
+		blockers = append(blockers, "Execution copies cannot be used as workflow templates.")
+	}
+	if g.Metadata.Version != d.GraphVersion {
+		blockers = append(blockers, "The workflow changed. Review its current version and save again.")
+	}
+	if n := g.Node(d.NodeID); n == nil || n.Disabled {
+		blockers = append(blockers, "Select an enabled entry agent.")
+	}
+	result := g.Node(d.ResultNodeID)
+	if result == nil || result.Disabled {
+		blockers = append(blockers, "Select an enabled result agent.")
+	}
+	if g.Spec.Workspace.Path != "" {
+		blockers = append(blockers, "This workflow uses an existing workspace path. Task-owned local project workspaces are not available yet.")
+	}
+	if g.Spec.Environment != nil {
+		blockers = append(blockers, "This workflow requires an environment build. Task-owned environment preparation is not available yet.")
+	}
+	for _, n := range g.Spec.Nodes {
+		if n.Disabled {
+			continue
+		}
+		if n.Loop.Mode != domain.LoopOnce && n.Loop.Mode != domain.LoopEvent {
+			blockers = append(blockers, "Task workflows currently support once and event agents only.")
+			break
+		}
+	}
+	g.Metadata.ID = ExecutionID(d.ID)
+	g.Metadata.Name = d.Title + " (task execution)"
+	g.Metadata.Version = 0
+	g.Metadata.Labels = map[string]string{"leforge.task": d.ID, "leforge.workflow": source.Metadata.ID}
+	g.Spec.Workspace.Path = ""
+	return &g, blockers, nil
+}
+func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
+	d, err := (taskconfig.Manager{Store: m.Store}).Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	source, err := m.Store.GetGraph(ctx, d.GraphID, 0)
+	if err != nil {
+		return nil, err
+	}
+	g, blockers, err := Prepare(d, source)
+	if err != nil {
+		return nil, err
+	}
+	report := m.Engine.Validate(g)
+	for _, issue := range report.Errors {
+		blockers = append(blockers, issue.Path+": "+issue.Message)
+	}
+	for _, issue := range report.Warnings {
+		blockers = append(blockers, issue.Path+": "+issue.Message)
+	}
+	if d.Status != "draft" {
+		blockers = append(blockers, "This task has already been submitted. Start is not repeated.")
+	}
+	r := &Review{Task: d, CurrentGraphVersion: source.Metadata.Version, Validation: report, Blockers: blockers, CanStart: len(blockers) == 0, ExecutionGraphID: g.Metadata.ID, Grants: []domain.ToolGrant{}}
+	for _, n := range g.Spec.Nodes {
+		if !n.Disabled {
+			r.Agents = append(r.Agents, AgentRequirements{ID: n.ID, Model: n.Model, Grants: n.Tools, Isolation: n.Isolation.Mode})
+		}
+	}
+	if n := g.Node(d.NodeID); n != nil {
+		r.Grants = append(r.Grants, n.Tools...)
+		r.Model = n.Model
+		r.Isolation = n.Isolation.Mode
+	}
+	return r, nil
+}
+func (m Manager) Start(ctx context.Context, id string, revision int64, actor string) (*taskconfig.Draft, error) {
+	tm := taskconfig.Manager{Store: m.Store}
+	d, err := tm.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if d.Status != "draft" {
+		return d, nil
+	} // Retries never dispatch a second start.
+	if d.Revision != revision {
+		return nil, storage.ErrConflict
+	}
+	review, err := m.Review(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !review.CanStart {
+		return nil, fmt.Errorf("%w: review task requirements before starting", taskconfig.ErrInvalid)
+	}
+	source, err := m.Store.GetGraph(ctx, d.GraphID, d.GraphVersion)
+	if err != nil {
+		return nil, err
+	}
+	g, blockers, err := Prepare(d, source)
+	if err != nil {
+		return nil, err
+	}
+	if len(blockers) > 0 {
+		return nil, taskconfig.ErrInvalid
+	}
+	d.ExecutionGraphID = g.Metadata.ID
+	d, err = tm.Transition(ctx, d, "preparing", actor)
+	if err != nil {
+		return nil, err
+	}
+	// No compensating delete: partial resources and the durable intent remain
+	// inspectable after failure, and neither GET nor retry replays side effects.
+	fail := func(cause error) (*taskconfig.Draft, error) {
+		d.LaunchError = "Task preparation or start did not complete. Inspect diagnostics; this request will not be dispatched again."
+		_, saveErr := tm.Transition(context.WithoutCancel(ctx), d, "interrupted", actor)
+		return nil, errors.Join(cause, saveErr)
+	}
+	if _, err = m.Store.GetGraph(ctx, g.Metadata.ID, 0); !errors.Is(err, storage.ErrNotFound) {
+		if err == nil {
+			err = storage.ErrConflict
+		}
+		return fail(err)
+	}
+	if _, _, err = m.Engine.SaveGraph(ctx, g, 0, actor); err != nil {
+		return fail(err)
+	}
+	// Stable input ID avoids duplicate insertion. The owned graph has never run.
+	input := &domain.OperatorMessage{ID: "task-input-" + id, GraphID: g.Metadata.ID, NodeID: d.NodeID, Replica: 0, Text: d.Request, Author: actor, CreatedAt: time.Now().UTC()}
+	if err = m.Store.PutOperatorMessageOnce(ctx, input); err != nil {
+		return fail(err)
+	}
+	d, err = tm.Transition(ctx, d, "starting", actor)
+	if err != nil {
+		return nil, err
+	}
+	if err = m.Engine.GraphAction(ctx, g.Metadata.ID, "start", actor); err != nil {
+		return fail(err)
+	}
+	return tm.Transition(ctx, d, "running", actor)
+}
+
+type View struct {
+	Task       *taskconfig.Draft   `json:"task"`
+	State      string              `json:"state"`
+	Executions []*domain.Execution `json:"executions"`
+	Result     *domain.Execution   `json:"result,omitempty"`
+	Blockers   []string            `json:"blockers"`
+}
+
+func (m Manager) View(ctx context.Context, id string) (*View, error) {
+	d, err := (taskconfig.Manager{Store: m.Store}).Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	v := &View{Task: d, State: d.Status, Executions: []*domain.Execution{}, Blockers: []string{}}
+	if d.ExecutionGraphID == "" {
+		return v, nil
+	}
+	if d.ExecutionGraphID != ExecutionID(d.ID) {
+		return nil, errors.New("invalid task execution binding")
+	}
+	g, err := m.Store.GetGraph(ctx, d.ExecutionGraphID, 0)
+	if errors.Is(err, storage.ErrNotFound) {
+		v.Blockers = append(v.Blockers, "Execution preparation is incomplete. No automatic retry will occur.")
+		return v, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if g.Metadata.Labels["leforge.task"] != d.ID {
+		return nil, errors.New("invalid task graph ownership")
+	}
+	xs, err := m.Store.ListExecutions(ctx, storage.ExecutionFilter{GraphID: d.ExecutionGraphID, Limit: 1000})
+	if err != nil {
+		return nil, err
+	}
+	v.Executions = xs
+	if len(xs) >= 1000 {
+		v.Blockers = append(v.Blockers, "Execution history exceeds this bounded view; completion cannot be inferred.")
+		return v, nil
+	}
+	st, err := m.Engine.Status(ctx, d.ExecutionGraphID)
+	if err != nil {
+		return nil, err
+	}
+	active := false
+	workersActive := false
+	failed := false
+	for _, x := range xs {
+		if !x.Status.Terminal() {
+			workersActive = true
+			active = true
+		}
+		if x.Status == domain.ExecFailed || x.Status == domain.ExecInterrupted {
+			failed = true
+		}
+		if x.NodeID == d.ResultNodeID && x.ParentExecutionID == "" && (v.Result == nil || x.StartedAt.After(v.Result.StartedAt)) {
+			v.Result = x
+		}
+	}
+	for _, ch := range st.Channels {
+		for _, q := range ch.Groups {
+			if q.Pending > 0 || q.InFlight > 0 {
+				active = true
+			}
+			if q.Dead > 0 {
+				failed = true
+			}
+		}
+	}
+	for _, n := range st.Nodes {
+		for _, r := range n.Replicas {
+			if r.State == domain.ReplicaStarting || r.State == domain.ReplicaRunning || r.State == domain.ReplicaStopping {
+				workersActive = true
+				active = true
+			}
+		}
+	}
+	if st.ApprovalsPending > 0 {
+		active = true
+		v.Blockers = append(v.Blockers, "A human approval is required.")
+	}
+	if d.Status == "cancel_requested" {
+		if !workersActive && st.State == domain.GraphStopped {
+			v.State = "cancelled"
+			v.Blockers = append(v.Blockers, "Execution stopped. Retained queue messages and history are not deleted or restarted.")
+		}
+		return v, nil
+	}
+	if st.RunID != "" {
+		v.State = "running"
+	} else {
+		v.Blockers = append(v.Blockers, "Start outcome is unresolved. No automatic replay will occur.")
+		return v, nil
+	}
+	if !active && len(xs) > 0 {
+		if failed {
+			v.State = "failed"
+		} else if v.Result != nil && v.Result.Status == domain.ExecSucceeded {
+			v.State = "succeeded"
+		} else if st.State == domain.GraphStopped {
+			v.State = "interrupted"
+		}
+	}
+	return v, nil
+}
+func (m Manager) Cancel(ctx context.Context, id, actor string) (*taskconfig.Draft, error) {
+	tm := taskconfig.Manager{Store: m.Store}
+	d, err := tm.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if d.Status == "draft" {
+		return tm.Transition(ctx, d, "cancelled", actor)
+	}
+	if d.Status == "cancelled" {
+		return d, nil
+	}
+	if d.ExecutionGraphID != ExecutionID(d.ID) {
+		return nil, storage.ErrConflict
+	}
+	g, rec, err := m.Engine.GetGraph(ctx, d.ExecutionGraphID, 0)
+	if err != nil {
+		return nil, err
+	}
+	if g.Metadata.Labels["leforge.task"] != d.ID || rec.RunID == "" {
+		return nil, fmt.Errorf("%w: launch has no confirmed run; inspect preparation first", storage.ErrConflict)
+	}
+	if d.Status != "cancel_requested" {
+		d, err = tm.Transition(ctx, d, "cancel_requested", actor)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err = m.Engine.GraphAction(ctx, d.ExecutionGraphID, "kill", actor); err != nil {
+		return nil, err
+	}
+	return d, nil
+}

@@ -1,6 +1,6 @@
 # Task-oriented Workflow Contracts
 
-Status: FLOW-01 design reviewed against code on 2026-10-19. FLOW-03 draft persistence and requirement review are implemented as recorded below; execution admission and project behavior remain planned. OpenAPI documents only delivered endpoints.
+Status: FLOW-01 design reviewed against code on 2026-10-19. FLOW-03 draft persistence and requirement review are implemented as recorded below; initial execution-copy admission is delivered; project behavior remains planned. OpenAPI documents only delivered endpoints.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Vocabulary and existing foundations
@@ -9,7 +9,7 @@ The current wire contract remains [OpenAPI](../api/openapi.yaml).
 |---|---|---|
 | Project | Registered repository and execution preferences | Workspace configuration belongs to graphs; a reusable project record is planned. |
 | Workflow | Saved graph defining agents, channels and policies | `domain.Graph`, with versioned definitions. |
-| Task | One user request with input, chosen project/workflow and review outcome | No durable first-class task entity yet. |
+| Task | One user request with input, chosen project/workflow and review outcome | Revisioned request and execution-copy binding in installation settings. |
 | Graph run | Graph lifecycle from start through stop | `GraphRecord.RunID`; starting an already running graph is not a new run. |
 | Execution | One turn of one agent replica | `domain.Execution`, including graph version, run ID, input/output IDs and parent execution ID. |
 | Workspace | Files where work executes | Shared graph root or per-replica worktree; neither implies a per-task directory. |
@@ -107,19 +107,22 @@ without presenting success or automatically repeating work.
 
 ## Concurrent reuse and workspace boundaries
 
-Selecting Software Factory reuses its saved definition, not another task's mutable
-conversation, input queue or workspace. Current per-replica directories do not
-provide this guarantee. Initial task admission must serialize work on a shared
-graph execution context/workspace and reject or queue a conflicting launch with
-a clear reason. Existing unrelated activity must also be considered; a lock used
-only by the new task endpoint would not protect against legacy start/chat/inject.
+Selecting a workflow reuses its saved definition. Admission creates an explicitly
+reviewed execution copy (`task-run-<task suffix>`), preserving normalized runtime,
+model, grants, policies and channel definitions. The review explains that starting
+runs the entire workflow and the request targets only the selected entry agent.
+This replaces the earlier proposed shared-graph serialization approach: a copy
+reuses existing graph-scoped queues, memory, approvals, children and managed
+workspaces without changing the original definition or adding a second engine.
+Copies are visible in workflow listings and linked from task details; they are
+not silently created or usable as templates. Legacy graph mutation routes reject
+the reserved namespace. Task control routes verify the persisted ownership binding.
 
-Do not advertise concurrent independent tasks on the same workflow until task
-scoping covers replica memory, messages, approvals, child executions, workspace
-bindings and all admission paths. Phase B adds task-owned local worktrees; a new
-worktree alone is insufficient to isolate execution context. Never duplicate or
-rewrite the saved graph silently to simulate concurrency. Different proven
-independent scopes may continue operating concurrently.
+Two tasks therefore have distinct managed roots and engine state. This does not
+isolate OS processes or external resources referenced by tools. Existing absolute
+workspace paths and environment definitions are currently blocked at admission;
+registered local project worktrees and task-owned environment preparation remain
+pending. No automatic commit, push or cleanup occurs.
 
 ## Lifecycle, results and interruption
 
@@ -190,11 +193,10 @@ UI saves on explicit request, not automatically; save before leaving an unsaved
 form. A stale graph version or revision does not overwrite the draft.
 
 The review endpoint returns current graph/provider/environment validation plus
-blockers. `canStart` is always false. No task start/cancel endpoint exists yet.
+blockers. Draft review blocks start until an enabled result agent is selected and current requirements pass.
 Saving/reviewing never injects a message, starts an agent, modifies a graph or grants
 a tool. The task form currently targets an agent; channel bindings, registered
-projects, current effective grant presentation, isolated admission, idempotent
-start, authoritative result association and recovery remain pending.
+projects, current effective grant presentation, project-specific admission, channel-target input and broader workflow completion semantics remain pending.
 
 `task.draft_save_requested` records metadata-only mutation intent before storage
 CAS. Audit failure blocks the save. This event does not claim a save succeeded;
@@ -202,3 +204,28 @@ the revisioned draft is the authoritative outcome. History contains no request
 body in this event. SQLite and filesystem reopen tests prove draft persistence;
 API tests prove revision/version errors and viewer denial. This foundation is not
 full FLOW-03 completion or standalone installation acceptance.
+
+## FLOW-03 execution copies (2026-10-19)
+
+Admin-only start preserves the existing graph-creation permission. Operators can
+prepare drafts, and viewers can inspect evidence. Start claims the draft revision
+before preparing resources, records metadata-only transition intents, inserts a
+stable operator-message ID, then starts the copy. Repeated start requests return
+the existing state without another dispatch. Submitted requests are immutable.
+Uncertain partial preparation remains visible and is never automatically retried
+by the task API. Normal engine recovery/redelivery rules still apply to work
+already admitted; this is not an exactly-once guarantee for external tool effects.
+
+Progress derives from persisted copy executions and current replica, queue and
+approval state. The explicitly selected result agent supplies the result; active
+work and pending approvals prevent success. Failed/interrupted turns prevent a
+success projection. At the 1,000-execution inspection cap, completion is unknown.
+The stored admission status and observed progress are separate; the list displays
+the observed state when available. Missing telemetry is not evidence of success. Once/event
+workflows are supported initially; unsupported modes are blocked before start.
+
+Stop affects only the owned copy, waits for stopped workers in the progress view,
+and retains queued messages, workspace files and history. It does not restart
+retained messages. Generated summaries remain distinct from tool outcomes, with
+links to execution details and workspace inspection. This increment does not
+complete FLOW-03, FLOW-06 or the standalone installation.

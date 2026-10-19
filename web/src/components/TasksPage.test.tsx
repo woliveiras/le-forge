@@ -25,7 +25,7 @@ it('preserves request on conflict and sends no tool grants',async()=>{
  await userEvent.click(screen.getByRole('button',{name:'Save draft'}));
  await screen.findByText('Workflow changed');
  expect((screen.getByLabelText('Request') as HTMLTextAreaElement).value).toBe('Check the parser');
- expect(backend.find('POST','/api/v1/tasks')[0].body).toEqual({title:'Investigate a bug',request:'Check the parser',outcome:'freeform',graphId:'factory',graphVersion:1,nodeId:'worker'});
+ expect(backend.find('POST','/api/v1/tasks')[0].body).toEqual({title:'Investigate a bug',request:'Check the parser',outcome:'freeform',graphId:'factory',graphVersion:1,nodeId:'worker',resultNodeId:''});
  expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(1);
 });
 it('renders viewer fields read-only and reports loading failures',async()=>{
@@ -36,4 +36,13 @@ it('renders viewer fields read-only and reports loading failures',async()=>{
  unmount();render(<TasksPage create info={{identity:{role:'viewer'}} as Info} graphs={graphs}/>);
  expect((screen.getByRole('button',{name:'Save draft'}) as HTMLButtonElement).disabled).toBe(true);
  await waitFor(()=>expect(screen.getByLabelText('Title').closest('fieldset')?.disabled).toBe(true));
+});
+it('requires reviewed confirmation and admin authority before starting',async()=>{
+ const draft={id:'tsk_a',revision:1,status:'draft',title:'Task',request:'Explain',outcome:'freeform',graphId:'factory',graphVersion:1,nodeId:'worker',resultNodeId:'worker'};
+ const backend=fakeApi({'GET /api/v1/tasks':()=>({items:[draft]}),'GET /api/v1/tasks/tsk_a':()=>draft,'GET /api/v1/tasks/tsk_a/review':()=>({task:draft,canStart:true,blockers:[],validation:{errors:[],warnings:[]},executionGraphId:'task-run-a',grants:[],model:{},isolation:'process'})});
+ render(<TasksPage id="tsk_a" info={info} graphs={graphs}/>);
+ await userEvent.click(await screen.findByRole('button',{name:'Review requirements'}));
+ await userEvent.click(await screen.findByRole('checkbox'));
+ expect((screen.getByRole('button',{name:'Start task'}) as HTMLButtonElement).disabled).toBe(true);
+ expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(0);
 });

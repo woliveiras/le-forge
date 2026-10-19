@@ -27,16 +27,20 @@ type Input struct {
 	GraphID      string `json:"graphId"`
 	GraphVersion int    `json:"graphVersion"`
 	NodeID       string `json:"nodeId"`
+	ResultNodeID string `json:"resultNodeId,omitempty"`
 }
 type Draft struct {
+	ObservedState string `json:"observedState,omitempty"`
 	Input
-	ID        string    `json:"id"`
-	Revision  int64     `json:"revision"`
-	Status    string    `json:"status"`
-	CreatedBy string    `json:"createdBy"`
-	UpdatedBy string    `json:"updatedBy"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ExecutionGraphID string    `json:"executionGraphId,omitempty"`
+	LaunchError      string    `json:"launchError,omitempty"`
+	ID               string    `json:"id"`
+	Revision         int64     `json:"revision"`
+	Status           string    `json:"status"`
+	CreatedBy        string    `json:"createdBy"`
+	UpdatedBy        string    `json:"updatedBy"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 type Page struct {
 	Items []*Draft `json:"items"`
@@ -54,6 +58,9 @@ func Validate(in Input) error {
 		if strings.TrimSpace(field.value) == "" || len(field.value) > field.max || !utf8.ValidString(field.value) || strings.ContainsRune(field.value, 0) {
 			return fmt.Errorf("%w: %s is required and must be valid text within %d bytes", ErrInvalid, field.name, field.max)
 		}
+	}
+	if len(in.ResultNodeID) > 128 || !utf8.ValidString(in.ResultNodeID) || strings.ContainsRune(in.ResultNodeID, 0) {
+		return fmt.Errorf("%w: invalid result agent", ErrInvalid)
 	}
 	switch in.Outcome {
 	case "understand", "implement", "investigate", "review", "freeform":
@@ -140,7 +147,7 @@ func (m Manager) Save(ctx context.Context, id string, in Input, revision int64, 
 		if err != nil {
 			return nil, err
 		}
-		if revision < 1 || revision != old.Revision {
+		if old.Status != "draft" || revision < 1 || revision != old.Revision {
 			return nil, storage.ErrConflict
 		}
 		d.CreatedAt = old.CreatedAt
@@ -157,6 +164,33 @@ func (m Manager) Save(ctx context.Context, id string, in Input, revision int64, 
 		return nil, err
 	}
 	rev, err := m.Store.PutSetting(ctx, prefix+d.ID, b, revision, actor)
+	if err != nil {
+		return nil, err
+	}
+	d.Revision = rev
+	return d, nil
+}
+
+// Transition commits lifecycle state with CAS, preserving the request snapshot.
+func (m Manager) Transition(ctx context.Context, d *Draft, status, actor string) (*Draft, error) {
+	old, err := m.Get(ctx, d.ID)
+	if err != nil {
+		return nil, err
+	}
+	if old.Revision != d.Revision {
+		return nil, storage.ErrConflict
+	}
+	d.Status = status
+	d.UpdatedBy = actor
+	d.UpdatedAt = time.Now().UTC()
+	if err = m.Store.AppendEvent(ctx, domain.NewEvent("task.transition_requested", d.GraphID, map[string]any{"taskId": d.ID, "from": old.Status, "to": status, "expectedRevision": d.Revision}).WithActor(actor)); err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, err
+	}
+	rev, err := m.Store.PutSetting(ctx, prefix+d.ID, b, d.Revision, actor)
 	if err != nil {
 		return nil, err
 	}

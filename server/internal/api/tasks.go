@@ -10,6 +10,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
+	"github.com/woliveiras/le-forge/server/internal/taskrun"
 )
 
 func taskError(err error) error {
@@ -30,6 +31,15 @@ func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) error {
 	page, err := (taskconfig.Manager{Store: s.Store}).List(r.Context(), r.URL.Query().Get("after"), limit)
 	if err != nil {
 		return taskError(err)
+	}
+	for _, d := range page.Items {
+		if d.Status != "draft" {
+			v, e := s.taskRunner().View(r.Context(), d.ID)
+			if e != nil {
+				return e
+			}
+			d.ObservedState = v.State
+		}
 	}
 	writeJSON(w, 200, page)
 	return nil
@@ -78,26 +88,58 @@ func (s *Server) saveTask(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, status, d)
 	return nil
 }
+func (s *Server) taskRunner() taskrun.Manager {
+	return taskrun.Manager{Store: s.Store, Engine: s.Engine}
+}
 func (s *Server) reviewTask(w http.ResponseWriter, r *http.Request) error {
-	d, err := (taskconfig.Manager{Store: s.Store}).Get(r.Context(), r.PathValue("tid"))
+	v, err := s.taskRunner().Review(r.Context(), r.PathValue("tid"))
 	if err != nil {
-		return err
+		return taskError(err)
 	}
-	g, err := s.Store.GetGraph(r.Context(), d.GraphID, 0)
+	writeJSON(w, 200, v)
+	return nil
+}
+func (s *Server) taskProgress(w http.ResponseWriter, r *http.Request) error {
+	v, err := s.taskRunner().View(r.Context(), r.PathValue("tid"))
 	if err != nil {
-		return err
+		return taskError(err)
 	}
-	report := s.Engine.Validate(g)
-	blockers := []string{"Task execution admission is not available yet. Saving or reviewing does not start agents."}
-	if g.Metadata.Version != d.GraphVersion {
-		blockers = append(blockers, "The workflow changed. Review the current version and save the draft again.")
+	writeJSON(w, 200, v)
+	return nil
+}
+func (s *Server) taskAction(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Confirm bool `json:"confirm"`
 	}
-	n := g.Node(d.NodeID)
-	if n == nil || n.Disabled {
-		blockers = append(blockers, "The selected agent is missing or disabled.")
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil || !in.Confirm {
+		return badRequest("explicit confirmation is required")
 	}
-	// Validation includes current runtime/provider/environment checks; this response
-	// is a preview, never permission to start or proof of future availability.
-	writeJSON(w, 200, map[string]any{"task": d, "currentGraphVersion": g.Metadata.Version, "validation": report, "blockers": blockers, "canStart": false})
+	var extra any
+	if dec.Decode(&extra) != io.EOF {
+		return badRequest("expected one JSON object")
+	}
+	var d *taskconfig.Draft
+	var err error
+	if r.PathValue("action") == "start" {
+		rev, e := ifMatchRevision(r)
+		if e != nil {
+			return e
+		}
+		if rev < 1 {
+			return badRequest("If-Match is required")
+		}
+		d, err = s.taskRunner().Start(r.Context(), r.PathValue("tid"), rev, identityFrom(r.Context()).Name)
+	} else if r.PathValue("action") == "cancel" {
+		d, err = s.taskRunner().Cancel(r.Context(), r.PathValue("tid"), identityFrom(r.Context()).Name)
+	} else {
+		return badRequest("unknown task action")
+	}
+	if err != nil {
+		return taskError(err)
+	}
+	writeJSON(w, 202, d)
 	return nil
 }

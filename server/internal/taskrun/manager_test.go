@@ -1,0 +1,33 @@
+package taskrun
+
+import (
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/taskconfig"
+	"testing"
+)
+
+func TestPreparePreservesAuthorityAndSeparatesIdentity(t *testing.T) {
+	source := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 2}, Spec: domain.GraphSpec{Defaults: domain.NodeDefaults{Tools: []domain.ToolGrant{{Name: "filesystem.read", Paths: []string{"docs/**"}, RequiresApproval: true}}}, Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}, Workspace: domain.NodeWorkspace{ReadOnly: true}}}}}
+	d := &taskconfig.Draft{ID: "tsk_abc", Input: taskconfig.Input{Title: "Task", GraphVersion: 2, NodeID: "worker", ResultNodeID: "worker"}}
+	copy, blocks, err := Prepare(d, source)
+	if err != nil || len(blocks) > 0 {
+		t.Fatal(blocks, err)
+	}
+	if copy.Metadata.ID != "task-run-abc" || copy.Metadata.Labels["leforge.task"] != d.ID || !copy.Spec.Nodes[0].Workspace.ReadOnly || len(copy.Spec.Nodes[0].Tools) != 1 || !copy.Spec.Nodes[0].Tools[0].RequiresApproval {
+		t.Fatal(copy)
+	}
+	copy.Spec.Nodes[0].Tools[0].Paths[0] = "other"
+	if source.Metadata.ID != "source" || source.Spec.Defaults.Tools[0].Paths[0] != "docs/**" {
+		t.Fatal("source mutated")
+	}
+}
+func TestPrepareRejectsUnsupportedLaunches(t *testing.T) {
+	for _, change := range []func(*domain.Graph){func(g *domain.Graph) { g.Metadata.Version = 2 }, func(g *domain.Graph) { g.Spec.Workspace.Path = "/existing" }, func(g *domain.Graph) { g.Spec.Environment = &domain.EnvironmentSpec{} }, func(g *domain.Graph) { g.Spec.Nodes[0].Disabled = true }, func(g *domain.Graph) { g.Spec.Nodes[0].Loop.Mode = domain.LoopContinuous }} {
+		g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 1}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}}}
+		change(g)
+		_, blocks, err := Prepare(&taskconfig.Draft{ID: "tsk_abc", Input: taskconfig.Input{GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker"}}, g)
+		if err != nil || len(blocks) == 0 {
+			t.Fatal(blocks, err)
+		}
+	}
+}

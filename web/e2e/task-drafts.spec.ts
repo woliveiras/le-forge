@@ -17,7 +17,7 @@ test('saves and resumes a reviewed request without starting or changing the work
  await page.reload();
  await expect(page.getByRole('textbox',{name:'Request',exact:true})).toHaveValue('Explain why the parser rejects this input.');
  await page.getByRole('button',{name:'Review requirements'}).click();
- await expect(page.getByRole('article',{name:'Task requirements'})).toContainText('does not start agents');
+ await expect(page.getByRole('article',{name:'Task requirements'})).toContainText('Select an enabled result agent.');
  expect(await (await page.request.get('/api/v1/graphs/task-draft-flow/executions',{headers})).json()).toEqual([]);
  const saved=await (await page.request.get('/api/v1/graphs/task-draft-flow',{headers})).json();
  expect(saved.record.version).toBe(1);expect(saved.graph.spec.nodes[0].tools??[]).toEqual([]);
@@ -35,4 +35,29 @@ test('viewer cannot save a task through the UI or API',async({page})=>{
  await page.goto('/#/tasks/new');
  await expect(page.getByRole('button',{name:'Save draft'})).toBeDisabled();
  expect((await page.request.post('/api/v1/tasks',{headers:{Authorization:'Bearer e2e-viewer-token'},data:{}})).status()).toBe(403);
+});
+
+test('reviews and starts an owned task, retains its result after reload and stops only its copy',async({page})=>{
+ const graph={metadata:{id:'task-start-flow',name:'Task start flow'},spec:{nodes:[{id:'worker',name:'Worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Isolated task');
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain this synthetic request');
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-start-flow');
+ await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');
+ await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();
+ await expect(page).toHaveURL(/#\/tasks\/tsk_/);
+ await page.getByRole('button',{name:'Review requirements'}).click();
+ await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
+ await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ await expect(page.getByRole('link',{name:'Execution details'})).toHaveAttribute('href',/#\/g\/task-run-/);
+ expect(await(await page.request.get('/api/v1/graphs/task-start-flow/executions',{headers})).json()).toEqual([]);
+ await page.getByRole('checkbox',{name:"Stop this task's execution copy and retain its data."}).check();
+ await page.getByRole('button',{name:'Stop task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
 });

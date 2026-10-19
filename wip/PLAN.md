@@ -1788,3 +1788,18 @@ reopen tests, API tests, component tests and four browser cases passed. Full
 make test/lint/build checks passed (300 frontend tests); no installed deployment
 was performed. Independent task execution, launch deduplication/reconciliation,
 channel bindings and standalone work remain pending; FLOW-03 is not complete.
+
+### Task execution admission evidence — 2026-10-19
+
+FLOW-03b now starts an explicitly reviewed, version-pinned execution copy of a
+workflow rather than serializing tasks against its mutable source graph. This
+reuses the engine's graph-scoped memory, queues, children and managed workspace.
+The UI explains the copy and whole-workflow start; original graphs and grants are
+preserved. Admission is CAS-protected, repeated start never redispatches, uncertain
+preparation remains inspectable, and task controls cannot stop unrelated graphs.
+Progress derives from owned executions and unsettled work; generated summaries
+remain distinct from tool outcomes. Required Go/Python/frontend tests, lint/build
+and the 83-case main browser suite passed. Hosted OAuth/provider browser results
+are recorded separately. This is an incremental FLOW-03 delivery, not completion
+of all task/project flows or standalone readiness. See docs/task-workflows.md for
+current restrictions. The existing installation was not changed.

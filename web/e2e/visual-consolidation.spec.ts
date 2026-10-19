@@ -10,7 +10,7 @@ test('viewer opens contextual help with the keyboard and navigates remaining scr
  await page.keyboard.press('Enter');
  await expect(page.getByText(/may incur usage charges/)).not.toBeVisible();
  await expect(page.getByRole('button',{name:'Add provider',exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:'Skills & steering',exact:true}).click();
+ await page.getByRole('button',{name:'Skills & instructions',exact:true}).click();
  await expect(page.getByText('Guidance never grants tools, credentials or permissions.')).toBeVisible();
  await expect(page.getByRole('button',{name:'Save skill',exact:true})).toBeDisabled();
  await page.locator('summary').filter({hasText:'How instruction precedence works'}).click();

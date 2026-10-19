@@ -129,7 +129,7 @@ paths:
         - {in: path, name: tid, required: true, schema: {type: string}}
       responses:
         '200':
-          description: Current validation and blockers; canStart is always false until task admission is implemented
+          description: Current validation and launch blockers
           content:
             application/json:
               schema:
@@ -140,8 +140,71 @@ paths:
                   currentGraphVersion: {type: integer}
                   validation: {type: object}
                   blockers: {type: array, items: {type: string}}
-                  canStart: {const: false}
+                  canStart: {type: boolean}
+                  executionGraphId: {type: string}
+                  grants: {type: array, items: {type: object}}
+                  model: {type: object}
+                  isolation: {type: string}
+                  agents: {type: array, items: {type: object}}
         '404': {description: Task or workflow not found}
+  /api/v1/tasks/{tid}/progress:
+    get:
+      summary: Read owned executions and conservative result projection
+      x-leforge-role: viewer
+      parameters:
+        - {in: path, name: tid, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Persisted task, observed state, bounded executions, optional result and blockers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task: {$ref: '#/components/schemas/TaskDraft'}
+                  state: {type: string}
+                  executions: {type: array, items: {type: object}}
+                  result: {type: object}
+                  blockers: {type: array, items: {type: string}}
+        '404': {description: Task not found}
+  /api/v1/tasks/{tid}/start:
+    post:
+      summary: Claim a draft revision and start an explicitly reviewed execution copy
+      x-leforge-role: admin
+      parameters:
+        - {in: path, name: tid, required: true, schema: {type: string}}
+        - {in: header, name: If-Match, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [confirm], properties: {confirm: {const: true}}}
+      responses:
+        '202':
+          description: Claimed task; repeated submissions return existing state without dispatching another start
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '400': {description: Missing confirmation or revision}
+        '403': {description: Administrator required}
+        '409': {description: Stale revision or ownership conflict}
+        '422': {description: Unsupported or invalid workflow requirements}
+  /api/v1/tasks/{tid}/cancel:
+    post:
+      summary: Stop only the task execution copy while retaining its data
+      x-leforge-role: admin
+      parameters:
+        - {in: path, name: tid, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, required: [confirm], properties: {confirm: {const: true}}}
+      responses:
+        '202': {description: Cancellation requested; inspect progress for settled workers}
+        '400': {description: Explicit confirmation required}
+        '403': {description: Administrator required}
+        '409': {description: Unconfirmed launch or ownership conflict}
   /api/v1/delegation-policy:
     get:
       summary: Read the effective native delegation policy
@@ -1890,19 +1953,24 @@ components:
         graphId: {type: string, minLength: 1, maxLength: 128}
         graphVersion: {type: integer, minimum: 1}
         nodeId: {type: string, minLength: 1, maxLength: 128}
+        resultNodeId: {type: string, maxLength: 128}
     TaskDraft:
       type: object
       required: [id, revision, status, title, request, outcome, graphId, graphVersion, nodeId, createdBy, updatedBy, createdAt, updatedAt]
       properties:
         id: {type: string}
         revision: {type: integer, minimum: 1}
-        status: {const: draft}
+        status: {enum: [draft, preparing, starting, running, interrupted, cancel_requested, cancelled]}
+        executionGraphId: {type: string}
+        launchError: {type: string}
+        observedState: {type: string, description: Optional list projection; persisted admission status is separate}
         title: {type: string}
         request: {type: string}
         outcome: {type: string}
         graphId: {type: string}
         graphVersion: {type: integer}
         nodeId: {type: string}
+        resultNodeId: {type: string}
         createdBy: {type: string}
         updatedBy: {type: string}
         createdAt: {type: string, format: date-time}
