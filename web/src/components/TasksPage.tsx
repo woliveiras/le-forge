@@ -1,3 +1,4 @@
+import {TaskRequirementRepairs} from './TaskRequirementRepairs';
 import {TaskDecisions} from './TaskDecisions';
 import {TaskActivity} from './TaskActivity';
 import {useEffect, useState} from 'react';
@@ -63,7 +64,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
   const inspect=async()=>{
-    if(!saved)return;setBusy(true);setError(undefined);
+    if(!saved)return;setBusy(true);setError(undefined);setConfirmed(false);
     try{setReview(await api.reviewTask(saved.id));}catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
   const start=async()=>{
@@ -117,6 +118,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       {review.project&&<p>Project: {review.project.name} · Source: {review.project.path} · Base: {input.baseCommit} · Task worktree: {review.workspacePath}. Commands use the workflow's configured isolation and permissions.</p>}
       <p>Execution copy: {review.executionGraphId}. Starting runs the whole workflow with a fresh managed workspace. Input goes through the selected channel or directly to the entry agent; the selected result agent supplies the result.</p>
       <p>Entry agent model: {review.model?.provider||'runtime default'} / {review.model?.name||'runtime default'}. Isolation: {review.isolation||'process'}. Process execution uses the server machine and is not a sandbox.</p>
+      <TaskRequirementRepairs agents={review.agents??[]}/>
       <p>Tool permissions remain unchanged. Every call still passes gateway policies and approvals.</p>
       <details><summary>All workflow agents and permissions</summary>{review.agents?.map(agent=><section key={agent.id}><h3>{agent.id}</h3><p>{agent.model?.provider} / {agent.model?.name} · {agent.isolation}</p><pre>{JSON.stringify(agent.grants??[],null,2)}</pre></section>)}</details>
       <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I reviewed the workflow and authorize a separate execution copy.</label>

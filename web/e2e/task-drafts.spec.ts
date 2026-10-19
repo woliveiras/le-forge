@@ -137,3 +137,19 @@ test('keeps task approvals contextual and preserves viewer restrictions and deci
  await page.evaluate(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));await page.goto(`/#/tasks/${viewerTask.id}`);await page.reload();
  const decisions=page.getByRole('region',{name:'Task decisions',exact:true});await expect(decisions).toContainText('Waiting for an authorized operator to decide.');await expect(decisions.getByRole('button',{name:'Approve',exact:true})).toHaveCount(0);
 });
+
+test('repairs an MCP connection in another tab and rechecks the retained task before start',async({page})=>{
+ const create=await page.request.post('/api/v1/mcp/connections',{headers,data:{id:'task-repair',name:'Task repair connection',service:'generic',endpoint:'https://mcp.fixture.invalid/mcp',enabled:true,credential:{value:'fixture-mcp-token'}}});expect(create.status()).toBe(201);
+ const connection=await(await page.request.post('/api/v1/mcp/connections/task-repair/tools/refresh',{headers})).json();
+ expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id:'task-repair-flow',name:'Repair workflow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[{name:'mcp.task-repair.search'}]}]}}})).status()).toBe(201);
+ expect((await page.request.put('/api/v1/mcp/connections/task-repair',{headers:{...headers,'If-Match':String(connection.revision)},data:{id:'task-repair',name:'Task repair connection',service:'generic',endpoint:'https://mcp.fixture.invalid/mcp',enabled:false}})).status()).toBe(200);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Retained repair draft');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Keep my request during connection repair');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-repair-flow');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements',exact:true}).click();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ const taskURL=page.url();await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
+ const popupPromise=page.waitForEvent('popup');await page.getByRole('link',{name:'Review connection task-repair in another tab'}).click();const popup=await popupPromise;
+ await popup.getByRole('link',{name:'Settings',exact:true}).click();await popup.getByRole('button',{name:'Edit Task repair connection',exact:true}).click();await popup.getByRole('checkbox',{name:'Connection enabled',exact:true}).check();await popup.getByRole('button',{name:'Save MCP connection',exact:true}).click();await expect(popup.getByText('2 tools discovered. Grant access to agents before they can use them.')).toBeVisible();await popup.close();
+ await expect(page).toHaveURL(taskURL);await expect(page.getByRole('textbox',{name:'Request',exact:true})).toHaveValue('Keep my request during connection repair');await page.getByRole('button',{name:'Review requirements',exact:true}).click();
+ await expect(page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'})).not.toBeChecked();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeEnabled();
+});

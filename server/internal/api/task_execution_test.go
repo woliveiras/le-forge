@@ -1,9 +1,12 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
+	"github.com/woliveiras/le-forge/server/internal/mcpconfig/mcptest"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
@@ -206,4 +209,60 @@ func TestTaskMessageRejectionIsNotReportedAsRunningForever(t *testing.T) {
 		call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &v)
 		return v.State == "failed" && len(v.Executions) == 0 && v.PendingApprovals != nil && len(v.PendingApprovals) == 0
 	})
+}
+
+func TestTaskConnectionRepairPreservesUnsubmittedDraft(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	upstream := mcptest.New()
+	defer upstream.Close()
+	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		return mcpconfig.DiscoverWithClient(ctx, endpoint, token, upstream.Client())
+	}
+	in := mcpconfig.Input{ID: "task-repair", Name: "Task repair", Service: "generic", Endpoint: upstream.URL, Enabled: true, Credential: &mcpconfig.Credential{Value: "fixture-mcp-token"}}
+	if _, err := a.MCP.Put(t.Context(), in, 0, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	connection, err := a.MCP.Refresh(t.Context(), in.ID, "admin")
+	if err != nil || connection.Status != "ready" {
+		t.Fatal(connection, err)
+	}
+	doc := `{"metadata":{"id":"task-repair"},"spec":{"nodes":[{"id":"worker","runtime":{"kind":"echo"},"loop":{"mode":"once"},"tools":["mcp.task-repair.search"]}]}}`
+	if c := call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", doc, nil); c != 201 {
+		t.Fatal(c)
+	}
+	input := taskconfig.Input{Title: "Repair task", Request: "Preserve this request", Outcome: "freeform", GraphID: "task-repair", GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker"}
+	body, _ := json.Marshal(input)
+	var d taskconfig.Draft
+	if c := call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", string(body), &d); c != 201 {
+		t.Fatal(c)
+	}
+	in.Enabled = false
+	in.Credential = nil
+	connection, err = a.MCP.Put(t.Context(), in, connection.Revision, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var review taskrun.Review
+	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", adminTok, "", "", &review); c != 200 || review.CanStart || len(review.Blockers) == 0 {
+		t.Fatal(c, review)
+	}
+	var retained taskconfig.Draft
+	call(t, srv, "GET", "/api/v1/tasks/"+d.ID, adminTok, "", "", &retained)
+	if retained.Status != "draft" || retained.Revision != d.Revision || retained.Request != input.Request || retained.ExecutionGraphID != "" {
+		t.Fatal(retained)
+	}
+	in.Enabled = true
+	if _, err = a.MCP.Put(t.Context(), in, connection.Revision, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.MCP.Refresh(t.Context(), in.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", adminTok, "", "", &review); c != 200 || !review.CanStart || review.Task.Revision != d.Revision {
+		t.Fatal(c, review)
+	}
+	xs, err := a.Store.ListExecutions(t.Context(), storage.ExecutionFilter{GraphID: taskrun.ExecutionID(d.ID)})
+	if err != nil || len(xs) != 0 {
+		t.Fatal("review dispatched execution", xs, err)
+	}
 }

@@ -56,6 +56,12 @@ func (e *Engine) ValidateForStart(ctx context.Context, g *domain.Graph) *graph.R
 		report.Errors = append(report.Errors, pre.Errors...)
 		report.Valid = report.Valid && pre.Valid
 	}
+	if e.opt.ValidateToolGrants != nil {
+		if err := e.opt.ValidateToolGrants(ctx, g); err != nil {
+			report.Valid = false
+			report.Errors = append(report.Errors, graph.Issue{Path: "spec.nodes.tools", Message: err.Error()})
+		}
+	}
 	return report
 }
 

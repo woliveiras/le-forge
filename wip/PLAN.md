@@ -1986,3 +1986,12 @@ task review page after an explicit execution selection. It preserves event bound
 error states, token accounting caveats, interruption confirmation and roles.
 Tests verify denied tool outcomes are distinct from completed executions and
 that terminal-tree controls cannot restart or interrupt completed work.
+
+
+### Task requirement repair before admission
+
+FLOW-06b checks the current MCP catalogue during workflow preflight, before a
+task claims its execution copy. Configuration links open separately so the saved
+request remains available; returning users review requirements again and provide
+fresh start consent. Server-side save and per-call gateway checks remain in place.
+Real MCP/API and browser tests cover failure, repair and retained draft identity.

@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -69,6 +70,28 @@ func TestAdmissionValidationSeparatesWarningsFromRequirements(t *testing.T) {
 	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "warning"}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "echo", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}, Channels: []domain.Channel{{ID: "audit", From: "echo"}}}}
 	report = r.eng.ValidateForStart(r.ctx, g)
 	if !report.Valid || len(report.Errors) != 0 || len(report.Warnings) == 0 {
+		t.Fatal(report)
+	}
+}
+
+func TestReviewRevalidatesCurrentToolCatalogue(t *testing.T) {
+	dir := t.TempDir()
+	rejected := true
+	r := newRig(t, openStore(t, dir), memory.New(), dir, "tool-review", func(o *engine.Options) {
+		o.ValidateToolGrants = func(_ context.Context, _ *domain.Graph) error {
+			if rejected {
+				return errors.New("fixture catalogue unavailable")
+			}
+			return nil
+		}
+	})
+	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "review"}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}}}
+	report := r.eng.ValidateForStart(r.ctx, g)
+	if report.Valid || len(report.Errors) != 1 || report.Errors[0].Path != "spec.nodes.tools" {
+		t.Fatal(report)
+	}
+	rejected = false
+	if report = r.eng.ValidateForStart(r.ctx, g); !report.Valid {
 		t.Fatal(report)
 	}
 }
