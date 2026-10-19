@@ -1826,3 +1826,13 @@ failure after settlement. Runtime preflight errors remain blocking while ordinar
 graph warnings stay informational. Unit/engine/API tests, five browser cases,
 `CI=true make test`, lint and build passed. Software Factory payload compatibility
 is documented; no external runtime or provider validation is inferred from it.
+
+### Standalone dependency audit — 2026-10-19
+
+LOCAL-01 is documented in docs/standalone.md: reuse SQLite and filesystem queues,
+package UI assets with the native server, require Git only for repository work,
+and keep inference/external runtimes/sandbox infrastructure explicit and optional.
+macOS arm64 is the initial qualification target; other target builds need their
+own smoke evidence. Native initialization, locking, occupied-port handling,
+operational recovery and stdio MCP remain implementation tasks. This was a read-only
+architecture audit alongside Phase A, not installation activation or completion.
