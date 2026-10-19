@@ -254,3 +254,25 @@ which MCP operations can be dispatched; they do not sandbox the MCP executable.
 Host/path/command grant constraints cannot be silently reinterpreted as process
 confinement. Docker/server profiles reject local-process registration and execution.
 Remote vendor MCP compatibility and real credentials remain external validation.
+
+## Updating the native bundle
+
+Stop Forge, then create an offline backup with the current bundle before changing
+binaries. Keep the previous bundle and the archive. Extract/build the new bundle
+separately and start it with `--local --data-dir <existing-private-profile>`.
+Do not run `--init-local` against existing data. The configured web directory must
+continue pointing to the intended bundle's assets; update that path explicitly
+when relocating assets. Never share this profile with the Docker installation.
+
+`make test-native-upgrade` qualifies the first format-1 native launcher from commit
+`faf4644` against the current launcher using disposable binaries/profile data. It
+verifies a retained custom graph, first-time Software Factory seeding, unchanged
+factory version on restart, no unintended execution, and byte-for-byte state
+preservation when an unsupported installation format is rejected. This is a
+format-1 compatibility test, not a promise of arbitrary future downgrade safety.
+
+If a future format requires migration, that release must supply its own reviewed
+migration and recovery procedure. The current launcher refuses unknown formats
+before opening the database. To recover an old snapshot, preserve the failed
+profile separately and use the documented restore procedure at the original,
+absent path. Never overwrite or delete the failed profile as an automatic repair.

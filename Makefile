@@ -117,3 +117,7 @@ build-native: ## Build the current host's native bundle without Docker; does not
 .PHONY: test-native-browser
 test-native-browser: ## Chromium against a disposable production native profile; no Docker required
 	./scripts/test-native-browser.sh
+
+.PHONY: test-native-upgrade
+test-native-upgrade: ## Disposable format-1 native binary upgrade and safe failure qualification (host Go/Git/Python)
+	$(PYTHON) scripts/test-native-upgrade.py

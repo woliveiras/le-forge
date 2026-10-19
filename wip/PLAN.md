@@ -1956,3 +1956,13 @@ automatically granted and no external application configuration is imported.
 Real-subprocess/storage/gateway integration and production-native browser fixtures
 cover failure, repair, revocation and credential visibility. HTTP and Docker
 behavior remain separate; vendor acceptance stays in the final validation round.
+
+
+### Native format-1 upgrade qualification
+
+LOCAL-03d runs an actual old/new binary journey from the initial native launcher
+commit faf4644, including backup, retained graph, factory seeding, second restart
+and unsupported-format rejection without persistent changes. The native lifecycle
+contract is qualified for this format-1 path; unknown future migrations remain
+fail-closed and require their own approved procedure. No user installation was
+upgraded. The automated qualifier is `make test-native-upgrade`.
