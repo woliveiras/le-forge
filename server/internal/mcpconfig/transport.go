@@ -293,6 +293,11 @@ func sessionAttempt(ctx context.Context, endpoint, token string, client *http.Cl
 		}
 		return env.Result, nil
 	}
+	return protocolOperation(ctx, call, stateless, token, action)
+}
+
+// protocolOperation keeps catalogue validation identical across trusted transports.
+func protocolOperation(ctx context.Context, call rpcCall, stateless bool, token string, action func(rpcCall) error) ([]Tool, error) {
 	if !stateless {
 		init, e := call(1, "initialize", map[string]any{"protocolVersion": protocol, "capabilities": map[string]any{}, "clientInfo": map[string]string{"name": "LeForge", "version": "1"}})
 		if e != nil {

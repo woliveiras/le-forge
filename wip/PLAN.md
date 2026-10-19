@@ -1921,3 +1921,16 @@ LOCAL-03b qualifies the existing budget reconciler through the production native
 launcher and restored SQLite profile, including a second restart and a foreign
 worker whose reservations must remain intact. No model calls or real billing were
 used. Cross-version upgrade qualification remains distinct and open.
+
+
+### Local MCP transport foundation
+
+LOCAL-05a provides an internal session-based MCP 2025-06-18 stdio transport.
+Executable and working directory must be absolute; no shell expansion or parent
+environment inheritance occurs. Processes are scoped to an operation, with a
+15-second deadline, bounded frames/catalogues and Unix process-group teardown.
+Child stderr is discarded and environment echoes are rejected. HTTP discovery
+shares the same protocol/catalogue validator. This foundation does not expose
+commands to the API or grant tools: native-only reviewed registration, encrypted
+environment values, gateway authorization and browser coverage remain pending.
+Windows is rejected until process-tree teardown is qualified.
