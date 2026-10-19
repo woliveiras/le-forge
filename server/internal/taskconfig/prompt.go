@@ -46,6 +46,9 @@ type promptProposal struct {
 // SavePrompt persists only user-authored input, before contacting a model. It
 // does not accept grants, execution modes, model settings or filesystem paths.
 func (m Manager) SavePrompt(ctx context.Context, p PromptInput, actor string) (*Draft, error) {
+	return m.savePrompt(ctx, p, actor, "", false)
+}
+func (m Manager) savePrompt(ctx context.Context, p PromptInput, actor, newID string, submitted bool) (*Draft, error) {
 	if strings.TrimSpace(p.Request) == "" || len(p.Request) > 16384 || !utf8.ValidString(p.Request) || strings.ContainsRune(p.Request, 0) || len(p.GraphID) > 128 || !utf8.ValidString(p.GraphID) || strings.ContainsRune(p.GraphID, 0) {
 		return nil, fmt.Errorf("%w: provide a request of at most 16384 bytes and a valid workflow ID", ErrInvalid)
 	}
@@ -70,6 +73,7 @@ func (m Manager) SavePrompt(ctx context.Context, p PromptInput, actor string) (*
 			return nil, storage.ErrConflict
 		}
 		d.Input = old.Input
+		d.Submitted = old.Submitted
 		d.CreatedAt = old.CreatedAt
 		d.CreatedBy = old.CreatedBy
 	} else {
@@ -77,6 +81,9 @@ func (m Manager) SavePrompt(ctx context.Context, p PromptInput, actor string) (*
 			return nil, storage.ErrConflict
 		}
 		d.ID = domain.NewID("tsk")
+		if newID != "" {
+			d.ID = newID
+		}
 	}
 	if p.Settings != nil {
 		d.Title = p.Settings.Title
@@ -85,6 +92,7 @@ func (m Manager) SavePrompt(ctx context.Context, p PromptInput, actor string) (*
 		d.BaseCommit = p.Settings.BaseCommit
 		d.Source = p.Settings.Source
 	}
+	d.Submitted = d.Submitted || submitted
 	d.Request = p.Request
 	d.GraphID = p.GraphID
 	d.GraphVersion = 0
@@ -212,7 +220,7 @@ func (m Manager) ResolvePrompt(ctx context.Context, d *Draft, models *llm.Regist
 		return finish("needs_input", "The proposed input needs manual review. Check Review settings and save the draft.")
 	}
 	if proposal.Repository != "" && d.ProjectID == "" {
-		return finish("needs_repository", "Repository URL identified. Import the public repository or select a registered project, then save the draft.")
+		return finish("needs_repository", "Repository URL identified. Import the repository or select a registered project, then continue the task or save the draft.")
 	}
 	return finish("resolved", "Request interpreted and draft saved. Review requirements before starting; permissions are unchanged.")
 }

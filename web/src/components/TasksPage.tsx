@@ -48,7 +48,8 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
 }
 function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean;nativeProfile:boolean}) {
   const [input,setInput] = useState<TaskInput>(()=>draft?{source:draft.source,executionMode:draft.executionMode,title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
-  const [importOpen,setImportOpen]=useState(false);
+  const [submissionKey,setSubmissionKey]=useState(()=>crypto.randomUUID());
+ const [importOpen,setImportOpen]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [customTitle,setCustomTitle]=useState(!!draft);
   const projects=useAsync(()=>api.projects(),[]);
@@ -64,7 +65,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};
     window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);
   },[dirty]);
-  const change=(next:Partial<TaskInput>)=>{setInput(old=>updateTaskInput(old,next));setDirty(true);setReview(undefined);setConfirmed(false);};
+  const change=(next:Partial<TaskInput>)=>{setSubmissionKey(crypto.randomUUID());setInput(old=>updateTaskInput(old,next));setDirty(true);setReview(undefined);setConfirmed(false);};
   const editRequest=(request:string)=>change({request,...(!customTitle?{title:promptTitle(request)}:{})});
   const save=async()=>{
     setBusy(true);setError(undefined);
@@ -77,6 +78,14 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       const result=await api.resolveTaskPrompt(input,saved?.id,saved?.revision);
       setSaved(result);setInput({source:result.source,title:result.title,request:result.request,outcome:result.outcome,graphId:result.graphId,graphVersion:result.graphVersion,nodeId:result.nodeId,resultNodeId:result.resultNodeId,channelId:result.channelId,messageType:result.messageType,payloadJson:result.payloadJson,projectId:result.projectId,baseCommit:result.baseCommit,executionMode:result.executionMode});setDirty(false);setReview(undefined);setConfirmed(false);
       if(!saved)location.hash=`#/tasks/${encodeURIComponent(result.id)}`;
+    }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+  };
+  useEffect(()=>{if(!draft?.submitted||draft.status!=='draft')return;let disposed=false;void api.reviewTask(draft.id).then(value=>{if(!disposed)setReview(value);}).catch(e=>{if(!disposed)setError(errorMessage(e));});return()=>{disposed=true;};},[draft?.id,draft?.submitted]);
+  const submit=async()=>{
+    setBusy(true);setError(undefined);
+    try{const result=await api.submitTaskPrompt(input,submissionKey,saved?.id,saved?.revision);const task=result.task;
+      setSaved(task);setInput(task);setDirty(false);setReview(result.review);setConfirmed(false);setSubmissionKey(crypto.randomUUID());
+      if(!saved)location.hash=`#/tasks/${encodeURIComponent(task.id)}`;
     }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
   const inspect=async()=>{
@@ -104,7 +113,8 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     }} onSubmit={e=>{e.preventDefault();void save();}}>
       <fieldset disabled={!canEdit||busy}>
         <label>Request<textarea required rows={8} placeholder="Describe the work you want the agents to do and the result you expect." maxLength={16384} value={input.request} onChange={e=>editRequest(e.target.value)}/></label>
-        <p>Describe your goal in your own words. Saving keeps a draft; agents start only after review and confirmation.</p>
+        <p>Run task authorizes a separate execution of the selected workflow with its existing permissions. Forge checks requirements first; missing configuration or required approvals keep the task waiting. Saving alone keeps a draft.</p>
+        <Btn tone="primary" disabled={!input.request.trim()||busy||!canStart} onClick={()=>void submit()}>{saved?.submitted?'Continue task':'Run task'}</Btn>
         <Btn disabled={!input.request.trim()||busy||!canEdit} onClick={()=>void resolve()}>Resolve request</Btn>
         <p>Uses the configured default model to interpret and save your request. Your workflow selection takes priority, then a named workflow, then Software Factory. Title, project and environment choices are retained; input bindings are rebuilt. No agents start.</p>
         {saved?.resolution&&<aside aria-label="Request interpretation"><p>{saved.resolution.message}</p>{saved.resolution.repository&&<p>Repository: {saved.resolution.repository}</p>}{['needs_model','model_error'].includes(saved.resolution.state)&&<a href="#/models">Configure models</a>}<p>Your original request is preserved. Resolving never grants tool access.</p></aside>}

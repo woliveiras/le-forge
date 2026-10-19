@@ -221,3 +221,53 @@ func (s *Server) resolveTaskPrompt(w http.ResponseWriter, r *http.Request) error
 	writeJSON(w, http.StatusOK, d)
 	return nil
 }
+
+// Submission is administrator-only like task start. The prompt is not authority:
+// the explicit confirm flag and existing review/start checks remain mandatory.
+func (s *Server) submitTaskPrompt(w http.ResponseWriter, r *http.Request) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 24<<10)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var in struct {
+		taskconfig.PromptInput
+		Key     string `json:"key"`
+		Confirm bool   `json:"confirm"`
+	}
+	if err := dec.Decode(&in); err != nil || !in.Confirm {
+		return badRequest("confirm prompt submission with existing workflow permissions")
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return badRequest("expected one JSON object")
+	}
+	actor := identityFrom(r.Context()).Name
+	m := taskconfig.Manager{Store: s.Store}
+	d, fresh, err := m.SaveSubmission(r.Context(), in.PromptInput, in.Key, actor)
+	if err != nil {
+		return taskError(err)
+	}
+	if fresh {
+		d, err = m.ResolvePrompt(r.Context(), d, s.Models, actor)
+		if err != nil {
+			return taskError(err)
+		}
+	}
+	var review *taskrun.Review
+	if d.Status == "draft" {
+		review, err = s.taskRunner().Review(r.Context(), d.ID)
+		if err != nil {
+			return taskError(err)
+		}
+		if fresh && review.CanStart {
+			d, err = s.taskRunner().Start(r.Context(), d.ID, d.Revision, actor)
+			if err != nil {
+				return taskError(err)
+			}
+			review = nil
+		}
+	}
+	writeJSON(w, 200, struct {
+		Task   *taskconfig.Draft `json:"task"`
+		Review *taskrun.Review   `json:"review,omitempty"`
+	}{d, review})
+	return nil
+}

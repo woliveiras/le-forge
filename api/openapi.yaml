@@ -177,6 +177,50 @@ paths:
         '400': {description: Invalid preference, missing revision or local mode unavailable in this profile}
         '403': {description: Administrator required}
         '409': {description: Stale project revision}
+  /api/v1/tasks/submit:
+    post:
+      summary: Submit a prompt and start only when effective requirements permit
+      x-leforge-role: admin
+      description: Requires explicit confirmation of existing workflow permissions. Saves/resolves/reviews before existing version-fenced task admission. Missing requirements retain the same draft. Key reservation precedes side effects; identical replays only return current state, never launch again. After repair use a new key and the current draft revision. Uncertain reservations remain retained and require inspection, not automatic replay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request, key, confirm]
+              properties:
+                key: {type: string, minLength: 16, maxLength: 80, pattern: "^[a-zA-Z0-9-]+$"}
+                confirm: {type: boolean, const: true}
+                request: {type: string, minLength: 1, maxLength: 16384}
+                settings:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    title: {type: string, maxLength: 200}
+                    executionMode: {enum: [workflow, local, sandbox]}
+                    projectId: {type: string}
+                    baseCommit: {type: string}
+                    source: {$ref: '#/components/schemas/TaskIssueSource'}
+                graphId: {type: string, maxLength: 128, description: Explicit workflow selection overrides model suggestions}
+                id: {type: string}
+                revision: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Started/current task or durable blocked draft with review requirements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task: {$ref: '#/components/schemas/TaskDraft'}
+                  review: {$ref: '#/components/schemas/TaskReview'}
+        '400': {description: Malformed request, unknown field or missing confirmation}
+        '403': {description: Administrator authority required}
+        '409': {description: Key/input mismatch, stale draft, concurrent change or uncertain reservation}
+        '422': {description: Invalid request or admission requirements changed}
+        '500': {description: Dependency failure; inspect persisted task before creating a new submission}
   /api/v1/tasks/prompt:
     post:
       summary: Persist and interpret a task request without starting agents (operator)
@@ -2247,6 +2291,17 @@ components:
         payloadJson: {type: string, maxLength: 16384, description: Valid JSON text sent only through the selected ingress channel}
         projectId: {type: string}
         baseCommit: {type: string, description: Full immutable commit identifier; required with projectId}
+    TaskReview:
+      type: object
+      properties:
+        task: {$ref: '#/components/schemas/TaskDraft'}
+        canStart: {type: boolean}
+        blockers: {type: array, items: {type: string}}
+        currentGraphVersion: {type: integer}
+        executionGraphId: {type: string}
+        canPrepareEnvironment: {type: boolean}
+        validation: {type: object, description: Existing graph validation report}
+        agents: {type: array, items: {type: object}, description: Effective agent models, grants and isolation}
     TaskDraft:
       type: object
       required: [id, revision, status, title, request, outcome, graphId, graphVersion, nodeId, createdBy, updatedBy, createdAt, updatedAt]

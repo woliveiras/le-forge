@@ -6,14 +6,14 @@ The current wire contract remains [OpenAPI](../api/openapi.yaml).
 ## Prompt-first tasks and authorization modes — incremental delivery
 
 **Decision: 2026-10-19. PROMPT-01 editor, PROMPT-02 interpretation and PROMPT-03 public URL import and PROMPT-04 Git authentication are implemented;
-automatic start and authorization modes remain planned.** New task starts with
+PROMPT-05 conditional prompt submission is implemented; authorization modes remain planned.** New task starts with
 the Request field, visible workflow/environment selectors and collapsed Review
 settings. A new draft derives an editable display title from the first prompt
 line, bounded to 200 UTF-8 bytes; explicit and loaded titles are preserved.
 Ambiguous required fields open the settings disclosure on validation failure.
 Saving still only persists a draft. Resolve request explicitly invokes the default
-model; URLs are identified but never fetched. The current explicit
-review/confirmation/start API remains in force.
+model; URLs are identified but never fetched. Run task can resolve and start after server review using the existing admission path.
+The separate review/confirmation/start API remains available.
 The primary view reports existing authorization policies instead of offering
 unimplemented modes. No installation permission or shared workflow is changed.
 
@@ -163,6 +163,46 @@ access, refusal/repair, secret non-persistence, redirect isolation, native-only
 selection and unchanged grants. Real private repositories, corporate SSO and OS
 keychain prompts remain authorized external acceptance; no real credentials were
 read or installation authentication changed for these tests.
+
+### Conditional prompt submission (PROMPT-05)
+
+**Run task** is the administrator-only execution action beside the prompt. Its
+visible explanation authorizes a separate execution of the selected/named/default
+workflow using existing permissions. It does not add grants or select a broader
+authorization mode. Operators retain Save draft / Resolve request; starting still
+requires the same administrator authority as the existing start endpoint.
+
+The server saves the original request, resolves it through the existing bounded
+interpreter, reviews the effective task requirements and calls the existing task
+admission only when `canStart` is true. It revalidates during admission, preserves
+workflow versions, owned execution copies, queues, project commits/worktrees and
+all tool/message approval gates. No repository credential lookup, clone, environment
+build or approval acceptance is inferred from prompt text.
+
+Missing models, ambiguous bindings, invalid model output, missing projects or
+unprepared environments leave the task saved. Requirements reload on submitted
+drafts. Repair the indicated configuration, explicitly import/select the project or
+prepare/approve its environment, then use **Continue task**. Continuing a prompt
+reinterprets the request and rebuilds bindings; manual bindings remain available
+through Save draft and the existing reviewed Start task path. Runtime approvals
+remain visible in task progress and the global approval inbox. Resolving, saving,
+reloading or replaying a submission never grants approvals or starts a second run.
+
+`POST /api/v1/tasks/submit` requires `confirm: true` and a bounded client key. A durable
+reservation scoped to the API identity binds that key to the exact input fingerprint
+and task ID before model/launch side effects. Same-key replays only return the current
+task; changed input returns conflict. Concurrent retries cannot create another launch.
+A lost response can be retried with the identical key/input. A reservation interrupted
+before its draft exists remains uncertain and is not automatically replayed; inspect
+Tasks before explicitly submitting a new request. Reservations are retained, not
+automatically expired. After reload, continue an existing draft rather than creating
+a new task for an uncertain submission. Distinct new keys represent distinct requests.
+
+Launch errors retain existing interrupted/preparing diagnostics and are never
+redispatched automatically. The browser retains the key on request failure; successful
+blocked submissions can be repaired with a new attempt against the same draft/revision.
+No background auto-resume is implied by configuration changes. Synthetic integration
+and browser evidence does not qualify live model interpretation or external accounts.
 
 ### Primary experience
 

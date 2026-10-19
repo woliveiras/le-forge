@@ -39,8 +39,8 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 are tracked as the next user-facing Release 1 increment. PROMPT-01 now delivers
 the prompt-first editor, PROMPT-02 adds durable request interpretation, and
 PROMPT-03 adds explicitly confirmed public repository imports and PROMPT-04 adds
-explicit Git authentication (including native host credentials); automatic admission
-and task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
+explicit Git authentication (including native host credentials). PROMPT-05 adds
+conditional administrator-confirmed prompt admission; task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
 behavior or installation permission change is activated by this documentation.**
 
 Earlier UX delivery evidence remains historical evidence for existing screens, not
@@ -2408,3 +2408,49 @@ credential vaults, automatic refresh/revocation and push credentials are outside
 this import flow. Live provider/enterprise SSO/keychain and OS-specific acceptance
 remain external validation. No activation, authentication configuration changes,
 remote push or real-account test occurred. PROMPT-05 automatic admission is next.
+
+### PROMPT-05 — Conditional prompt admission (2026-10-19)
+
+Implemented administrator-only Run task / Continue task alongside the prompt.
+The action explicitly authorizes existing workflow permissions; the server saves
+the original request, performs the existing bounded interpretation and reviews
+effective requirements before invoking the existing task runner. No new execution
+engine, permission grants, approval acceptance or implicit repository authentication
+is introduced. Save draft / Resolve request and separate reviewed start remain.
+
+Blocked submissions retain their ID/request and reload their requirement review.
+Repair model/configuration, clarify the request, import/select a project or use the
+existing environment preparation approval flow before continuing. Continue task
+reinterprets bindings; manual bindings still use Save draft and reviewed Start task.
+Runtime tool/message approvals remain in task progress and the global inbox.
+
+A durable identity-scoped client key binds the exact input fingerprint and task ID
+before model/launch side effects. Replays read current state only; changed input
+conflicts. CAS protects concurrent edits and existing admission protects dispatch.
+Uncertain reservations are retained and never retried automatically; inspect Tasks
+before creating a distinct new submission. After repair a new key targets the same
+draft/revision. Existing interrupted/preparing diagnostics remain authoritative.
+
+Evidence:
+- Unit and SQLite integration tests cover key validation, concurrent claims, one
+  draft, restart replay, changed-input conflict and uncertain save failure.
+- API integration covers admin-only admission, explicit confirmation, missing-model
+  persistence/repair, same-ID launch, replay without another execution, unchanged
+  source workflow and blocking clarification/missing repository/invalid proposals.
+- `go test -p 2 ./...`, race tests for taskconfig/taskrun/API, `go vet ./...` and
+  `go build ./...` passed. Focused new blocking cases also passed after addition.
+- TypeScript checks, all 347 Vitest tests and `pnpm build` passed. UI tests verify
+  the same key survives failed submissions and operators cannot run tasks.
+- Four opt-in deterministic Chromium prompt journeys passed: existing interpretation
+  and repair, direct ready-task execution/replay/reload, and clarification/continuation
+  without creating another task.
+- `make test-native-browser` passed all nine disposable standalone regressions,
+  including Software Factory and independent task worktrees.
+- `make test-python` passed (15 SDK, 14 agent and 8 script tests).
+- `make test`, `make lint` and `make build` were attempted but their Docker wrappers
+  could not reach the daemon; host equivalents above passed.
+
+OpenAPI and task/product contracts describe this boundary. Live model quality,
+external accounts and human acceptance remain deferred. No installation activation,
+secret changes, data deletion or remote push occurred. Authorization modes remain
+separate AUTH tasks; prompt submission does not implement Full access.

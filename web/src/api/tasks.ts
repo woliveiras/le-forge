@@ -17,6 +17,7 @@ export interface TaskInput {
   resultNodeId?: string;
 }
 export interface TaskDraft extends TaskInput {
+ submitted?:boolean;
  resolution?: {state:string;message:string;repository?:string};
   id: string;
   revision: number;

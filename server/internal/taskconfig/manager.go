@@ -37,6 +37,7 @@ type Input struct {
 	ResultNodeID  string       `json:"resultNodeId,omitempty"`
 }
 type Draft struct {
+	Submitted     bool        `json:"submitted,omitempty"`
 	Resolution    *Resolution `json:"resolution,omitempty"`
 	ObservedState string      `json:"observedState,omitempty"`
 	Input
@@ -181,6 +182,7 @@ func (m Manager) Save(ctx context.Context, id string, in Input, revision int64, 
 		if old.Resolution != nil && old.Resolution.Repository != "" && strings.Contains(in.Request, old.Resolution.Repository) && in.ProjectID == "" {
 			return nil, fmt.Errorf("%w: select a registered project for the repository URL or remove the URL from the request", ErrInvalid)
 		}
+		d.Submitted = old.Submitted
 		d.CreatedAt = old.CreatedAt
 		d.CreatedBy = old.CreatedBy
 	}

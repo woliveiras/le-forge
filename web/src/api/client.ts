@@ -169,6 +169,7 @@ export const api = {
   tasks: (after?: string) => request<TaskPage>(`${V1}/tasks`, {query:{after,limit:50}}),
   task: (id: string) => request<TaskDraft>(`${V1}/tasks/${enc(id)}`),
   resolveTaskPrompt: (input:TaskInput,id?:string,revision?:number) => request<TaskDraft>(`${V1}/tasks/prompt`, {method:'POST',body:{request:input.request,graphId:input.graphId,id,revision,settings:{title:input.title,executionMode:input.executionMode,projectId:input.projectId,baseCommit:input.baseCommit,source:input.source}}}),
+  submitTaskPrompt: (input:TaskInput,key:string,id?:string,revision?:number) => request<{task:TaskDraft;review?:TaskReview}>(`${V1}/tasks/submit`, {method:'POST',body:{key,confirm:true,request:input.request,graphId:input.graphId,id,revision,settings:{title:input.title,executionMode:input.executionMode,projectId:input.projectId,baseCommit:input.baseCommit,source:input.source}}}),
   repositoryImports: () => request<import('./tasks').RepositoryImportRecord[]>(`${V1}/repository-imports`),
   importRepository: (input:{url:string;ref:string;confirmed:boolean;retry?:boolean;revision?:number;authentication?:{mode:string;username?:string;token?:string}}) => request<import('./tasks').RepositoryImportRecord>(`${V1}/repository-imports`, {method:'POST',body:input}),
   cancelRepositoryImport: (id:string,revision:number) => request<import('./tasks').RepositoryImportRecord>(`${V1}/repository-imports/${enc(id)}/cancel`, {method:'POST',headers:{'If-Match':String(revision)}}),

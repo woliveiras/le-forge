@@ -102,3 +102,18 @@ it('shows the repair reason for an unresolved draft in the task list',async()=>{
  await screen.findByText('Request saved. Resolve to continue.');
  expect(screen.queryByText(/Workflow.*Version 0/)).toBeNull();
 });
+it('submits a prompt with a stable replay key and explicit authority, preserving input on failure',async()=>{
+ const backend=fakeApi({'GET /api/v1/projects':()=>[],'POST /api/v1/tasks/submit':()=>apiError(503,'Submission outcome unavailable','unavailable')});
+ render(<TasksPage create info={{identity:{role:'admin'}} as Info} graphs={graphs}/>);
+ await userEvent.type(screen.getByLabelText('Request'),'Explain the parser');await userEvent.selectOptions(screen.getByLabelText('Workflow'),'factory');
+ await userEvent.click(screen.getByRole('button',{name:'Run task'}));await screen.findByText('Submission outcome unavailable');
+ await userEvent.click(screen.getByRole('button',{name:'Run task'}));
+ await waitFor(()=>expect(backend.find('POST','/api/v1/tasks/submit')).toHaveLength(2));
+ const requests=backend.find('POST','/api/v1/tasks/submit').map(c=>c.body as {key:string;confirm:boolean;request:string});
+ expect(requests[0]).toEqual(requests[1]);expect(requests[0].confirm).toBe(true);expect(requests[0].request).toBe('Explain the parser');
+ expect((screen.getByLabelText('Request') as HTMLTextAreaElement).value).toBe('Explain the parser');
+});
+it('keeps prompt execution administrator-only',()=>{
+ fakeApi({'GET /api/v1/projects':()=>[]});render(<TasksPage create info={info} graphs={graphs}/>);
+ expect((screen.getByRole('button',{name:'Run task'}) as HTMLButtonElement).disabled).toBe(true);
+});

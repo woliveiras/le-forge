@@ -46,3 +46,28 @@ test('keeps invalid and ambiguous model output blocked and allows repair after r
  await page.reload();
  await expect(page.getByRole('textbox',{name:'Request',exact:true})).toHaveValue('fixture-model-error');
 });
+test('runs a ready prompt once and reloads tracking without changing the workflow',async({page})=>{
+ test.skip(process.env.LEFORGE_E2E_PROMPT_MODEL!=='1','Requires deterministic interpretation provider');
+ const graph={metadata:{id:'submit-flow',name:'Submit flow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain the parser without modifying files.');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('submit-flow');
+ const sent=page.waitForRequest(r=>r.url().endsWith('/api/v1/tasks/submit')&&r.method()==='POST');
+ await page.getByRole('button',{name:'Run task',exact:true}).click();const body=(await sent).postDataJSON();
+ await expect(page).toHaveURL(/#\/tasks\/tsk_/);await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ const replay=await page.request.post('/api/v1/tasks/submit',{headers,data:body});expect(replay.status()).toBe(200);const result=await replay.json();
+ await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ const copies=await(await page.request.get('/api/v1/graphs',{headers})).json();expect(copies.filter((g:{graph:{metadata:{id:string}}})=>g.graph.metadata.id===result.task.executionGraphId)).toHaveLength(1);
+ const original=await(await page.request.get('/api/v1/graphs/submit-flow',{headers})).json();expect(original.record.version).toBe(1);expect(original.graph.spec.nodes[0].tools??[]).toEqual([]);
+});
+test('retains a blocked submission and continues after clarification without a new task',async({page})=>{
+ test.skip(process.env.LEFORGE_E2E_PROMPT_MODEL!=='1','Requires deterministic interpretation provider');
+ const graph={metadata:{id:'submit-repair-flow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('fixture-ambiguous');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('submit-repair-flow');
+ await page.getByRole('button',{name:'Run task',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);const address=page.url();
+ await expect(page.getByLabel('Request interpretation')).toContainText('Clarify');await page.reload();
+ await expect(page.getByRole('article',{name:'Task requirements'})).toContainText('Clarify');
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain the parser.');await page.getByRole('button',{name:'Continue task',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: succeeded');expect(page.url()).toBe(address);
+});

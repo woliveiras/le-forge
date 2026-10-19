@@ -438,7 +438,10 @@ server-validated workflow/bindings and durable repair states. It preserves the
 original request and grants, never imports URLs or starts agents. The selected
 workflow overrides interpretation; otherwise the named workflow or compatible
 Software Factory default is used. Saving still only creates/updates a draft;
-explicit review and start remain required. The following admission behavior remains planned:
+PROMPT-05 now offers an administrator-confirmed Run task action that resolves,
+reviews and starts only when requirements are satisfied, using the existing admission
+path. Missing inputs remain durable for explicit continuation; submission-key replays
+do not redispatch. Separate reviewed start remains available. The implemented contract is:
 New task becomes a prompt-first entry point accepting
 an objective and repository URL, with optional workflow selection and collapsed
 Review settings. A compatible configured workflow (initially Software Factory)
