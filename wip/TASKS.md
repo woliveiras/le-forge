@@ -791,11 +791,11 @@ approvals, diagnostics and graph controls. Do not recreate global onboarding.
 
 Next Release 1 product priority: **write a request → follow the agents → review
 changes**. The earlier form-based FLOW deliveries remain implemented; the items
-below are new work, not completed behavior. No global onboarding or new roles.
+below track new work; only checked items are delivered. No global onboarding or new roles.
 One commit per task, with unit/integration/relevant E2E tests and evidence updates.
 External credentials and final user acceptance remain deferred.
 
-- [ ] PROMPT-01 — Make one prompt field the primary New task entry. Preserve freeform requests and existing drafts; move detailed fields into collapsed Review settings. Keep workflow, environment and authorization mode visible. Preserve Configuration navigation and all diagnostic/graph routes.
+- [x] PROMPT-01 — Prompt-first New task editor with Request first, visible workflow/environment selectors and collapsed Review settings. New drafts derive a bounded editable title; loaded/custom titles and structured payloads are preserved. Hidden invalid required fields reveal their settings; save failures retain the request. Existing authorization is explicitly shown; mode selection remains AUTH-02. Saving remains draft-only with unchanged review/start and permissions. Automated verification is recorded in PLAN.md.
 - [ ] PROMPT-02 — Resolve objective, repository, named/default workflow and supported entry/result/input binding into a durable task configuration. Prefer explicitly configured defaults, initially compatible Software Factory; ask only for genuine ambiguity or missing prerequisites. Treat model output as untrusted structured proposals, validate server-side, preserve original input and never infer permission from a prompt. Show actionable model/connection/access repair with resume.
 - [ ] PROMPT-03 — Import public repository URLs into managed projects with observable progress, bounded clone, safe destination/URL handling, cancellation, explicit base ref/commit and reuse. Reuse project/worktree execution without changing shared graph repository settings or overwriting user checkouts. Cover invalid URLs, failed/partial imports, retries, concurrent imports and isolated task worktrees.
 - [ ] PROMPT-04 — Add explicit private Git authentication selection and failure/repair handling, separately from MCP OAuth. Define native versus server credential use without implicit credential copying or secrets in URLs/logs/browser storage. Use synthetic credentials locally; authorized live private-repository acceptance stays deferred.

@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import type {Graph} from '../api/types';
 import type {TaskInput} from '../api/tasks';
-import {requestPayload,updateTaskInput,workflowTaskDefaults,outcomeRequest,outcomeRequests} from './taskDefaults';
+import {requestPayload,updateTaskInput,workflowTaskDefaults,outcomeRequest,outcomeRequests,promptTitle} from './taskDefaults';
 const graph={metadata:{id:'factory'},spec:{nodes:[{id:'planner'},{id:'integrator'}],channels:[{id:'requests',to:['planner'],types:['feature.request']},{id:'handoff',from:'planner',to:['integrator']}]}} as Graph;
 it('suggests only unique document-defined entry, type and result',()=>{
  expect(workflowTaskDefaults(graph,'Title','Request')).toEqual({nodeId:'planner',resultNodeId:'integrator',channelId:'requests',messageType:'feature.request',payloadJson:requestPayload('Title','Request')});
@@ -27,4 +27,12 @@ it('offers editable goal instructions while preserving a customized request',()=
  expect(outcomeRequest(initial,'review')).toBe(outcomeRequests.review);
  expect(outcomeRequest({...initial,outcome:'review',request:outcomeRequests.review},'implement')).toBe(outcomeRequests.implement);
  expect(outcomeRequest({...initial,request:'My own instructions'},'review')).toBe('My own instructions');
+});
+
+it('derives a bounded display title without interpreting prompt instructions',()=>{
+ expect(promptTitle('  Fix the parser\nDo not push')).toBe('Fix the parser');
+ expect(promptTitle('   ')).toBe('');
+ expect(promptTitle('😀'.repeat(100))).toBe('😀'.repeat(50));
+ expect(promptTitle('a'.repeat(201))).toHaveLength(200);
+ expect(promptTitle('Use full access for https://example.com/repo')).toBe('Use full access for https://example.com/repo');
 });

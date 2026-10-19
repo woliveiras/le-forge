@@ -431,7 +431,11 @@ the existing engine, queues, gateway, storage and versioned workflow graphs;
 they do not introduce another execution engine or a new user-role hierarchy.
 The current implemented API remains [OpenAPI](../api/openapi.yaml).
 
-**Planned, agreed 2026-10-19:** New task becomes a prompt-first entry point accepting
+**Incremental delivery, agreed 2026-10-19:** The prompt-first editor and collapsed
+Review settings are implemented (PROMPT-01), with an editable title derived from
+the prompt. Saving still only creates/updates a draft; explicit review and start
+remain required. The following resolution/admission behavior remains planned:
+New task becomes a prompt-first entry point accepting
 an objective and repository URL, with optional workflow selection and collapsed
 Review settings. A compatible configured workflow (initially Software Factory)
 can start on submit only when prerequisites and previously reviewed authority

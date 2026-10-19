@@ -1,3 +1,4 @@
+import {openTaskSettings} from './task-settings';
 import {test,expect} from '@playwright/test';
 const headers={Authorization:'Bearer e2e-admin-token'};
 test('saves and resumes a reviewed request without starting or changing the workflow',async({page})=>{
@@ -6,12 +7,16 @@ test('saves and resumes a reviewed request without starting or changing the work
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
  await page.goto('/#/tasks');
  await page.getByRole('link',{name:'New task',exact:true}).click();
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Goal',exact:true}).selectOption('investigate');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Investigate parser');
  await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain why the parser rejects this input.');
  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-draft-flow');
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');
  // Explicitly clear the suggested result to retain invalid-input coverage.
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();
  await expect(page).toHaveURL(/#\/tasks\/tsk_/);
@@ -24,10 +29,12 @@ test('saves and resumes a reviewed request without starting or changing the work
  const saved=await (await page.request.get('/api/v1/graphs/task-draft-flow',{headers})).json();
  expect(saved.record.version).toBe(1);expect(saved.graph.spec.nodes[0].tools??[]).toEqual([]);
  const url=page.url();
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Updated request');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');
- await page.reload();await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue('Updated request');
+ await page.reload();await openTaskSettings(page);
+ await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue('Updated request');
  await page.getByRole('link',{name:'Back to tasks',exact:true}).click();
  await page.getByRole('link',{name:'Updated request',exact:true}).click();await expect(page).toHaveURL(url);
 });
@@ -46,10 +53,13 @@ test('reviews and starts an owned task, retains its result after reload and stop
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
  await page.goto('/#/tasks/new');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Isolated task');
  await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain this synthetic request');
  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-start-flow');
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();
  await expect(page).toHaveURL(/#\/tasks\/tsk_/);
@@ -78,11 +88,16 @@ test('reviews structured channel input and reports the declared result with reta
  const graph={metadata:{id:'task-channel-flow',name:'Task channel flow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'event'}}],channels:[{id:'requests',to:['worker'],types:['feature.*']},{id:'result',from:'worker'}]}};
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Structured task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain fixture');
  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-channel-flow');
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Input delivery',exact:true}).selectOption('requests');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Message type',exact:true}).fill('feature.request');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Input payload (JSON)',exact:true}).fill('{"title":"Explicit input"}');
+ await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();
  await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
@@ -144,6 +159,7 @@ test('repairs an MCP connection in another tab and rechecks the retained task be
  expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id:'task-repair-flow',name:'Repair workflow'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[{name:'mcp.task-repair.search'}]}]}}})).status()).toBe(201);
  expect((await page.request.put('/api/v1/mcp/connections/task-repair',{headers:{...headers,'If-Match':String(connection.revision)},data:{id:'task-repair',name:'Task repair connection',service:'generic',endpoint:'https://mcp.fixture.invalid/mcp',enabled:false}})).status()).toBe(200);
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Retained repair draft');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Keep my request during connection repair');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('task-repair-flow');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements',exact:true}).click();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
  const taskURL=page.url();await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
@@ -158,6 +174,7 @@ test('prepares a task sandbox then requires a separate reviewed start',async({pa
  const graph={metadata:{id:'task-environment-flow',name:'Task environment flow'},spec:{environment:{image:'alpine:3.22'},nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},isolation:{mode:'docker'},tools:[]}]}};
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Prepared sandbox task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Synthetic build and execution boundary');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(graph.metadata.id);await page.getByRole('combobox',{name:'Execution environment',exact:true}).selectOption('sandbox');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);await page.getByRole('button',{name:'Review requirements'}).click();await expect(page.getByRole('region',{name:'Task environment definition'})).toContainText('alpine:3.22');await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Prepare task environment'}).click();
@@ -187,12 +204,13 @@ test('retains an issue source through missing-grant repair without fetching or s
  expect(response.status()).toBe(201);const draft=await response.json();
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
  await page.goto(`/#/tasks/${draft.id}`);
+ await openTaskSettings(page);
  await expect(page.getByRole('combobox',{name:'Issue connection',exact:true})).toHaveValue('personal');
  await expect(page.getByRole('textbox',{name:'Issue reference',exact:true})).toHaveValue('octocat/Hello-World#42');
  await page.getByRole('button',{name:'Review requirements'}).click();
  await expect(page.getByRole('article',{name:'Task requirements'})).toContainText('mcp.personal.issue_read');
  await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
- await page.reload();await expect(page.getByRole('textbox',{name:'Issue reference',exact:true})).toHaveValue('octocat/Hello-World#42');
+ await page.reload();await openTaskSettings(page);await expect(page.getByRole('textbox',{name:'Issue reference',exact:true})).toHaveValue('octocat/Hello-World#42');
  expect(await(await page.request.get('/api/v1/graphs/task-issue-draft/executions',{headers})).json()).toEqual([]);
 });
 
@@ -203,6 +221,7 @@ for(const kind of ['github','jira'] as const) test(`reads a selected ${kind} iss
  expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:id},spec:{nodes:[{id:'reader',runtime:{kind:'native'},model:{provider:'e2e',name:'fixture'},prompt:'Read the task issue source.',isolation:{mode:'process'},loop:{mode:'once'},tools:[{name:`mcp.${id}.${tool}`}]}]}}})).status()).toBe(201);
  await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
  await page.goto('/#/tasks/new');
+ await openTaskSettings(page);
  await page.getByRole('textbox',{name:'Title',exact:true}).fill(`Read ${kind} issue`);
  await page.getByRole('textbox',{name:'Request',exact:true}).fill('Investigate the selected issue.');
  await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(id);
@@ -220,4 +239,48 @@ for(const kind of ['github','jira'] as const) test(`reads a selected ${kind} iss
  const progress=await(await page.request.get(`/api/v1/tasks/${taskId}/progress`,{headers})).json();
  const events=await(await page.request.get(`/api/v1/graphs/${progress.task.executionGraphId}/events`,{headers})).json();
  expect(events.some((e:{type:string;data:{tool?:string;outcome?:string}})=>e.type==='tool.completed'&&e.data.tool===`mcp.${id}.${tool}`&&e.data.outcome==='ok')).toBeTruthy();
+});
+
+test('prompt-first draft keeps settings collapsed and never starts or interprets a URL automatically',async({page})=>{
+ const id='prompt-draft';
+ expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:id},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}}})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks/new');
+ const summary=page.getByText('Review settings',{exact:true});
+ await expect(summary.locator('..')).not.toHaveAttribute('open','');
+ await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveCount(0);
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Inspect https://example.com/repository\nDo not commit or push.');
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(id);
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();
+ await expect(page).toHaveURL(/#\/tasks\/tsk_/);
+ await page.reload();
+ await expect(summary.locator('..')).not.toHaveAttribute('open','');
+ await expect(page.getByRole('textbox',{name:'Request',exact:true})).toHaveValue('Inspect https://example.com/repository\nDo not commit or push.');
+ const task=await(await page.request.get('/api/v1/tasks/'+page.url().split('/').pop(),{headers})).json();
+ expect(task.title).toBe('Inspect https://example.com/repository');expect(task.status).toBe('draft');expect(task.projectId).toBeUndefined();
+ expect(await(await page.request.get(`/api/v1/graphs/${id}/executions`,{headers})).json()).toEqual([]);
+ await summary.focus();await page.keyboard.press('Enter');
+ await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue(task.title);
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Custom title');
+ await summary.click();await page.getByRole('textbox',{name:'Request',exact:true}).fill('Revised request');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();
+ await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');
+ await page.reload();await openTaskSettings(page);
+ await expect(page.getByRole('textbox',{name:'Title',exact:true})).toHaveValue('Custom title');
+});
+
+test('reveals invalid advanced fields instead of trapping validation behind collapsed settings',async({page})=>{
+ const id='prompt-ambiguous';
+ expect((await page.request.post('/api/v1/graphs',{headers,data:{metadata:{id,name:id},spec:{nodes:[{id:'one',runtime:{kind:'echo'}},{id:'two',runtime:{kind:'echo'}}]}}})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks/new');
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('textbox',{name:'Request',exact:true}).fill('Explain the project');
+ await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(id);
+ await expect(page.getByRole('combobox',{name:'Entry agent',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Entry agent',exact:true})).toBeVisible();
+ await expect(page).toHaveURL(/#\/tasks\/new$/);
+ await expect(page.getByRole('textbox',{name:'Request',exact:true})).toHaveValue('Explain the project');
+ expect(await(await page.request.get(`/api/v1/graphs/${id}/executions`,{headers})).json()).toEqual([]);
 });

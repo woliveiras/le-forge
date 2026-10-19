@@ -13,7 +13,7 @@ import {TaskCleanup} from './TaskCleanup';
 import {WorkspaceHandoff} from './WorkspaceHandoff';
 import {SyntheticTaskExample} from './SyntheticTaskExample';
 import {TaskEvidence} from './TaskEvidence';
-import {workflowTaskDefaults,updateTaskInput,outcomeRequest} from './taskDefaults';
+import {workflowTaskDefaults,updateTaskInput,outcomeRequest,promptTitle} from './taskDefaults';
 
 export const taskOutcomes = [
   {id:'understand',label:'Understand a repository',description:'Explain architecture, dependencies and areas that need attention.'},
@@ -47,6 +47,8 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
 }
 function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean;nativeProfile:boolean}) {
   const [input,setInput] = useState<TaskInput>(()=>draft?{source:draft.source,executionMode:draft.executionMode,title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [customTitle,setCustomTitle]=useState(!!draft);
   const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
   const [review,setReview] = useState<TaskReview>();
@@ -61,6 +63,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);
   },[dirty]);
   const change=(next:Partial<TaskInput>)=>{setInput(old=>updateTaskInput(old,next));setDirty(true);setReview(undefined);setConfirmed(false);};
+  const editRequest=(request:string)=>change({request,...(!customTitle?{title:promptTitle(request)}:{})});
   const save=async()=>{
     setBusy(true);setError(undefined);
     try {const result=await api.saveTask(input,saved?.id,saved?.revision);setSaved(result);setDirty(false);setReview(undefined);if(!saved)location.hash=`#/tasks/${encodeURIComponent(result.id)}`;}
@@ -85,26 +88,34 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
   if(saved&&saved.status!=='draft')return <TaskTracking task={saved} canControl={canStart} canDecide={canEdit} nativeProfile={nativeProfile}/>;
   return <>
     <a href="#/tasks">Back to tasks</a>
-    <form className="card form" aria-label="Task request" onSubmit={e=>{e.preventDefault();void save();}}>
+    <form className="card form" aria-label="Task request" onInvalidCapture={e=>{
+      const details=(e.target as HTMLElement).closest('details');
+      if(details){details.open=true;setSettingsOpen(true);}
+    }} onSubmit={e=>{e.preventDefault();void save();}}>
       <fieldset disabled={!canEdit||busy}>
-        <label>Goal<select value={input.outcome} onChange={e=>change({outcome:e.target.value,request:outcomeRequest(input,e.target.value)})}>{taskOutcomes.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
-        <p>{taskOutcomes.find(o=>o.id===input.outcome)?.description}</p>
-        <label>Title<input maxLength={200} required value={input.title} onChange={e=>change({title:e.target.value})}/></label>
-        <label>Request<textarea required rows={6} maxLength={16384} value={input.request} onChange={e=>change({request:e.target.value})}/></label>
-        <ErrorBox error={projects.error}/>
-        <label>Project<select value={input.projectId??''} onChange={e=>{const p=projects.data?.find(p=>p.id===e.target.value);change({projectId:p?.id,baseCommit:p?.head,executionMode:p?.executionMode??'workflow'});}}>
-          <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        <label>Request<textarea required rows={8} placeholder="Describe the work you want the agents to do and the result you expect." maxLength={16384} value={input.request} onChange={e=>editRequest(e.target.value)}/></label>
+        <p>Describe your goal in your own words. Saving keeps a draft; agents start only after review and confirmation.</p>
+        <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,...workflowTaskDefaults(g,input.title,input.request)});}}>
+          <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
+          {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}
         </select></label>
-        {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}
         <label>Execution environment<select value={input.executionMode??'workflow'} onChange={e=>change({executionMode:e.target.value as TaskInput['executionMode']})}>
           <option value="workflow">Use workflow environment</option><option value="local" disabled={!nativeProfile}>Local worktree{!nativeProfile?' (native Forge required)':''}</option><option value="sandbox">Sandbox</option>
         </select></label>
         <p>Environment selection is checked against the workflow; it does not change agent isolation or permissions. Local worktrees use the native Forge host and do not isolate processes or network access. <a href="https://woliveiras.com/posts/why-git-worktrees-matter-coding-agents/" target="_blank" rel="noreferrer">About worktrees</a></p>
         {input.executionMode==='sandbox'&&<p>Sandbox requires all enabled agents to use Docker isolation and the configured Docker/Colima daemon to be available. Forge never falls back to local execution.</p>}
-        <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,...workflowTaskDefaults(g,input.title,input.request)});}}>
-          <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
-          {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}
+        <p>Authorization: existing workflow permissions and installation approval policies. Task authorization modes are not available yet.</p>
+        <ErrorBox error={projects.error}/>
+        <details open={settingsOpen} onToggle={e=>setSettingsOpen(e.currentTarget.open)}>
+          <summary>Review settings</summary>
+        <label>Goal<select value={input.outcome} onChange={e=>change({outcome:e.target.value,request:outcomeRequest(input,e.target.value),...(!customTitle?{title:promptTitle(outcomeRequest(input,e.target.value))}:{})})}>{taskOutcomes.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
+        <p>{taskOutcomes.find(o=>o.id===input.outcome)?.description}</p>
+        <label>Title<input maxLength={200} required value={input.title} onChange={e=>{setCustomTitle(true);change({title:e.target.value});}}/></label>
+        <label>Project<select value={input.projectId??''} onChange={e=>{const p=projects.data?.find(p=>p.id===e.target.value);change({projectId:p?.id,baseCommit:p?.head,executionMode:p?.executionMode??'workflow'});}}>
+          <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
+        {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}
+        <p>Repository URLs in the request are retained as text. To provide repository files now, select a registered project; automatic URL import is not available yet.</p>
         <p className="muted">Unambiguous workflow inputs and result agents are suggested below. Review them before saving. Models and permissions are unchanged.</p>
         <label>Input delivery<select value={input.channelId??''} onChange={e=>{const c=selected?.spec.channels?.find(c=>c.id===e.target.value);change({channelId:c?.id,messageType:c?(c.types?.length===1&&!/[?*]/.test(c.types[0])?c.types[0]:''):undefined,payloadJson:c?JSON.stringify({title:input.title,description:input.request},null,2):undefined,...(c?{nodeId:c.to?.[0]??''}:{})});}}>
           <option value="">Direct agent instruction</option>{selected?.spec.channels?.filter(c=>!c.from&&c.to?.length===1&&(!c.type||c.type==='queue')&&!c.when).map(c=><option key={c.id} value={c.id}>{c.id} → {c.to?.[0]}</option>)}
@@ -121,6 +132,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
         </select></label>
         <p className="muted">Version {input.graphVersion||'not selected'}. Saving a request does not change the workflow or grant tools.</p>
         {selected&&selected.metadata.version!==input.graphVersion&&<Btn onClick={()=>change({graphVersion:selected.metadata.version??0})}>Use current workflow version</Btn>}
+        </details>
       </fieldset>
       <ErrorBox error={error}/>
       <div className="row"><Btn type="submit" tone="primary" disabled={!canEdit||busy}>Save draft</Btn><Btn disabled={!saved||dirty||busy} onClick={()=>void inspect()}>Review requirements</Btn></div>

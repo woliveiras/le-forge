@@ -36,9 +36,9 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 
 **Status: Phase A task-flow implementation and the Phase B native bundle are delivered within the documented capability limits. macOS arm64 automated native qualification passed; external accounts, actual editor launch, optional real native sandbox and other platform smoke checks remain pending. No existing installation activation is claimed.**
 **New decision, 2026-10-19: prompt-first New task and task authorization modes
-are planned and take priority as the next user-facing Release 1 increment. The
-previously delivered form is the current implementation, not the final intended
-primary experience. See the decision below and PROMPT/AUTH tasks; no new runtime
+are tracked as the next user-facing Release 1 increment. PROMPT-01 now delivers
+the prompt-first editor; resolution/import/admission and task authorization modes
+remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
 behavior or installation permission change is activated by this documentation.**
 
 Earlier UX delivery evidence remains historical evidence for existing screens, not
@@ -2233,5 +2233,37 @@ Git authentication contract; task authorization contract/enforcement/preferences
 automatic admission and contextual continuation; integrated fixture qualification.
 The detailed work is tracked in PROMPT-01–07 and AUTH-01–03 in TASKS.md. External
 account/platform/user acceptance stays last; Release 2 is not included.
-The canonical planned behavior is in [task workflow contracts](../docs/task-workflows.md#prompt-first-tasks-and-authorization-modes--planned).
+The canonical planned behavior is in [task workflow contracts](../docs/task-workflows.md#prompt-first-tasks-and-authorization-modes--incremental-delivery).
 This update is documentation only; existing implementation evidence is preserved.
+
+
+### PROMPT-01 — Prompt-first editor (2026-10-19)
+
+New task now starts with Request. Workflow and execution environment remain
+visible; Goal, editable title, project, input payload/agents and issue source are
+under collapsed Review settings. The first prompt line supplies a display title
+bounded to 200 UTF-8 bytes for a new draft; explicit/loaded titles are preserved.
+Existing generated channel payload synchronization remains intact. Invalid hidden
+required controls open their disclosure, and project-loading/save errors remain
+visible without losing the prompt. Existing viewer/operator/admin checks and
+explicit review/confirmation/start are unchanged. No new backend privilege or API
+was added. Existing authorization policies are described, not replaced by a fake
+mode selector. URLs are retained as text; interpretation, import, default workflow
+resolution and automatic start remain PROMPT-02 onward / AUTH tasks.
+
+Unit tests cover title derivation, Unicode limits and unchanged input semantics;
+API-client component integration covers retained requests on dependency failure,
+manual titles and no launch/grant side effects. Browser coverage exercises draft
+save/reload, keyboard disclosure, narrow-screen invalid-field recovery, existing
+project/channel/issue/approval/environment flows and native Software Factory.
+
+Verification passed: 336 frontend unit/component integration tests via
+`CI=true make test-web`; Python suites via `CI=true make test-python test-web`;
+host `go test ./...`, `go vet ./...` and `go build ./...`; TypeScript/E2E checks;
+15 Chromium task/project journeys and eight production native browser journeys.
+Existing browser tests were adapted to open the new disclosure before inspecting
+advanced fields, including after reload; no assertions or security checks were
+removed. `make test`, `make lint` and `make build` were attempted but the Docker
+socket was unavailable, so host checks were used. Formatting/diff checks passed.
+No installation was activated; remote accounts and final human acceptance remain
+pending. PROMPT-02 resolution is the next implementation slice.

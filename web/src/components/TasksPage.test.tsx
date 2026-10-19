@@ -18,6 +18,7 @@ it('offers distinct outcomes without an automatic target or permission choice',(
 it('preserves request on conflict and sends no tool grants',async()=>{
  const backend=fakeApi({'GET /api/v1/projects':()=>[],'GET /api/v1/tasks':()=>({items:[]}), 'POST /api/v1/tasks':()=>apiError(409,'Workflow changed','conflict')});
  render(<TasksPage create info={info} graphs={graphs}/>);
+ await userEvent.click(screen.getByText('Review settings'));
  await userEvent.type(screen.getByLabelText('Title'),'Investigate a bug');
  await userEvent.type(screen.getByLabelText('Request'),'Check the parser');
  await userEvent.selectOptions(screen.getByLabelText('Workflow'),'factory');
@@ -45,4 +46,32 @@ it('requires reviewed confirmation and admin authority before starting',async()=
  await userEvent.click(await screen.findByRole('checkbox'));
  expect((screen.getByRole('button',{name:'Start task'}) as HTMLButtonElement).disabled).toBe(true);
  expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(0);
+});
+it('starts with a prompt and collapsed settings, derives an editable title and preserves errors',async()=>{
+ const backend=fakeApi({'GET /api/v1/projects':()=>[],'GET /api/v1/tasks':()=>({items:[]}), 'POST /api/v1/tasks':()=>apiError(503,'Storage unavailable','unavailable')});
+ render(<TasksPage create info={info} graphs={graphs}/>);
+ const settings=screen.getByText('Review settings').closest('details')!;
+ expect(settings.open).toBe(false);
+ await userEvent.type(screen.getByLabelText('Request'),'Fix https://example.com/repo\nDo not push');
+ await userEvent.selectOptions(screen.getByLabelText('Workflow'),'factory');
+ await userEvent.click(screen.getByRole('button',{name:'Save draft'}));
+ await screen.findByText('Storage unavailable');
+ expect(backend.find('POST','/api/v1/tasks')[0].body).toMatchObject({title:'Fix https://example.com/repo',request:'Fix https://example.com/repo\nDo not push',nodeId:'worker'});
+ expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(1);
+ expect(settings.open).toBe(false);
+ await userEvent.click(screen.getByText('Review settings'));
+ await userEvent.clear(screen.getByLabelText('Title'));
+ await userEvent.type(screen.getByLabelText('Title'),'My title');
+ await userEvent.type(screen.getByLabelText('Request'),' and inspect tests');
+ expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My title');
+ await userEvent.click(screen.getByText('Review settings'));
+ await userEvent.click(screen.getByText('Review settings'));
+ expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('My title');
+});
+it('shows project-loading errors outside collapsed advanced settings',async()=>{
+ fakeApi({'GET /api/v1/projects':()=>apiError(503,'Projects unavailable','unavailable'),'GET /api/v1/tasks':()=>({items:[]})});
+ render(<TasksPage create info={info} graphs={graphs}/>);
+ const error=await screen.findByText('Projects unavailable');
+ expect(error.closest('details')).toBeNull();
+ expect(screen.getByText('Review settings').closest('details')?.open).toBe(false);
 });

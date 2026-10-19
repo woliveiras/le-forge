@@ -3,13 +3,18 @@
 Status: reviewed on 2026-10-19. Durable drafts, task-owned execution copies, registered project worktrees, native packaging/editor handoff and contextual approval/evidence views are implemented as recorded below. Issue-source selection, environment preferences/preparation and reviewed cleanup are implemented with the limits documented below; external acceptance remains pending.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
-## Prompt-first tasks and authorization modes — planned
+## Prompt-first tasks and authorization modes — incremental delivery
 
-**Decision: 2026-10-19. Not implemented.** This is the next UX increment after
-the delivered form-based flow. It does not activate automatic starts, change
-existing permissions, or authorize changes to a running installation. The
-implemented API and current review/start flow below remain in force until the
-new contract is implemented and tested.
+**Decision: 2026-10-19. PROMPT-01 editor implemented; interpretation, URL import,
+automatic start and authorization modes remain planned.** New task starts with
+the Request field, visible workflow/environment selectors and collapsed Review
+settings. A new draft derives an editable display title from the first prompt
+line, bounded to 200 UTF-8 bytes; explicit and loaded titles are preserved.
+Ambiguous required fields open the settings disclosure on validation failure.
+Saving still only persists a draft. URLs remain text, no model interprets the
+prompt, and the current explicit review/confirmation/start API remains in force.
+The primary view reports existing authorization policies instead of offering
+unimplemented modes. No installation permission or shared workflow is changed.
 
 ### Primary experience
 

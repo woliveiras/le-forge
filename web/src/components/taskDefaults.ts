@@ -40,3 +40,15 @@ export const outcomeRequests:Record<string,string>={
 export function outcomeRequest(previous:TaskInput,outcome:string):string {
  return previous.request===''||previous.request===outcomeRequests[previous.outcome]?outcomeRequests[outcome]??'':previous.request;
 }
+
+// A display title only: never interpret instructions, URLs or permissions here.
+export function promptTitle(request:string):string {
+ const line=request.trim().split(/\r?\n/,1)[0].replace(/\s+/g,' ');
+ let title='';let bytes=0;
+ for(const character of line){
+  const size=new TextEncoder().encode(character).length;
+  if(bytes+size>200)break;
+  title+=character;bytes+=size;
+ }
+ return title.trim();
+}
