@@ -30,11 +30,11 @@ Reconcile partially delivered checklist entries against code before implementati
 an unchecked umbrella item does not mean all of its subfeatures are absent.
 Rootless sandbox support stays deferred by the earlier user decision. Items marked
 Later and Release 2 reusable components do not block Release 1 UX completion.
-The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalone installation), as planned below. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
+The Phase A (task-oriented UX) and Phase B (standalone installation) implementation sequence is recorded below, followed by deferred external acceptance. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
 
 ## Task-oriented UX and Standalone Delivery Plan (2026-10-19)
 
-**Status: delivery in progress; FLOW-01 design and FLOW-02 navigation are complete as recorded below. Remaining flows and standalone installation are planned; no new installation activation is claimed.** Deliver Phase A before Phase B.
+**Status: Phase A task-flow implementation and the Phase B native bundle are delivered within the documented capability limits. macOS arm64 automated native qualification passed; external accounts, actual editor launch, optional real native sandbox and other platform smoke checks remain pending. No existing installation activation is claimed.**
 Earlier UX delivery evidence remains historical evidence for existing screens, not
 acceptance of this new flow. Do not restore the removed global onboarding panel.
 
@@ -75,8 +75,8 @@ worktree separates source changes, not processes/network/credentials, linking to
 
 FLOW-02 implementation evidence (2026-10-19): the shell now groups Work and
 Configuration, with collapsible configuration, active destinations and responsive
-navigation. Workflows retains graph routes; Tasks and Projects remain explicitly
-unavailable until their planned behavior is delivered. No role or API changes.
+navigation. At that delivery, Workflows retained graph routes and Tasks/Projects were disabled;
+the later FLOW-03 deliveries below enabled their implemented behavior. No role or API changes.
 Unit/App integration and 11 disposable-backend browser scenarios passed, including
 legacy links, drafts and viewer restrictions. Full test/lint/build checks passed;
 this does not constitute installed activation or final human acceptance.
@@ -2096,3 +2096,21 @@ accounts, VS Code application launch/user review, optional real native sandbox a
 other platform runtime checks remain explicitly pending under LOCAL-07b. The native
 bundle is suitable for a separately initialized local test, not a claim that all
 unrelated Release 1 backlog or external acceptance is complete.
+
+### FLOW-08 — Final automated flow regression (2026-10-19)
+
+Phase A implementation is complete within its documented contracts: task drafts,
+workflow selection, issue references, capability-aware environments, contextual
+approvals/progress and review evidence preserve existing grants and configuration.
+`CI=true make test` passed (332 frontend tests plus Go/Python), as did `make lint`
+and `make build`. `make test-e2e` passed 93 main journeys, one hosted CIMD case and
+one isolated provider case. Eight native Chromium journeys and format-1 upgrade
+qualification passed separately. A stale project-browser assertion was corrected
+from the former worktree label to the delivered workspace label; data preservation
+checks remained intact. No tests were skipped or security gates weakened.
+
+The native bundle can be initialized as an independent local test profile with
+Software Factory already present. Existing Docker services/data were not changed.
+LOCAL-07b and final developer/vendor acceptance remain open. Other Release 1
+backlog (including separately scoped provider boundaries and monetary limits) is
+not silently declared complete by this task/native delivery; Release 2 is untouched.

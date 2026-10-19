@@ -60,7 +60,11 @@ isolation:
 ```
 
 The [native bundle and private profile](docs/standalone.md#initial-native-bundle)
-provide explicit initialization and foreground start without Docker. The existing
+provide explicit initialization and foreground start without Docker. A new native
+profile includes Software Factory as its first stopped workflow. Configure and test
+a model in the UI, make it the default, register a repository, then choose Software
+Factory in New task; creating a graph is not required. Review permissions and the
+human handoff gate before real work. The existing
 [manual without-Docker setup](docs/getting-started.md#5-run-without-docker) uses
 SQLite and filesystem queues, so it does not require the Compose services.
 Install the project's tools on that host: for a React project, Node and the
