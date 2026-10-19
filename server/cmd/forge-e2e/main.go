@@ -215,6 +215,12 @@ func run() error {
 	defer fixtureFlat.Close()
 	fixtureIssues := mcptest.NewIssues()
 	defer fixtureIssues.Close()
+	accessFixtures := map[string]*httptest.Server{}
+	for _, status := range []int{401, 403, 429} {
+		fixture := mcptest.NewAccessFailure(status, "tools/list")
+		defer fixture.Close()
+		accessFixtures[fmt.Sprintf("https://access-%d.fixture.invalid/mcp", status)] = fixture
+	}
 	fixtureMCP := mcptest.New()
 	defer fixtureMCP.Close()
 	fixtureOAuth := mcptest.NewOAuth("")
@@ -261,6 +267,9 @@ func run() error {
 		defer fixture.Close()
 	}
 	a.MCP.Discover = func(ctx context.Context, endpoint, token string) ([]mcpconfig.Tool, error) {
+		if fixture := accessFixtures[endpoint]; fixture != nil {
+			return mcpconfig.DiscoverWithClient(ctx, fixture.URL, token, fixture.Client())
+		}
 		if endpoint == "https://issues.fixture.invalid/mcp" {
 			return mcpconfig.DiscoverWithClient(ctx, fixtureIssues.URL, token, fixtureIssues.Client())
 		}

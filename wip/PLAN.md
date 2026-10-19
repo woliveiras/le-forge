@@ -2159,3 +2159,26 @@ Host `go test ./...`, `go test -race ./internal/mcpconfig`, `go vet ./...`,
 `CI=true make test-python test-web` passed (333 web tests). `make test`,
 `make lint` and `make build` were attempted but the Docker socket was unavailable;
 no daemon or user installation was started. External validation remains pending.
+
+
+### MCP remote access diagnostics (2026-10-19)
+
+The remaining vendor authorization work now includes safe, actionable transport
+failure guidance in connection discovery and gateway tool results. Only exact
+platform-authored HTTP status diagnostics select a message: 401 requests credential
+review, 403 suggests checking resource/scopes/corporate policy without claiming a
+specific cause, and 429 distinguishes the provider limit from LeForge admission.
+No upstream descriptions/challenges/redirects are echoed, no failed tool call is
+replayed, and no scope or grant is automatically expanded. Existing OAuth 401
+reauthorization remains intact; 403 does not revoke authorization or affect other
+connections. TLS fixtures deliberately echo synthetic credential material to verify
+redaction through persistence, gateway and browser boundaries. External provider
+consent, scope matrices and corporate-policy qualification remain for the final
+acceptance phase; this implementation changes no installed connection.
+
+Validation passed: host `go test ./...`, `go vet ./...`, `go build ./...`,
+`go test -tags e2e ./cmd/forge-e2e`, TypeScript E2E checks,
+`CI=true make test-python test-web` (333 web tests), and seven Chromium access/
+OAuth journeys. `make test`, `make lint` and `make build` were attempted but the
+Docker socket was unavailable; the host checks above ran instead. No installation
+activation or external validation was performed.

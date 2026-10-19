@@ -830,3 +830,26 @@ Review tools that accept alternate URLs, aliases or query expressions separately
 Returned links/content are not constrained by these rules. Repository IAM, site
 permissions and query-cost controls remain necessary. Vendor-specific resource
 qualification remains pending; the generic boundary is tested with local fixtures.
+
+
+## Remote access failures
+
+Discovery and tool calls expose authored guidance for remote HTTP statuses:
+
+- **401:** review the connection credential; reauthorize OAuth or replace the
+  configured credential and explicitly test the connection. OAuth connections
+  retain the existing reauthorization-required transition and clear discovery.
+- **403:** review the requested resource, credential scopes and organization,
+  site or SSO policy with the provider administrator. The status alone does not
+  establish which restriction caused the refusal. Reauthorization is not an
+  automatic remedy; LeForge does not revoke an otherwise authorized OAuth
+  connection just because a resource returned 403.
+- **429:** wait and check the provider's quota. This is distinct from LeForge's
+  per-connection admission quota.
+
+Tool calls are not automatically replayed, including after these responses;
+remote outcome may still be uncertain. Discovery failures clear the eligible
+catalogue. Other connections and agent grants remain unchanged. Error response
+bodies, authentication challenges and redirect headers are not copied into this
+guidance, including when the provider echoes a credential. These diagnostics do
+not certify any vendor's scopes or corporate policy; live acceptance is separate.

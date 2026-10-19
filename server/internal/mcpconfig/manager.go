@@ -375,6 +375,9 @@ func (m *Manager) Refresh(ctx context.Context, id, actor string) (View, error) {
 		if errors.As(discoverErr, &detail) {
 			r.Error = "Discovery failed: " + detail.Reason
 		}
+		if guidance := accessGuidance(discoverErr); guidance != "" {
+			r.Error = guidance
+		}
 	} else {
 		r.Tools = catalog
 	}

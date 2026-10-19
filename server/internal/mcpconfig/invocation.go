@@ -132,6 +132,9 @@ func (t *remoteTool) Invoke(ctx context.Context, inv *tools.Invocation) (*tools.
 		if saveErr := t.m.noteOAuthUnauthorized(ctx, r, err); saveErr != nil {
 			return nil, saveErr
 		}
+		if guidance := accessGuidance(err); guidance != "" {
+			return nil, fmt.Errorf("%s Remote outcome may be unknown; no automatic retry.", guidance)
+		}
 		return nil, fmt.Errorf("MCP call failed; remote outcome may be unknown; no automatic retry")
 	}
 	if len(raw) > maxBody || containsTransportCredential(callctx, raw, token) {

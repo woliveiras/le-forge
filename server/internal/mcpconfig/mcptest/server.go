@@ -9,15 +9,21 @@ import (
 	"sync/atomic"
 )
 
-func New() *httptest.Server { return newServer(false, nil, false) }
+func New() *httptest.Server { return newServer(false, nil, false, 0, "") }
 
 // NewRecovering expires every first session before dispatch to exercise recovery.
-func NewRecovering() *httptest.Server { return newServer(true, nil, false) }
+func NewRecovering() *httptest.Server { return newServer(true, nil, false, 0, "") }
 func NewWithHeaders(headers map[string]string) *httptest.Server {
-	return newServer(false, headers, false)
+	return newServer(false, headers, false, 0, "")
 }
-func NewIssues() *httptest.Server { return newServer(false, nil, true) }
-func newServer(recovering bool, headers map[string]string, issues bool) *httptest.Server {
+func NewIssues() *httptest.Server { return newServer(false, nil, true, 0, "") }
+
+// NewAccessFailure returns a real TLS response with deliberately hostile error
+// content. Tests must prove that only the status reaches platform diagnostics.
+func NewAccessFailure(status int, method string) *httptest.Server {
+	return newServer(false, nil, false, status, method)
+}
+func newServer(recovering bool, headers map[string]string, issues bool, status int, failureMethod string) *httptest.Server {
 	var sessions atomic.Int64
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		valid := true
@@ -48,6 +54,12 @@ func newServer(recovering bool, headers map[string]string, issues bool) *httptes
 		}
 		if json.NewDecoder(r.Body).Decode(&q) != nil {
 			w.WriteHeader(400)
+			return
+		}
+		if q.Method == failureMethod {
+			w.Header().Set("WWW-Authenticate", `Bearer error_description="fixture-mcp-token private-detail"`)
+			w.Header().Set("Location", "https://example.invalid/fixture-mcp-token")
+			http.Error(w, "fixture-mcp-token private-detail", status)
 			return
 		}
 		var result any
