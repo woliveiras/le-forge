@@ -86,22 +86,58 @@ For a first repository test:
 5. Inspect results, diffs and tests before your own commit/push. Task completion
    itself performs neither action; agent permissions remain those you reviewed.
 
-The profile format is versioned and unknown formats are refused. This is not yet
-a complete upgrade/backup manager: preserve the entire stopped profile, encryption
-key and registered source repositories before upgrade. Never copy a live SQLite
-file alone or delete worktrees to reset a failed task.
+## Offline backup and restore
+
+Stop Forge with Ctrl-C and stop other processes writing its workspaces before
+backup. Do not open the same profile through the standard server entry point.
+The native lock rejects an active native instance; it cannot stop external writers.
+Create a new archive outside the profile:
+
+```sh
+./forged --backup-local /absolute/backups/forge-backup.tar.gz
+```
+
+Use the same `--data-dir` as initialization for a nondefault profile. The archive
+includes SQLite, filesystem queues, pending approvals, configuration, credentials,
+the encryption key and managed workspaces. It is private (0600), **not encrypted**;
+store it securely. Registered source repositories and their Git metadata need
+separate backups. Workspace symlinks are stored without following their targets.
+Special files are rejected. An unsuccessful backup remains `.partial` and is never
+published as a complete archive; inspect it before deciding on cleanup.
+
+Restore only a trusted archive, with Forge stopped, to its **original absolute
+profile path**, which must not exist:
+
+```sh
+./forged --restore-local /absolute/backups/forge-backup.tar.gz
+./forged --local
+```
+
+The command never overwrites a profile. Retain existing data separately before a
+recovery attempt; restore also refuses relocation because worktree metadata and
+configuration reference absolute paths. Keep the matching bundle/UI and external
+source repositories available at their original locations. Invalid archives leave
+a partial restore for inspection rather than deleting data automatically. Restore
+checks path boundaries, duplicate entries, gzip integrity and the profile format;
+it limits archives to 100 GiB and one million entries.
+
+The profile format is versioned and unknown formats are refused. Before replacing
+a bundle, preserve the stopped profile and source repositories and keep the old
+bundle. There is no automated cross-version migration or downgrade guarantee.
+Restart retains pending messages and approvals. Existing engine recovery may
+redeliver interrupted work; this does not guarantee exactly-once external effects.
 
 ## Delivery requirements still pending
 
 - Full platform qualification, real-model work and remaining task UX features.
-- Explicit operational backup/restore and upgrade procedures covering the database,
-  queue, encryption key, configuration and workspaces. Worktree metadata also
-  depends on the registered source repository; copying only the checkout is not
-  a complete backup.
+- Cross-version upgrade qualification and native token-reservation reconciliation.
+  Offline backup/restore is implemented; external repository backups remain the
+  user’s responsibility.
 - Native capability information for environment/editor choices; no silent sandbox
   fallback, secret import, existing Docker data migration or service activation.
 - Local MCP subprocess lifecycle and exact per-agent gateway grants.
-- A clean disposable native browser journey and platform qualification.
+- Broader real-provider and cross-platform native qualification beyond the
+  disposable synthetic browser journey already recorded below.
 
 The existing `make build` uses the Docker toolchain wrapper and is not evidence
 of a native distribution. See [task-workflows.md](task-workflows.md) for the UI and
@@ -125,3 +161,10 @@ source files. This is explicitly synthetic execution, not real model/MCP evidenc
 The existing installation was not rebuilt, restarted, migrated or configured.
 The remaining task-flow, stdio MCP and operational items in PLAN/TASKS are still
 pending; this bundle permits an initial native test rather than closing them.
+
+Offline recovery evidence: native unit tests cover active-instance refusal,
+non-overwrite, cancellation, path traversal, destination symlink aliases, corrupt
+archive checksums and synthetic credential preservation. The production native
+HTTP integration restores a stopped profile and verifies its draft, pending queue
+message and approval, then processes the retained messages after restart. These
+checks use disposable fixtures only, not the existing installation.

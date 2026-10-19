@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"io"
 	"net"
@@ -110,13 +111,67 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 	if c := request("POST", "/api/v1/tasks", `{"title":"Native fixture","request":"Synthetic request","outcome":"freeform","graphId":"fixture","graphVersion":1,"nodeId":"worker"}`, &draft); c != 201 {
 		t.Fatal(c)
 	}
+	queued := `{"metadata":{"id":"queued"},"spec":{"nodes":[{"id":"worker","runtime":{"kind":"echo"},"loop":{"mode":"event"}}],"channels":[{"id":"pending","to":["worker"]},{"id":"held","to":["worker"],"approval":true}]}}`
+	if c := request("POST", "/api/v1/graphs", queued, nil); c != 201 {
+		t.Fatal(c)
+	}
+	for _, channel := range []string{"pending", "held"} {
+		if c := request("POST", "/api/v1/graphs/queued/channels/"+channel+"/messages", `{"type":"fixture","payload":{"test":true}}`, nil); c != 201 {
+			t.Fatal(c)
+		}
+	}
+	var held []domain.Approval
+	if c := request("GET", "/api/v1/approvals?status=pending", "", &held); c != 200 || len(held) != 1 {
+		t.Fatal("missing durable gate", c)
+	}
 	stop(cancel, done)
+	archive := filepath.Join(filepath.Dir(root), "native-backup.tar.gz")
+	if err = Backup(t.Context(), root, archive); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(root, root+"-original-retained"); err != nil {
+		t.Fatal(err)
+	}
+	if err = Restore(t.Context(), archive, root); err != nil {
+		t.Fatal(err)
+	}
 	cancel, done = start()
 	defer stop(cancel, done)
 	var restored taskconfig.Draft
 	if c := request("GET", "/api/v1/tasks/"+draft.ID, "", &restored); c != 200 || restored.Title != draft.Title || restored.Revision != draft.Revision {
 		t.Fatal("lost draft on restart", c)
 	}
+	var recovered []domain.Approval
+	if c := request("GET", "/api/v1/approvals?status=pending", "", &recovered); c != 200 || len(recovered) != 1 || recovered[0].ID != held[0].ID {
+		t.Fatal("lost approval", c)
+	}
+	if c := request("POST", "/api/v1/graphs/queued/start", `{}`, nil); c != 200 && c != 202 {
+		t.Fatal(c)
+	}
+	waitExecutions := func(count int) {
+		t.Helper()
+		deadline := time.Now().Add(6 * time.Second)
+		for time.Now().Before(deadline) {
+			var xs []domain.Execution
+			request("GET", "/api/v1/graphs/queued/executions", "", &xs)
+			if len(xs) == count {
+				settled := true
+				for _, x := range xs {
+					settled = settled && x.Status == domain.ExecSucceeded
+				}
+				if settled {
+					return
+				}
+			}
+			time.Sleep(30 * time.Millisecond)
+		}
+		t.Fatal("restored queue did not settle", count)
+	}
+	waitExecutions(1)
+	if c := request("POST", "/api/v1/approvals/"+held[0].ID+"/approve", `{}`, nil); c != 200 {
+		t.Fatal(c)
+	}
+	waitExecutions(2)
 	res, err := http.Get(base + "/api/v1/tasks")
 	if err != nil {
 		t.Fatal(err)

@@ -105,6 +105,30 @@ func Open(root string) (*config.Config, func(), error) {
 	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		return nil, nil, errors.New("native directory must be a private directory (0700), not a symlink")
 	}
+	for _, name := range []string{"installation.json", "forge.yaml", "admin.token", "secret.key", "leforge.db", "leforge.db-wal", "leforge.db-shm", "instance.lock"} {
+		info, e := os.Lstat(filepath.Join(root, name))
+		if os.IsNotExist(e) {
+			continue
+		}
+		if e != nil {
+			return nil, nil, e
+		}
+		if !info.Mode().IsRegular() {
+			return nil, nil, errors.New("native state and credential files must be regular files, not symlinks")
+		}
+	}
+	for _, name := range []string{"queues", "workspaces"} {
+		info, e := os.Lstat(filepath.Join(root, name))
+		if os.IsNotExist(e) {
+			continue
+		}
+		if e != nil {
+			return nil, nil, e
+		}
+		if !info.IsDir() {
+			return nil, nil, errors.New("native state directories must not be symlinks")
+		}
+	}
 	b, err := os.ReadFile(filepath.Join(root, "installation.json"))
 	if err != nil {
 		return nil, nil, err

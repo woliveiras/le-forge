@@ -26,19 +26,27 @@ func main() {
 	dataDir := flag.String("data-dir", "", "native data directory (default: OS user config directory/LeForge)")
 	webDir := flag.String("web-dir", "", "native init: bundled UI directory (default: web next to executable)")
 	port := flag.Int("port", 8787, "native init: loopback console port")
+	backupLocal := flag.String("backup-local", "", "write a private offline native profile archive to a new path")
+	restoreLocal := flag.String("restore-local", "", "restore a trusted native backup to its original, absent data directory")
 	flag.Parse()
 	if *version {
 		fmt.Println(api.Version)
 		return
 	}
-	if *local || *initLocal {
-		if *cfgPath != "" || (*local && *initLocal) {
-			fmt.Fprintln(os.Stderr, "choose either --local or --init-local, without --config")
+	if *local || *initLocal || *backupLocal != "" || *restoreLocal != "" {
+		actions := 0
+		for _, yes := range []bool{*local, *initLocal, *backupLocal != "", *restoreLocal != ""} {
+			if yes {
+				actions++
+			}
+		}
+		if *cfgPath != "" || actions != 1 {
+			fmt.Fprintln(os.Stderr, "choose exactly one native action, without --config")
 			os.Exit(2)
 		}
 		invalidStartFlag := false
 		flag.Visit(func(f *flag.Flag) {
-			if *local && (f.Name == "port" || f.Name == "web-dir") {
+			if !*initLocal && (f.Name == "port" || f.Name == "web-dir") {
 				invalidStartFlag = true
 			}
 		})
@@ -56,6 +64,21 @@ func main() {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
+		}
+		if *backupLocal != "" || *restoreLocal != "" {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			if *backupLocal != "" {
+				err = localinstall.Backup(ctx, root, *backupLocal)
+			} else {
+				err = localinstall.Restore(ctx, *restoreLocal, root)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "native backup/restore:", err)
+				os.Exit(1)
+			}
+			fmt.Println("Native profile operation completed. Archives contain private credentials; protect them. Registered source repositories require separate backups.")
+			return
 		}
 		if *initLocal {
 			web := *webDir

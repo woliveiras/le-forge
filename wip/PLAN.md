@@ -1852,3 +1852,14 @@ This baseline was delivered after the core Phase A task/project/channel flow;
 advanced Phase A items and LOCAL-03–07 remain explicitly open. Neither full roadmap
 completion nor real-provider/stdio qualification is claimed. No current installation
 or persistent user data was changed, and no push or release was performed.
+
+
+### Native offline recovery delivery (2026-10-19)
+
+LOCAL-03a adds explicit stopped-profile backup and non-overwriting restore at the
+original absolute path. Archives include private credentials and must be protected;
+external source Git repositories remain a separate backup obligation. Unit and
+native production HTTP integration evidence covers queue/approval/draft recovery,
+archive integrity and failure preservation. This does not close cross-version
+upgrade qualification or native token-reservation recovery. No existing Docker
+installation or user profile is migrated or activated.
