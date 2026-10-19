@@ -422,33 +422,23 @@ resource admission and safe reset; see the acceptance evidence for coverage and 
 
 ## 4. User Tasks and Child Executions
 
-### User-initiated tasks
+### User-initiated tasks — FLOW-01 design contract
 
-The interface needs a first-class task record so a request can be followed
-through messages, executions, approvals, and file changes. Proposed API:
+**Design completed 2026-10-19; implementation pending.** The reviewed contract is
+in [Task-oriented workflow contracts](task-workflows.md). It supersedes the
+previous preliminary graph-scoped task endpoint proposal. No task/project API is
+implemented by this documentation change; OpenAPI remains the implemented API.
 
-| Method and path | Minimum role | Contract |
-|---|---|---|
-| `POST /api/v1/graphs/{graphId}/tasks` | operator | Create a task and return `202` with its stable ID and initial state. |
-| `GET /api/v1/graphs/{graphId}/tasks` | viewer | List tasks in the graph, with bounded pagination and status filters. |
-| `GET /api/v1/graphs/{graphId}/tasks/{taskId}` | viewer | Read the task, linked message/execution IDs, and terminal result when available. |
-| `POST /api/v1/graphs/{graphId}/tasks/{taskId}/cancel` | operator | Request cancellation; return the current task state. |
+A task is a durable user request, a workflow is an existing versioned graph, and
+an execution is one agent turn. Project registration and task/run bindings need
+additional metadata; they reuse the current engine, queues, gateway, approvals,
+execution tree and storage adapters. A graph run is not a user task. Current
+replica worktrees must not be presented as independent per-task workspaces.
 
-Create body contains exactly one target: either `{nodeId, instruction,
-replica?}` for operator-directed agent work, or `{channelId, type, payload}`
-for graph-routed work. Optional `title` and a client idempotency key are
-metadata, not instructions to bypass graph routing. The backend validates the
-graph, node/channel, state, payload limits, and caller role before accepting.
-The resulting task is associated with the operator message or injected
-message, and descendants inherit `taskId` through platform-controlled
-correlation metadata.
-
-Persist a task record with `id`, `graphId`, `createdBy`, target, status,
-created/updated timestamps, linked message IDs, linked execution IDs, and
-terminal result/error summary. The task state is `queued`, `running`,
-`awaiting_approval`, `succeeded`, `failed`, `cancel_requested`, or `cancelled`.
-Task and execution history follow existing retention/audit policy and cannot
-be used to read another graph's workspace.
+The contract specifies target/input mapping, version review, idempotent admission,
+restart recovery, concurrency limits and authoritative result association. All
+implementation deliveries must preserve exact grants, current installation roles
+and the read-only browser workspace inspector. Navigation groups add no roles.
 
 ### Dynamic child execution
 

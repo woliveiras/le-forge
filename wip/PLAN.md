@@ -1,8 +1,8 @@
 # LeForge Evolution Plan
 
-**Goal:** Make the web interface the place where users configure models and integrations, build graphs, and monitor agents at work. LangGraph remains supported; reusable components are deferred to the second release.
+**Goal:** Let users start useful tasks, choose existing workflows, follow progress and review results through the web interface, while keeping graph construction, configuration, security and diagnostics accessible. LangGraph remains supported; reusable components are deferred to the second release.
 
-## Delivery Order and Final Acceptance (2026-10-18)
+## Delivery Order and Final Acceptance (updated 2026-10-19)
 
 Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
@@ -19,7 +19,7 @@ required; postponement does not qualify a provider or authorize external changes
 
 The native analysis delegation foundation and installation-managed profiles,
 approval policy, finite limits and execution-tree controls are implemented (section 8).
-Next: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
+Remaining backlog: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
 installation activation of the execution-tree controls was validated on 2026-10-18 (section 8).
 
@@ -30,8 +30,89 @@ Reconcile partially delivered checklist entries against code before implementati
 an unchecked umbrella item does not mean all of its subfeatures are absent.
 Rootless sandbox support stays deferred by the earlier user decision. Items marked
 Later and Release 2 reusable components do not block Release 1 UX completion.
-Do not add a new first-class task resource merely to close this UI checklist:
-current task operation uses existing graph/agent execution and message controls.
+The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalone installation), as planned below. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
+
+## Task-oriented UX and Standalone Delivery Plan (2026-10-19)
+
+**Status: planned, not implemented or activated.** Deliver Phase A before Phase B.
+Earlier UX delivery evidence remains historical evidence for existing screens, not
+acceptance of this new flow. Do not restore the removed global onboarding panel.
+
+### Phase A — Daily work first
+
+FLOW-01 design completed on 2026-10-19: see [task workflow contracts](../docs/task-workflows.md). Inspection confirms that graph runs and replica worktrees cannot serve as independent user tasks. Durable task metadata, launch/completion bindings and shared-scope admission are required before enabling the new flow; none is claimed implemented by the design delivery.
+
+Separate navigation into Work (Tasks, Projects, Approvals) and Configuration
+(Workflows, Connections, Models, Skills & instructions, Administration). This is
+presentation for the same user, not new roles or relaxed backend authorization.
+Workflows exposes existing graph/agent editing; existing links and drafts survive.
+
+New task starts with an outcome: understand a repository, implement a change,
+investigate an issue, review changes, or a freeform request. Select a project and
+an existing graph such as Software Factory, then review model, required tools,
+effective permissions and execution environment before starting. Outcome presets
+are editable instructions, never implicit grants. Validate graph input/entry-point
+compatibility and preserve independent task/run context when a graph is reused.
+
+Investigate an issue can use explicitly connected Jira/GitHub MCP tools, with a
+URL or issue ID as input. Missing connections or grants have direct repair links
+that return to the draft. Installed local MCPs are not automatically available to
+a Docker server; local stdio support belongs to Phase B. No automatic credential
+import, authorization expansion or provider write is implied.
+
+The task page keeps the request, current progress, required decisions, errors,
+result and changes together. Show approvals in context and in the global inbox.
+Keep events, tool calls, traces, usage and execution-tree controls accessible as
+details. Distinguish task completion from individual tool outcomes and missing
+telemetry. Repair links preserve task context and draft state.
+
+Present Local worktree and Sandbox as explicit capability-aware options. Phase A
+must not offer unsupported host execution as working functionality. A container
+mount shares files, not host execution. Remember a project's choice only while
+it remains available and authorized. Use short English help explaining that a
+worktree separates source changes, not processes/network/credentials, linking to
+[Why Git Worktrees Matter](https://woliveiras.com/posts/why-git-worktrees-matter-coding-agents/).
+
+### Phase B — Independent standalone installation
+
+Offer a native Forge installation with a browser UI and execution as the OS user,
+without requiring Docker or a companion executor connected to a container.
+Keep the Docker installation independently supported for local/remote servers.
+Deployment location and execution isolation remain separate choices. Optional
+sandbox execution may require an explicitly configured compatible runtime.
+
+Verified baseline: config defaults already use SQLite and the filesystem queue;
+these adapters run without separate PostgreSQL or NATS services. Reuse storage,
+queue, engine and permission contracts. Do not claim the packaged native journey
+is complete merely because these adapters exist. Audit UI assets, runtime/provider
+dependencies, OS support and container assumptions before selecting packaging.
+
+Manage repository registration and per-task worktrees without overwriting dirty
+checkouts, crossing task ownership or silently deleting data. Support VS Code
+handoff and manual review. Commit/push remain separate explicit decisions.
+Local execution uses actual OS permissions; it is not a sandbox and must not imply
+filesystem or network confinement that the implementation cannot enforce.
+
+Register local MCP processes explicitly, with reviewed commands/environment and
+per-agent tool grants. Reuse suitable HTTP connections. Do not automatically
+consume another application's MCP configuration or OS credential store. Keep
+secrets out of API responses, browser storage, prompts and logs.
+
+Package startup, local data paths, secure initial access, restart recovery,
+backup/restore and safe upgrades. PostgreSQL-to-SQLite migration is a separate
+explicitly approved operation, not an installation side effect. Preserve existing
+installation data and require approval for activation or external changes.
+
+### Evidence and acceptance
+
+Each behavior delivery needs unit, integration and relevant browser coverage,
+including invalid input, dependencies failing, permission denial and recovery.
+Run make test, make lint and make build; record E2E results separately. Keep all
+new tasks unchecked until proven. Final human walkthrough, clean-install and
+external vendor acceptance remain deferred to the final Release 1 stage. Phase A
+can be tested against current execution capabilities; Phase B adds real native
+worktree/OS and optional sandbox validation without replacing Docker regression
+coverage. No Release 2 reusable-component work is included.
 
 ## Product Principles
 
@@ -40,8 +121,8 @@ current task operation uses existing graph/agent execution and message controls.
 - **Bounded autonomy:** Agents may delegate work, but they cannot expand their own permissions or consume unlimited resources.
 - **Security independent of instructions:** Skills and steering guide agents but do not replace platform-enforced permissions.
 - **Genuine visual construction:** The canvas must allow users to edit graphs, not just view those already defined.
-- **Containers are the primary managed workflow:** Project environments run on LeForge's dedicated daemon. Native `process` execution remains supported as an explicit trust choice with the platform user's OS rights; it does not gain container isolation. Deployment location and execution isolation are separate choices (see the README). Resource cleanup must preserve persistent data and respect ownership and approval policy.
-- **Users operate; they do not edit files:** Users send commands/instructions through the interface; only agents may modify workspace files. Users may inspect files and diffs.
+- **Explicit execution choices (planned UX):** Local worktrees and sandboxes are first-class choices. Standalone installation is planned after the task-oriented UX. Existing managed container behavior remains supported: Project environments run on LeForge's dedicated daemon. Native `process` execution remains supported as an explicit trust choice with the platform user's OS rights; it does not gain container isolation. Deployment location and execution isolation are separate choices (see the README). Resource cleanup must preserve persistent data and respect ownership and approval policy.
+- **Review in the preferred editor:** The browser workspace inspector remains read-only. In the planned standalone workflow, users can open worktrees in VS Code, edit and review locally, and decide separately whether to commit and push. Completion never implies permission to commit or push.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -107,7 +188,7 @@ Give each graph a managed **environment**:
 
 Environment definitions coming from repositories or agents are untrusted content: they cannot change grants, credentials, limits, or network policy beyond what the installation allows.
 
-**Acceptance criterion:** An operator connects a repository without requiring a LeForge-specific file, accepts a discovered definition or approves an agent proposal, and runs tasks only after the environment is ready. Later tasks reuse compatible images and caches while keeping workspaces isolated, with bounded active resource consumption. Rebuild and reset preserve resources referenced by other tasks. Nothing is installed on the host and agents never receive Docker access.
+**Acceptance criterion (sandbox mode):** An operator connects a repository without requiring a LeForge-specific file, accepts a discovered definition or approves an agent proposal, and runs tasks only after the environment is ready. Later tasks reuse compatible images and caches while keeping workspaces isolated, with bounded active resource consumption. Rebuild and reset preserve resources referenced by other tasks. Nothing is installed on the host and agents never receive Docker access.
 
 ### 5. Create the File and Interaction Panel
 

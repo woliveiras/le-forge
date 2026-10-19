@@ -4,7 +4,7 @@ This checklist breaks down the [product plan](./PLAN.md) into implementable work
 
 Checked boxes represent only work that has been implemented and verified. Release 1 is still in progress. Implemented features include browser interaction with the visual editor, managed providers through the real Python LangGraph adapter, read-only workspace/Git inspection, and opt-in skills/project steering with per-execution manifests. The supported sandbox lifecycle and durable Docker review/preview flows are implemented; see [sandbox acceptance](../docs/sandbox-acceptance.md) and section 4a. Rootless remains deferred. MCP live DCR/CIMD/vendor acceptance, full delegation trees and tool-bearing children, universal file-change provenance, native preview supervision, automatic PR/CI adapters and full Release 1 validation remain pending.
 
-## Delivery Order and Final Acceptance (2026-10-18)
+## Delivery Order and Final Acceptance (updated 2026-10-19)
 
 Developer usability acceptance is deferred by user decision until the remaining
 Release 1 implementation is ready. It is not a prerequisite for the next delivery
@@ -21,7 +21,7 @@ required; postponement does not qualify a provider or authorize external changes
 
 The native analysis delegation foundation and installation-managed profiles,
 approval policy, finite limits and execution-tree controls are implemented (section 8).
-Next: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
+Remaining backlog: broader runtime/profile support and enforceable monetary ceilings. Cumulative token admission is implemented below. Preserve explicit delegation grants
 and the empty child permission set. Final developer acceptance remains deferred;
 installation activation of the execution-tree controls was validated on 2026-10-18 (section 8).
 
@@ -32,8 +32,7 @@ Reconcile partially delivered checklist entries against code before implementati
 an unchecked umbrella item does not mean all of its subfeatures are absent.
 Rootless sandbox support stays deferred by the earlier user decision. Items marked
 Later and Release 2 reusable components do not block Release 1 UX completion.
-Do not add a new first-class task resource merely to close this UI checklist:
-current task operation uses existing graph/agent execution and message controls.
+The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalone installation), as planned below. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -746,6 +745,39 @@ two tool grants. No configuration edits or live tool calls were needed. The
 previous image is retained as `leforge/forged:before-onboarding-removal` for
 rollback. This activation does not include the separate delegation changes.
 
+### 10a. Phase A — Task-oriented Navigation and Execution Flow (planned 2026-10-19)
+
+Implement this phase before standalone installation. FLOW-01 is a completed design delivery; all behavior below remains planned;
+previous UX-01–UX-05 evidence does not mark them complete. Each behavior task
+includes unit, integration and relevant E2E success/error/permission tests, plus
+updates to affected product contracts. Preserve existing routes, drafts, grants,
+approvals, diagnostics and graph controls. Do not recreate global onboarding.
+
+- [x] FLOW-01 — Define task/project/workflow terminology and the task-to-graph/execution contract. Inventory existing capabilities and missing persistence; specify entry-point/input mapping, concurrent reuse of a saved graph, version capture, ownership, refresh recovery and result association. Reuse the current execution engine; document any necessary metadata additions.
+  - Design evidence (2026-10-19): [task workflow contract](../docs/task-workflows.md) inventories graph runs, turns, injection and replica worktrees; specifies durable admission, explicit completion bindings and shared-scope concurrency gates. Documentation reviewed; runtime behavior and tests remain pending in FLOW-03 onward.
+- [ ] FLOW-02 — Group navigation into Work (Tasks, Projects, Approvals) and Configuration (Workflows, Connections, Models, Skills & instructions, Administration). Preserve graph editing, deep links and unsaved drafts; add no roles and preserve all backend authorization checks. Test keyboard navigation and narrow layouts.
+- [ ] FLOW-03 — Build New task around editable outcome presets and freeform input. Let users choose project and existing graph (including Software Factory), inspect requirements and review/start with minimal steps. Validate incompatible workflows, unavailable models and missing permissions without granting tools or mutating the shared graph implicitly. Provide clearly labeled synthetic examples without real account access.
+- [ ] FLOW-04 — Add Jira/GitHub issue source selection through explicitly configured MCP connections and granted tools. Accept issue URL/ID, validate the source and required capabilities, and preserve the draft through connection/authorization repair. Treat fetched content as untrusted data. Local stdio discovery waits for LOCAL-05; no automatic connection import.
+- [ ] FLOW-05 — Add project execution preferences and capability-aware Local worktree/Sandbox selection. Explain actual execution location and access; remember valid authorized choices. Unavailable native execution remains unavailable until Phase B. Add short English worktree help linking to the user's article, without duplicating it or implying security isolation.
+- [ ] FLOW-06 — Consolidate request, progress, action-needed state, result and changed files in one task view. Keep approvals contextual and in the inbox; retain expandable tool outcomes, events, traces, token usage and child/tree interruption. Distinguish failed tools from completed runs and absent telemetry from inactivity. Repair actions return to the same task.
+- [ ] FLOW-07 — Add review handoff with diff/test evidence, actual worktree location and capability-aware Open in VS Code. Show explicit commit/push state and preserve manual editor review. Do not commit, push or delete worktrees on task completion. Complete automated Phase A regression coverage; keep human acceptance pending.
+
+### 10b. Phase B — Standalone Forge on the User's Machine (after Phase A)
+
+Baseline already present: SQLite and filesystem queue defaults, existing storage
+and broker interfaces, and native process execution. This is not evidence that
+standalone packaging or local worktree UX is complete. No PostgreSQL/NATS install
+should be required for the basic native flow. Keep Docker independently usable;
+no native companion plus container is required for ordinary local work.
+
+- [ ] LOCAL-01 — Audit standalone dependencies and supported OS/architectures: UI assets, native/external runtimes, model providers, authentication, paths, observability and container assumptions. Define the supported initial platform matrix and native/Docker capability contract before packaging.
+- [ ] LOCAL-02 — Package native server and web UI with simple install/start/stop and browser entry. Initialize SQLite, filesystem queues and OS-appropriate private data directories without additional database/broker services. Handle occupied ports, unwritable directories, missing dependencies and repeated startup clearly. Test clean disposable installation without Docker.
+- [ ] LOCAL-03 — Complete local lifecycle and operational safety: initial access, credential storage, graceful shutdown, restart/reconciliation, backup/restore and versioned upgrade failure handling. Validate pending messages, approvals and token reservations across restarts. Never silently reset data or migrate the existing Docker installation; document separately approved migration work.
+- [ ] LOCAL-04 — Implement registered local repositories and task-owned worktree lifecycle using host execution. Preserve dirty checkouts, validate paths/base revisions and concurrent tasks, avoid branch collisions and expose changes in VS Code. Document OS-level authority and enforce applicable gateway permissions/approvals without claiming sandbox confinement. Cleanup requires explicit review and preserves user changes.
+- [ ] LOCAL-05 — Support explicitly registered local MCP stdio processes and reusable HTTP connections. Review commands/environment, manage process lifecycle and failures, discover tools and enforce per-agent grants on each call. Any config import requires explicit selection/review; do not copy or expose OS secrets automatically. Test process failure, restart, discovery errors and denied calls with fixtures.
+- [ ] LOCAL-06 — Connect the Phase A environment selector to native execution and optional sandbox runtime capabilities. Detect unavailable Docker/Colima without blocking local work; explain setup only for a selected sandbox. Preserve sandbox policies and Docker/server flows; never interpret a bind mount as host execution or silently fall back from sandbox to native.
+- [ ] LOCAL-07 — Complete native unit/integration/browser coverage and platform smoke checks: install → configure model → register repo → select workflow → worktree task → review in VS Code. Cover parallel tasks, cancellation, restart recovery and preservation of data. Exercise optional real sandbox separately and retain Docker regressions. Update installation, security, backup and troubleshooting docs with exact supported limits; leave external vendor and human acceptance for the final round.
+
 ### 11. Integrated Validation of Release 1
 
 Run the consolidated acceptance round after the remaining Release 1 implementation. User direction on 2026-10-18: keep external vendor validation for the final phase; continue local implementation and fixture-based checks first, without starting Release 2. Per-delivery automated tests continue throughout development. Include the deferred UX walkthrough; do not mark acceptance complete based only on automated tests.
@@ -755,7 +787,7 @@ Run the consolidated acceptance round after the remaining Release 1 implementati
 - [ ] Validate direct first-use navigation on a clean installation, including real test MCPs and providers; the global onboarding panel has been withdrawn.
 - [x] Verify that no interface path allows users to directly edit workspace files. — File/Git inspection exposes only reads; API integration and Chromium reject POST/PUT/PATCH/DELETE even for administrators and verify unchanged contents. Component tests confirm read-only controls and GET-only requests. Agent tools remain the explicit write path.
 - [ ] Verify that no secret reaches the browser after saving, the runtime, a prompt, or logs. — Provider browser acceptance now saves and tests a synthetic key through the real backend and a loopback HTTP model server, checks successful inference, edit/reload, and a 401 response that deliberately echoes the key. API/UI/localStorage/sessionStorage and captured model requests contain no key. Existing provider API/storage integration and component tests pass; broader all-credential/runtime/log acceptance remains pending.
-- [ ] Verify that no project toolchain, image, or container is installed or created on the host; everything runs on the LeForge Docker daemon and is removed by its reset.
+- [ ] Verify sandbox-mode toolchains/images/containers stay on the configured LeForge sandbox daemon; reset preserves unrelated and persistent data. Separately validate explicitly selected native worktree execution on the host without claiming sandbox isolation or automatically installing project dependencies.
 - [ ] Verify that data and instructions from one graph/workspace do not appear in another scope. — File inspection now discards late reads/errors across selections and graph/workspace changes, with component and browser regression coverage. A real engine/store/gateway integration now runs two graphs with identical node IDs and distinct skills, project steering, operator tasks and files; runtime inputs and persisted instruction snapshots contain only their graph markers, and traversal, absolute cross-graph paths and symlink reads are denied. Broader Docker/external-runtime and final manual acceptance remain pending.
 - [ ] Run relevant backend, frontend, SDK/runtime, and Docker image tests; record known limitations. — Provider-management browser checks use their own mandatory disposable backend because provider CRUD reloads the fixture model registry. Main journeys, hosted CIMD and provider management remain chained under make test-e2e; full installed/Docker acceptance remains for the final phase.
 - [ ] Update user, operations, and troubleshooting guides to reflect delivered behavior. — Delegation contracts now distinguish delivered bounded recursion/external-parent callbacks from proposed alternate APIs; MCP warehouse qualification and operations guidance are updated. Final integrated acceptance documentation remains pending.
