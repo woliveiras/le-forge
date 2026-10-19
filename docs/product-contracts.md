@@ -433,8 +433,12 @@ The current implemented API remains [OpenAPI](../api/openapi.yaml).
 
 **Incremental delivery, agreed 2026-10-19:** The prompt-first editor and collapsed
 Review settings are implemented (PROMPT-01), with an editable title derived from
-the prompt. Saving still only creates/updates a draft; explicit review and start
-remain required. The following resolution/admission behavior remains planned:
+the prompt. PROMPT-02 adds explicit Resolve request: bounded model interpretation,
+server-validated workflow/bindings and durable repair states. It preserves the
+original request and grants, never imports URLs or starts agents. The selected
+workflow overrides interpretation; otherwise the named workflow or compatible
+Software Factory default is used. Saving still only creates/updates a draft;
+explicit review and start remain required. The following admission behavior remains planned:
 New task becomes a prompt-first entry point accepting
 an objective and repository URL, with optional workflow selection and collapsed
 Review settings. A compatible configured workflow (initially Software Factory)

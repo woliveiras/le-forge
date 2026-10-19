@@ -37,7 +37,8 @@ type Input struct {
 	ResultNodeID  string       `json:"resultNodeId,omitempty"`
 }
 type Draft struct {
-	ObservedState string `json:"observedState,omitempty"`
+	Resolution    *Resolution `json:"resolution,omitempty"`
+	ObservedState string      `json:"observedState,omitempty"`
 	Input
 	ExecutionGraphID string    `json:"executionGraphId,omitempty"`
 	LaunchError      string    `json:"launchError,omitempty"`
@@ -176,6 +177,9 @@ func (m Manager) Save(ctx context.Context, id string, in Input, revision int64, 
 		}
 		if old.Status != "draft" || revision < 1 || revision != old.Revision {
 			return nil, storage.ErrConflict
+		}
+		if old.Resolution != nil && old.Resolution.Repository != "" && strings.Contains(in.Request, old.Resolution.Repository) && in.ProjectID == "" {
+			return nil, fmt.Errorf("%w: select a registered project for the repository URL or remove the URL from the request", ErrInvalid)
 		}
 		d.CreatedAt = old.CreatedAt
 		d.CreatedBy = old.CreatedBy

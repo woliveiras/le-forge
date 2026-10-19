@@ -75,3 +75,30 @@ it('shows project-loading errors outside collapsed advanced settings',async()=>{
  expect(error.closest('details')).toBeNull();
  expect(screen.getByText('Review settings').closest('details')?.open).toBe(false);
 });
+it('resolves a prompt through the client and exposes durable repair without granting or starting',async()=>{
+ const draft={id:'tsk_prompt',revision:2,status:'draft',title:'Explain',request:'Explain',outcome:'freeform',graphId:'',graphVersion:0,nodeId:'',resolution:{state:'needs_model',message:'Configure a default model and resolve again.'}};
+ const backend=fakeApi({'GET /api/v1/projects':()=>[],'GET /api/v1/tasks':()=>({items:[]}), 'POST /api/v1/tasks/prompt':()=>draft});
+ render(<TasksPage create info={info} graphs={graphs}/>);
+ await userEvent.type(screen.getByLabelText('Request'),'Explain');
+ await userEvent.click(screen.getByRole('button',{name:'Resolve request'}));
+ await screen.findByText('Configure a default model and resolve again.');
+ expect(screen.getByRole('link',{name:'Configure models'}).getAttribute('href')).toBe('#/models');
+ expect(backend.find('POST','/api/v1/tasks/prompt')[0].body).toEqual({request:'Explain',graphId:'',settings:{title:'Explain'}});
+ expect(backend.calls.filter(c=>c.method!=='GET')).toHaveLength(1);
+ expect((screen.getByLabelText('Request') as HTMLTextAreaElement).value).toBe('Explain');
+});
+it('keeps the prompt editable after interpretation transport failure',async()=>{
+ fakeApi({'GET /api/v1/projects':()=>[],'GET /api/v1/tasks':()=>({items:[]}), 'POST /api/v1/tasks/prompt':()=>apiError(503,'Unavailable','unavailable')});
+ render(<TasksPage create info={info} graphs={graphs}/>);
+ await userEvent.type(screen.getByLabelText('Request'),'Keep original');
+ await userEvent.click(screen.getByRole('button',{name:'Resolve request'}));
+ await screen.findByText('Unavailable');
+ expect((screen.getByLabelText('Request') as HTMLTextAreaElement).value).toBe('Keep original');
+ expect((screen.getByRole('button',{name:'Resolve request'}) as HTMLButtonElement).disabled).toBe(false);
+});
+it('shows the repair reason for an unresolved draft in the task list',async()=>{
+ fakeApi({'GET /api/v1/tasks':()=>({items:[{id:'tsk_pending',title:'Saved request',status:'draft',graphId:'',graphVersion:0,resolution:{state:'pending',message:'Request saved. Resolve to continue.'}}]})});
+ render(<TasksPage info={info} graphs={graphs}/>);
+ await screen.findByText('Request saved. Resolve to continue.');
+ expect(screen.queryByText(/Workflow.*Version 0/)).toBeNull();
+});

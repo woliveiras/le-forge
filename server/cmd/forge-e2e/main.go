@@ -38,6 +38,27 @@ type analysisProvider struct{}
 func (analysisProvider) Name() string                                    { return "e2e" }
 func (analysisProvider) Models(context.Context) ([]llm.ModelInfo, error) { return nil, nil }
 func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatResponse, error) {
+	if strings.Contains(r.System, "LeForge task request interpreter") {
+		var in struct {
+			Request          string `json:"request"`
+			SelectedWorkflow string `json:"selectedWorkflow"`
+		}
+		if err := json.Unmarshal([]byte(r.Messages[0].Content), &in); err != nil {
+			return nil, err
+		}
+		if strings.Contains(in.Request, "fixture-model-error") {
+			return nil, fmt.Errorf("fixture model unavailable")
+		}
+		raw := `{"outcome":"implement","workflowId":"","repository":"","clarification":false}`
+		if strings.Contains(in.Request, "fixture-ambiguous") {
+			raw = `{"outcome":"freeform","clarification":true}`
+		}
+		if strings.Contains(in.Request, "fixture-invalid") {
+			raw = `{"outcome":"implement","tools":["shell.exec"]}`
+		}
+		return &llm.ChatResponse{Message: llm.ChatMessage{Content: raw}}, nil
+	}
+
 	for _, message := range r.Messages {
 		if match := regexp.MustCompile(`Task issue source: read using (mcp\.[a-z0-9_-]+\.[A-Za-z_]+) with arguments (\{[^\n]+\})\.`).FindStringSubmatch(message.Content); match != nil {
 			for _, result := range r.Messages {
@@ -308,6 +329,17 @@ func run() error {
 		return mcpconfig.CallWithClient(ctx, fixtureMCP.URL, token, name, args, fixtureMCP.Client())
 	}
 	a.Models.Add(llm.ProviderConfig{Name: "e2e", DefaultModel: "fixture"}, analysisProvider{})
+	// Opt-in only for the disposable prompt interpretation browser suite.
+	if os.Getenv("LEFORGE_E2E_PROMPT_MODEL") == "1" {
+		entries := []llm.Entry{}
+		for _, p := range a.Models.List() {
+			provider, _ := a.Models.Get(p.Name)
+			entries = append(entries, llm.Entry{Config: llm.ProviderConfig{Name: p.Name, Type: p.Type, DefaultModel: p.DefaultModel}, Provider: provider})
+		}
+		if err := a.Models.ReplaceProviders(entries, "e2e"); err != nil {
+			return err
+		}
+	}
 	for _, id := range []string{"journey-required", "journey-automatic", "discover-a", "discover-b", "proposal-accept", "proposal-reject", "analysis-failure", "build-failure", "retry-build", "cpu-holder", "cpu-waiter", "memory-holder", "memory-waiter", "idle-resume", "preparation-holder", "preparation-waiter", "git-inspect", "git-inspect-readonly", "journal-capture", "activity-approve", "activity-reject"} {
 		dir := filepath.Join(cfg.Workspaces.Root, id)
 		if err := os.MkdirAll(dir, 0755); err != nil {

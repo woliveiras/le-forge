@@ -111,6 +111,7 @@ func (s *Server) routes() {
 	routes := []route{
 		{"GET /api/v1/tasks", R, s.listTasks},
 		{"POST /api/v1/tasks", O, s.saveTask},
+		{"POST /api/v1/tasks/prompt", O, s.resolveTaskPrompt},
 		{"GET /api/v1/tasks/{tid}", R, s.getTask},
 		{"PUT /api/v1/tasks/{tid}", O, s.saveTask},
 		{"GET /api/v1/tasks/{tid}/review", R, s.reviewTask},

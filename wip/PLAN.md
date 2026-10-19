@@ -37,8 +37,8 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 **Status: Phase A task-flow implementation and the Phase B native bundle are delivered within the documented capability limits. macOS arm64 automated native qualification passed; external accounts, actual editor launch, optional real native sandbox and other platform smoke checks remain pending. No existing installation activation is claimed.**
 **New decision, 2026-10-19: prompt-first New task and task authorization modes
 are tracked as the next user-facing Release 1 increment. PROMPT-01 now delivers
-the prompt-first editor; resolution/import/admission and task authorization modes
-remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
+the prompt-first editor and PROMPT-02 adds durable request interpretation;
+import/admission and task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
 behavior or installation permission change is activated by this documentation.**
 
 Earlier UX delivery evidence remains historical evidence for existing screens, not
@@ -2267,3 +2267,39 @@ removed. `make test`, `make lint` and `make build` were attempted but the Docker
 socket was unavailable, so host checks were used. Formatting/diff checks passed.
 No installation was activated; remote accounts and final human acceptance remain
 pending. PROMPT-02 resolution is the next implementation slice.
+
+### PROMPT-02 — Durable request interpretation (2026-10-19)
+
+Implemented operator-only `POST /api/v1/tasks/prompt` and Resolve request in New
+task. Persist the original prompt before a bounded default-model call with no tools;
+retain pending/error/clarification states on the existing task draft. Strict proposal
+validation accepts only goal, workflow reference and a verbatim repository URL.
+An explicit selector wins, then a named workflow, then the existing compatible
+Software Factory. Structural binding never guesses between entry/result agents or
+message types. CAS prevents stale model responses from overwriting newer edits.
+
+Repository URLs remain unfetched references requiring an explicitly selected
+registered project; import is PROMPT-03. Manual repair uses existing draft saving;
+normal requirement review handles model/MCP/access/environment repairs. Interpretation
+never edits shared graphs, grants tools or starts agents. Unresolved drafts block
+admission. Current project/environment/title/issue settings survive reinterpretation and
+normal review revalidates compatibility; entry/result/channel bindings are rebuilt.
+Only whitelisted settings accompany resolution. No generic default-workflow
+preference setting was added: selector/named workflow/Software Factory is the current
+precedence. Live interpretation quality remains unqualified by synthetic fixtures.
+
+Verification: host `go test ./...`, `go vet ./...`, `go build ./...` passed;
+`go test -tags e2e ./cmd/forge-e2e` passed; `CI=true make test-python test-web`
+passed (339 frontend tests after the final list-state test; Python SDK, agents and scripts). TypeScript and E2E
+TypeScript checks passed. Eight native production browser journeys passed via `make test-native-browser`.
+Fourteen existing task browser journeys and the project/worktree browser journey
+passed; the two new prompt journeys passed after correcting their accessible-role
+locators. The final rerun also checks retention of the selected environment.
+Run the new deterministic provider journeys with
+`LEFORGE_E2E_PROMPT_MODEL=1 pnpm exec playwright test e2e/task-prompts.spec.ts`
+from web. SQLite close/reopen, model failure/recovery, malicious/invalid proposals,
+named/explicit/default selection, repository repair, CAS conflicts and unchanged
+workflow/grants have automated coverage. `make test`, `make lint`, `make build`
+were attempted and blocked by the unavailable Docker socket; host equivalents
+were used. No installation activation, external credentials or live repository
+qualification is claimed. PROMPT-03 public repository import is next.

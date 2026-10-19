@@ -39,7 +39,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
       <ErrorBox error={list.error}/>
       <Btn onClick={()=>void list.reload()} disabled={list.loading}>Refresh tasks</Btn>
       {!list.loading&&!list.error&&list.data?.items.length===0&&<p>No task drafts yet. Create a request using one of your existing workflows.</p>}
-      <ul className="task-list">{list.data?.items.map(task=><li key={task.id}><a href={`#/tasks/${encodeURIComponent(task.id)}`}>{task.title}</a><p>{task.observedState??task.status} · Workflow {task.graphId} · Version {task.graphVersion}</p></li>)}</ul>
+      <ul className="task-list">{list.data?.items.map(task=><li key={task.id}><a href={`#/tasks/${encodeURIComponent(task.id)}`}>{task.title}</a><p>{task.resolution&&task.resolution.state!=='resolved'?task.resolution.message:(task.observedState??task.status)}{task.graphId&&<> · Workflow {task.graphId} · Version {task.graphVersion}</>}</p></li>)}</ul>
       {after&&<Btn onClick={()=>setAfter(undefined)}>First page</Btn>}
       {list.data?.next&&<Btn onClick={()=>setAfter(list.data?.next)}>Next page</Btn>}
     </>}
@@ -69,6 +69,14 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     try {const result=await api.saveTask(input,saved?.id,saved?.revision);setSaved(result);setDirty(false);setReview(undefined);if(!saved)location.hash=`#/tasks/${encodeURIComponent(result.id)}`;}
     catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
+  const resolve=async()=>{
+    setBusy(true);setError(undefined);
+    try {
+      const result=await api.resolveTaskPrompt(input,saved?.id,saved?.revision);
+      setSaved(result);setInput({source:result.source,title:result.title,request:result.request,outcome:result.outcome,graphId:result.graphId,graphVersion:result.graphVersion,nodeId:result.nodeId,resultNodeId:result.resultNodeId,channelId:result.channelId,messageType:result.messageType,payloadJson:result.payloadJson,projectId:result.projectId,baseCommit:result.baseCommit,executionMode:result.executionMode});setDirty(false);setReview(undefined);setConfirmed(false);
+      if(!saved)location.hash=`#/tasks/${encodeURIComponent(result.id)}`;
+    }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+  };
   const inspect=async()=>{
     if(!saved)return;setBusy(true);setError(undefined);setConfirmed(false);
     try{setReview(await api.reviewTask(saved.id));}catch(e){setError(errorMessage(e));}finally{setBusy(false);}
@@ -95,6 +103,9 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       <fieldset disabled={!canEdit||busy}>
         <label>Request<textarea required rows={8} placeholder="Describe the work you want the agents to do and the result you expect." maxLength={16384} value={input.request} onChange={e=>editRequest(e.target.value)}/></label>
         <p>Describe your goal in your own words. Saving keeps a draft; agents start only after review and confirmation.</p>
+        <Btn disabled={!input.request.trim()||busy||!canEdit} onClick={()=>void resolve()}>Resolve request</Btn>
+        <p>Uses the configured default model to interpret and save your request. Your workflow selection takes priority, then a named workflow, then Software Factory. Title, project and environment choices are retained; input bindings are rebuilt. No agents start.</p>
+        {saved?.resolution&&<aside aria-label="Request interpretation"><p>{saved.resolution.message}</p>{saved.resolution.repository&&<p>Repository: {saved.resolution.repository}</p>}{['needs_model','model_error'].includes(saved.resolution.state)&&<a href="#/models">Configure models</a>}<p>Your original request is preserved. Resolving never grants tool access.</p></aside>}
         <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,...workflowTaskDefaults(g,input.title,input.request)});}}>
           <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
           {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}

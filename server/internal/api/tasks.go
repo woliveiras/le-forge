@@ -196,3 +196,28 @@ func (s *Server) taskCleanup(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]bool{"removed": true})
 	return nil
 }
+
+// Persist first so model failures and disconnected clients retain the request.
+func (s *Server) resolveTaskPrompt(w http.ResponseWriter, r *http.Request) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 24<<10)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var in taskconfig.PromptInput
+	if err := dec.Decode(&in); err != nil {
+		return badRequest("invalid prompt request")
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return badRequest("expected one JSON object")
+	}
+	m := taskconfig.Manager{Store: s.Store}
+	d, err := m.SavePrompt(r.Context(), in, identityFrom(r.Context()).Name)
+	if err != nil {
+		return taskError(err)
+	}
+	d, err = m.ResolvePrompt(r.Context(), d, s.Models, identityFrom(r.Context()).Name)
+	if err != nil {
+		return taskError(err)
+	}
+	writeJSON(w, http.StatusOK, d)
+	return nil
+}

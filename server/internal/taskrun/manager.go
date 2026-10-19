@@ -147,6 +147,9 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	if err != nil {
 		return nil, err
 	}
+	if d.Resolution != nil && d.Resolution.State != "resolved" {
+		return &Review{Task: d, Validation: &graph.Report{}, Blockers: []string{d.Resolution.Message}}, nil
+	}
 	version := 0
 	if d.Status == "environment_pending" {
 		version = d.GraphVersion

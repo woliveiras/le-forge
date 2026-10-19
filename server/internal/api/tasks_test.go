@@ -139,3 +139,38 @@ func TestTaskIssueSourcePersistsWithoutAuthority(t *testing.T) {
 		t.Fatal(xs, err)
 	}
 }
+
+func TestPromptAPIResumesWithoutAuthority(t *testing.T) {
+	srv, a := setupApp(t, nil)
+	body := `{"request":"Explain this project"}`
+	for _, tc := range []struct {
+		token, body string
+		status      int
+	}{{viewerTok, body, 403}, {operatorTok, `{"request":"x","tools":[]}`, 400}, {operatorTok, `{"request":""}`, 422}, {operatorTok, body + ` {}`, 400}} {
+		if c := call(t, srv, "POST", "/api/v1/tasks/prompt", tc.token, "application/json", tc.body, nil); c != tc.status {
+			t.Fatal(c, tc)
+		}
+	}
+	var d taskconfig.Draft
+	if c := call(t, srv, "POST", "/api/v1/tasks/prompt", operatorTok, "application/json", body, &d); c != 200 || d.Resolution.State != "needs_model" {
+		t.Fatal(c, d)
+	}
+	reloaded, err := (taskconfig.Manager{Store: a.Store}).Get(t.Context(), d.ID)
+	if err != nil || reloaded.Request != "Explain this project" {
+		t.Fatal(reloaded, err)
+	}
+	var review struct {
+		CanStart bool
+		Blockers []string
+	}
+	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", viewerTok, "", "", &review); c != 200 || review.CanStart || len(review.Blockers) == 0 {
+		t.Fatal(c, review)
+	}
+	req, _ := json.Marshal(map[string]any{"request": "Explain again", "id": d.ID, "revision": d.Revision})
+	if c := call(t, srv, "POST", "/api/v1/tasks/prompt", operatorTok, "application/json", string(req), &d); c != 200 || d.Request != "Explain again" {
+		t.Fatal(c, d)
+	}
+	if c := call(t, srv, "POST", "/api/v1/tasks/prompt", operatorTok, "application/json", string(req), nil); c != 409 {
+		t.Fatal(c)
+	}
+}

@@ -5,16 +5,53 @@ The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Prompt-first tasks and authorization modes — incremental delivery
 
-**Decision: 2026-10-19. PROMPT-01 editor implemented; interpretation, URL import,
+**Decision: 2026-10-19. PROMPT-01 editor and PROMPT-02 interpretation are implemented; URL import,
 automatic start and authorization modes remain planned.** New task starts with
 the Request field, visible workflow/environment selectors and collapsed Review
 settings. A new draft derives an editable display title from the first prompt
 line, bounded to 200 UTF-8 bytes; explicit and loaded titles are preserved.
 Ambiguous required fields open the settings disclosure on validation failure.
-Saving still only persists a draft. URLs remain text, no model interprets the
-prompt, and the current explicit review/confirmation/start API remains in force.
+Saving still only persists a draft. Resolve request explicitly invokes the default
+model; URLs are identified but never fetched. The current explicit
+review/confirmation/start API remains in force.
 The primary view reports existing authorization policies instead of offering
 unimplemented modes. No installation permission or shared workflow is changed.
+
+### Implemented request interpretation (PROMPT-02)
+
+**Resolve request** saves the original request before calling the configured
+non-mock default model through the existing LLM gateway, without tools. A bounded
+JSON proposal identifies the goal, an explicitly named workflow and a repository
+URL quoted from the prompt. The server rejects unknown fields, invalid outcomes,
+fabricated URLs and unsupported proposals. Model prose and provider error payloads
+are not returned as repair instructions. The request itself is retained unchanged.
+
+The visible workflow selector takes precedence. Otherwise a named existing workflow
+is used, or `software-factory` when no workflow is named. There is no arbitrary
+first-workflow fallback. Entry/result agents and exact channel message bindings
+are derived from the actual graph structure, not model-supplied agent IDs. Multiple
+entries/results or missing exact message types require Review settings. A resolved
+snapshot pins the graph version; normal pre-start validation catches later changes.
+
+Pending interpretation, missing/unavailable models, invalid proposals, ambiguity
+and repository prerequisites are persisted on the same task draft. Reload Tasks
+and resolve again, or repair and save through Review settings. Compare-and-swap
+revisions prevent a slow response from overwriting a newer edit. A process/network
+failure can leave a pending draft; inspect Tasks before submitting a new task.
+The API may return a storage failure after the initial draft was persisted.
+
+Repository URLs are references only in this delivery. Select a registered project
+and verify that it matches the requested repository before saving; no network Git
+operation or credential lookup occurs. URL import remains PROMPT-03. Resolving
+rebuilds entry/result/channel bindings; the current project/environment/title/issue
+settings are retained and normal review revalidates their compatibility. Only these
+whitelisted settings can accompany interpretation; they cannot add grants.
+
+Resolution never edits workflows, adds grants, chooses an authorization mode or
+starts agents. Unresolved drafts cannot be admitted. Normal Review requirements
+continues to expose model, MCP connection, grant, environment and policy repair,
+followed by a separate explicit reviewed start. Model interpretation quality with
+live providers and human acceptance remain external validation, not fixture evidence.
 
 ### Primary experience
 

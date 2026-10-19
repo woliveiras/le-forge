@@ -101,6 +101,43 @@ paths:
         '400': {description: Invalid preference, missing revision or local mode unavailable in this profile}
         '403': {description: Administrator required}
         '409': {description: Stale project revision}
+  /api/v1/tasks/prompt:
+    post:
+      summary: Persist and interpret a task request without starting agents (operator)
+      description: Saves the original request before a bounded model call. Unresolved drafts survive restart and block admission. Existing drafts require their current revision. Returns actionable resolution states; model errors never expose provider payloads. URLs are identified but not fetched. Only whitelisted fields are accepted; no permission changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [request]
+              properties:
+                request: {type: string, minLength: 1, maxLength: 16384}
+                settings:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    title: {type: string, maxLength: 200}
+                    executionMode: {enum: [workflow, local, sandbox]}
+                    projectId: {type: string}
+                    baseCommit: {type: string}
+                    source: {$ref: '#/components/schemas/TaskIssueSource'}
+                graphId: {type: string, maxLength: 128, description: Explicit workflow selection overrides model suggestions}
+                id: {type: string}
+                revision: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Persisted draft with resolution status; no agents started
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskDraft'}
+        '400': {description: Malformed request or unknown fields}
+        '403': {description: Operator authority required}
+        '409': {description: Draft changed or is no longer editable}
+        '422': {description: Invalid request}
+        '500': {description: Storage failure; a pending draft may already have been saved and can be resumed from Tasks}
   /api/v1/tasks:
     get:
       summary: List persisted task drafts (does not list historical agent turns)
@@ -2118,6 +2155,14 @@ components:
       type: object
       required: [id, revision, status, title, request, outcome, graphId, graphVersion, nodeId, createdBy, updatedBy, createdAt, updatedAt]
       properties:
+        resolution:
+          type: object
+          description: Server-owned interpretation metadata; pending or repair states block task admission until resolved or explicitly repaired and saved.
+          required: [state, message]
+          properties:
+            state: {enum: [pending, needs_model, model_error, invalid_proposal, needs_input, needs_repository, resolved]}
+            message: {type: string}
+            repository: {type: string, description: Untrusted URL quoted from the original request; never fetched by interpretation}
         id: {type: string}
         revision: {type: integer, minimum: 1}
         status: {enum: [draft, preparing, environment_build_requested, environment_pending, environment_cancel_requested, starting, running, interrupted, cancel_requested, cancelled]}
