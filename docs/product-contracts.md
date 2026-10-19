@@ -422,22 +422,32 @@ resource admission and safe reset; see the acceptance evidence for coverage and 
 
 ## 4. User Tasks and Child Executions
 
-### User-initiated tasks — FLOW-01 design contract
+### User-initiated tasks — implemented foundation and planned prompt-first UX
 
-**Design completed 2026-10-19; draft persistence/review implemented, task execution pending.** The reviewed contract is
-in [Task-oriented workflow contracts](task-workflows.md). It supersedes the
-previous preliminary graph-scoped task endpoint proposal. The draft list/create/read/update and review endpoints are now implemented under `/api/v1/tasks`; project and task execution APIs remain planned. OpenAPI remains the implemented API.
+Durable task drafts, reviewed task-owned execution copies, registered local
+projects/worktrees and contextual progress/approval views are implemented within
+the limits in [Task-oriented workflow contracts](task-workflows.md). Tasks reuse
+the existing engine, queues, gateway, storage and versioned workflow graphs;
+they do not introduce another execution engine or a new user-role hierarchy.
+The current implemented API remains [OpenAPI](../api/openapi.yaml).
 
-A task is a durable user request, a workflow is an existing versioned graph, and
-an execution is one agent turn. Project registration and task/run bindings need
-additional metadata; they reuse the current engine, queues, gateway, approvals,
-execution tree and storage adapters. A graph run is not a user task. Current
-replica worktrees must not be presented as independent per-task workspaces.
+**Planned, agreed 2026-10-19:** New task becomes a prompt-first entry point accepting
+an objective and repository URL, with optional workflow selection and collapsed
+Review settings. A compatible configured workflow (initially Software Factory)
+can start on submit only when prerequisites and previously reviewed authority
+are satisfied. Missing inputs and approvals pause the durable task context.
+The same approval appears in the task and global inbox; hard policy denials
+remain denials. Remote URL import into New task and task-level authorization
+modes are not implemented by this documentation change.
 
-The contract specifies target/input mapping, version review, idempotent admission,
-restart recovery, concurrency limits and authoritative result association. All
-implementation deliveries must preserve exact grants, current installation roles
-and the read-only browser workspace inspector. Navigation groups add no roles.
+Planned modes are **Ask for approval**, **Workspace access** and **Full access**.
+Full access preauthorizes a reviewed task scope, not all tools/accounts or a bypass
+of installation restrictions. Review native/sandbox location, file/network access,
+external actions and commit/push explicitly. Worktrees do not isolate native
+processes. Existing per-agent grants, child permission limits, mandatory policies
+and audit history remain. Project preference reuse and in-flight mode changes
+must preserve explicit scope and stale-policy checks. A risk-based **Approve for
+me** mode is deferred. See the linked contract for semantics and acceptance tests.
 
 ### Dynamic child execution
 

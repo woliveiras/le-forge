@@ -35,6 +35,12 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 ## Task-oriented UX and Standalone Delivery Plan (2026-10-19)
 
 **Status: Phase A task-flow implementation and the Phase B native bundle are delivered within the documented capability limits. macOS arm64 automated native qualification passed; external accounts, actual editor launch, optional real native sandbox and other platform smoke checks remain pending. No existing installation activation is claimed.**
+**New decision, 2026-10-19: prompt-first New task and task authorization modes
+are planned and take priority as the next user-facing Release 1 increment. The
+previously delivered form is the current implementation, not the final intended
+primary experience. See the decision below and PROMPT/AUTH tasks; no new runtime
+behavior or installation permission change is activated by this documentation.**
+
 Earlier UX delivery evidence remains historical evidence for existing screens, not
 acceptance of this new flow. Do not restore the removed global onboarding panel.
 
@@ -2182,3 +2188,50 @@ Validation passed: host `go test ./...`, `go vet ./...`, `go build ./...`,
 OAuth journeys. `make test`, `make lint` and `make build` were attempted but the
 Docker socket was unavailable; the host checks above ran instead. No installation
 activation or external validation was performed.
+
+
+### Prompt-first New task and authorization modes — agreed, not implemented (2026-10-19)
+
+Replace mandatory detailed task setup with a primary prompt accepting the
+repository URL, requested work, optional workflow and constraints. Example:
+"Implement GitHub authentication in https://github.com/example/project using
+Software Factory; use a local worktree and leave changes for VS Code review;
+do not commit or push." Resolve existing configuration and supported graph input/
+result bindings; retain Review settings collapsed by default. Work/Configuration
+remain interface groups for the same user, with existing backend permissions.
+
+The desired flow is prompt → agent progress → review. Sending the prompt may
+start work only when prerequisites and applicable prior authority are satisfied.
+Reuse an existing project or import the URL, prepare a task worktree, and dispatch
+to the chosen/default compatible workflow. Software Factory is the initial default
+candidate; missing models/access or ambiguous bindings require contextual repair,
+not guessed configuration. Preserve request/context and resume after resolution.
+Repository import from New task and private Git authentication are still missing;
+MCP OAuth is not automatically a Git clone credential. No shared graph mutation
+or duplicate execution is implied by prompt interpretation.
+
+Expose Ask for approval, Workspace access and Full access beside the prompt.
+Full access is an explicitly reviewed task capability scope that avoids repeated
+individual approvals; it does not add MCP grants/accounts or bypass mandatory
+installation policy. Confirmation must state execution location, file/network
+access, external actions and whether commit/push are included. It can be remembered
+for a project after explicit confirmation. Mode and environment are independent;
+local commands have OS-user authority, while sandbox controls continue to apply.
+Workspace access must not claim containment merely from a worktree directory.
+Define enforceable restrictions or explicit escalation before shipping that mode.
+
+The same approval is visible in the task and global Approvals inbox, with one
+decision/history. Approval permits resumption of an eligible blocked action;
+mandatory prohibitions remain blocked and link to configuration review. Keep
+all action/audit/diagnostic evidence even for preauthorized execution. Users can
+reduce authorization or stop a task; define effects on pending/in-flight work
+without pretending external side effects can be undone. Child agents cannot
+expand the parent's permissions. A risk-based Approve for me mode is deferred.
+
+Implementation sequence: prompt UI/resolution; managed public URL imports; private
+Git authentication contract; task authorization contract/enforcement/preferences;
+automatic admission and contextual continuation; integrated fixture qualification.
+The detailed work is tracked in PROMPT-01–07 and AUTH-01–03 in TASKS.md. External
+account/platform/user acceptance stays last; Release 2 is not included.
+The canonical planned behavior is in [task workflow contracts](../docs/task-workflows.md#prompt-first-tasks-and-authorization-modes--planned).
+This update is documentation only; existing implementation evidence is preserved.

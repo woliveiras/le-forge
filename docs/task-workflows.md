@@ -3,6 +3,124 @@
 Status: reviewed on 2026-10-19. Durable drafts, task-owned execution copies, registered project worktrees, native packaging/editor handoff and contextual approval/evidence views are implemented as recorded below. Issue-source selection, environment preferences/preparation and reviewed cleanup are implemented with the limits documented below; external acceptance remains pending.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
+## Prompt-first tasks and authorization modes — planned
+
+**Decision: 2026-10-19. Not implemented.** This is the next UX increment after
+the delivered form-based flow. It does not activate automatic starts, change
+existing permissions, or authorize changes to a running installation. The
+implemented API and current review/start flow below remain in force until the
+new contract is implemented and tested.
+
+### Primary experience
+
+New task starts with one prompt field. The user can include a repository URL,
+the requested change, a workflow name and constraints, for example:
+
+> In https://github.com/example/project, implement GitHub authentication using
+> Software Factory. Work in a local worktree and leave the changes for my review
+> in VS Code. Do not commit or push.
+
+Resolve the objective, repository/project, workflow and execution preferences
+from that request and previously reviewed configuration. Use a named workflow,
+or a configured default (initially Software Factory when available and compatible).
+Do not select an arbitrary graph or fabricate missing model/access configuration.
+The workflow's agents and channels coordinate the work; the user does not need
+to manually fill entry agents, message types or payload JSON for an unambiguous,
+supported workflow. Keep those bindings inspectable under **Review settings**.
+
+Submitting the prompt can start work when all prerequisites and applicable
+permissions are already satisfied. Save the original request and resolved task
+configuration durably. Ask only for a necessary clarification, missing model or
+repository access, incompatible workflow, or required approval; retain the task
+and resume after resolution. Admission must remain idempotent across retries and
+reload, version-fenced and independently scoped from the reusable source graph.
+Prompt interpretation is untrusted input, never permission to add tools, connect
+accounts, override installation policy or alter shared workflow definitions.
+
+Remote URL import is still missing from New task. Reuse the existing clone and
+project/worktree foundations, adding managed import progress, cancellation,
+reference/commit selection, duplicate/reuse handling and explicit authentication
+for private repositories. MCP OAuth access does not automatically authorize Git
+clone. Start with public repository URLs; private authentication is a separate
+implementation task. Native work remains on the user's host; Docker paths remain
+on the server/container. Worktrees separate changes, not OS authority.
+
+Keep the prompt, progress, required action, result and changes on the task page.
+Progress should describe observable stages such as obtaining the repository,
+preparing the worktree, planning, working and waiting for review. Events, tool
+calls, traces, costs/usage and execution-tree controls remain available as details;
+no security or observability feature is removed. Repository/configuration content
+cannot grant authority merely by appearing in an agent's input.
+
+### Configuration and approvals
+
+**Review settings** is collapsed by default. Workflows, models, connections,
+skills/instructions and installation policies stay under Configuration. This is
+an interface organization for the same user, not a new role model; existing
+backend role checks remain authoritative. Do not restore the global onboarding.
+
+Show the same pending approval in the task and the global **Approvals** inbox,
+with the operation, target, execution location and consequences. Both views act
+on one durable decision and audit history. Approval resumes the blocked work;
+rejection/cancellation must have an explicit outcome. An action that policy allows
+only after approval can enter this queue. A policy prohibition cannot be bypassed
+by approving it: explain the block and link to configuration review instead.
+Missing configuration and ambiguous intent are repair/clarification states, not
+fake approval requests. Any repair must be revalidated before execution resumes.
+
+### Authorization mode selection
+
+Expose the mode beside the prompt and throughout execution, for example:
+**Software Factory · Local worktree · Full access**. The selection applies to the
+task and participating agents within their effective grants, including delegated
+children without permission amplification. These are planned presets, not claims
+that the current gateway already supports task-level mode overrides.
+
+| Mode | Intended behavior |
+|---|---|
+| Ask for approval | Ask for commands, modifications and external actions classified as requiring approval by the effective policy. Reads need not all become approval prompts. |
+| Workspace access | Preauthorize applicable commands and modifications in the task worktree; additional access requires approval when policy permits. This label is not a claim of OS confinement for native commands. |
+| Full access | Preauthorize the broad, explicitly reviewed capability set for the task, without individual prompts inside that scope. It does not grant unavailable tools or override mandatory installation policy. |
+
+Choosing Full access requires a concise review showing actual execution location,
+accessible files, network, external operations, and whether commit and push are
+included. Ordinary use must not repeat this confirmation for every command.
+A project may remember an explicitly confirmed preference; scope changes must not
+silently inherit broader authorization. Record the actor, mode, reviewed scope,
+policy/workflow version and time so automatic approval is auditable. Exact
+persistence fields and policy precedence require a design/implementation review.
+
+Authorization mode and environment are independent. Full access in a sandbox is
+bounded by that sandbox's effective isolation and network/resource policies. Local
+commands execute with the OS user's authority; a worktree alone cannot enforce a
+filesystem or network boundary. Before shipping Workspace access for arbitrary
+native commands, define enforceable limits or require an explicit escalation;
+do not promise containment based on the command's working directory.
+
+MCP tools still require explicit per-agent grants. Selecting Full access cannot
+silently authorize a new connection, add tools, expose credentials or grant child
+agents more than their parent. Mandatory installation limits and prohibitions
+remain active and visible. Commit/push must be represented explicitly in the
+reviewed scope; neither follows merely from a code-editing request. Restrictive
+user instructions must not be silently broadened by prompt interpretation.
+
+Allow reducing the mode and stopping the task. Revalidate pending and subsequent
+actions after a mode change; already dispatched external effects cannot be undone
+by changing a selector. Define cancellation behavior for in-flight commands.
+Continue recording actions and decisions even when individually preauthorized.
+An **Approve for me** risk-evaluation mode is deferred until there is a separately
+designed and tested evaluator; do not imply such an evaluator currently exists.
+
+### Validation before delivery
+
+Require unit, integration and browser tests for prompt resolution, ambiguous or
+missing inputs, import failure/cancellation/reuse, exact launch binding, automatic
+start only within prior authority, reload/retry without duplicate work, contextual
+approval/rejection, hard denials, all three modes, concurrent changes, stale policy,
+delegated permission limits and retained audit evidence. Include native versus
+sandbox semantics and visible limitations. Real vendor credentials, private remote
+repositories and user acceptance remain in the final external validation round.
+
 ## Vocabulary and existing foundations
 
 | Term | Meaning | Current implementation |
