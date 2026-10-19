@@ -2454,3 +2454,8 @@ OpenAPI and task/product contracts describe this boundary. Live model quality,
 external accounts and human acceptance remain deferred. No installation activation,
 secret changes, data deletion or remote push occurred. Authorization modes remain
 separate AUTH tasks; prompt submission does not implement Full access.
+
+
+### AUTH-01 — Task authorization contract
+
+Defined precedence and three modes in docs/task-authorization.md and a pure server policy evaluator. Mandatory approvals and exact grants remain ceilings; native shell is denied in Workspace access. Runtime binding and UI remain AUTH-02. Validation: `go test ./internal/taskauth` (policy success/denial/mandatory-gate cases). Documentation/pure policy only; gateway integration coverage follows with wiring in AUTH-02.
