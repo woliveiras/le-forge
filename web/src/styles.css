@@ -1866,3 +1866,19 @@ button, summary, a { touch-action: manipulation; }
   .tl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
   .tl-text { grid-column: 1 / -1; }
 }
+
+/* Daily work and installation configuration share the existing authorization model. */
+.navigation-group, .navigation-items { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.navigation-items[hidden] { display: none; }
+.navigation-group + .navigation-group { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 8px; }
+.navigation-label { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; padding: 8px 14px; }
+.navigation-hint { font-size: 12px; color: var(--muted); margin: 0 14px 8px; }
+.primary-navigation .navigation-disclosure { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.primary-navigation button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 800px) {
+  .primary-navigation { flex-direction: column; max-height: 38vh; overflow: auto; }
+  .navigation-group { flex-shrink: 0; }
+  .navigation-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+  .primary-navigation button { white-space: normal; overflow-wrap: anywhere; }
+  .navigation-group + .navigation-group { margin-top: 0; padding-top: 8px; }
+}

@@ -15,10 +15,10 @@ test('graph cards open from whitespace and agent links preserve drafts and actio
  await expect(page).toHaveURL(/agent\?agent=reader/);
  const name=page.getByRole('region',{name:'Agent configuration',exact:true}).getByLabel('Name',{exact:true});
  await name.fill('Unsaved reader');
- await page.getByRole('button',{name:'Graphs',exact:true}).click();
+ await page.getByRole('button',{name:'Workflows',exact:true}).click();
  await card.getByRole('button',{name:'Configure reader',exact:true}).click();
  await expect(name).toHaveValue('Unsaved reader');
- await page.getByRole('button',{name:'Graphs',exact:true}).click();
+ await page.getByRole('button',{name:'Workflows',exact:true}).click();
  await card.getByRole('button',{name:'Start',exact:true}).click();
  await expect(page).toHaveURL(/#\/graphs$/);
  await card.getByRole('button',{name:'UX card',exact:true}).focus();

@@ -34,7 +34,7 @@ The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalo
 
 ## Task-oriented UX and Standalone Delivery Plan (2026-10-19)
 
-**Status: planned, not implemented or activated.** Deliver Phase A before Phase B.
+**Status: delivery in progress; FLOW-01 design and FLOW-02 navigation are complete as recorded below. Remaining flows and standalone installation are planned; no new installation activation is claimed.** Deliver Phase A before Phase B.
 Earlier UX delivery evidence remains historical evidence for existing screens, not
 acceptance of this new flow. Do not restore the removed global onboarding panel.
 
@@ -72,6 +72,14 @@ mount shares files, not host execution. Remember a project's choice only while
 it remains available and authorized. Use short English help explaining that a
 worktree separates source changes, not processes/network/credentials, linking to
 [Why Git Worktrees Matter](https://woliveiras.com/posts/why-git-worktrees-matter-coding-agents/).
+
+FLOW-02 implementation evidence (2026-10-19): the shell now groups Work and
+Configuration, with collapsible configuration, active destinations and responsive
+navigation. Workflows retains graph routes; Tasks and Projects remain explicitly
+unavailable until their planned behavior is delivered. No role or API changes.
+Unit/App integration and 11 disposable-backend browser scenarios passed, including
+legacy links, drafts and viewer restrictions. Full test/lint/build checks passed;
+this does not constitute installed activation or final human acceptance.
 
 ### Phase B — Independent standalone installation
 

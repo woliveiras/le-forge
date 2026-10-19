@@ -1,3 +1,4 @@
+import { PrimaryNavigation } from './components/PrimaryNavigation';
 import { runSection, type RunSection } from './components/runPresentation';
 import { agentSection, type AgentSection } from './components/agentSettingsModel';
 import { Activity, useCallback, useEffect, useState } from 'react';
@@ -175,28 +176,8 @@ function Shell() {
         )}
       </header>
       <div className="workspace-shell">
-        <nav className="primary-navigation" aria-label="Main navigation">
-          <button type="button" className={`approvals-btn ${route.view === 'graphs' || route.view === 'graph' ? 'on' : ''}`} onClick={() => go({ view: 'graphs' })}>Graphs</button>
-          <button
-            type="button"
-            className={`approvals-btn ${route.view === 'connections' ? 'on' : ''}`} aria-current={route.view === 'connections' ? 'page' : undefined}
-            onClick={() => go({ view: 'connections' })}
-          >
-            Connections
-          </button>
-          <button type="button" className={`approvals-btn ${route.view === 'models' ? 'on' : ''}`} aria-current={route.view === 'models' ? 'page' : undefined} onClick={() => go({ view: 'models' })}>Models</button>
-          <button type="button" className={`approvals-btn ${route.view === 'administration' ? 'on' : ''}`} aria-current={route.view === 'administration' ? 'page' : undefined} onClick={() => go({ view: 'administration', section: 'health' })}>Administration</button>
-          <button
-            type="button"
-            className={`approvals-btn ${route.view === 'approvals' ? 'on' : ''}`} aria-current={route.view === 'approvals' ? 'page' : undefined}
-            onClick={() => go({ view: 'approvals' })}
-          >
-            Approvals {pending > 0 && <span className="count">{pending}</span>}
-          </button>
-          <button type="button" className={`approvals-btn ${route.view === 'skills' ? 'on' : ''}`} aria-current={route.view === 'skills' ? 'page' : undefined} onClick={() => go({ view: 'skills' })}>
-            Skills & steering
-          </button>
-        </nav>
+        <PrimaryNavigation active={route.view === 'graph' ? 'graphs' : route.view} pending={pending}
+          onNavigate={view => go(view === 'administration' ? {view, section: 'health'} : {view})} />
         <main>
           <ErrorBox error={info.error && !graphs.error ? `info: ${info.error}` : undefined} />
           {route.view === 'graphs' && (

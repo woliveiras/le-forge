@@ -17,7 +17,7 @@ test('direct first use preserves canvas drafts and inspects a real execution wit
   const name = page.getByRole('region',{name:'Agent configuration',exact:true}).getByLabel('Name',{exact:true});
   await name.fill('My first echo');
   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Models',exact:true}).click();
-  await page.getByRole('button', {name:'Graphs',exact:true}).click();
+  await page.getByRole('button', {name:'Workflows',exact:true}).click();
   await page.getByRole('button',{name:'Configure Echo',exact:true}).click();
   await expect(name).toHaveValue('My first echo');
   await page.getByRole('button',{name:'Review & save',exact:true}).click();

@@ -1,15 +1,24 @@
 # Console navigation
 
-The console separates installation-wide configuration from graph operations.
+The console groups daily work and configuration for the same user. This does not
+introduce roles or change API permissions.
 
-| Destination | Scope |
-| --- | --- |
-| Graphs | Existing graph editor, activity, files, messages and advanced YAML |
-| Connections (`#/connections`) | Installation MCP connections, OAuth setup, discovered tools and call history |
-| Models (`#/models`) | Model providers, credentials and explicit connection/inference tests |
-| Administration (`#/administration/health`) | Installation health and policy sections |
-| Skills & steering | Existing installation instruction management |
-| Approvals | Existing approval and application-review flows |
+| Group | Destination | Scope |
+| --- | --- | --- |
+| Work | Tasks / Projects | Disabled and explicitly labeled unavailable until their task/project flows are implemented. Existing Runs remains agent execution history. |
+| Work | Approvals | Existing approval and application-review flows, including pending count |
+| Configuration | Workflows (`#/graphs`) | Existing graph editor, activity, files, messages and advanced YAML |
+| Configuration | Connections (`#/connections`) | Installation MCP connections, OAuth setup, discovered tools and call history |
+| Configuration | Models (`#/models`) | Model providers, credentials and explicit connection/inference tests |
+| Configuration | Skills & instructions (`#/skills`) | Existing installation instruction management |
+| Configuration | Administration (`#/administration/health`) | Installation health and policy sections |
+
+Configuration can be collapsed with its button (Enter or Space with keyboard
+focus). Navigation to another destination reveals the group; reload/direct links
+start expanded so the active destination is visible. Collapse is session UI state,
+not installation configuration. On narrow screens navigation wraps and scrolls
+within a bounded area. Existing graph URLs and editor drafts retain their behavior.
+The graph list still uses its existing Graphs heading and graph actions.
 
 Administration has independent hash routes for `health`, `network`, `resources`,
 `retention` and `tools`. Opening a section loads only that section's resources.
