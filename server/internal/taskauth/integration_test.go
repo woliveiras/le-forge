@@ -38,8 +38,11 @@ func (a *approver) RequestApproval(_ context.Context, r *domain.Approval) (*doma
 	return r, nil
 }
 func setup(t *testing.T) (Manager, *taskconfig.Draft, *tools.Principal) {
+	return setupAt(t, t.TempDir())
+}
+func setupAt(t *testing.T, root string) (Manager, *taskconfig.Draft, *tools.Principal) {
 	t.Helper()
-	s, err := fsstore.Open(t.TempDir())
+	s, err := fsstore.Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,6 +103,7 @@ func TestGatewayConsentAndMandatoryGrants(t *testing.T) {
 			if _, err = gw.Invoke(t.Context(), p, tool.Name(), nil); err != nil || ap.calls != expected+1 {
 				t.Fatal(err, ap.calls)
 			}
+			p.NodeID = "temporary-child"
 			p.Grants = nil
 			if _, err = gw.Invoke(t.Context(), p, tool.Name(), nil); !errors.Is(err, tools.ErrDenied) {
 				t.Fatal(err)
@@ -246,5 +250,84 @@ func TestPreferenceIsOnlySuggestion(t *testing.T) {
 	review, _ = m.Review(t.Context(), next.ID)
 	if review.Record.Mode != Ask {
 		t.Fatal("suggestion silently expanded scope")
+	}
+}
+
+func TestConsentSurvivesStoreRestart(t *testing.T) {
+	root := t.TempDir()
+	m, d, p := setupAt(t, root)
+	r, err := m.Review(t.Context(), d.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Save(t.Context(), d.ID, Full, r.Scope, 0, "admin", true); err != nil {
+		t.Fatal(err)
+	}
+	launch(t, m, d, p)
+	if err = m.Store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := fsstore.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	m.Store = reopened
+	required, _, err := m.Check(t.Context(), p, &sampleTool{}, false)
+	if err != nil || required {
+		t.Fatal(required, err)
+	}
+	r, err = m.Review(t.Context(), d.ID)
+	if err != nil || r.Record.ExecutionScope == "" || r.Record.Actor != "admin" {
+		t.Fatal(r, err)
+	}
+}
+
+func TestNativeShellRequiresAskOrExplicitFull(t *testing.T) {
+	for _, mode := range []Mode{Ask, Full} {
+		t.Run(string(mode), func(t *testing.T) {
+			m, d, p := setup(t)
+			g, err := m.Store.GetGraph(t.Context(), d.GraphID, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g.Spec.Nodes[0].Tools = []domain.ToolGrant{{Name: "shell.exec"}}
+			if _, err = m.Store.SaveGraph(t.Context(), g, 1); err != nil {
+				t.Fatal(err)
+			}
+			in := d.Input
+			in.GraphVersion = 2
+			d, err = (taskconfig.Manager{Store: m.Store}).Save(t.Context(), d.ID, in, d.Revision, "admin")
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := m.Review(t.Context(), d.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = m.Save(t.Context(), d.ID, Workspace, r.Scope, 0, "admin", true); !errors.Is(err, ErrInvalid) {
+				t.Fatal("native workspace admitted", err)
+			}
+			if _, err = m.Save(t.Context(), d.ID, mode, r.Scope, 0, "admin", true); err != nil {
+				t.Fatal(err)
+			}
+			launch(t, m, d, p)
+			p.Grants = g.Spec.Nodes[0].Tools
+			p.Workdir = t.TempDir()
+			ap := &approver{}
+			gw := tools.NewGateway(tools.Builtin(tools.BuiltinConfig{}), ap, nil)
+			gw.TaskAuthorization = m.Check
+			res, err := gw.Invoke(t.Context(), p, "shell.exec", json.RawMessage(`{"command":"printf fixture"}`))
+			if err != nil || res.IsError || !strings.Contains(res.Content, "fixture") {
+				t.Fatal(res, err)
+			}
+			want := 0
+			if mode == Ask {
+				want = 1
+			}
+			if ap.calls != want {
+				t.Fatal(ap.calls)
+			}
+		})
 	}
 }

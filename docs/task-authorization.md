@@ -43,3 +43,23 @@ Waiting calls refuse a decision made under an earlier consent revision. Stop tas
 uses the existing execution-copy cancellation flow. In-flight effects are not rolled
 back. Preference-save failures are reported separately from an already saved task
 consent. Integrated qualification remains PROMPT-07.
+
+
+## Qualification and limits
+
+Local qualification covers the prompt interpreter fixture, real Git smart-HTTP
+import and worktrees, native tool gateway, all three modes, explicit approvals,
+rejection, denied tools, revision changes, cancellation, and persisted consent after
+store reopen. The native browser suite also exercises the preinstalled Software
+Factory and its human handoff. The small prompt qualification workflow uses a
+scripted model; it does not claim live model quality or live provider access.
+
+The policy version identifies the server's task-authorization contract. Installation
+restrictions are independently enforced at their existing boundaries on every call;
+task consent does not replace or edit those policies. Existing task copies without
+a consent record are labeled legacy and retain workflow approvals. They cannot be
+silently promoted into a new mode while running.
+
+Live private repositories, OS credential helpers/keychains, corporate providers,
+real Docker sandbox execution and final user acceptance remain external validation.
+This delivery does not activate or migrate the user's running installation.

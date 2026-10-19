@@ -2143,15 +2143,17 @@ paths:
         "422":
           description: Invalid connection or MCP grant
 
-  /tasks/{tid}/authorization:
+  /api/v1/tasks/{tid}/authorization:
     parameters:
       - {name: tid, in: path, required: true, schema: {type: string}}
     get:
       summary: Review current task consent and capability scope
+      x-leforge-role: viewer
       responses:
         '200': {description: Scope digest, reviewed capabilities and optional consent record}
     put:
       summary: Confirm draft consent or reduce running task authorization (admin only)
+      x-leforge-role: admin
       parameters:
         - {name: If-Match, in: header, required: true, schema: {type: integer, minimum: 0}, description: Consent revision; zero creates the initial record}
       requestBody:

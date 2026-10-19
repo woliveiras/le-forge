@@ -787,7 +787,7 @@ approvals, diagnostics and graph controls. Do not recreate global onboarding.
 
   - [x] FLOW-08 — Final automated Phase A regression: `CI=true make test` passed (332 frontend plus Go/Python), `make lint` and `make build` passed. `make test-e2e` passed (93 main journeys, one hosted CIMD and one isolated provider journey). Eight production native browser journeys and native format-1 upgrade/restart qualification passed separately. Updated the old project-browser wording assertion to the delivered workspace label without removing preservation checks. Human/external acceptance remains unchecked; no existing installation activation.
 
-### 10a.1 Prompt-first tasks and authorization modes — planned (2026-10-19)
+### 10a.1 Prompt-first tasks and authorization modes — implemented with local qualification (2026-10-19)
 
 Next Release 1 product priority: **write a request → follow the agents → review
 changes**. The earlier form-based FLOW deliveries remain implemented; the items
@@ -804,7 +804,7 @@ External credentials and final user acceptance remain deferred.
 - [x] AUTH-03 — Persist optional explicitly confirmed project preferences and allow task mode reduction/stop. Revalidate scope changes, stale versions and pending/subsequent actions; define in-flight cancellation without claiming rollback of external effects. Record automatic decisions and manual changes; no silent broadening through saved defaults.
 - [x] PROMPT-05 — Administrator-confirmed Run task resolves the saved prompt and starts through existing reviewed/version-fenced admission only when requirements are satisfied. Missing model/project/configuration, clarification and environment preparation retain the same draft for explicit Continue task; runtime approval gates and grants are unchanged. Durable identity-scoped submission keys/fingerprints prevent duplicate resolution/launch on replay; uncertain reservations fail closed. Unit, storage/API integration and Chromium success/repair/replay coverage recorded in PLAN.md. No implicit clone, credential lookup, environment approval, automatic replay or broader authority.
 - [x] PROMPT-06 — Present understandable task stages, result and code changes in one view. Reuse the same durable approval in the task and global Approvals inbox; approval resumes, rejection/cancellation is explicit, and mandatory denials link to configuration without an approval bypass. Keep events/tool calls/traces/usage/tree details accessible.
-- [ ] PROMPT-07 — Qualify the integrated prompt → URL import → selected/default Software Factory → isolated worktree → agent work → review journey with local fixtures. Cover all modes, errors, permission denials, mode changes, reload/recovery and source/data preservation. Run documented checks; record native/sandbox limitations. Keep live provider/private repository and final user acceptance separate and uncompleted until proven.
+- [x] PROMPT-07 — Qualified the integrated prompt → URL import → selected/default Software Factory → isolated worktree → agent work → review journey with local fixtures. Covered all modes, errors, permission denials, mode changes, reload/store recovery and source/data preservation using local fixtures and native execution. Evidence, required Make target limitations and host checks are recorded in PLAN.md. Live provider/private repository, real Docker sandbox and final user acceptance remain separate and uncompleted.
 
 ### 10b. Phase B — Standalone Forge on the User's Machine (after Phase A)
 

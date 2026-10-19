@@ -14,6 +14,7 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/taskauth"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
 )
@@ -87,6 +88,10 @@ func TestTaskEnvironmentBuildRequiresSeparateStartAndRetainsSource(t *testing.T)
 	}
 	if c := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); c != 409 {
 		t.Fatal("stale start", c)
+	}
+	var consent taskauth.Review
+	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/authorization", viewerTok, "", "", &consent); c != 200 || consent.Record != nil {
+		t.Fatal("stale start created consent", c, consent)
 	}
 	if c := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", viewerTok, "", "", &review); c != 200 || !review.CanStart {
 		t.Fatal(c, review)

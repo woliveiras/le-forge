@@ -2501,3 +2501,46 @@ denials point to configuration, without a bypass. Stale consent is a review bloc
 
 Verified: taskrun/API Go suites; 22 focused UI tests; two Chromium journeys approve
 and reject the same durable workflow gate and verify reload/history/result states.
+
+### PROMPT-07 — Integrated qualification
+
+Qualified prompt interpretation → public Git import → selected/default Software
+Factory fixture → isolated task worktree → native agent tool execution → code
+review. The model is deterministic, but Git smart HTTP, storage, engine, gateway,
+approvals, file writes and browser/API boundaries are real. All three authorization
+modes preserve original Git objects/source files and distinct worktrees. Full access
+still denies tools without grants. Project suggestions are not inherited consent.
+The production native profile separately exercises the preinstalled Software Factory
+through its human gate; this does not qualify live model output.
+
+Qualification also covers private authentication refusal/repair with synthetic
+credentials, slow-import cancellation, reload/resume, stale scopes, denied live
+expansion, durable decision identities, child grant denial, native shell consent,
+storage restart, and rejection without inferred success. Findings fixed during
+qualification: stale prepared-environment starts now validate revision/requirements
+before creating consent; consent seals propagate serialization errors; legacy
+executions are labeled accurately; environment-pending tasks can review consent;
+browser selectors identify the intended confirmation when multiple checkboxes exist.
+No tests or policy checks were removed or weakened.
+
+Checks: `make test`, `make lint`, `make build` attempted and blocked by the unavailable
+Docker socket. Host equivalents `go test -p 2 ./...`, `go vet ./...`, `go build ./...`
+passed; `gofmt -l .` returned no paths. Race checks cover taskauth/taskconfig/taskrun,
+tools and API. `go test -tags e2e ./cmd/forge-e2e` passed. Python suites passed
+(15 SDK, 14 agent, 8 script tests). Web TypeScript/build, Vitest and Chromium
+qualification results are recorded with the final verification below.
+
+External validation remains deferred: live models/MCP/private repository accounts,
+OS keychains/corporate restrictions, real Docker sandbox and final user acceptance.
+No live installation activation, secret changes or push was performed.
+
+Final verification: 364 Vitest tests across 73 files passed with two workers;
+TypeScript and the production web build passed. Thirty Chromium journeys passed
+across prompt qualification, prompt submission, authorization, task decisions/drafts,
+repository imports and projects; seven affected journeys were rerun successfully
+following final consent-display fixes. `make test-native-browser` passed all nine
+journeys against a disposable production native profile. Initial failures were
+limited to an incorrect test assumption about imported repositories being checked
+out, ambiguous checkbox selectors after adding consent, and legacy tests needing
+the now-required Ask-mode decision; assertions were made more explicit and passed.
+OpenAPI YAML parsed successfully and `git diff --check` is clean.

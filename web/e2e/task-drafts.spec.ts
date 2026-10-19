@@ -100,7 +100,7 @@ test('reviews structured channel input and reports the declared result with reta
  await openTaskSettings(page);
  await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();
- await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await expect(page.getByText('echoed 1 message(s)',{exact:true})).toBeVisible();
 });
@@ -233,6 +233,8 @@ for(const kind of ['github','jira'] as const) test(`reads a selected ${kind} iss
  await page.getByRole('button',{name:'Review requirements'}).click();
  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();
  await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Needs your decision',exact:true})).toBeVisible();
+ await page.getByRole('region',{name:'Task decisions'}).getByRole('button',{name:'Approve',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await expect(page.getByText(/Issue result:.*Issue fixture read completed/)).toBeVisible();
  const taskId=page.url().split('/').pop()!;

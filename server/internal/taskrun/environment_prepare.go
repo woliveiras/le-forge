@@ -105,9 +105,6 @@ func (m Manager) PrepareEnvironment(ctx context.Context, id string, revision int
 }
 
 func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Draft, revision int64, actor string) (*taskconfig.Draft, error) {
-	if err := (taskauth.Manager{Store: m.Store}).Ensure(ctx, d.ID, actor); err != nil {
-		return nil, err
-	}
 	if d.Revision != revision {
 		return nil, storage.ErrConflict
 	}
@@ -122,6 +119,9 @@ func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Dra
 	if err != nil {
 		return nil, err
 	}
+	if err := (taskauth.Manager{Store: m.Store}).Ensure(ctx, d.ID, actor); err != nil {
+		return nil, err
+	}
 	tm := taskconfig.Manager{Store: m.Store}
 	d, err = tm.Transition(ctx, d, "starting", actor)
 	if err != nil {
@@ -132,6 +132,9 @@ func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Dra
 		_, saveErr := tm.Transition(context.WithoutCancel(ctx), d, "interrupted", actor)
 		return nil, errors.Join(cause, saveErr)
 	}
+	if err = (taskauth.Manager{Store: m.Store}).Bind(ctx, d.ID, g); err != nil {
+		return fail(err)
+	}
 	if d.ChannelID != "" {
 		if _, err = m.Engine.Inject(ctx, g.Metadata.ID, d.ChannelID, d.MessageType, json.RawMessage(d.PayloadJSON), d.NodeID, nil, actor); err != nil {
 			return fail(err)
@@ -141,9 +144,6 @@ func (m Manager) startPreparedEnvironment(ctx context.Context, d *taskconfig.Dra
 		if err = m.Store.PutOperatorMessageOnce(ctx, input); err != nil {
 			return fail(err)
 		}
-	}
-	if err = (taskauth.Manager{Store: m.Store}).Bind(ctx, d.ID, g); err != nil {
-		return fail(err)
 	}
 	if err = m.Engine.GraphAction(ctx, g.Metadata.ID, "start", actor); err != nil {
 		return fail(err)

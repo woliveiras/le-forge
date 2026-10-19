@@ -196,7 +196,11 @@ func (m Manager) Check(ctx context.Context, p *tools.Principal, t tools.Tool, ma
 		return mandatory, "legacy", nil
 	} // Existing installation tasks keep their grants.
 	rec := review.Record
-	if rec.ExecutionScope == "" || rec.ExecutionScope != executionScope(g) {
+	currentScope, scopeErr := executionScope(g)
+	if scopeErr != nil {
+		return false, "", scopeErr
+	}
+	if rec.ExecutionScope == "" || rec.ExecutionScope != currentScope {
 		return false, "", ErrDenied
 	}
 	if rec.Scope != review.Scope {
@@ -210,10 +214,13 @@ func (m Manager) Check(ctx context.Context, p *tools.Principal, t tools.Tool, ma
 	return required, fmt.Sprintf("%s:%d:%s", id, rec.Revision, rec.Mode), err
 }
 
-func executionScope(g *domain.Graph) string {
-	b, _ := json.Marshal(g.Spec)
+func executionScope(g *domain.Graph) (string, error) {
+	b, err := json.Marshal(g.Spec)
+	if err != nil {
+		return "", err
+	}
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // Bind seals the execution copy after normalization and before any agent starts.
@@ -226,7 +233,10 @@ func (m Manager) Bind(ctx context.Context, id string, g *domain.Graph) error {
 		return ErrDenied
 	}
 	rec := review.Record
-	rec.ExecutionScope = executionScope(g)
+	rec.ExecutionScope, err = executionScope(g)
+	if err != nil {
+		return err
+	}
 	b, err := json.Marshal(rec)
 	if err != nil {
 		return err

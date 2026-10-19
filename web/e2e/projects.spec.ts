@@ -30,7 +30,7 @@ test('registers a repository and reviews a separate task worktree without touchi
  await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
   await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();
   await expect(page.getByRole('article',{name:'Task requirements'})).toContainText(repo);
-  await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
+  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Start task',exact:true}).click();
   await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
   await expect(page.getByRole('article',{name:'Task progress'})).toContainText('Task workspace on the Forge server');
   expect(readFileSync(join(repo,'dirty.txt'),'utf8')).toBe('keep');

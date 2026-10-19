@@ -34,3 +34,11 @@ it('keeps project preferences as suggestions and prevents full access while runn
  expect((screen.getByRole('option',{name:'Full access'}) as HTMLOptionElement).disabled).toBe(true);
  expect(screen.queryByLabelText('Remember this mode as a project suggestion')).toBeNull();
 });
+it('does not claim Ask mode or offer live expansion on a legacy task',async()=>{
+ render(<TaskAuthorization taskId="tsk_1" canEdit running onChanged={()=>{}}/>);
+ await screen.findByText(/Existing workflow approvals/);expect(screen.queryByRole('checkbox')).toBeNull();
+});
+it('identifies stale saved consent before another start',async()=>{
+ vi.mocked(api.taskAuthorization).mockResolvedValue({scope:'new-scope',record:{taskId:'tsk_1',mode:'full',scope:'old-scope',actor:'admin',policyVersion:1,revision:1}});
+ render(<TaskAuthorization taskId="tsk_1" canEdit onChanged={()=>{}}/>);await screen.findByText(/Saved authorization is stale/);
+});

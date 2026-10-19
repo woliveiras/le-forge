@@ -52,6 +52,9 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 			return nil, fmt.Errorf("fixture model unavailable")
 		}
 		raw := `{"outcome":"implement","workflowId":"","repository":"","clarification":false}`
+		if strings.Contains(in.Request, "https://repository.fixture.example/source.git") {
+			raw = `{"outcome":"implement","workflowId":"","repository":"https://repository.fixture.example/source.git","clarification":false}`
+		}
 		if strings.Contains(in.Request, "fixture-ambiguous") {
 			raw = `{"outcome":"freeform","clarification":true}`
 		}
@@ -148,6 +151,9 @@ func (analysisProvider) Chat(_ context.Context, r *llm.ChatRequest) (*llm.ChatRe
 			toolName = "mcp.oauth-browser.search"
 		}
 		return &llm.ChatResponse{Message: llm.ChatMessage{ToolCalls: []llm.ToolCall{{ID: "remote-search", Name: toolName, Arguments: callArgs}}}, StopReason: "tool_calls"}, nil
+	}
+	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "prompt-journey-fixture") {
+		return promptJourneyResponse(r), nil
 	}
 	if len(r.Messages) > 0 && strings.Contains(r.Messages[0].Content, "git-inspect-fixture") {
 		return gitInspectionResponse(r), nil
