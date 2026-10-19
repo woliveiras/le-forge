@@ -1934,3 +1934,12 @@ shares the same protocol/catalogue validator. This foundation does not expose
 commands to the API or grant tools: native-only reviewed registration, encrypted
 environment values, gateway authorization and browser coverage remain pending.
 Windows is rejected until process-tree teardown is qualified.
+
+
+### Callback completion boundary
+
+LOCAL-03c removes callback admission as soon as the runtime returns, before the
+terminal execution is persisted or published. Deferred cleanup still covers
+earlier exits. Unit and deterministic storage-boundary integration tests cover
+success/failure and keep other executions authorized independently. This closes
+the completion/revocation race observed by the existing external callback test.

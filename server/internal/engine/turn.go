@@ -265,6 +265,9 @@ func (r *replica) turn(loopCtx context.Context, n *domain.Node, dels []queue.Del
 
 	rt := e.opt.Runtimes[n.Runtime.Kind]
 	res, err := rt.Turn(turnCtx, in, env)
+	// End callback admission before persisting or publishing a terminal outcome.
+	// Deferred cleanup remains necessary for earlier exits, but is too late here.
+	e.execs.unregister(x.ID)
 	killed := errors.Is(turnCtx.Err(), context.Canceled) && !errors.Is(context.Cause(turnCtx), executioncontrol.ErrUnavailable)
 	env.mu.Lock()
 	yielded := env.yielded
