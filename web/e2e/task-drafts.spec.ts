@@ -153,3 +153,29 @@ test('repairs an MCP connection in another tab and rechecks the retained task be
  await expect(page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'})).not.toBeChecked();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
  await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeEnabled();
 });
+
+test('prepares a task sandbox then requires a separate reviewed start',async({page})=>{
+ const graph={metadata:{id:'task-environment-flow',name:'Task environment flow'},spec:{environment:{image:'alpine:3.22'},nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},isolation:{mode:'docker'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto('/#/tasks/new');
+ await page.getByRole('textbox',{name:'Title',exact:true}).fill('Prepared sandbox task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Synthetic build and execution boundary');await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption(graph.metadata.id);await page.getByRole('combobox',{name:'Execution environment',exact:true}).selectOption('sandbox');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);await page.getByRole('button',{name:'Review requirements'}).click();await expect(page.getByRole('region',{name:'Task environment definition'})).toContainText('alpine:3.22');await expect(page.getByRole('button',{name:'Start task',exact:true})).toBeDisabled();
+ await page.getByRole('checkbox',{name:'I reviewed the workflow and authorize a separate execution copy.'}).check();await page.getByRole('button',{name:'Prepare task environment'}).click();
+ await expect(page.getByRole('status')).toHaveText('Task status: environment_pending');await expect(page.getByRole('region',{name:'Task environment preparation'})).toContainText('Environment: ready');
+ const id=page.url().split('/').at(-1)!;const progress=await(await page.request.get(`/api/v1/tasks/${id}/progress`,{headers})).json();
+ expect(await(await page.request.get(`/api/v1/graphs/${progress.task.executionGraphId}/executions`,{headers})).json()).toEqual([]);
+ await page.reload();await expect(page.getByRole('button',{name:'Start prepared task'})).toBeDisabled();await page.getByRole('button',{name:'Review prepared task requirements'}).click();await expect(page.getByText('Workflow version 1. Agent permissions remain unchanged.')).toBeVisible();
+ await page.getByRole('checkbox',{name:'I reviewed this task environment and authorize the selected build or start action.'}).check();await page.getByRole('button',{name:'Start prepared task'}).click();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ const source=await(await page.request.get(`/api/v1/graphs/${graph.metadata.id}/environment`,{headers})).json();expect(source.state).toBe('absent');
+});
+
+test('failed task environment remains inspectable and can be stopped without executing',async({page})=>{
+ const graph={metadata:{id:'task-environment-failure'},spec:{environment:{dockerfile:'FROM alpine:3.22\nRUN echo E2E_BUILD_FAIL'},nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},isolation:{mode:'docker'},tools:[]}]}};
+ expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
+ const res=await page.request.post('/api/v1/tasks',{headers,data:{title:'Failed build',request:'Synthetic failure',outcome:'freeform',graphId:graph.metadata.id,graphVersion:1,nodeId:'worker',resultNodeId:'worker',executionMode:'sandbox'}});expect(res.status()).toBe(201);const task=await res.json();
+ expect((await page.request.post(`/api/v1/tasks/${task.id}/prepare-environment`,{headers:{...headers,'If-Match':String(task.revision)},data:{confirm:true}})).status()).toBe(202);
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));await page.goto(`/#/tasks/${task.id}`);await expect(page.getByRole('region',{name:'Task environment preparation'})).toContainText('Environment: failed');await expect(page.getByRole('button',{name:'Start prepared task'})).toBeDisabled();await expect(page.getByRole('button',{name:'Retry environment build'})).toBeDisabled();
+ await page.reload();await expect(page.getByRole('region',{name:'Task environment preparation'})).toContainText('Environment: failed');
+ await page.getByRole('checkbox',{name:"Stop this task's execution copy and retain its data."}).check();await page.getByRole('button',{name:'Stop task',exact:true}).click();await expect(page.getByRole('status')).toHaveText('Task status: cancelled');
+ const progress=await(await page.request.get(`/api/v1/tasks/${task.id}/progress`,{headers})).json();expect(await(await page.request.get(`/api/v1/graphs/${progress.task.executionGraphId}/executions`,{headers})).json()).toEqual([]);
+});

@@ -15,6 +15,7 @@ import (
 
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/engine"
+	"github.com/woliveiras/le-forge/server/internal/environment"
 	"github.com/woliveiras/le-forge/server/internal/graph"
 	"github.com/woliveiras/le-forge/server/internal/storage"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
@@ -23,6 +24,7 @@ import (
 const GraphPrefix = "task-run-"
 
 type Manager struct {
+	Environments  *environment.Manager
 	NativeProfile bool
 	CheckSandbox  func(context.Context) error
 	Workspaces    *workspace.Manager
@@ -36,18 +38,21 @@ type AgentRequirements struct {
 	Isolation domain.IsolationMode `json:"isolation"`
 }
 type Review struct {
-	Project             *projectconfig.Project `json:"project,omitempty"`
-	WorkspacePath       string                 `json:"workspacePath,omitempty"`
-	Agents              []AgentRequirements    `json:"agents"`
-	Task                *taskconfig.Draft      `json:"task"`
-	CurrentGraphVersion int                    `json:"currentGraphVersion"`
-	Validation          *graph.Report          `json:"validation"`
-	Blockers            []string               `json:"blockers"`
-	CanStart            bool                   `json:"canStart"`
-	ExecutionGraphID    string                 `json:"executionGraphId"`
-	Grants              []domain.ToolGrant     `json:"grants"`
-	Model               domain.ModelRef        `json:"model"`
-	Isolation           domain.IsolationMode   `json:"isolation"`
+	CanPrepareEnvironment bool                    `json:"canPrepareEnvironment"`
+	EnvironmentDefinition *domain.EnvironmentSpec `json:"environmentDefinition,omitempty"`
+	Environment           *environment.View       `json:"environment,omitempty"`
+	Project               *projectconfig.Project  `json:"project,omitempty"`
+	WorkspacePath         string                  `json:"workspacePath,omitempty"`
+	Agents                []AgentRequirements     `json:"agents"`
+	Task                  *taskconfig.Draft       `json:"task"`
+	CurrentGraphVersion   int                     `json:"currentGraphVersion"`
+	Validation            *graph.Report           `json:"validation"`
+	Blockers              []string                `json:"blockers"`
+	CanStart              bool                    `json:"canStart"`
+	ExecutionGraphID      string                  `json:"executionGraphId"`
+	Grants                []domain.ToolGrant      `json:"grants"`
+	Model                 domain.ModelRef         `json:"model"`
+	Isolation             domain.IsolationMode    `json:"isolation"`
 }
 
 func ExecutionID(id string) string { return GraphPrefix + strings.TrimPrefix(id, "tsk_") }
@@ -98,8 +103,8 @@ func Prepare(d *taskconfig.Draft, source *domain.Graph) (*domain.Graph, []string
 	if g.Spec.Workspace.Path != "" {
 		blockers = append(blockers, "This workflow uses an existing workspace path. Task-owned local project workspaces are not available yet.")
 	}
-	if g.Spec.Environment != nil {
-		blockers = append(blockers, "This workflow requires an environment build. Task-owned environment preparation is not available yet.")
+	if g.Spec.Environment != nil && g.Spec.Environment.Origin != nil && g.Spec.Environment.Origin.Source == "agent" {
+		blockers = append(blockers, "This environment approval belongs to the source workflow. Review an explicit workflow environment definition before creating a task copy.")
 	}
 	for _, n := range g.Spec.Nodes {
 		if n.Disabled {
@@ -122,7 +127,11 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	if err != nil {
 		return nil, err
 	}
-	source, err := m.Store.GetGraph(ctx, d.GraphID, 0)
+	version := 0
+	if d.Status == "environment_pending" {
+		version = d.GraphVersion
+	}
+	source, err := m.Store.GetGraph(ctx, d.GraphID, version)
 	if err != nil {
 		return nil, err
 	}
@@ -130,12 +139,22 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	if err != nil {
 		return nil, err
 	}
+	if d.Status == "environment_pending" {
+		g, err = m.preparedEnvironmentGraph(ctx, d)
+		if err != nil {
+			return nil, err
+		}
+	}
 	blockers = append(blockers, m.checkEnvironment(ctx, d, g)...)
+	preparationBlocks := append([]string{}, blockers...)
 	report := m.Engine.ValidateForStart(ctx, g)
 	for _, issue := range report.Errors {
 		blockers = append(blockers, issue.Path+": "+issue.Message)
+		if issue.Path != "spec.environment" {
+			preparationBlocks = append(preparationBlocks, issue.Message)
+		}
 	}
-	if d.Status != "draft" {
+	if d.Status != "draft" && d.Status != "environment_pending" {
 		blockers = append(blockers, "This task has already been submitted. Start is not repeated.")
 	}
 	r := &Review{Task: d, CurrentGraphVersion: source.Metadata.Version, Validation: report, Blockers: blockers, CanStart: len(blockers) == 0, ExecutionGraphID: g.Metadata.ID, Grants: []domain.ToolGrant{}}
@@ -147,14 +166,33 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 		r.Project = project
 		if e = projectconfig.Verify(ctx, project, d.BaseCommit); e != nil {
 			r.Blockers = append(r.Blockers, e.Error())
+			preparationBlocks = append(preparationBlocks, e.Error())
 		}
 		if m.Workspaces == nil {
 			r.Blockers = append(r.Blockers, "Task workspaces are unavailable.")
+			preparationBlocks = append(preparationBlocks, "Task workspaces are unavailable.")
 		} else {
 			r.WorkspacePath = filepath.Join(m.Workspaces.Root, g.Metadata.ID)
 		}
 	}
 	r.CanStart = len(r.Blockers) == 0
+	r.EnvironmentDefinition = g.Spec.Environment
+	if g.Spec.Environment != nil && d.Status == "draft" {
+		r.CanStart = false
+		r.Blockers = append(r.Blockers, "Prepare and review the task environment before starting agents.")
+	}
+	if g.Spec.Environment != nil {
+		if m.Environments == nil {
+			r.CanStart = false
+			r.Blockers = append(r.Blockers, "Environment preparation is unavailable.")
+		} else {
+			r.Environment, err = m.Environments.Get(ctx, g)
+			if err != nil {
+				return nil, err
+			}
+			r.CanPrepareEnvironment = d.Status == "draft" && len(preparationBlocks) == 0 && graph.Validate(g, m.Engine.KnownRuntimes()).Valid
+		}
+	}
 	for _, n := range g.Spec.Nodes {
 		if !n.Disabled {
 			r.Agents = append(r.Agents, AgentRequirements{ID: n.ID, Model: n.Model, Grants: n.Tools, Isolation: n.Isolation.Mode})
@@ -172,6 +210,9 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 	d, err := tm.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if d.Status == "environment_pending" {
+		return m.startPreparedEnvironment(ctx, d, revision, actor)
 	}
 	if d.Status != "draft" {
 		return d, nil
@@ -286,6 +327,7 @@ func workspaceScopes(g *domain.Graph, st *engine.GraphStatus) []WorkspaceScope {
 }
 
 type View struct {
+	Environment      *environment.View   `json:"environment,omitempty"`
 	Workspaces       []WorkspaceScope    `json:"workspaces"`
 	PendingApprovals []*domain.Approval  `json:"pendingApprovals"`
 	WorkspacePath    string              `json:"workspacePath,omitempty"`
@@ -321,6 +363,16 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 	}
 	if g.Metadata.Labels["leforge.task"] != d.ID {
 		return nil, errors.New("invalid task graph ownership")
+	}
+	if (d.Status == "environment_pending" || d.Status == "environment_cancel_requested" || d.Status == "environment_build_requested") && m.Environments != nil {
+		v.Environment, err = m.Environments.Get(ctx, g)
+		if err != nil {
+			return nil, err
+		}
+		if d.Status == "environment_cancel_requested" && v.Environment.State != environment.StateBuilding {
+			v.State = "cancelled"
+		}
+		return v, nil
 	}
 	xs, err := m.Store.ListExecutions(ctx, storage.ExecutionFilter{GraphID: d.ExecutionGraphID, Limit: 1000})
 	if err != nil {
@@ -428,6 +480,24 @@ func (m Manager) Cancel(ctx context.Context, id, actor string) (*taskconfig.Draf
 	d, err := tm.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if d.Status == "environment_pending" || d.Status == "environment_cancel_requested" {
+		if m.Environments == nil {
+			return nil, errors.New("environment preparation unavailable")
+		}
+		if _, err = m.preparedEnvironmentGraph(ctx, d); err != nil {
+			return nil, err
+		}
+		if d.Status != "environment_cancel_requested" {
+			d, err = tm.Transition(ctx, d, "environment_cancel_requested", actor)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err = m.Environments.CancelBuild(ctx, d.ExecutionGraphID, actor); err != nil {
+			return nil, err
+		}
+		return tm.Transition(ctx, d, "cancelled", actor)
 	}
 	if d.Status == "draft" {
 		return tm.Transition(ctx, d, "cancelled", actor)

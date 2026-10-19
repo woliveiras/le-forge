@@ -540,6 +540,28 @@ func (m *Manager) removeOldImages(id, keep string) {
 	}
 }
 
+// CancelBuild stops only a build owned by this instance. It retains its status,
+// images and caches; it is not an environment reset.
+func (m *Manager) CancelBuild(ctx context.Context, graphID, actor string) error {
+	m.mu.Lock()
+	b := m.running[graphID]
+	m.mu.Unlock()
+	if b == nil {
+		if m.leaseAlive(ctx, graphID) {
+			return fmt.Errorf("%w: build belongs to another instance", ErrBuildRunning)
+		}
+		return nil
+	}
+	m.publish(ctx, "environment.build_cancel_requested", graphID, actor, nil)
+	b.cancel()
+	select {
+	case <-b.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Reset removes the environment of a graph: a running build, its images,
 // cache volumes and status. The next build starts from scratch.
 func (m *Manager) Reset(ctx context.Context, graphID, actor string) error {

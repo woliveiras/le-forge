@@ -92,7 +92,7 @@ func (s *Server) saveTask(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (s *Server) taskRunner() taskrun.Manager {
-	return taskrun.Manager{Store: s.Store, Engine: s.Engine, Workspaces: s.Workspaces, NativeProfile: s.Config.NativeProfile, CheckSandbox: func(ctx context.Context) error {
+	return taskrun.Manager{Store: s.Store, Engine: s.Engine, Workspaces: s.Workspaces, Environments: s.Environments, NativeProfile: s.Config.NativeProfile, CheckSandbox: func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		cmd := tools.DockerCommand(ctx, s.Config.Isolation.Docker.Bin, s.Config.Isolation.Docker.Host, "info", "--format", "{{.ServerVersion}}")
@@ -133,7 +133,7 @@ func (s *Server) taskAction(w http.ResponseWriter, r *http.Request) error {
 	}
 	var d *taskconfig.Draft
 	var err error
-	if r.PathValue("action") == "start" {
+	if r.PathValue("action") == "start" || r.PathValue("action") == "prepare-environment" {
 		rev, e := ifMatchRevision(r)
 		if e != nil {
 			return e
@@ -141,7 +141,11 @@ func (s *Server) taskAction(w http.ResponseWriter, r *http.Request) error {
 		if rev < 1 {
 			return badRequest("If-Match is required")
 		}
-		d, err = s.taskRunner().Start(r.Context(), r.PathValue("tid"), rev, identityFrom(r.Context()).Name)
+		if r.PathValue("action") == "prepare-environment" {
+			d, err = s.taskRunner().PrepareEnvironment(r.Context(), r.PathValue("tid"), rev, identityFrom(r.Context()).Name)
+		} else {
+			d, err = s.taskRunner().Start(r.Context(), r.PathValue("tid"), rev, identityFrom(r.Context()).Name)
+		}
 	} else if r.PathValue("action") == "cancel" {
 		d, err = s.taskRunner().Cancel(r.Context(), r.PathValue("tid"), identityFrom(r.Context()).Name)
 	} else {

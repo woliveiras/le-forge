@@ -446,3 +446,47 @@ func TestBuildValidatesAcceptedRepositoryBeforeDocker(t *testing.T) {
 		t.Fatalf("%+v %v", v, err)
 	}
 }
+
+func TestCancelBuildRetainsStatusAndDoesNotResetCaches(t *testing.T) {
+	h := setup(t)
+	h.docker.set(t, "slow-pull", "")
+	g := graphWith(goNodeEnv())
+	ctx := context.Background()
+	if _, err := h.m.Build(ctx, g, false, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.CancelBuild(ctx, g.Metadata.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	v := h.wait(t, g)
+	if v.State != StateFailed || v.Error != "build cancelled" {
+		t.Fatal(v)
+	}
+	calls := strings.Join(h.docker.calls(t), "\n")
+	if strings.Contains(calls, "volume rm") || strings.Contains(calls, "volume ls") {
+		t.Fatal("cancellation reset caches", calls)
+	}
+	if err := h.m.CancelBuild(ctx, g.Metadata.ID, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	again, err := h.m.Get(ctx, g)
+	if err != nil || again.State != v.State || again.Error != v.Error {
+		t.Fatal(again, err)
+	}
+}
+
+func TestCancelBuildDoesNotCancelAnotherInstance(t *testing.T) {
+	h := setup(t)
+	ctx := context.Background()
+	ok, err := h.store.AcquireLease(ctx, leasePrefix+"bookaneer", "other-instance", time.Minute)
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if err = h.m.CancelBuild(ctx, "bookaneer", "admin"); !errors.Is(err, ErrBuildRunning) {
+		t.Fatal(err)
+	}
+	leases, err := h.store.ListLeases(ctx, leasePrefix+"bookaneer")
+	if err != nil || len(leases) != 1 || leases[0].Holder != "other-instance" {
+		t.Fatal(leases, err)
+	}
+}

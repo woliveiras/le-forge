@@ -366,8 +366,14 @@ installation, a registered project and process isolation for every enabled agent
 only the configured sandbox daemon with a bounded read-only request. An
 unavailable daemon blocks sandbox admission without affecting local tasks.
 Selection does not rewrite the workflow or grant tools; review agent environment
-settings when a workflow is incompatible. Task-owned environment builds are still
-a separate pending step, so workflows requiring them remain blocked explicitly.
+settings when a workflow is incompatible. For a workflow with an explicit environment definition, review it and choose
+**Prepare task environment**. The task keeps a stopped copy while the existing
+environment manager builds it. After readiness, select **Review prepared task
+requirements**, confirm, and **Start prepared task**. Builds never start agents
+automatically. Failed builds retain diagnostics and require an explicit retry;
+stopping preparation retains environment state, images and caches. An approval
+for an agent-generated environment belongs to its original graph and is not
+transferred to a new task copy; use an explicitly reviewed workflow definition.
 
 Administrators can save a **Preferred execution environment** on the Projects
 page. It is suggested when a project is selected for a task; it does not change

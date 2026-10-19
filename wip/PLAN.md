@@ -2044,3 +2044,17 @@ Optimistic concurrency preserves competing edits; project path and base commit
 remain unchanged. Selecting a project suggests the saved mode for a new draft,
 without rewriting existing drafts or granting execution. Native-only local
 preferences and all task admission checks remain enforced server-side.
+
+
+### Separate task environment build and execution admission
+
+FLOW-05c / LOCAL-06b prepare a stopped task-owned graph and workspace after
+explicit environment review, reusing the environment manager and its policy,
+capacity, provenance and build checks. Durable CAS transitions separate build
+intent, pending environment and execution start; build readiness never injects
+the task input. A second review and confirmation are required to start, and
+repeated start requests do not dispatch twice. Explicit build retry and
+cancellation retain data, images, caches and diagnostics. Remote-instance builds
+cannot be cancelled locally. Agent-origin approvals remain graph-bound and cannot
+be transferred implicitly to a task copy. Interrupted preparation is retained
+for inspection without automatic replay.

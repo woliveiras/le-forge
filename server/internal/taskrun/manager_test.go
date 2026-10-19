@@ -23,7 +23,9 @@ func TestPreparePreservesAuthorityAndSeparatesIdentity(t *testing.T) {
 	}
 }
 func TestPrepareRejectsUnsupportedLaunches(t *testing.T) {
-	for _, change := range []func(*domain.Graph){func(g *domain.Graph) { g.Metadata.Version = 2 }, func(g *domain.Graph) { g.Spec.Workspace.Path = "/existing" }, func(g *domain.Graph) { g.Spec.Environment = &domain.EnvironmentSpec{} }, func(g *domain.Graph) { g.Spec.Nodes[0].Disabled = true }, func(g *domain.Graph) { g.Spec.Nodes[0].Loop.Mode = domain.LoopContinuous }} {
+	for _, change := range []func(*domain.Graph){func(g *domain.Graph) { g.Metadata.Version = 2 }, func(g *domain.Graph) { g.Spec.Workspace.Path = "/existing" }, func(g *domain.Graph) {
+		g.Spec.Environment = &domain.EnvironmentSpec{Origin: &domain.EnvironmentOrigin{Source: "agent"}}
+	}, func(g *domain.Graph) { g.Spec.Nodes[0].Disabled = true }, func(g *domain.Graph) { g.Spec.Nodes[0].Loop.Mode = domain.LoopContinuous }} {
 		g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 1}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}}}}}
 		change(g)
 		_, blocks, err := Prepare(&taskconfig.Draft{ID: "tsk_abc", Input: taskconfig.Input{GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker"}}, g)
@@ -71,5 +73,18 @@ func TestPreparationFailureRequiresFailedReplicaInScope(t *testing.T) {
 	st.Nodes[0].Replicas[2].State = domain.ReplicaCompleted
 	if preparationFailed(st) {
 		t.Fatal("completed replica treated as failed")
+	}
+}
+
+func TestPrepareRetainsExplicitEnvironmentWithoutMutatingSource(t *testing.T) {
+	source := &domain.Graph{Metadata: domain.GraphMetadata{ID: "source", Version: 1}, Spec: domain.GraphSpec{Environment: &domain.EnvironmentSpec{Image: "alpine:3.22", Setup: []string{"echo fixture"}}, Nodes: []domain.Node{{ID: "worker", Runtime: domain.RuntimeRef{Kind: domain.RuntimeEcho}, Isolation: domain.IsolationSpec{Mode: domain.IsolationDocker}}}}}
+	d := &taskconfig.Draft{ID: "tsk_fixture", Input: taskconfig.Input{Title: "Environment", GraphVersion: 1, NodeID: "worker", ResultNodeID: "worker"}}
+	prepared, blocks, err := Prepare(d, source)
+	if err != nil || len(blocks) > 0 || prepared.Spec.Environment == nil || prepared.Spec.Nodes[0].Isolation.Mode != domain.IsolationDocker {
+		t.Fatal(prepared, blocks, err)
+	}
+	prepared.Spec.Environment.Setup[0] = "changed"
+	if source.Spec.Environment.Setup[0] != "echo fixture" {
+		t.Fatal("source environment mutated")
 	}
 }

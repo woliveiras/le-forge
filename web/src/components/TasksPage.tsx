@@ -1,3 +1,4 @@
+import {TaskEnvironment} from './TaskEnvironment';
 import {TaskRequirementRepairs} from './TaskRequirementRepairs';
 import {TaskDecisions} from './TaskDecisions';
 import {TaskActivity} from './TaskActivity';
@@ -68,6 +69,12 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
     if(!saved)return;setBusy(true);setError(undefined);setConfirmed(false);
     try{setReview(await api.reviewTask(saved.id));}catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   };
+  const prepareEnvironment=async()=>{
+    if(!saved||!review||!confirmed)return;
+    setBusy(true);setError(undefined);
+    try{setSaved(await api.prepareTaskEnvironment(saved.id,review.task.revision));setReview(undefined);}
+    catch(e){setError(errorMessage(e));try{setSaved(await api.task(saved.id));}catch(readError){setError(`${errorMessage(e)}; ${errorMessage(readError)}`);}}finally{setBusy(false);}
+  };
   const start=async()=>{
     if(!saved||!review||!confirmed)return;
     setBusy(true);setError(undefined);
@@ -125,10 +132,12 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       <p>Execution copy: {review.executionGraphId}. Starting runs the whole workflow with a fresh managed workspace. Input goes through the selected channel or directly to the entry agent; the selected result agent supplies the result.</p>
       <p>Entry agent model: {review.model?.provider||'runtime default'} / {review.model?.name||'runtime default'}. Isolation: {review.isolation||'process'}. Process execution uses the server machine and is not a sandbox.</p>
       <TaskRequirementRepairs agents={review.agents??[]}/>
+      {review.environmentDefinition&&<section aria-label="Task environment definition"><h3>Environment to prepare</h3><p>Building may execute setup commands under the installation sandbox policies and limits. Build completion does not start agents.</p><pre>{JSON.stringify(review.environmentDefinition,null,2)}</pre></section>}
       <p>Tool permissions remain unchanged. Every call still passes gateway policies and approvals.</p>
       <details><summary>All workflow agents and permissions</summary>{review.agents?.map(agent=><section key={agent.id}><h3>{agent.id}</h3><p>{agent.model?.provider} / {agent.model?.name} · {agent.isolation}</p><pre>{JSON.stringify(agent.grants??[],null,2)}</pre></section>)}</details>
       <label><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>I reviewed the workflow and authorize a separate execution copy.</label>
       {!canStart&&<p>An administrator must start this task, because it creates an execution copy.</p>}
+      {review.canPrepareEnvironment&&<Btn tone="primary" disabled={!canStart||!confirmed||busy} onClick={()=>void prepareEnvironment()}>Prepare task environment</Btn>}
       <Btn tone="primary" disabled={!canStart||!review.canStart||!confirmed||busy} onClick={()=>void start()}>Start task</Btn>
       <a href={`#/g/${encodeURIComponent(input.graphId)}/agent?agent=${encodeURIComponent(input.nodeId)}&section=general`}>Review agent configuration</a>
     </article>}
@@ -165,6 +174,7 @@ function TaskTracking({task,canControl,canDecide,nativeProfile}:{task:TaskDraft;
       {graph&&<TaskDecisions graphId={graph} approvals={error?undefined:progress?.pendingApprovals} canDecide={canDecide} canAdmin={canControl} onChanged={()=>setRefresh(x=>x+1)}/>}
       {progress?.workspacePath&&<WorkspaceHandoff path={progress.workspacePath} nativeProfile={nativeProfile}/>}
       {canControl&&progress?.state==='cancelled'&&current.projectId&&<TaskCleanup taskId={task.id} workspaces={progress.workspaces??[]} onChanged={()=>setRefresh(x=>x+1)}/>}
+      {progress?.environment&&<TaskEnvironment key={task.id} task={current} environment={progress.environment} canControl={canControl} onChanged={()=>setRefresh(x=>x+1)}/>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
       {graph&&<TaskEvidence key={graph} graphId={graph} workspaces={progress?.workspaces??[]} nativeProfile={nativeProfile} executions={progress?.executions??[]} role={canControl?'admin':canDecide?'operator':'viewer'}/>}
