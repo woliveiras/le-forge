@@ -2024,3 +2024,14 @@ branches and history, rejects dirty/untracked/ignored files and revalidates the
 checkout binding and review fingerprint before non-force Git removal. Locked
 checkouts fail safely. The user must stop independent external writers first.
 Only disposable repositories were removed in automated validation.
+
+
+### Explicit task environment selection
+
+FLOW-05a / LOCAL-06a persist the requested workflow/local/sandbox choice in the
+draft and validate it again at admission. Local worktree requires native launch
+identity, a registered project and process isolation; sandbox requires Docker
+isolation for each enabled agent and a successful bounded read-only daemon probe.
+Selection never changes grants or downgrades isolation. Local work does not probe
+or require Docker. Project preference persistence and task-owned environment
+build preparation remain separate implementation tasks.

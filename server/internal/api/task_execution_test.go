@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/woliveiras/le-forge/server/internal/config"
 	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig"
 	"github.com/woliveiras/le-forge/server/internal/mcpconfig/mcptest"
@@ -302,5 +303,41 @@ func TestTaskPreparationFailureIsVisibleWithoutExecution(t *testing.T) {
 	})
 	if b, err := os.ReadFile(path); err != nil || string(b) != "preserve blocking file" {
 		t.Fatal("existing data changed", err)
+	}
+}
+
+func TestTaskEnvironmentChoiceFailsClosedAndDoesNotRequireDockerForProcess(t *testing.T) {
+	srv, _ := setupApp(t, func(c *config.Config) { c.Isolation.Docker.Bin = "/missing-disposable-fixture/docker" })
+	call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", taskGraph, nil)
+	for _, mode := range []string{"workflow", "local", "sandbox"} {
+		var input taskconfig.Input
+		if err := json.Unmarshal([]byte(taskBody), &input); err != nil {
+			t.Fatal(err)
+		}
+		input.ResultNodeID = input.NodeID
+		input.ExecutionMode = mode
+		b, _ := json.Marshal(input)
+		var d taskconfig.Draft
+		if code := call(t, srv, "POST", "/api/v1/tasks", adminTok, "application/json", string(b), &d); code != 201 {
+			t.Fatal(code)
+		}
+		var review taskrun.Review
+		if code := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/review", viewerTok, "", "", &review); code != 200 {
+			t.Fatal(code)
+		}
+		if review.CanStart != (mode == "workflow") {
+			t.Fatal(mode, review)
+		}
+		if mode == "sandbox" && !strings.Contains(strings.Join(review.Blockers, " "), "sandbox daemon is unavailable") {
+			t.Fatal(review)
+		}
+		if mode == "local" && !strings.Contains(strings.Join(review.Blockers, " "), "native Forge") {
+			t.Fatal(review)
+		}
+		if mode != "workflow" {
+			if code := taskStart(t, srv.URL, d.ID, adminTok, d.Revision); code == 202 {
+				t.Fatal("unsupported selection executed")
+			}
+		}
 	}
 }

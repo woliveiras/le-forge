@@ -17,7 +17,7 @@ func TestValidate(t *testing.T) {
 	if err := Validate(good()); err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []func(*Input){func(i *Input) { i.Title = " " }, func(i *Input) { i.Request = strings.Repeat("x", 16385) }, func(i *Input) { i.Request = "\x00" }, func(i *Input) { i.Request = string([]byte{255}) }, func(i *Input) { i.Outcome = "execute-anything" }, func(i *Input) { i.GraphVersion = 0 }, func(i *Input) { i.NodeID = "" }} {
+	for _, change := range []func(*Input){func(i *Input) { i.ExecutionMode = "unsafe" }, func(i *Input) { i.Title = " " }, func(i *Input) { i.Request = strings.Repeat("x", 16385) }, func(i *Input) { i.Request = "\x00" }, func(i *Input) { i.Request = string([]byte{255}) }, func(i *Input) { i.Outcome = "execute-anything" }, func(i *Input) { i.GraphVersion = 0 }, func(i *Input) { i.NodeID = "" }} {
 		in := good()
 		change(&in)
 		if !errors.Is(Validate(in), ErrInvalid) {

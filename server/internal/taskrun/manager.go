@@ -23,9 +23,11 @@ import (
 const GraphPrefix = "task-run-"
 
 type Manager struct {
-	Workspaces *workspace.Manager
-	Store      storage.Store
-	Engine     *engine.Engine
+	NativeProfile bool
+	CheckSandbox  func(context.Context) error
+	Workspaces    *workspace.Manager
+	Store         storage.Store
+	Engine        *engine.Engine
 }
 type AgentRequirements struct {
 	ID        string               `json:"id"`
@@ -128,6 +130,7 @@ func (m Manager) Review(ctx context.Context, id string) (*Review, error) {
 	if err != nil {
 		return nil, err
 	}
+	blockers = append(blockers, m.checkEnvironment(ctx, d, g)...)
 	report := m.Engine.ValidateForStart(ctx, g)
 	for _, issue := range report.Errors {
 		blockers = append(blockers, issue.Path+": "+issue.Message)

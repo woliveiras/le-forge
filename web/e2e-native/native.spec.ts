@@ -22,7 +22,8 @@ test('native profile authenticates, registers a local repo and executes a review
  await expect(page.getByRole('combobox',{name:'Workflow',exact:true})).toContainText('Software Factory');
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Synthetic native worktree task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Test plumbing only; no real model or account access.');
  await page.getByRole('combobox',{name:'Project',exact:true}).selectOption({label:'Native repository'});await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('native-synthetic');await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
- await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
+ await page.getByRole('combobox',{name:'Execution environment',exact:true}).selectOption('local');
+ await page.getByRole('button',{name:'Save draft',exact:true}).click();await expect(page).toHaveURL(/#\/tasks\/tsk_/);await expect(page.getByRole('status')).toHaveText('Draft saved. No agents have been started.');await page.reload();await expect(page.getByRole('combobox',{name:'Execution environment',exact:true})).toHaveValue('local');await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  expect(readFileSync(join(repo,'dirty.txt'),'utf8')).toBe('preserve');

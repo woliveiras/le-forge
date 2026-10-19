@@ -355,3 +355,16 @@ confirmation for the selected path. A missing status snapshot is not evidence
 that a workspace was deleted. Agent worktrees are independent: changes there
 need not appear in the shared task workspace or the registered source checkout.
 The interface does not infer a successful push or passing tests from completion.
+
+
+### Selecting execution location
+
+**Execution environment** is retained with the draft. **Use workflow environment**
+keeps the saved workflow settings. **Local worktree** requires a native Forge
+installation, a registered project and process isolation for every enabled agent.
+**Sandbox** requires every enabled agent to use Docker isolation; review probes
+only the configured sandbox daemon with a bounded read-only request. An
+unavailable daemon blocks sandbox admission without affecting local tasks.
+Selection does not rewrite the workflow or grant tools; review agent environment
+settings when a workflow is incompatible. Task-owned environment builds are still
+a separate pending step, so workflows requiring them remain blocked explicitly.

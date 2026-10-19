@@ -1,11 +1,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"github.com/woliveiras/le-forge/server/internal/tools"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/graph"
@@ -89,7 +92,14 @@ func (s *Server) saveTask(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 func (s *Server) taskRunner() taskrun.Manager {
-	return taskrun.Manager{Store: s.Store, Engine: s.Engine, Workspaces: s.Workspaces}
+	return taskrun.Manager{Store: s.Store, Engine: s.Engine, Workspaces: s.Workspaces, NativeProfile: s.Config.NativeProfile, CheckSandbox: func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		cmd := tools.DockerCommand(ctx, s.Config.Isolation.Docker.Bin, s.Config.Isolation.Docker.Host, "info", "--format", "{{.ServerVersion}}")
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
+		return cmd.Run()
+	}}
 }
 func (s *Server) reviewTask(w http.ResponseWriter, r *http.Request) error {
 	v, err := s.taskRunner().Review(r.Context(), r.PathValue("tid"))

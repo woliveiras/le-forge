@@ -44,7 +44,7 @@ export function TasksPage({id,create,info,graphs}: {id?:string;create?:boolean;i
   </section>;
 }
 function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDraft;graphs:GraphSummary[];canEdit:boolean;canStart:boolean;nativeProfile:boolean}) {
-  const [input,setInput] = useState<TaskInput>(()=>draft?{title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
+  const [input,setInput] = useState<TaskInput>(()=>draft?{executionMode:draft.executionMode,title:draft.title,request:draft.request,outcome:draft.outcome,graphId:draft.graphId,graphVersion:draft.graphVersion,nodeId:draft.nodeId,resultNodeId:draft.resultNodeId,projectId:draft.projectId,baseCommit:draft.baseCommit,channelId:draft.channelId,messageType:draft.messageType,payloadJson:draft.payloadJson}:empty);
   const projects=useAsync(()=>api.projects(),[]);
   const [saved,setSaved] = useState(draft);
   const [review,setReview] = useState<TaskReview>();
@@ -88,6 +88,11 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
           <option value="">No repository (managed workspace)</option>{projects.data?.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select></label>
         {input.projectId&&<p>Base commit: <code>{input.baseCommit}</code>. A separate worktree will be created on the Forge server. Uncommitted source files are not copied.</p>}
+        <label>Execution environment<select value={input.executionMode??'workflow'} onChange={e=>change({executionMode:e.target.value as TaskInput['executionMode']})}>
+          <option value="workflow">Use workflow environment</option><option value="local" disabled={!nativeProfile}>Local worktree{!nativeProfile?' (native Forge required)':''}</option><option value="sandbox">Sandbox</option>
+        </select></label>
+        <p>Environment selection is checked against the workflow; it does not change agent isolation or permissions. Local worktrees use the native Forge host and do not isolate processes or network access. <a href="https://woliveiras.com/posts/why-git-worktrees-matter-coding-agents/" target="_blank" rel="noreferrer">About worktrees</a></p>
+        {input.executionMode==='sandbox'&&<p>Sandbox requires all enabled agents to use Docker isolation and the configured Docker/Colima daemon to be available. Forge never falls back to local execution.</p>}
         <label>Workflow<select required value={input.graphId} onChange={e=>{const g=graphs.find(g=>g.graph.metadata.id===e.target.value)?.graph;change({graphId:e.target.value,graphVersion:g?.metadata.version??0,...workflowTaskDefaults(g,input.title,input.request)});}}>
           <option value="">Select workflow</option>{!selected&&input.graphId&&<option value={input.graphId}>{input.graphId} (unavailable)</option>}
           {graphs.map(({graph:g})=><option key={g.metadata.id} value={g.metadata.id}>{g.metadata.name||g.metadata.id}</option>)}
@@ -113,7 +118,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
       <p role="status">{dirty?'Unsaved changes':saved?'Draft saved. No agents have been started.':'Save this request to resume it later.'}</p>
     </form>
     {review&&<article className="card" aria-label="Task requirements"><h2>Requirements</h2>
-      <p>Current workflow version: {review.currentGraphVersion}</p>
+      <p>Current workflow version: {review.currentGraphVersion} · Requested environment: {review.task.executionMode||'workflow'}</p>
       {review.blockers.map(b=><p key={b}>{b}</p>)}
       {[...(review.validation.errors??[]),...(review.validation.warnings??[])].map((v,i)=><p key={i}>{v.path}: {v.message}</p>)}
       {review.project&&<p>Project: {review.project.name} · Source: {review.project.path} · Base: {input.baseCommit} · Task worktree: {review.workspacePath}. Commands use the workflow's configured isolation and permissions.</p>}
