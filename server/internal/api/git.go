@@ -7,6 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/projectconfig"
+	"github.com/woliveiras/le-forge/server/internal/taskconfig"
+	"github.com/woliveiras/le-forge/server/internal/taskrun"
 	"github.com/woliveiras/le-forge/server/internal/tools"
 	"github.com/woliveiras/le-forge/server/internal/workspace"
 )
@@ -30,6 +34,31 @@ func (s *Server) inspectGit(w http.ResponseWriter, r *http.Request) error {
 	base, err := s.Workspaces.GraphDir(g)
 	if err != nil {
 		return err
+	}
+	if strings.HasPrefix(g.Metadata.ID, taskrun.GraphPrefix) {
+		task, e := (taskconfig.Manager{Store: s.Store}).Get(r.Context(), g.Metadata.Labels["leforge.task"])
+		if e != nil {
+			return e
+		}
+		if !validInspectionTask(g, task) {
+			return badRequest("invalid task workspace binding")
+		}
+		if task.ProjectID != "" {
+			expected, e := filepath.EvalSymlinks(filepath.Join(s.Workspaces.Root, g.Metadata.ID))
+			actual, actualErr := filepath.EvalSymlinks(base)
+			if e != nil || actualErr != nil || expected != actual {
+				return badRequest("task workspace path changed")
+			}
+			project, e := (projectconfig.Manager{Store: s.Store}).Get(r.Context(), task.ProjectID)
+			if e != nil {
+				return e
+			}
+			canonical, e := filepath.EvalSymlinks(project.Path)
+			if e != nil || canonical != project.Path {
+				return badRequest("registered project path is unavailable or changed")
+			}
+			base = project.Path
+		}
 	}
 	result, err := s.Workspaces.Inspect(r.Context(), root, base, view, path)
 	if err != nil {
@@ -63,4 +92,10 @@ func browsePath(root, path string) (string, string, error) {
 		}
 	}
 	return abs, rel, nil
+}
+
+// Resolve project metadata only through the persisted admission binding. A
+// repository-controlled .git file or graph label cannot choose another project.
+func validInspectionTask(g *domain.Graph, d *taskconfig.Draft) bool {
+	return d != nil && g.Metadata.ID == taskrun.ExecutionID(d.ID) && d.ExecutionGraphID == g.Metadata.ID && g.Metadata.Labels["leforge.task"] == d.ID && g.Metadata.Labels["leforge.workflow"] == d.GraphID
 }

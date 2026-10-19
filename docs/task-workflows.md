@@ -299,3 +299,20 @@ apply. Partial preparation errors retain records and direct users to inspect the
 there is no automatic retry of uncertain writes. The example is labeled synthetic
 throughout and does not claim repository analysis. Operators/viewers do not receive
 a shortcut around the existing graph-creation permission.
+
+
+### Task review evidence
+
+Task progress embeds the existing read-only Git inspection on demand: current
+status, tracked-file diff against HEAD (including staged changes), bounded history
+and observed workspace operations. Nothing is fetched until Inspect changes is
+selected. Untracked file contents remain available through Workspace files.
+Execution links open Tool calls for command/test evidence; a successful agent
+summary does not prove test success, commit or push. The inspection is current
+workspace state, not an immutable execution snapshot. Existing read permissions,
+Git path validation and observation limitations remain unchanged.
+
+For registered-project tasks, Git inspection resolves the source repository only
+from the persisted task/project binding, verifies graph ownership and expected
+workspace location, and retains the existing bounded private metadata snapshot.
+Changing a worktree's `.git` pointer cannot select arbitrary external metadata.

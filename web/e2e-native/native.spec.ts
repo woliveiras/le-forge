@@ -7,7 +7,7 @@ test('native profile authenticates, registers a local repo and executes a review
  // Credential belongs only to the disposable native installation created by the wrapper.
  const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
  const headers={Authorization:`Bearer ${token}`};
- const repo=join(root,'repo');mkdirSync(repo);execFileSync('git',['init','-q',repo]);execFileSync('git',['-C',repo,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','--allow-empty','-qm','initial']);writeFileSync(join(repo,'dirty.txt'),'preserve');
+ const repo=join(root,'repo');mkdirSync(repo);execFileSync('git',['init','-q',repo]);writeFileSync(join(repo,'tracked.txt'),'original\n');execFileSync('git',['-C',repo,'add','tracked.txt']);execFileSync('git',['-C',repo,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','--allow-empty','-qm','initial']);writeFileSync(join(repo,'dirty.txt'),'preserve');
  const graph={metadata:{id:'native-synthetic',name:'Synthetic native test'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.goto('/#/projects');
@@ -26,6 +26,15 @@ test('native profile authenticates, registers a local repo and executes a review
  await page.getByRole('checkbox',{name:'Forge and this browser are on the same computer, with VS Code installed.'}).check();
  await expect(page.getByRole('link',{name:'Open in VS Code',exact:true})).toHaveAttribute('href',/^vscode:\/\/file.*task-run-/);
  // Inspect the handoff target without launching an external editor during tests.
+ const taskPath=await page.getByRole('region',{name:'Review workspace',exact:true}).locator('code').textContent();
+ expect(taskPath?.startsWith(join(root,'state','workspaces'))).toBe(true);
+ writeFileSync(join(taskPath!,'tracked.txt'),'changed in disposable worktree\n');
+ await page.getByRole('button',{name:'Inspect changes',exact:true}).click();
+ await expect(page.getByRole('region',{name:'Git inspection',exact:true})).toContainText('M tracked.txt');
+ await page.getByRole('combobox',{name:'Git view',exact:true}).selectOption('diff');
+ await expect(page.getByRole('region',{name:'Git inspection',exact:true})).toContainText('+changed in disposable worktree');
+ expect(readFileSync(join(repo,'tracked.txt'),'utf8')).toBe('original\n');
+
  await page.getByRole('link',{name:'Workspace files',exact:true}).click();await expect(page).toHaveURL(/task-run-.*\/files/);
 });
 

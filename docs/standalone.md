@@ -91,7 +91,8 @@ For a first repository test:
    Forge and the browser are on the same computer and VS Code is installed.
    Alternatively, open the displayed worktree path manually.
    Dirty files in the original checkout are not copied or overwritten.
-5. Inspect results, diffs and tests before your own commit/push. Task completion
+5. Use Inspect changes in task progress for Git status/diff/history, and Tool calls
+   for recorded command outcomes. Inspect results and tests before your own commit/push. Task completion
    itself performs neither action; agent permissions remain those you reviewed.
 
 ## Offline backup and restore
@@ -176,3 +177,11 @@ archive checksums and synthetic credential preservation. The production native
 HTTP integration restores a stopped profile and verifies its draft, pending queue
 message and approval, then processes the retained messages after restart. These
 checks use disposable fixtures only, not the existing installation.
+
+Latest native task evidence: offline backup/recovery, explicit VS Code handoff,
+synthetic first-use preparation and task-local Git inspection are implemented.
+The final changed-code suite passed 312 frontend tests plus Go/Python, lint/build,
+nine relevant browser cases and two native production-binary journeys. Earlier
+full browser regression in this delivery passed 86 main cases plus hosted CIMD
+and isolated provider cases. Actual VS Code launch, a real model, local stdio MCP,
+optional native sandbox and other OS/architecture smoke checks remain unverified.

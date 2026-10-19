@@ -1881,3 +1881,12 @@ runtime and authorized graph/task APIs. Preparation saves records after consent;
 execution still requires review. The example's scope is explicit, with no account,
 model or repository dependency. This enables an immediate native plumbing test
 while real-provider, issue-source and advanced environment journeys remain open.
+
+
+### Task-local review evidence
+
+FLOW-07b reuses authorized Git status/diff/history inspection inside task progress,
+loaded only after the user's request. Execution links point to recorded tool calls
+for test evidence. No automatic test-success, commit or push inference is made.
+Native integration verifies a changed disposable worktree and unchanged source.
+The final human editor check and broader workspace/test aggregation remain open.

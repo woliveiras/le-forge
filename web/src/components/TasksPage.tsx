@@ -6,6 +6,7 @@ import {useAsync} from '../hooks/useData';
 import {Btn, ErrorBox} from './common';
 import {WorkspaceHandoff} from './WorkspaceHandoff';
 import {SyntheticTaskExample} from './SyntheticTaskExample';
+import {TaskEvidence} from './TaskEvidence';
 
 export const taskOutcomes = [
   {id:'understand',label:'Understand a repository',description:'Explain architecture, dependencies and areas that need attention.'},
@@ -151,6 +152,7 @@ function TaskTracking({task,canControl,nativeProfile}:{task:TaskDraft;canControl
       {progress?.workspacePath&&<WorkspaceHandoff path={progress.workspacePath} nativeProfile={nativeProfile}/>}
       <h3>Result</h3><p>{progress?.result?.summary||'No result recorded yet.'}</p>
       <p>Agent output is generated content. Inspect tool outcomes and test evidence before accepting changes.</p>
+      {graph&&<TaskEvidence key={graph} graphId={graph} executions={progress?.executions??[]}/>}
       {graph&&<nav aria-label="Task evidence"><a href={`#/g/${encodeURIComponent(graph)}/runs`}>Execution details</a> · <a href={`#/g/${encodeURIComponent(graph)}/files`}>Workspace files</a> · <a href="#/approvals">Approvals</a></nav>}
       <details><summary>Workflow and executions</summary><p>Source: {task.graphId} · Version {task.graphVersion} · Execution copy: {graph||'not prepared'}</p>
         <ul>{progress?.executions.map(x=><li key={x.id}><a href={`#/g/${encodeURIComponent(x.graphId)}/runs?execution=${encodeURIComponent(x.id)}&section=result`}>{x.nodeId}: {x.status}</a></li>)}</ul>

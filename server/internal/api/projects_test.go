@@ -5,6 +5,7 @@ import (
 	"github.com/woliveiras/le-forge/server/internal/projectconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
+	"github.com/woliveiras/le-forge/server/internal/workspace"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,6 +74,21 @@ func TestProjectTaskWorktreeThroughAPI(t *testing.T) {
 	})
 	if _, err := os.Stat(filepath.Join(review.WorkspacePath, ".git")); err != nil {
 		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(review.WorkspacePath, "new-file"), []byte("task change"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var inspection workspace.Inspection
+	endpoint := "/api/v1/graphs/" + taskrun.ExecutionID(d.ID) + "/git/status"
+	if code := call(t, srv, "GET", endpoint, viewerTok, "", "", &inspection); code != 200 || !inspection.Repository || !strings.Contains(inspection.Content, "new-file") {
+		t.Fatalf("task inspection: %d %+v", code, inspection)
+	}
+	// A modified .git pointer must not expose a different repository.
+	if err := os.WriteFile(filepath.Join(review.WorkspacePath, ".git"), []byte("gitdir: /outside/fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, srv, "GET", endpoint, viewerTok, "", "", nil); code == 200 {
+		t.Fatal("redirected task metadata accepted")
 	}
 	if b, err := os.ReadFile(filepath.Join(repo, "uncommitted")); err != nil || string(b) != "preserve" {
 		t.Fatal("dirty source changed", err)
