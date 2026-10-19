@@ -8,6 +8,9 @@ test('native profile authenticates, registers a local repo and executes a review
  const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
  const headers={Authorization:`Bearer ${token}`};
  const repo=join(root,'repo');mkdirSync(repo);execFileSync('git',['init','-q',repo]);writeFileSync(join(repo,'tracked.txt'),'original\n');execFileSync('git',['-C',repo,'add','tracked.txt']);execFileSync('git',['-C',repo,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','--allow-empty','-qm','initial']);writeFileSync(join(repo,'dirty.txt'),'preserve');
+ const initial=await(await page.request.get('/api/v1/graphs',{headers})).json();
+ expect(initial).toHaveLength(1);expect(initial[0].graph.metadata.id).toBe('software-factory');expect(initial[0].record.state).toBe('stopped');
+ expect(initial[0].graph.spec.nodes.every((node:{runtime:{kind:string}})=>node.runtime.kind==='native')).toBe(true);
  const graph={metadata:{id:'native-synthetic',name:'Synthetic native test'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.goto('/#/projects');
@@ -16,6 +19,7 @@ test('native profile authenticates, registers a local repo and executes a review
  await expect(page.getByRole('heading',{name:'Projects',exact:true})).toBeVisible();
  await page.getByRole('textbox',{name:'Project name',exact:true}).fill('Native repository');await page.getByRole('textbox',{name:'Repository path',exact:true}).fill(repo);await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Register project',exact:true}).click();
  await page.getByRole('link',{name:'Create task',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Workflow',exact:true})).toContainText('Software Factory');
  await page.getByRole('textbox',{name:'Title',exact:true}).fill('Synthetic native worktree task');await page.getByRole('textbox',{name:'Request',exact:true}).fill('Test plumbing only; no real model or account access.');
  await page.getByRole('combobox',{name:'Project',exact:true}).selectOption({label:'Native repository'});await page.getByRole('combobox',{name:'Workflow',exact:true}).selectOption('native-synthetic');await page.getByRole('combobox',{name:'Entry agent',exact:true}).selectOption('worker');await page.getByRole('combobox',{name:'Result agent',exact:true}).selectOption('worker');
  await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('button',{name:'Review requirements'}).click();await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Start task',exact:true}).click();

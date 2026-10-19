@@ -113,6 +113,21 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 	if c := request("POST", "/api/v1/graphs", `{"metadata":{"id":"fixture"},"spec":{"nodes":[{"id":"worker","runtime":{"kind":"echo"}}]}}`, nil); c != 201 {
 		t.Fatal(c)
 	}
+	var factory struct {
+		Graph  domain.Graph       `json:"graph"`
+		Record domain.GraphRecord `json:"record"`
+	}
+	if code := request("GET", "/api/v1/graphs/software-factory", "", &factory); code != 200 || factory.Graph.Metadata.Version != 1 || factory.Record.State != domain.GraphStopped {
+		t.Fatal("factory not seeded stopped", code)
+	}
+	factory.Graph.Metadata.Name = "Personal factory"
+	factoryJSON, e := json.Marshal(factory.Graph)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if code := request("PUT", "/api/v1/graphs/software-factory", string(factoryJSON), nil); code != 200 {
+		t.Fatal(code)
+	}
 	var draft taskconfig.Draft
 	if c := request("POST", "/api/v1/tasks", `{"title":"Native fixture","request":"Synthetic request","outcome":"freeform","graphId":"fixture","graphVersion":1,"nodeId":"worker"}`, &draft); c != 201 {
 		t.Fatal(c)
@@ -142,6 +157,10 @@ func TestNativeStartPersistRestartAndOccupiedPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancel, done = start()
+	if code := request("GET", "/api/v1/graphs/software-factory", "", &factory); code != 200 || factory.Graph.Metadata.Name != "Personal factory" || factory.Graph.Metadata.Version != 2 {
+		t.Fatal("factory edit lost on restart", code)
+	}
+
 	defer stop(cancel, done)
 	var restored taskconfig.Draft
 	if c := request("GET", "/api/v1/tasks/"+draft.ID, "", &restored); c != 200 || restored.Title != draft.Title || restored.Revision != draft.Revision {

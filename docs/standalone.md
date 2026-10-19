@@ -78,12 +78,37 @@ it uses no model, repository, tools or connected account and does not perform AI
 analysis. Nothing starts during preparation. If preparation fails, inspect Tasks
 and the linked example workflow before retrying; partial records are retained.
 
+## Software Factory on first launch
+
+The native launcher seeds Software Factory once, stopped, before serving the UI.
+It is embedded in the executable, so no repository checkout or Python agent
+service is required. Repeated launches preserve saved edits, versions and an
+intentional deletion. A failed seed/marker write fails startup explicitly; retry
+preserves any graph already created rather than overwriting it. This also makes
+the factory available when opening an older native profile that has no seed marker,
+without replacing an existing workflow with the same ID.
+
+This native variant has planner, researcher, developer, reviewer, QA and review
+handoff agents. It uses native model calls and typed message channels. Configure a
+real model before actual work; the initial mock provider is not a working software
+engineering model. It does not silently connect accounts or select credentials.
+The developer initially writes only `src/**` and `tests/**`; review grants for your
+project. QA has read-only tools and explicitly reports checks that still need human
+execution. It does not claim tests passed. A human approval gates the final review
+handoff. No agent receives Git write or shell permission in this default template;
+commits and pushes remain manual. The Docker/Python example is unchanged.
+
+For a task using this workflow, select the registered project and Software Factory,
+entry `planner`, input channel `requests`, message type `feature.request`, and
+result agent `integrator`. Supply the request as JSON with `title` and `description`.
+Review the entire workflow's grants and model settings before starting.
+
 For a first repository test:
 
 1. In Configuration → Models, configure a real available provider. The initial
    mock provider and echo runtime are synthetic plumbing tests, not real AI work.
-2. Create a workflow with a native agent, select that provider/model and review
-   its explicit tool grants. For manual code review, prefer scoped filesystem
+2. Open the preinstalled Software Factory, select that provider/model and review
+   its explicit tool grants. You can also create a different workflow. For manual code review, prefer scoped filesystem
    tools; do not grant Git write or unrestricted shell actions unintentionally.
 3. Register your repository in Projects. New task lets you select that project,
    workflow, entry/result agents and a reviewed commit.

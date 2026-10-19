@@ -1890,3 +1890,16 @@ loaded only after the user's request. Execution links point to recorded tool cal
 for test evidence. No automatic test-success, commit or push inference is made.
 Native integration verifies a changed disposable worktree and unchanged source.
 The final human editor check and broader workspace/test aggregation remain open.
+
+
+### First native workflow — user decision, 2026-10-19
+
+The local installation must provide Software Factory on first launch so users do
+not need to create their initial graph. LOCAL-02a seeds a versioned native variant
+once, stopped, and preserves saved customizations and intentional deletion.
+Native agents replace the Docker example's external Python runtime. Explicit
+model configuration, scoped grants and human handoff approval remain required;
+Git writes, pushes and shell commands are not granted by this template. QA reports
+outstanding checks without claiming synthetic evidence as real test success.
+The existing Docker example remains unchanged. External model acceptance stays
+at the end of the plan, separately from automated fixture coverage.

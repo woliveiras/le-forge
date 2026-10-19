@@ -192,7 +192,10 @@ func Run(ctx context.Context, root string) error {
 	if err != nil {
 		return err
 	}
-	err = a.Run(ctx)
+	err = seedFactory(ctx, a)
+	if err == nil {
+		err = a.Run(ctx)
+	}
 	if err != nil {
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
