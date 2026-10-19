@@ -250,3 +250,16 @@ test('parallel native tasks keep independent worktrees and cancellation scopes',
  expect(readFileSync(join(states[0].workspacePath,'tracked.txt'),'utf8')).toBe('first task only\n');
  expect(readFileSync(join(root,'repo','dirty.txt'),'utf8')).toBe('preserve');
 });
+test('native import offers explicitly selected host authentication without invoking it on selection',async({page})=>{
+ const root=process.env.LEFORGE_NATIVE_E2E_DATA!;
+ const token=readFileSync(join(root,'state','admin.token'),'utf8').trim();
+ await page.addInitScript(value=>localStorage.setItem('leforgeToken',value),token);
+ await page.goto('/#/projects');await page.getByText('Import from URL',{exact:true}).click();
+ const section=page.getByRole('region',{name:'Import repository'});
+ await section.getByRole('combobox',{name:'Git authentication'}).selectOption('local_git');
+ await expect(section).toContainText('Helpers may execute local commands');
+ await expect(section.getByRole('button',{name:'Import repository',exact:true})).toBeDisabled();
+ await section.getByRole('combobox',{name:'Git authentication'}).selectOption('local_gh');
+ await expect(section.getByRole('button',{name:'Import repository',exact:true})).toBeDisabled();
+ const records=await(await page.request.get('/api/v1/repository-imports',{headers:{Authorization:`Bearer ${token}`}})).json();expect(records).toEqual([]);
+});

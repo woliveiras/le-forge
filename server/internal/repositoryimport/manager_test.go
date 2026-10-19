@@ -283,7 +283,7 @@ func TestExpiredAttemptRecoveryAndExistingDirectoryPreservation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	m.wg.Add(1)
-	m.run(ctx, cancel, r, "fixture")
+	m.run(ctx, cancel, r, "fixture", Authentication{})
 	content, err := os.ReadFile(marker)
 	if err != nil || string(content) != "keep" {
 		t.Fatal("existing files replaced", err)

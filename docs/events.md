@@ -203,7 +203,7 @@ authoritative. Payloads contain no objectives, model output or credentials.
 ## Public repository imports
 
 `repository.import_transition` records attempted durable transitions with `importId`,
-`attempt`, `state` and `bytes`, plus the initiating actor. It is written before the
+`attempt`, `state`, `bytes` and the selected `authentication` mode (never credentials), plus the initiating actor. It is written before the
 compare-and-swap setting update, so an audit entry alone does not prove the update
 committed; the import record is authoritative. URLs, Git output and credentials are
 not event payloads. `repository.import` spans worker operations.

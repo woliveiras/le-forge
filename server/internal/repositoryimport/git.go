@@ -51,8 +51,8 @@ func (w *limitedOutput) Write(p []byte) (int, error) {
 	}
 	return n, nil
 }
-func fetch(ctx context.Context, dir, source, ref string, client *http.Client, received *atomic.Int64) (string, string) {
-	endpoint, close, status, err := bridge(ctx, source, client, maxTransfer, received)
+func fetch(ctx context.Context, dir, source, ref string, client *http.Client, received *atomic.Int64, auth ...Authentication) (string, string) {
+	endpoint, close, status, err := bridge(ctx, source, client, maxTransfer, received, auth...)
 	if err != nil {
 		return "", "Cannot initialize the bounded Git transport."
 	}
@@ -69,7 +69,7 @@ func fetch(ctx context.Context, dir, source, ref string, client *http.Client, re
 			}
 			switch status.Load() {
 			case 401, 403:
-				return "", "Repository requires authentication or denies access. Public import does not use host credentials; private Git authentication is not available yet."
+				return "", "Repository authentication or access was denied. Select Git authentication, check repository read access and any organization approval, then retry with current credentials. MCP OAuth is separate."
 			case 301, 302, 303, 307, 308:
 				return "", "Repository redirected the request. Use its canonical HTTPS clone URL. Redirects are not followed."
 			case 413:

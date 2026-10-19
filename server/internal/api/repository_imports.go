@@ -40,14 +40,14 @@ func (s *Server) startRepositoryImport(w http.ResponseWriter, r *http.Request) e
 		repositoryimport.Input
 		Confirmed bool `json:"confirmed"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 16384)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&in); err != nil {
 		return badRequest("invalid import request")
 	}
 	if dec.Decode(&struct{}{}) != io.EOF || !in.Confirmed {
-		return badRequest("Confirm public repository download into a managed directory")
+		return badRequest("Confirm repository download into a managed directory")
 	}
 	result, err := s.RepositoryImports.Start(r.Context(), in.Input, identityFrom(r.Context()).Name)
 	if errors.Is(err, repositoryimport.ErrInvalid) || errors.Is(err, projectconfig.ErrInvalid) {

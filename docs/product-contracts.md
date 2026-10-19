@@ -448,7 +448,10 @@ The same approval appears in the task and global inbox; hard policy denials
 remain denials. PROMPT-03 adds explicitly confirmed public HTTPS repository imports
 from Projects and New task, with persisted progress, cancellation, safe retry and
 pinned project reuse. It does not start tasks, grant access or use host credentials.
-Private Git authentication and task-level authorization modes remain planned.
+PROMPT-04 adds per-attempt HTTPS tokens and explicitly selected native Git helper/
+GitHub CLI authentication. Secrets are not persisted, and server installations cannot
+select host authentication. MCP OAuth remains separate; task-level authorization
+modes remain planned.
 
 Planned modes are **Ask for approval**, **Workspace access** and **Full access**.
 Full access preauthorizes a reviewed task scope, not all tools/accounts or a bypass

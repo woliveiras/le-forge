@@ -5,7 +5,7 @@ The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Prompt-first tasks and authorization modes — incremental delivery
 
-**Decision: 2026-10-19. PROMPT-01 editor, PROMPT-02 interpretation and PROMPT-03 public URL import are implemented;
+**Decision: 2026-10-19. PROMPT-01 editor, PROMPT-02 interpretation and PROMPT-03 public URL import and PROMPT-04 Git authentication are implemented;
 automatic start and authorization modes remain planned.** New task starts with
 the Request field, visible workflow/environment selectors and collapsed Review
 settings. A new draft derives an editable display title from the first prompt
@@ -69,8 +69,8 @@ GitHub owner/repository URLs are normalized to clone URLs. Credentials, query
 strings, IP literals, private/reserved DNS addresses and redirects are rejected.
 Use a canonical clone URL. The transport pins validated public DNS addresses and
 does not inherit proxy credentials, Git credential helpers, host Git configuration
-or cookies. Authentication failures require a different public source or the future
-private-Git flow; they do not trigger a credential search.
+or cookies. Authentication failures require explicit selection/repair through PROMPT-04;
+anonymous import never triggers a credential search.
 
 Each download is a shallow metadata/object snapshot in a new managed directory
 under the server workspace root's `.repositories` directory. Import does not check
@@ -101,8 +101,68 @@ separately reviewed cleanup.
 
 Unit, real smart-HTTP Git/API integration and disposable Chromium tests cover import,
 reuse, cancellation, failure/retry, permissions and reviewed task execution. They do
-not qualify live public hosts, private authentication, corporate networks, Windows
+not qualify live public hosts, live private-provider compatibility, corporate networks, Windows
 process handling or automatic task admission.
+
+### Private Git authentication (PROMPT-04)
+
+**Git authentication** is selected explicitly for each import attempt. The same
+administrator confirmation, URL validation, transfer limits and task admission
+permissions apply. MCP connections/OAuth and agent tool grants are independent.
+The choices are:
+
+- **Public repository (no credentials)**: unchanged anonymous import.
+- **HTTPS username and token (this attempt only)**: enter a provider-supported
+  username and a token with repository read access. Forge sends HTTP Basic
+  authentication only to the selected canonical clone endpoint. Values remain in
+  request/worker memory, never in import records, Git config, subprocess arguments,
+  environment variables, URLs, events or browser storage. The form clears the token
+  after submission, including errors; retry requires re-entry. Use HTTPS when
+  accessing a remote Forge installation.
+- **Use local Git credential helper** (native profile only): explicitly authorize
+  `git credential fill` for this HTTPS host/path, from a fresh directory outside
+  repository configuration. It uses the native process user's existing global/
+  system helper configuration. Helpers may execute local commands. Forge requests
+  credentials but never calls approve/store/erase, reconfigures Git or launches an
+  interactive login. Terminal/askpass prompting is disabled and resolution is
+  bounded to 15 seconds. A helper's own behavior remains the host user's authority.
+- **Use local GitHub CLI authentication** (native profile only): explicitly call
+  `gh auth token --hostname <selected host>` using the native process user's stored
+  CLI login. Forge ignores GH/GITHUB token environment overrides and does not run
+  login/setup-git. The returned token is used as HTTPS Basic password with username
+  `x-access-token`. Provider/enterprise compatibility requires external acceptance.
+
+A server/container cannot select native host authentication through the UI or API.
+It uses an explicit per-attempt token; no host credential copying or remote helper
+agent is required. Native mode refers to the OS user running Forge, not necessarily
+the user of a remote browser. These choices do not change task execution permissions.
+
+Local helper output must provide an HTTPS username/password pair; unsupported
+credential formats, missing tools, unavailable login and oversized output fail with
+sanitized repair instructions. HTTP 401/403 explains that repository read access,
+token validity or organization approval may need repair. No upstream/helper stderr
+is shown. Configure the selected tool yourself or select a token and retry; Forge
+never silently falls back to another credential source. Cancelled/interrupted
+attempts retain files and require an explicit new attempt.
+
+Only the selected authentication mode is persisted. Authenticated imports use a
+separate URL/ref reuse key from anonymous imports. Within the existing installation
+ownership model, a ready authenticated snapshot is shared like any registered
+project: selecting it does not revalidate remote credentials or refetch HEAD.
+Changing token accounts does not create per-user isolation. Agent permissions still
+apply to task execution; cached files are not revoked when a remote token expires.
+
+Private repository means authenticated content, not private-network access: public
+DNS/HTTPS checks remain enforced. SSH, private IP hosts, credential vault management,
+automatic refresh, credential revocation and push authentication are not part of this
+import flow. Tokens from helpers are used only in the fixed upstream HTTP bridge;
+Git fetch/checkout still uses isolated configuration and never receives them.
+
+Synthetic real Git HTTP, API, helper subprocess and browser tests cover successful
+access, refusal/repair, secret non-persistence, redirect isolation, native-only
+selection and unchanged grants. Real private repositories, corporate SSO and OS
+keychain prompts remain authorized external acceptance; no real credentials were
+read or installation authentication changed for these tests.
 
 ### Primary experience
 
@@ -131,7 +191,7 @@ Prompt interpretation is untrusted input, never permission to add tools, connect
 accounts, override installation policy or alter shared workflow definitions.
 
 Public URL import is available from New task and Projects after explicit confirmation.
-Private Git authentication remains a separate implementation task (PROMPT-04).
+Private Git authentication is an explicit per-attempt selection (PROMPT-04).
 MCP OAuth access does not automatically authorize Git clone. Native work remains on the user's host; Docker paths remain
 on the server/container. Worktrees separate changes, not OS authority.
 

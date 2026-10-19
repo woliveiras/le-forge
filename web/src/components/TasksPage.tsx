@@ -147,7 +147,7 @@ function TaskEditor({draft,graphs,canEdit,canStart,nativeProfile}:{draft?:TaskDr
         {selected&&selected.metadata.version!==input.graphVersion&&<Btn onClick={()=>change({graphVersion:selected.metadata.version??0})}>Use current workflow version</Btn>}
         </details>
       </fieldset>
-      <details open={importOpen} onToggle={e=>setImportOpen(e.currentTarget.open)}><summary>Import repository from URL</summary>{importOpen&&<RepositoryImport canEdit={canStart} canSelect={canEdit} initialURL={saved?.resolution?.repository} onProject={project=>{change({projectId:project.id,baseCommit:project.head});void projects.reload();setSettingsOpen(true);}}/>}</details>
+      <details open={importOpen} onToggle={e=>setImportOpen(e.currentTarget.open)}><summary>Import repository from URL</summary>{importOpen&&<RepositoryImport nativeProfile={nativeProfile} canEdit={canStart} canSelect={canEdit} initialURL={saved?.resolution?.repository} onProject={project=>{change({projectId:project.id,baseCommit:project.head});void projects.reload();setSettingsOpen(true);}}/>}</details>
       {saved?.resolution?.state==='needs_repository'&&!importOpen&&<Btn onClick={()=>setImportOpen(true)}>Prepare repository</Btn>}
       <ErrorBox error={error}/>
       <div className="row"><Btn type="submit" tone="primary" disabled={!canEdit||busy}>Save draft</Btn><Btn disabled={!saved||dirty||busy} onClick={()=>void inspect()}>Review requirements</Btn></div>

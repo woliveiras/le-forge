@@ -257,7 +257,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	if cfg.Auth.Disabled {
 		log.Warn("API authentication is DISABLED; never expose this instance beyond localhost")
 	}
-	a.RepositoryImports, err = repositoryimport.New(repositoryimport.Options{Store: a.Store, Root: filepath.Join(ws.Root, ".repositories"), Log: log})
+	a.RepositoryImports, err = repositoryimport.New(repositoryimport.Options{Native: cfg.NativeProfile, Store: a.Store, Root: filepath.Join(ws.Root, ".repositories"), Log: log})
 	if err != nil {
 		return nil, err
 	}

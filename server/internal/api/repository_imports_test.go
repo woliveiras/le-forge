@@ -35,7 +35,7 @@ func TestRepositoryImportAPIPermissionsAndPersistence(t *testing.T) {
 			t.Fatal(c)
 		}
 	}
-	for _, bad := range []string{`{"url":"file:///tmp/repo","confirmed":true}`, `{"url":"https://user:secret@host.example/repo","confirmed":true}`, `{"url":"https://example.com/repo","tools":["shell.exec"],"confirmed":true}`, `{"url":"https://example.com/repo","confirmed":false}`} {
+	for _, bad := range []string{`{"url":"https://example.com/repo","authentication":{"mode":"local_git"},"confirmed":true}`, `{"url":"https://example.com/repo","authentication":{"mode":"token","username":"u","token":"bad\nvalue"},"confirmed":true}`, `{"url":"file:///tmp/repo","confirmed":true}`, `{"url":"https://user:secret@host.example/repo","confirmed":true}`, `{"url":"https://example.com/repo","tools":["shell.exec"],"confirmed":true}`, `{"url":"https://example.com/repo","confirmed":false}`} {
 		if c := call(t, srv, "POST", "/api/v1/repository-imports", adminTok, "application/json", bad, nil); c != 400 {
 			t.Fatal(c)
 		}

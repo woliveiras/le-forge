@@ -54,8 +54,8 @@ paths:
             application/json:
               schema: {type: array, items: {$ref: '#/components/schemas/RepositoryImport'}}
     post:
-      summary: Confirm public HTTPS import or reuse a pinned snapshot
-      description: No task execution or permission changes. Shallow smart HTTP fetch, no host credentials or redirects; two active imports per process, three minutes and 128 MiB incoming transfer per attempt. Partial directories are retained. Matching URL/ref reuses the ready commit without refreshing HEAD.
+      summary: Confirm HTTPS import with explicit Git authentication or reuse a pinned snapshot
+      description: No task execution or permission changes. Shallow smart HTTP fetch, no redirects; native credentials require explicit native-only selection; two active imports per process, three minutes and 128 MiB incoming transfer per attempt. Partial directories are retained. Matching URL/ref reuses the ready commit without refreshing HEAD.
       x-leforge-role: admin
       requestBody:
         required: true
@@ -68,6 +68,14 @@ paths:
               properties:
                 url: {type: string, maxLength: 2048, description: Public HTTPS clone URL without credentials, query or fragment; public DNS hostname required}
                 ref: {type: string, maxLength: 256, default: HEAD, description: HEAD, full refs/heads/ or refs/tags/ reference, or full commit hash}
+                authentication:
+                  type: object
+                  additionalProperties: false
+                  description: Per-attempt credentials are never returned or stored. Native modes use the Forge OS user's configuration; MCP OAuth is unrelated. Authenticated and anonymous URL/ref snapshots have separate reuse keys; a ready snapshot does not revalidate credentials.
+                  properties:
+                    mode: {enum: [anonymous, token, local_git, local_gh], default: anonymous}
+                    username: {type: string, maxLength: 256, writeOnly: true, description: Required for token mode only; no colon or control characters}
+                    token: {type: string, maxLength: 8192, writeOnly: true, description: Required for token mode only; no control characters; re-enter for retries}
                 confirmed: {type: boolean, const: true}
                 retry: {type: boolean, default: false}
                 revision: {type: integer, description: Current record revision required for explicit retry}
@@ -2183,6 +2191,7 @@ components:
     RepositoryImport:
       type: object
       properties:
+        authentication: {enum: [anonymous, token, local_git, local_gh], description: Selected mode only; absent for older anonymous records}
         id: {type: string}
         url: {type: string}
         ref: {type: string}

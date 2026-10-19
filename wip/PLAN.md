@@ -38,7 +38,8 @@ The Phase A (task-oriented UX) and Phase B (standalone installation) implementat
 **New decision, 2026-10-19: prompt-first New task and task authorization modes
 are tracked as the next user-facing Release 1 increment. PROMPT-01 now delivers
 the prompt-first editor, PROMPT-02 adds durable request interpretation, and
-PROMPT-03 adds explicitly confirmed public repository imports; automatic admission
+PROMPT-03 adds explicitly confirmed public repository imports and PROMPT-04 adds
+explicit Git authentication (including native host credentials); automatic admission
 and task authorization modes remain planned. The current explicit review/start flow remains in force. See the decision below and PROMPT/AUTH tasks; no new runtime
 behavior or installation permission change is activated by this documentation.**
 
@@ -2356,3 +2357,54 @@ change, push or external account operation occurred. Ready HEAD reuse deliberate
 does not fetch a newer branch tip; choose another explicit ref/commit. Shared-store
 servers need access to the same managed project paths. Private Git authentication
 is PROMPT-04; automatic admission remains PROMPT-05.
+
+### PROMPT-04 — Explicit private Git authentication (2026-10-19)
+
+Implemented per-attempt authentication selection in repository imports. Administrators
+can provide an HTTPS username/token, or explicitly choose existing Git credential
+helpers / GitHub CLI login on the native profile. Server/container profiles reject
+native modes in the API as well as hiding them in the UI. No actual user credential
+was inspected, copied or changed during implementation. Synthetic fixtures only.
+
+Native Git credential lookup executes from the empty attempt directory with parent
+repository discovery blocked, preserving selected host helper configuration but
+removing Git routing and GH/GITHUB token environment overrides. The Git path calls
+credential fill only; the GH path calls auth token for the selected hostname.
+Prompting is disabled, resolution is limited to 15 seconds and stdout to 16 KiB,
+stderr is discarded and failures are sanitized. A configured helper may run local
+commands under the native OS user; the UI requires explicit confirmation. Forge
+does not invoke login, setup-git, approve/store or erase.
+
+Resolved credentials are attached only inside the fixed-endpoint HTTPS bridge,
+never to fetch/checkout processes, Git config, URLs, persisted records or browser
+storage. The bridge refuses redirects even with an injected client and ignores
+cookie jars. Tokens remain in worker memory for one attempt; the form clears them
+after submission and on target changes. Only authentication mode is persisted/audited.
+Anonymous and authenticated URL/ref reuse keys differ; authenticated snapshots
+retain the existing installation ownership model, with no per-user isolation or
+credential revalidation when reusing cached files. Existing projects, partial
+attempts and graph/tool permissions remain unchanged.
+
+Tests and checks:
+- `go test -p 2 ./...`, `go vet ./...` and `go build ./...` passed.
+- Race tests passed for repository imports/project configuration and imports/API.
+- Unit/integration coverage includes malformed selections, server denial of native
+  modes, fixed-endpoint/redirect handling, real synthetic Git helper and GH CLI
+  subprocesses, cancellation/output bounds, sanitized helper failures, refused
+  private Git access, retry after restart, retained attempts and absence of secrets
+  in settings, Git config, API responses and audit payloads.
+- TypeScript checks, 345 Vitest tests and the web production build passed.
+- Four Chromium import journeys passed, including private authentication refusal,
+  reload, token re-entry, successful retry and server rejection of native modes.
+- `make test-native-browser` passed nine standalone journeys, including explicit
+  host-authentication selection without invoking credentials on selection.
+- `make test-python` passed (15 SDK, 14 agent and 8 script tests).
+- `make test`, `make lint` and `make build` were attempted; their Docker wrappers
+  could not reach the unavailable daemon. Host Go equivalents above passed.
+
+Docs and OpenAPI describe the implemented choices and limits. HTTPS repositories
+on public DNS endpoints are supported; SSH/private network access, persistent
+credential vaults, automatic refresh/revocation and push credentials are outside
+this import flow. Live provider/enterprise SSO/keychain and OS-specific acceptance
+remain external validation. No activation, authentication configuration changes,
+remote push or real-account test occurred. PROMPT-05 automatic admission is next.

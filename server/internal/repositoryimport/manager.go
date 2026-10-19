@@ -29,27 +29,30 @@ var validID = regexp.MustCompile(`^imp_[a-f0-9]{64}$`)
 func randomID() string { return domain.NewID("attempt") }
 
 type Input struct {
-	URL      string `json:"url"`
-	Ref      string `json:"ref"`
-	Retry    bool   `json:"retry,omitempty"`
-	Revision int64  `json:"revision,omitempty"`
+	Authentication Authentication `json:"authentication,omitempty"`
+	URL            string         `json:"url"`
+	Ref            string         `json:"ref"`
+	Retry          bool           `json:"retry,omitempty"`
+	Revision       int64          `json:"revision,omitempty"`
 }
 type Record struct {
-	ID        string    `json:"id"`
-	URL       string    `json:"url"`
-	Ref       string    `json:"ref"`
-	State     string    `json:"state"`
-	Message   string    `json:"message"`
-	Revision  int64     `json:"revision"`
-	Attempt   string    `json:"attempt"`
-	ProjectID string    `json:"projectId,omitempty"`
-	Commit    string    `json:"commit,omitempty"`
-	Bytes     int64     `json:"bytes"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Deadline  time.Time `json:"deadline"`
+	Authentication string    `json:"authentication,omitempty"`
+	ID             string    `json:"id"`
+	URL            string    `json:"url"`
+	Ref            string    `json:"ref"`
+	State          string    `json:"state"`
+	Message        string    `json:"message"`
+	Revision       int64     `json:"revision"`
+	Attempt        string    `json:"attempt"`
+	ProjectID      string    `json:"projectId,omitempty"`
+	Commit         string    `json:"commit,omitempty"`
+	Bytes          int64     `json:"bytes"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Deadline       time.Time `json:"deadline"`
 }
 type Options struct {
+	Native bool
 	Store  storage.Store
 	Root   string
 	Log    *slog.Logger
@@ -60,6 +63,7 @@ type progress struct {
 	bytes   *atomic.Int64
 }
 type Manager struct {
+	native   bool
 	progress sync.Map
 	store    storage.Store
 	root     string
@@ -92,7 +96,7 @@ func New(o Options) (*Manager, error) {
 		o.Log = slog.Default()
 	}
 	ctx, stop := context.WithCancel(context.Background())
-	return &Manager{store: o.Store, root: root, log: o.Log, client: o.Client, ctx: ctx, stop: stop, active: map[string]context.CancelFunc{}}, nil
+	return &Manager{native: o.Native, store: o.Store, root: root, log: o.Log, client: o.Client, ctx: ctx, stop: stop, active: map[string]context.CancelFunc{}}, nil
 }
 func (m *Manager) Close(ctx context.Context) error {
 	m.mu.Lock()
@@ -126,7 +130,7 @@ func (m *Manager) read(ctx context.Context, id string) (*Record, error) {
 }
 func (m *Manager) save(ctx context.Context, r *Record, actor string) error {
 	r.UpdatedAt = time.Now().UTC()
-	if err := m.store.AppendEvent(ctx, domain.NewEvent("repository.import_transition", "", map[string]any{"importId": r.ID, "attempt": r.Attempt, "state": r.State, "bytes": r.Bytes}).WithActor(actor)); err != nil {
+	if err := m.store.AppendEvent(ctx, domain.NewEvent("repository.import_transition", "", map[string]any{"importId": r.ID, "attempt": r.Attempt, "state": r.State, "bytes": r.Bytes, "authentication": r.Authentication}).WithActor(actor)); err != nil {
 		return err
 	}
 	b, err := json.Marshal(r)
@@ -194,6 +198,9 @@ func (m *Manager) List(ctx context.Context) ([]*Record, error) {
 	return result, nil
 }
 func (m *Manager) Start(ctx context.Context, in Input, actor string) (*Record, error) {
+	if err := in.Authentication.validate(m.native); err != nil {
+		return nil, fmt.Errorf("%w: select anonymous, an explicit HTTPS username/token, or native-only local authentication", ErrInvalid)
+	}
 	source, err := ValidateURL(in.URL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: use a public HTTPS clone URL without credentials, query, fragment or port", ErrInvalid)
@@ -204,7 +211,11 @@ func (m *Manager) Start(ctx context.Context, in Input, actor string) (*Record, e
 	if !ValidateRef(in.Ref) {
 		return nil, fmt.Errorf("%w: select HEAD, refs/heads/name, refs/tags/name or a full commit hash", ErrInvalid)
 	}
-	sum := sha256.Sum256([]byte(source + "\n" + in.Ref))
+	key := source + "\n" + in.Ref
+	if in.Authentication.Mode != "" && in.Authentication.Mode != "anonymous" {
+		key += "\nprivate"
+	}
+	sum := sha256.Sum256([]byte(key))
 	id := "imp_" + hex.EncodeToString(sum[:])
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -240,11 +251,12 @@ func (m *Manager) Start(ctx context.Context, in Input, actor string) (*Record, e
 		return nil, fmt.Errorf("%w: two imports are active; wait or cancel one before importing", storage.ErrConflict)
 	}
 	now := time.Now().UTC()
-	r := &Record{ID: id, URL: source, Ref: in.Ref, State: "fetching", Message: "Fetching public Git snapshot. No repository code is executed.", Attempt: randomID(), CreatedAt: now, Deadline: now.Add(maxDuration + 10*time.Second)}
+	r := &Record{ID: id, URL: source, Ref: in.Ref, State: "fetching", Message: "Fetching Git snapshot. No repository code is executed.", Attempt: randomID(), CreatedAt: now, Deadline: now.Add(maxDuration + 10*time.Second)}
 	if old != nil {
 		r.Revision = old.Revision
 		r.CreatedAt = old.CreatedAt
 	}
+	r.Authentication = in.Authentication.Mode
 	r.ProjectID = domain.NewID("prj")
 	if err = m.save(ctx, r, actor); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
@@ -256,7 +268,7 @@ func (m *Manager) Start(ctx context.Context, in Input, actor string) (*Record, e
 	m.active[id] = cancel
 	m.wg.Add(1)
 	snapshot := *r
-	go m.run(work, cancel, &snapshot, actor)
+	go m.run(work, cancel, &snapshot, actor, in.Authentication)
 	return r, nil
 }
 func (m *Manager) Cancel(ctx context.Context, id string, revision int64, actor string) (*Record, error) {
@@ -279,7 +291,7 @@ func (m *Manager) Cancel(ctx context.Context, id string, revision int64, actor s
 	m.mu.Unlock()
 	return r, nil
 }
-func (m *Manager) run(ctx context.Context, cancel context.CancelFunc, r *Record, actor string) {
+func (m *Manager) run(ctx context.Context, cancel context.CancelFunc, r *Record, actor string, auth Authentication) {
 	start := time.Now()
 	outcome := "failed"
 	defer func() {
@@ -344,7 +356,12 @@ func (m *Manager) run(ctx context.Context, cancel context.CancelFunc, r *Record,
 		finish("failed", "Cannot create a new managed directory; existing data was not replaced.")
 		return
 	}
-	head, message := fetch(ctx, dir, r.URL, r.Ref, m.client, &received)
+	credential, err := auth.resolve(ctx, r.URL, dir)
+	if err != nil {
+		finish("failed", err.Error())
+		return
+	}
+	head, message := fetch(ctx, dir, r.URL, r.Ref, m.client, &received, credential)
 	if message != "" {
 		finish("failed", message)
 		return
@@ -389,5 +406,5 @@ func (m *Manager) run(ctx context.Context, cancel context.CancelFunc, r *Record,
 		m.log.Error("repository project publication outcome is uncertain; recovery will inspect the persisted project", "import_id", r.ID)
 		return
 	}
-	finish("ready", "Public repository imported. Select the project and pinned commit for a task; agents have not started.")
+	finish("ready", "Repository imported. Select the project and pinned commit for a task; agents have not started.")
 }

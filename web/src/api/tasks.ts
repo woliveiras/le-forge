@@ -37,4 +37,4 @@ export interface TaskProgress {environment?:import('./types').EnvironmentView;wo
 
 export interface CleanupPreview {path:string;branch:string;head:string;status:string;clean:boolean;fingerprint:string}
 
-export interface RepositoryImportRecord {id:string;url:string;ref:string;state:string;message:string;revision:number;attempt:string;projectId?:string;commit?:string;bytes:number;createdAt:string;updatedAt:string;deadline:string}
+export interface RepositoryImportRecord {authentication?:string;id:string;url:string;ref:string;state:string;message:string;revision:number;attempt:string;projectId?:string;commit?:string;bytes:number;createdAt:string;updatedAt:string;deadline:string}

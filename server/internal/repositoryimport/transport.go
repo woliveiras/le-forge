@@ -1,5 +1,5 @@
-// Package repositoryimport imports public Git snapshots without host credentials
-// or repository code execution. Task admission remains a separate operation.
+// Package repositoryimport imports Git snapshots using explicitly selected
+// authentication, without repository code execution. Task admission is separate.
 package repositoryimport
 
 import (
@@ -96,8 +96,12 @@ func publicClient() *http.Client {
 
 // A private loopback bridge is the only URL Git sees. The bridge forwards only
 // upload-pack discovery/read requests to the validated HTTPS target. DNS is pinned
-// at dial time. No redirects, proxies, cookies, credentials or remote helpers pass.
-func bridge(ctx context.Context, source string, client *http.Client, limit int64, received *atomic.Int64) (string, func(), *atomic.Int32, error) {
+// at dial time. No redirects, proxies or cookies pass. Explicit credentials are
+// attached only to the fixed upstream, never forwarded from the loopback request.
+func bridge(ctx context.Context, source string, client *http.Client, limit int64, received *atomic.Int64, auth ...Authentication) (string, func(), *atomic.Int32, error) {
+	scopedClient := *client
+	scopedClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	scopedClient.Jar = nil
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, nil, err
@@ -129,7 +133,10 @@ func bridge(ctx context.Context, source string, client *http.Client, limit int64
 			http.Error(w, "invalid", 400)
 			return
 		}
-		req.Header.Set("User-Agent", "LeForge-public-import")
+		req.Header.Set("User-Agent", "LeForge-repository-import")
+		if len(auth) > 0 && auth[0].Mode == "token" {
+			req.SetBasicAuth(auth[0].Username, auth[0].Token)
+		}
 		if r.Method == "POST" {
 			req.Header.Set("Content-Type", "application/x-git-upload-pack-request")
 			if encoding := r.Header.Get("Content-Encoding"); encoding == "gzip" {
@@ -139,7 +146,7 @@ func bridge(ctx context.Context, source string, client *http.Client, limit int64
 		if value := r.Header.Get("Git-Protocol"); value == "version=2" {
 			req.Header.Set("Git-Protocol", value)
 		}
-		resp, err := client.Do(req)
+		resp, err := scopedClient.Do(req)
 		if err != nil {
 			status.Store(502)
 			http.Error(w, "repository unavailable", 502)

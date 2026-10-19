@@ -5,7 +5,7 @@ const source='https://repository.fixture.example/source.git';
 async function openImport(page:import('@playwright/test').Page,url:string){
  await page.goto('/#/tasks/new');
  await page.getByText('Import repository from URL',{exact:true}).click();
- const section=page.getByRole('region',{name:'Import public repository'});
+ const section=page.getByRole('region',{name:'Import repository'});
  await section.getByRole('textbox',{name:'Clone URL'}).fill(url);
  await section.getByRole('checkbox').check();
  await section.getByRole('button',{name:'Import repository',exact:true}).click();
@@ -40,7 +40,7 @@ test('retains failures across reload and retries a transient error without repla
  const url='https://repository.fixture.example/retry.git';let section=await openImport(page,url);
  await expect(section.getByRole('status')).toContainText('failed:');
  const initial=(await (await page.request.get('/api/v1/repository-imports',{headers})).json()).find((r:{url:string})=>r.url===url);
- await page.reload();await page.getByText('Import repository from URL',{exact:true}).click();section=page.getByRole('region',{name:'Import public repository'});
+ await page.reload();await page.getByText('Import repository from URL',{exact:true}).click();section=page.getByRole('region',{name:'Import repository'});
  await section.getByRole('combobox',{name:'Saved imports'}).selectOption(initial.id);
  await expect(section.getByRole('status')).toContainText('failed:');
  await section.getByRole('checkbox').check();await section.getByRole('button',{name:'Retry import'}).click();
@@ -56,4 +56,27 @@ test('cancels a slow import and denies viewer import through UI and API',async({
  await page.evaluate(()=>localStorage.setItem('leforgeToken','e2e-viewer-token'));
  await page.reload();await page.getByText('Import repository from URL',{exact:true}).click();
  await expect(page.getByRole('button',{name:'Import repository',exact:true})).toBeDisabled();
+});
+test('repairs private Git authentication without persisting the token or granting tools',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('leforgeToken','e2e-admin-token'));
+ await page.goto('/#/tasks/new');await page.getByText('Import repository from URL',{exact:true}).click();
+ let section=page.getByRole('region',{name:'Import repository'});
+ const privateURL='https://repository.fixture.example/private.git';
+ await section.getByRole('textbox',{name:'Clone URL'}).fill(privateURL);
+ await section.getByRole('combobox',{name:'Git authentication'}).selectOption('token');
+ await section.getByRole('textbox',{name:'Git username'}).fill('fixture-user');
+ await section.getByLabel('Git access token').fill('wrong-synthetic-token');
+ await section.getByRole('checkbox').check();await section.getByRole('button',{name:'Import repository',exact:true}).click();
+ await expect(section.getByRole('status')).toContainText('failed:');await expect(section.getByRole('status')).toContainText('MCP OAuth is separate');
+ await expect(section.getByLabel('Git access token')).toHaveValue('');
+ const records=await (await page.request.get('/api/v1/repository-imports',{headers})).json();const record=records.find((r:{url:string;authentication:string})=>r.url===privateURL&&r.authentication==='token');
+ await page.reload();await page.getByText('Import repository from URL',{exact:true}).click();section=page.getByRole('region',{name:'Import repository'});
+ await section.getByRole('combobox',{name:'Saved imports'}).selectOption(record.id);
+ await expect(section.getByRole('combobox',{name:'Git authentication'})).toHaveValue('token');await expect(section.getByLabel('Git access token')).toHaveValue('');
+ await section.getByRole('textbox',{name:'Git username'}).fill('fixture-user');await section.getByLabel('Git access token').fill('synthetic-read-token');
+ await section.getByRole('checkbox').check();await section.getByRole('button',{name:'Retry import'}).click();
+ await expect(section.getByRole('status')).toContainText('ready:');await expect(section.getByLabel('Git access token')).toHaveValue('');
+ const response=await (await page.request.get('/api/v1/repository-imports',{headers})).text();expect(response).not.toContain('synthetic-read-token');expect(response).not.toContain('fixture-user');
+ const browserStorage=await page.evaluate(()=>JSON.stringify({local:{...localStorage},session:{...sessionStorage}}));expect(browserStorage).not.toContain('synthetic-read-token');
+ expect((await page.request.post('/api/v1/repository-imports',{headers,data:{url:privateURL,ref:'HEAD',confirmed:true,authentication:{mode:'local_git'}}})).status()).toBe(400);
 });

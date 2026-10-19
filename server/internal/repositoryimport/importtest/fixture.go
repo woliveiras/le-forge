@@ -83,6 +83,18 @@ func New(ctx context.Context, root string) (*Fixture, error) {
 	handler := &cgi.Handler{Path: filepath.Join(path, "git-http-backend"), Env: []string{"GIT_PROJECT_ROOT=" + root, "GIT_HTTP_EXPORT_ALL=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull}}
 	var retries atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/private.git/") {
+			user, token, ok := r.BasicAuth()
+			if !ok || user != "fixture-user" || token != "synthetic-read-token" {
+				http.Error(w, "synthetic secret rejected", 401)
+				return
+			}
+			copied := r.Clone(r.Context())
+			u := *r.URL
+			u.Path = strings.Replace(u.Path, "/private.git/", "/source.git/", 1)
+			copied.URL = &u
+			r = copied
+		}
 		if strings.HasPrefix(r.URL.Path, "/slow.git/") {
 			<-r.Context().Done()
 			return
