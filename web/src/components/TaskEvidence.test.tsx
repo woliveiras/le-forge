@@ -30,3 +30,17 @@ it('inspects exact execution outcomes inline without treating completion as tool
  expect(screen.queryByText('private-marker')).toBeNull();expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
  expect(screen.getByText('Execution tree and interruption')).toBeTruthy();
 });
+
+it('switches read-only inspection to the selected agent workspace',async()=>{
+ const backend=fakeApi({'GET /api/v1/graphs/g/git/status':()=>({repository:true,directory:'/fixture/worker',branch:'worker',content:' M agent.txt'}),'GET /api/v1/graphs/g/events':()=>[],'GET /api/v1/graphs/g/executions':()=>[]});
+ const workspaces=[{nodeId:'worker',replica:1,path:'/fixture/worker',branch:'worker',inspectionNode:'worker',subdir:''}];
+ const view=render(<TaskEvidence graphId="g" executions={[]} workspaces={workspaces}/>);
+ await userEvent.selectOptions(screen.getByLabelText('Workspace to review'),JSON.stringify(['worker',1]));
+ expect(screen.getByText('/fixture/worker')).toBeTruthy();
+ await userEvent.click(screen.getByRole('button',{name:'Inspect changes'}));await screen.findByText('M agent.txt');
+ expect(backend.fetch.mock.calls.some(([url])=>String(url).includes('node=worker')&&String(url).includes('replica=1'))).toBe(true);
+ expect(backend.calls.every(c=>c.method==='GET')).toBe(true);
+ view.rerender(<TaskEvidence graphId="g" executions={[]} workspaces={[]}/>);
+ expect(screen.queryByRole('region',{name:'Git inspection'})).toBeNull();
+ expect((screen.getByRole('button',{name:'Hide changes'}) as HTMLButtonElement).disabled).toBe(true);
+});

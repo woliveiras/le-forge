@@ -344,3 +344,14 @@ usage is shown with the parent/child double-counting caveat. An expandable execu
 tree reuses existing budget, child interruption and whole-tree controls, including
 confirmation and server-side authorization. Activity and diagnostics are also
 expandable inside the task page. Existing detailed routes remain available.
+
+
+### Reviewing agent worktrees
+
+Under **Changes and checks**, select **Workspace to review** to inspect the
+shared task workspace or a prepared agent replica. Each scope uses the existing
+read-only Git inspector; native editor handoff requires the same-computer
+confirmation for the selected path. A missing status snapshot is not evidence
+that a workspace was deleted. Agent worktrees are independent: changes there
+need not appear in the shared task workspace or the registered source checkout.
+The interface does not infer a successful push or passing tests from completion.

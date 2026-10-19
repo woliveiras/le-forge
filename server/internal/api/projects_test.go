@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"github.com/woliveiras/le-forge/server/internal/domain"
 	"github.com/woliveiras/le-forge/server/internal/projectconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"github.com/woliveiras/le-forge/server/internal/taskrun"
@@ -44,7 +45,13 @@ func TestProjectTaskWorktreeThroughAPI(t *testing.T) {
 	if c := call(t, srv, "POST", "/api/v1/projects", adminTok, "application/json", `{"name":"x","path":"relative"}`, nil); c != 400 {
 		t.Fatal(c)
 	}
-	call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", taskGraph, nil)
+	var workflow domain.Graph
+	if err := json.Unmarshal([]byte(taskGraph), &workflow); err != nil {
+		t.Fatal(err)
+	}
+	workflow.Spec.Nodes[0].Workspace.Mode = domain.WorkspaceWorktree
+	graphBody, _ := json.Marshal(workflow)
+	call(t, srv, "POST", "/api/v1/graphs", adminTok, "application/json", string(graphBody), nil)
 	var input taskconfig.Input
 	if err := json.Unmarshal([]byte(taskBody), &input); err != nil {
 		t.Fatal(err)
@@ -82,6 +89,24 @@ func TestProjectTaskWorktreeThroughAPI(t *testing.T) {
 	endpoint := "/api/v1/graphs/" + taskrun.ExecutionID(d.ID) + "/git/status"
 	if code := call(t, srv, "GET", endpoint, viewerTok, "", "", &inspection); code != 200 || !inspection.Repository || !strings.Contains(inspection.Content, "new-file") {
 		t.Fatalf("task inspection: %d %+v", code, inspection)
+	}
+
+	var progress taskrun.View
+	if code := call(t, srv, "GET", "/api/v1/tasks/"+d.ID+"/progress", viewerTok, "", "", &progress); code != 200 || len(progress.Workspaces) != 1 {
+		t.Fatal(code, progress)
+	}
+	scope := progress.Workspaces[0]
+	if scope.InspectionNode != input.NodeID || scope.Path == review.WorkspacePath || scope.Branch == "" {
+		t.Fatal(scope)
+	}
+	if err := os.WriteFile(filepath.Join(scope.Path, "agent-file"), []byte("agent change"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code := call(t, srv, "GET", endpoint+"?node="+input.NodeID+"&replica=0", viewerTok, "", "", &inspection); code != 200 || !strings.Contains(inspection.Content, "agent-file") || strings.Contains(inspection.Content, "new-file") {
+		t.Fatal(code, inspection)
+	}
+	if code := call(t, srv, "GET", endpoint+"?node=missing&replica=0", viewerTok, "", "", nil); code == 200 {
+		t.Fatal("unknown scope accepted")
 	}
 	// A modified .git pointer must not expose a different repository.
 	if err := os.WriteFile(filepath.Join(review.WorkspacePath, ".git"), []byte("gitdir: /outside/fixture\n"), 0600); err != nil {

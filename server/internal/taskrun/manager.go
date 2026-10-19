@@ -249,7 +249,41 @@ func (m Manager) Start(ctx context.Context, id string, revision int64, actor str
 	return tm.Transition(ctx, d, "running", actor)
 }
 
+type WorkspaceScope struct {
+	NodeID         string `json:"nodeId"`
+	Replica        int    `json:"replica"`
+	Path           string `json:"path"`
+	Branch         string `json:"branch,omitempty"`
+	InspectionNode string `json:"inspectionNode"`
+	Subdir         string `json:"subdir"`
+}
+
+func workspaceScopes(g *domain.Graph, st *engine.GraphStatus) []WorkspaceScope {
+	scopes := []WorkspaceScope{}
+	for _, n := range st.Nodes {
+		for _, r := range n.Replicas {
+			if r == nil || r.GraphID != g.Metadata.ID || r.Workdir == "" || r.Replica < 0 {
+				continue
+			}
+			for _, node := range g.Spec.Nodes {
+				if node.ID != r.NodeID {
+					continue
+				}
+				scope := WorkspaceScope{NodeID: r.NodeID, Replica: r.Replica, Path: r.Workdir, Branch: r.Branch, Subdir: node.Workspace.Subdir}
+				if node.Workspace.Mode == domain.WorkspaceWorktree {
+					scope.InspectionNode = node.ID
+					scope.Subdir = ""
+				}
+				scopes = append(scopes, scope)
+				break
+			}
+		}
+	}
+	return scopes
+}
+
 type View struct {
+	Workspaces       []WorkspaceScope    `json:"workspaces"`
 	PendingApprovals []*domain.Approval  `json:"pendingApprovals"`
 	WorkspacePath    string              `json:"workspacePath,omitempty"`
 	Task             *taskconfig.Draft   `json:"task"`
@@ -298,6 +332,7 @@ func (m Manager) View(ctx context.Context, id string) (*View, error) {
 	if err != nil {
 		return nil, err
 	}
+	v.Workspaces = workspaceScopes(g, st)
 	active := false
 	workersActive := false
 	failed := false

@@ -2,6 +2,7 @@ package taskrun
 
 import (
 	"github.com/woliveiras/le-forge/server/internal/domain"
+	"github.com/woliveiras/le-forge/server/internal/engine"
 	"github.com/woliveiras/le-forge/server/internal/taskconfig"
 	"testing"
 )
@@ -46,5 +47,14 @@ func TestPrepareChannelBinding(t *testing.T) {
 	g.Spec.Channels[0].From = "worker"
 	if _, b, e := Prepare(d, g); e != nil || len(b) == 0 {
 		t.Fatal(b, e)
+	}
+}
+
+func TestWorkspaceScopesOnlyKnownPreparedReplicas(t *testing.T) {
+	g := &domain.Graph{Metadata: domain.GraphMetadata{ID: "task-run-fixture"}, Spec: domain.GraphSpec{Nodes: []domain.Node{{ID: "writer", Workspace: domain.NodeWorkspace{Mode: domain.WorkspaceWorktree, Subdir: "ignored"}}, {ID: "shared", Workspace: domain.NodeWorkspace{Subdir: "src"}}}}}
+	st := &engine.GraphStatus{Nodes: []engine.NodeStatus{{Replicas: []*domain.ReplicaStatus{nil, {GraphID: g.Metadata.ID, NodeID: "writer", Replica: 1, Workdir: "/fixture/writer", Branch: "task-writer"}, {GraphID: g.Metadata.ID, NodeID: "shared", Workdir: "/fixture/src"}, {GraphID: "other", NodeID: "writer", Workdir: "/private"}, {GraphID: g.Metadata.ID, NodeID: "unknown", Workdir: "/unknown"}, {GraphID: g.Metadata.ID, NodeID: "writer"}}}}}
+	scopes := workspaceScopes(g, st)
+	if len(scopes) != 2 || scopes[0].InspectionNode != "writer" || scopes[0].Replica != 1 || scopes[0].Subdir != "" || scopes[1].InspectionNode != "" || scopes[1].Subdir != "src" {
+		t.Fatalf("unexpected scopes: %+v", scopes)
 	}
 }

@@ -11,7 +11,7 @@ test('native profile authenticates, registers a local repo and executes a review
  const initial=await(await page.request.get('/api/v1/graphs',{headers})).json();
  expect(initial).toHaveLength(1);expect(initial[0].graph.metadata.id).toBe('software-factory');expect(initial[0].record.state).toBe('stopped');
  expect(initial[0].graph.spec.nodes.every((node:{runtime:{kind:string}})=>node.runtime.kind==='native')).toBe(true);
- const graph={metadata:{id:'native-synthetic',name:'Synthetic native test'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},tools:[]}]}};
+ const graph={metadata:{id:'native-synthetic',name:'Synthetic native test'},spec:{nodes:[{id:'worker',runtime:{kind:'echo'},loop:{mode:'once'},workspace:{mode:'worktree'},tools:[]}]}};
  expect((await page.request.post('/api/v1/graphs',{headers,data:graph})).status()).toBe(201);
  await page.goto('/#/projects');
  await page.getByLabel('API token').fill(token);
@@ -37,6 +37,13 @@ test('native profile authenticates, registers a local repo and executes a review
  await expect(page.getByRole('region',{name:'Git inspection',exact:true})).toContainText('M tracked.txt');
  await page.getByRole('combobox',{name:'Git view',exact:true}).selectOption('diff');
  await expect(page.getByRole('region',{name:'Git inspection',exact:true})).toContainText('+changed in disposable worktree');
+ expect(readFileSync(join(repo,'tracked.txt'),'utf8')).toBe('original\n');
+ await page.getByRole('combobox',{name:'Workspace to review'}).selectOption(JSON.stringify(['worker',0]));
+ const agentPath=await page.getByRole('region',{name:'Review task evidence'}).getByRole('region',{name:'Review workspace',exact:true}).locator('code').textContent();
+ expect(agentPath).not.toBe(taskPath);writeFileSync(join(agentPath!,'tracked.txt'),'isolated agent change\n');
+ await page.getByRole('combobox',{name:'Git view',exact:true}).selectOption('diff');
+ await expect(page.getByRole('region',{name:'Git inspection',exact:true})).toContainText('+isolated agent change');
+ expect(readFileSync(join(taskPath!,'tracked.txt'),'utf8')).toBe('changed in disposable worktree\n');
  expect(readFileSync(join(repo,'tracked.txt'),'utf8')).toBe('original\n');
 
  await page.getByRole('link',{name:'Workspace files',exact:true}).click();await expect(page).toHaveURL(/task-run-.*\/files/);

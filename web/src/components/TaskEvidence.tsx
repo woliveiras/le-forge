@@ -1,3 +1,5 @@
+import type {TaskWorkspace} from '../api/tasks';
+import {WorkspaceHandoff} from './WorkspaceHandoff';
 import {RunEvents} from './RunsView';
 import {ExecutionTreeView} from './ExecutionTreeView';
 import {useState} from 'react';
@@ -5,7 +7,9 @@ import type {Execution} from '../api/types';
 import {Btn} from './common';
 import {GitView} from './GitView';
 
-export function TaskEvidence({graphId,executions,role}:{graphId:string;executions:Execution[];role?:string}) {
+export function TaskEvidence({graphId,executions,role,workspaces=[],nativeProfile=false}:{graphId:string;executions:Execution[];role?:string;workspaces?:TaskWorkspace[];nativeProfile?:boolean}) {
+  const [workspaceKey,setWorkspaceKey]=useState('');
+  const scope=workspaces.find(x=>JSON.stringify([x.nodeId,x.replica])===workspaceKey);
   const [inspect,setInspect]=useState(false);
   const [selected,setSelected]=useState('');
   const [showTree,setShowTree]=useState(false);
@@ -13,8 +17,11 @@ export function TaskEvidence({graphId,executions,role}:{graphId:string;execution
   return <section aria-label="Review task evidence">
     <h3>Changes and checks</h3>
     <p>Inspect the current working tree, diff and history. A completed agent run is not proof that tests passed or that changes were committed or pushed.</p>
-    <Btn onClick={()=>setInspect(value=>!value)}>{inspect?'Hide changes':'Inspect changes'}</Btn>
-    {inspect&&<GitView key={graphId} graphId={graphId} node="" replica={0} path=""/>}
+    <label>Workspace to review<select value={workspaceKey} onChange={e=>setWorkspaceKey(e.target.value)}><option value="">Shared task workspace</option>{workspaces.map(x=><option key={JSON.stringify([x.nodeId,x.replica])} value={JSON.stringify([x.nodeId,x.replica])}>{x.nodeId} · replica {x.replica}{x.branch?` · ${x.branch}`:''}</option>)}</select></label>
+    {workspaceKey&&!scope&&<p>The selected workspace is absent from this snapshot. Select an available workspace before inspecting.</p>}
+    {scope&&<WorkspaceHandoff key={scope.path} path={scope.path} nativeProfile={nativeProfile}/>}
+    <Btn disabled={!!workspaceKey&&!scope} onClick={()=>setInspect(value=>!value)}>{inspect?'Hide changes':'Inspect changes'}</Btn>
+    {inspect&&(!workspaceKey||scope)&&<GitView key={`${graphId}:${workspaceKey}`} graphId={graphId} node={scope?.inspectionNode??""} replica={scope?.replica??0} path={scope?.subdir??""}/>}
     <h4>Check execution evidence</h4>
     <p>Open recorded tool calls to review commands and their outcomes. No test result is inferred from the agent summary.</p>
     {!!executions.length&&<label>Inspect execution evidence<select value={selected} onChange={e=>{setSelected(e.target.value);setShowTree(false);}}><option value="">Select an execution</option>{executions.filter(x=>x.graphId===graphId).map(x=><option key={x.id} value={x.id}>{x.nodeId} · {x.status} · {x.id}</option>)}</select></label>}

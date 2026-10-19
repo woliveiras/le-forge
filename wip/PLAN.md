@@ -1995,3 +1995,14 @@ task claims its execution copy. Configuration links open separately so the saved
 request remains available; returning users review requirements again and provide
 fresh start consent. Server-side save and per-call gateway checks remain in place.
 Real MCP/API and browser tests cover failure, repair and retained draft identity.
+
+
+### Task workspace review scopes
+
+FLOW-07d exposes prepared agent/replica workspaces from engine status in task
+progress, scoped to known nodes of the owned execution graph. Users select the
+shared task workspace or an agent worktree for read-only Git inspection and
+explicit native editor handoff. Missing snapshots do not silently switch scope.
+Task replica branches use `leforge-replicas/<graph>/<node>-<replica>` to avoid
+Git ref collisions with the task root branch `leforge/<graph>`. Ordinary workflow
+branch names and existing files are unchanged. No cleanup, commit or push occurs.

@@ -12,7 +12,7 @@ export function WorkspaceHandoff({path,nativeProfile}:{path:string;nativeProfile
   const href=nativeProfile&&loopback?workspaceEditorLink(path):undefined;
   return <section aria-label="Review workspace">
     <h3>Review changes in your editor</h3>
-    <p>Task worktree on {nativeProfile?'the native Forge host':'the Forge server'}: <code>{path}</code></p>
+    <p>Task workspace on {nativeProfile?'the native Forge host':'the Forge server'}: <code>{path}</code></p>
     {href?<>
       <label><input type="checkbox" checked={confirmedPath===path} onChange={e=>setConfirmedPath(e.target.checked?path:undefined)}/>Forge and this browser are on the same computer, with VS Code installed.</label>
       {confirmedPath===path&&<a className="btn" href={href}>Open in VS Code</a>}

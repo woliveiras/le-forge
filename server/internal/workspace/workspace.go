@@ -156,7 +156,7 @@ func (m *Manager) Replica(ctx context.Context, g *domain.Graph, n *domain.Node, 
 	lock.Lock()
 	defer lock.Unlock()
 	dir = filepath.Join(m.Root, ".worktrees", g.Metadata.ID, fmt.Sprintf("%s-%d", n.ID, replica))
-	branch = fmt.Sprintf("leforge/%s/%s-%d", g.Metadata.ID, n.ID, replica)
+	branch = replicaBranch(g, n.ID, replica)
 	if isRepo(dir) {
 		return dir, branch, nil
 	}
@@ -231,4 +231,14 @@ func (m *Manager) git(ctx context.Context, dir string, args ...string) (string, 
 		return out.String(), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(out.String()))
 	}
 	return out.String(), nil
+}
+
+// Task roots already own leforge/<graph>; Git cannot place a ref below that ref.
+// Ordinary workflow branches retain their existing names.
+func replicaBranch(g *domain.Graph, nodeID string, replica int) string {
+	prefix := "leforge"
+	if g.Metadata.Labels["leforge.task"] != "" {
+		prefix = "leforge-replicas"
+	}
+	return fmt.Sprintf("%s/%s/%s-%d", prefix, g.Metadata.ID, nodeID, replica)
 }
