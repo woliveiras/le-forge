@@ -1,10 +1,15 @@
+import {RunEvents} from './RunsView';
+import {ExecutionTreeView} from './ExecutionTreeView';
 import {useState} from 'react';
 import type {Execution} from '../api/types';
 import {Btn} from './common';
 import {GitView} from './GitView';
 
-export function TaskEvidence({graphId,executions}:{graphId:string;executions:Execution[]}) {
+export function TaskEvidence({graphId,executions,role}:{graphId:string;executions:Execution[];role?:string}) {
   const [inspect,setInspect]=useState(false);
+  const [selected,setSelected]=useState('');
+  const [showTree,setShowTree]=useState(false);
+  const execution=executions.find(x=>x.id===selected&&x.graphId===graphId);
   return <section aria-label="Review task evidence">
     <h3>Changes and checks</h3>
     <p>Inspect the current working tree, diff and history. A completed agent run is not proof that tests passed or that changes were committed or pushed.</p>
@@ -12,6 +17,9 @@ export function TaskEvidence({graphId,executions}:{graphId:string;executions:Exe
     {inspect&&<GitView key={graphId} graphId={graphId} node="" replica={0} path=""/>}
     <h4>Check execution evidence</h4>
     <p>Open recorded tool calls to review commands and their outcomes. No test result is inferred from the agent summary.</p>
+    {!!executions.length&&<label>Inspect execution evidence<select value={selected} onChange={e=>{setSelected(e.target.value);setShowTree(false);}}><option value="">Select an execution</option>{executions.filter(x=>x.graphId===graphId).map(x=><option key={x.id} value={x.id}>{x.nodeId} · {x.status} · {x.id}</option>)}</select></label>}
+    {selected&&!execution&&<p>The selected execution is no longer in this snapshot. Select another execution to inspect.</p>}
+    {execution&&<section aria-label="Selected execution evidence"><p>Execution: {execution.status}. Individual tool outcomes may differ.</p><p>{execution.usage?.inputTokens??0} input / {execution.usage?.outputTokens??0} output tokens recorded for this execution. Child usage is included in its parent; do not add both totals.</p><RunEvents key={execution.id} execution={execution} toolsOnly/><details onToggle={e=>setShowTree(e.currentTarget.open)}><summary>Execution tree and interruption</summary>{showTree&&<ExecutionTreeView key={execution.id} graphId={graphId} executionId={execution.id} role={role}/>}</details></section>}
     {executions.length===0?<p>No execution evidence recorded yet.</p>:<ul>{executions.map(run=><li key={run.id}><a href={`#/g/${encodeURIComponent(graphId)}/runs?execution=${encodeURIComponent(run.id)}&section=tools`}>{run.nodeId} · {run.status} · Tool calls</a></li>)}</ul>}
   </section>;
 }

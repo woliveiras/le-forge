@@ -1977,3 +1977,12 @@ environment decisions remain administrator-only. Missing/error telemetry is
 not presented as an empty approval list. Activity and diagnostics are loaded
 on demand within the task page, retaining access to detailed runs and evidence.
 Dependency repair and broader child/test aggregation remain separate follow-ups.
+
+
+### Inline task execution evidence
+
+FLOW-07c reuses the existing run-event and execution-tree components within the
+task review page after an explicit execution selection. It preserves event bounds,
+error states, token accounting caveats, interruption confirmation and roles.
+Tests verify denied tool outcomes are distinct from completed executions and
+that terminal-tree controls cannot restart or interrupt completed work.

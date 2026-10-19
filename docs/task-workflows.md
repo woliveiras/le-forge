@@ -1,13 +1,13 @@
 # Task-oriented Workflow Contracts
 
-Status: FLOW-01 design reviewed against code on 2026-10-19. FLOW-03 draft persistence and requirement review are implemented as recorded below; initial execution-copy admission is delivered; project behavior remains planned. OpenAPI documents only delivered endpoints.
+Status: reviewed on 2026-10-19. Durable drafts, task-owned execution copies, registered project worktrees, native packaging/editor handoff and contextual approval/evidence views are implemented as recorded below. Issue-source selection, environment preferences/preparation and reviewed cleanup remain open in TASKS.md.
 The current wire contract remains [OpenAPI](../api/openapi.yaml).
 
 ## Vocabulary and existing foundations
 
 | Term | Meaning | Current implementation |
 |---|---|---|
-| Project | Registered repository and execution preferences | Workspace configuration belongs to graphs; a reusable project record is planned. |
+| Project | Registered repository and execution preferences | Explicit repository registration with immutable initial HEAD; execution preferences remain planned. |
 | Workflow | Saved graph defining agents, channels and policies | `domain.Graph`, with versioned definitions. |
 | Task | One user request with input, chosen project/workflow and review outcome | Revisioned request and execution-copy binding in installation settings. |
 | Graph run | Graph lifecycle from start through stop | `GraphRecord.RunID`; starting an already running graph is not a new run. |
@@ -250,9 +250,8 @@ OS permissions. No commit, push, merge, source reset or cleanup is automatic.
 
 The UI explains server versus container paths and links worktree background
 information. A container-mounted repository still runs commands in the container;
-this delivery does not pretend it is the user's host. Native packaging, automatic
-editor handoff, preferred environment configuration and explicit project updates
-remain pending. Existing file/diff inspection is linked from task progress.
+this delivery does not pretend it is the user's host. Native packaging and explicit editor handoff are delivered below; preferred
+environment configuration and explicit project updates remain pending. Existing file/diff inspection is linked from task progress.
 
 ## Structured input and retained outputs (2026-10-19)
 
@@ -330,3 +329,18 @@ Generated title/description JSON tracks request edits only while it still equals
 the generated payload; customized JSON is preserved. Goal presets provide editable
 initial instructions, and switching goals never replaces a customized request.
 These instructions are not permission restrictions or new tool grants.
+
+
+### Contextual decisions and execution evidence
+
+Task progress shows pending approvals for its owned execution copy. Decisions use
+the existing approval API and still appear in the inbox. Viewer and operator/admin
+boundaries remain unchanged; environment approval remains administrator-only.
+Unavailable or bounded-out approval telemetry is distinct from an empty list.
+
+Selecting an execution loads its bounded tool event history inline. Completed
+execution status does not imply successful tools or passing tests. Recorded token
+usage is shown with the parent/child double-counting caveat. An expandable execution
+tree reuses existing budget, child interruption and whole-tree controls, including
+confirmation and server-side authorization. Activity and diagnostics are also
+expandable inside the task page. Existing detailed routes remain available.

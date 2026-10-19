@@ -59,7 +59,7 @@ function RunApprovals({execution,role}:{execution:Execution;role?:string}) {
  {!approvals.error&&<>{records.map(a=><ApprovalCard key={a.id} a={a} canDecide={(role==='admin'||role==='operator')&&(a.kind!=='environment'||role==='admin')} onDone={()=>void approvals.reload()}/>)}{!approvals.loading&&!records.length&&<p>No approvals linked to this execution.</p>}</>}
  </section>;
 }
-function RunEvents({execution,toolsOnly,summaryOnly=false}:{execution:Execution;toolsOnly:boolean;summaryOnly?:boolean}) {
+export function RunEvents({execution,toolsOnly,summaryOnly=false}:{execution:Execution;toolsOnly:boolean;summaryOnly?:boolean}) {
  const events=useRunData(()=>api.events(execution.graphId,{node:execution.nodeId,limit:300}));
  const linked=runEvents(events.data??[],execution);const blocked=blockedToolCalls(linked);
  const invoked=linked.filter(e=>e.type==='tool.invoked').length;

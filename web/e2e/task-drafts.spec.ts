@@ -59,6 +59,14 @@ test('reviews and starts an owned task, retains its result after reload and stop
  await page.getByRole('button',{name:'Start task',exact:true}).click();
  await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
  await page.reload();await expect(page.getByRole('status')).toHaveText('Task status: succeeded');
+ const taskId=page.url().split('/').pop()!;
+ const progress=await(await page.request.get(`/api/v1/tasks/${taskId}/progress`,{headers})).json();
+ await page.getByLabel('Inspect execution evidence').selectOption(progress.executions[0].id);
+ await expect(page.getByRole('region',{name:'Run tool calls',exact:true})).toContainText('0 tool invocations observed');
+ await page.getByText('Execution tree and interruption',{exact:true}).click();
+ await expect(page.getByRole('region',{name:'Execution tree',exact:true})).toContainText('Root execution');
+ await expect(page.getByRole('button',{name:'Stop entire tree',exact:true})).toBeDisabled();
+ await page.getByText('Execution tree and interruption',{exact:true}).click();
  await expect(page.getByRole('link',{name:'Execution details'})).toHaveAttribute('href',/#\/g\/task-run-/);
  expect(await(await page.request.get('/api/v1/graphs/task-start-flow/executions',{headers})).json()).toEqual([]);
  await page.getByRole('checkbox',{name:"Stop this task's execution copy and retain its data."}).check();
