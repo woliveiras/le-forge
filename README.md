@@ -305,6 +305,9 @@ Full tree: [docs/folder-structure.md](docs/folder-structure.md).
 - [Configuration reference](docs/configuration.md)
 - [Deployment](docs/deployment.md) — single node, HA, Kubernetes, backup, upgrades, air-gapped
 - [Production hardening](docs/production-hardening.md)
+- [Connecting Atlassian Cloud and Bitbucket Data Center](docs/atlassian-bitbucket-setup.md) — short setup path; Bitbucket Data Center part is proposed
+- [Cost control](docs/cost-control.md) — proposed: prices, cost records and monetary budgets
+- [OpenCode as a gateway-bound runtime](docs/opencode-runtime.md) — proposed: OpenCode loop with LeForge models, tools and sandbox
 - [Extensibility](docs/extensibility.md) — providers, brokers, stores, runtimes, tools, sandboxes, agents in any language
 - [API and protocol contracts](docs/dev/contracts.md), OpenAPI in `api/`
 - [Architecture decision records](docs/adr/)
