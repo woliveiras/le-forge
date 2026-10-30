@@ -32,7 +32,7 @@ Reconcile partially delivered checklist entries against code before implementati
 an unchecked umbrella item does not mean all of its subfeatures are absent.
 Rootless sandbox support stays deferred by the earlier user decision. Items marked
 Later and Release 2 reusable components do not block Release 1 UX completion.
-The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalone installation), as planned below. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
+The next delivery sequence is Phase A (task-oriented UX), then Phase B (standalone installation), then Phase C (issue to pull request under the gateway, section 10c, added 2026-10-30), as planned below. Other Release 1 gaps remain open; Release 2 is not authorized. Reuse existing graph/agent execution and message controls where possible. Define the task-to-execution contract before deciding whether additional persistent task metadata is necessary; a navigation rename alone does not justify a parallel execution engine.
 
 ## Release 1 — Build and Operate Graphs Through the Interface
 
@@ -244,7 +244,7 @@ supervision.
 - [x] Exercise real Chromium React navigation, mutable HTTP with application auth, cookies, WebSockets, approve/revoke and request-changes/new-review (`make test-e2e-real`), through a private gateway forwarder while sandbox IPs remain unreachable.
 - [x] Provide a manual Postman recipe and remote TLS configuration. Automated tests use HTTP/cURL and a private remote topology; an interactive Postman session and a public DNS/TLS deployment are not claimed as tested.
 - [ ] Later: native process supervision under explicit host-execution policy, with its weaker isolation clearly reported.
-- [ ] Later: provider-specific PR/CI adapters with authenticated event validation and exact revision matching. Manual external/local review already works.
+- [ ] Later: provider-specific PR/CI adapters with authenticated event validation and exact revision matching. Manual external/local review already works. Pushing and opening pull requests now belong to Phase C (SCM-01–SCM-06); CI adapters and revision matching remain here.
 
 **Done when:** The remote Docker web and HTTP review journeys in `PLAN.md` 5a
 pass, including protected access, durable human waiting, exact candidate binding,
@@ -684,7 +684,7 @@ and cooperative interruption for the current native scope are verified above.
 - [x] Implement grant inheritance and guarantee that a child receives no more permissions than its parent. — Native profiles select up to 32 exact parent declarations without rewriting constraints. Child calls use the existing gateway, inherited workspace restrictions, per-call approvals and shared rate/connection limits; no wildcard expansion, model override, memory/emit or environment/review continuation capability; recursive delegation additionally requires its exact inherited grant and reviewed depth. Calls consume the parent allowance, and each model round reserves root-tree tokens. Unit, real-gateway integration, race and browser coverage validate the boundary.
 - [x] Implement a configurable global policy: approval required for every delegation or bounded automatic execution. — Implemented for native profiles, including inherited capabilities; richer runtimes remain separate.
 - [x] Implement pending-approval state and block the child execution until a human decision when required. — Native analysis foundation; see scope above.
-- [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost. — Bounded depth/count/concurrency/duration/output limits are implemented; cumulative token admission is implemented for native trees; a hard monetary ceiling remains pending.
+- [ ] Enforce global server-side limits for depth, children per parent, concurrency, duration, and cost. — Bounded depth/count/concurrency/duration/output limits are implemented; cumulative token admission is implemented for native trees; a hard monetary ceiling remains pending and is planned in Phase C (COST-01–COST-05).
 - [x] Account for consumption across the entire tree and stop/reject new delegations when limits are reached. — Native tree CAS reservations and exactly-once settlement; unknown usage is charged conservatively. No monetary guarantee or external-runtime support.
 - [x] Implement child execution cancellation and defined propagation of failure/cancellation to the parent agent. — Native child/tree cooperative interruption and parent continuation are implemented; external-runtime propagation remains separate.
 - [x] Define behavior for timeout, failure, partial result, and delegation with no result. — Native analysis foundation; see scope above.
@@ -834,6 +834,98 @@ no native companion plus container is required for ordinary local work.
   - [x] LOCAL-07a — Automated macOS arm64 native qualification: eight production-binary Chromium journeys cover first-graph Software Factory, browser model configuration/default selection, unchanged factory execution through its approval gate, retained results, project/worktree inspection, MCP stdio repair, parallel task isolation, scoped cancellation and reviewed cleanup. The HTTP model is synthetic; source files and graph definitions remain unchanged. Native lifecycle/storage unit/integration tests and format-1 upgrade/restart qualification passed. Native/API documentation now records delivered routes and external limits.
   - [x] LOCAL-07c — Readable native terminal logs, startup URL/data location and shutdown stage/duration feedback; JSON remains selectable without rewriting profiles. Close browser event streams after agent draining and propagate HTTP shutdown failures. Unit tests cover formatting, scoped attributes, control characters and writer errors; real HTTP/native lifecycle integration covers stream closure, console output and persisted restart state.
   - [ ] LOCAL-07b — Final external acceptance: actual model/MCP accounts, VS Code application launch/user review, optional real sandbox on the chosen daemon, and other OS/architecture runtime smoke checks. No live installation activation or external-account change is implied by LOCAL-07a.
+
+### 10c. Phase C — From Issue to Pull Request Under the Gateway (after Phase B)
+
+Goal: a labelled issue becomes a reviewed pull request, end to end, with every
+model call, tool call, push and tracker update passing through LeForge's gateways.
+Decisions recorded on 2026-10-30:
+
+- Runs only on the user's machine (native or local Compose). Live tests may use
+  personal or test accounts against real public APIs, opt-in; no company
+  infrastructure, credentials or approvals are assumed or changed.
+- Providers stay vendor-neutral: built-in providers first, an out-of-process
+  provider plugin protocol afterwards.
+- No GitHub CLI or other SCM CLI inside agent runs. Push and pull requests are
+  gateway tools with server-held credentials.
+- Issue triggers start with polling on the existing scheduled loops and leases;
+  webhooks come later.
+- Browser OIDC login is deferred (see AUTH-OIDC below).
+
+Proposed designs: [cost control](../docs/cost-control.md),
+[OpenCode runtime](../docs/opencode-runtime.md),
+[Atlassian and Bitbucket Data Center setup](../docs/atlassian-bitbucket-setup.md).
+Every task needs unit and integration tests, and browser tests where it has UI,
+as required by `AGENTS.md`.
+
+#### Model providers
+
+- [ ] PROV-01 — Extend `llm.Usage` with optional cache-read and cache-write tokens; map them in providers that report them. Keep existing fields and wire contracts compatible.
+- [ ] PROV-02 — Built-in AWS Bedrock provider (`llm/bedrock`) using the Converse API through `aws-sdk-go-v2`: tool use, JSON mode, usage, model listing, region and inference-profile IDs (including EU profiles). Credentials come only from the server-side AWS default chain (profile, SSO, environment); none reach runtimes, prompts, events or the browser. Map throttling, access-denied and model-not-enabled errors to actionable states. Unit tests with an HTTP fixture that verifies SigV4 signing; opt-in live test with a personal account.
+- [ ] PROV-03 — Built-in Google provider for Gemini (Gemini API key and Vertex AI with Application Default Credentials), with the same contract and tests as PROV-02.
+- [ ] PROV-04 — Provider conformance suite: one shared test set (chat, tool calls, tool results, JSON mode, usage, errors, cancellation, timeouts, credential redaction) that every built-in provider passes, documented in `docs/extensibility.md`.
+- [ ] PROV-05 — Design Provider Protocol v1 for out-of-process provider plugins, derived from `llm.Provider` and PROV-04: transport (HTTP or stdio), manifest (name, version, checksum, declared outbound hosts), lifecycle and error contract. Document the trust model: a plugin receives prompts and code, runs as a separate process, receives only its own credential, and requires administrator review to install. Design only; no implementation in this task.
+- [ ] PROV-06 — Implement provider plugin installation and execution per PROV-05, after PROV-02 is delivered: explicit administrator install with checksum verification, isolated process, per-plugin encrypted credential, console label marking plugin providers, conformance suite run before enablement.
+
+**Done when:** Bedrock and Gemini work through the UI like existing providers,
+pass the conformance suite, and never expose credentials; the plugin protocol is
+documented before any plugin code exists.
+
+#### Push and pull requests through the gateway
+
+- [ ] SCM-01 — Define an `SCMProvider` interface (repository identity, push, pull request create/get, comment) and an SCM connection model with encrypted server-side credentials, following the provider/MCP credential patterns. Credentials never enter Git configuration, remote URLs, process arguments, agent-visible environment, events or logs.
+- [ ] SCM-02 — `git.push` gateway tool: pushes only the task's working branch, with a mandatory branch prefix; refuses the base branch, force pushes, tags and other refs; grant constrained by repository. Runs in LeForge's own Git process, not in the agent sandbox.
+- [ ] SCM-03 — `scm.pull_request.create` gateway tool: bounded title/body, base fixed by the task, idempotent per branch (returns the existing PR), PR URL recorded as task evidence. Requires approval by default in every authorization mode until a policy explicitly relaxes it.
+- [ ] SCM-04 — GitHub adapter over the REST API (fine-grained token or OAuth from the existing connection model). Fixture-based integration tests; opt-in live test against a personal test repository.
+- [ ] SCM-05 — Bitbucket Data Center adapter: base URL, repository or project HTTP access token, optional custom CA, HTTPS clone/fetch/push and REST pull requests, "Test connection" that reads token identity and visible repositories. Integration tests against a local Bitbucket Data Center container with an evaluation licence; mark the proposed section in `docs/atlassian-bitbucket-setup.md` as delivered only after they pass.
+- [ ] SCM-06 — Connect the Software Factory hand-off and the task flow to SCM-02/03 so a completed task can push and open a PR after its human gate, with failures (rejected push, existing PR, missing permission) shown on the task.
+
+**Done when:** a native task ends with a pushed branch and an open pull request on
+GitHub and on a local Bitbucket Data Center, created only through gateway tools,
+with no SCM credential visible to agents.
+
+#### Issue triggers by label (Jira and GitHub)
+
+- [ ] TRIG-01 — Normalized issue model and source adapters: Jira through the Atlassian MCP connection (JQL) and GitHub through its connection (issue search). Issue content is passed to agents as data, never as instructions.
+- [ ] TRIG-02 — Trigger entity on a workflow: source, label and query, schedule, pre-recorded task consent (actor, workflow version, project, environment, authorization mode, policy version). Any change to those invalidates the consent and pauses the trigger instead of running.
+- [ ] TRIG-03 — Polling on the existing scheduled loops with leases so only one instance runs a trigger; one issue at a time per trigger; missed times run once, not once per missed time.
+- [ ] TRIG-04 — Eligibility rules: has the label, open/To Do, unassigned or assigned to the trigger owner, not blocked, never run by this workflow (deduplication keyed by source, issue and workflow). A "Matching issues" preview lists next, waiting and skipped issues with the reason.
+- [ ] TRIG-05 — Claim and start write-back through gateway tools: assign, replace the label with `leforge:in-progress`, add a comment saying LeForge started with a link to the task, and in Jira transition to "In Progress" when that transition exists. A missing transition is recorded on the task and does not fail the run.
+- [ ] TRIG-06 — Completion write-back: on success comment with the PR link, label `leforge:review` and transition to "In Review" when available; on failure or stop comment with the reason and label `leforge:failed`, and pause the trigger.
+- [ ] TRIG-07 — Trigger UI: create/edit on a workflow, state (active, paused with reason, finished), last run and skipped-time reasons, resume after review. Browser tests with fixture MCP/GitHub servers.
+- [ ] Later: webhooks for Jira and GitHub with authenticated event validation, as an alternative to polling.
+
+**Done when:** labelling a test issue in a personal Jira site or GitHub repository
+produces, without manual start, a task that comments, transitions where possible,
+and ends with a PR or a visible failure, under the pre-recorded consent.
+
+#### Monetary cost control ([design](../docs/cost-control.md))
+
+- [ ] COST-01 — Cost records written by the LLM gateway for every call (native, external callback, delegation), with reported or estimated usage; external `TurnResult.usage` recorded separately.
+- [ ] COST-02 — Versioned price catalogue in installation settings, editable by administrators; local providers default to zero; unpriced models visible and governed by policy. No vendor prices shipped.
+- [ ] COST-03 — Task-run budget with reservation before dispatch (reusing the delegation CAS ledger pattern), settlement after, pause at the hard level and audited human raise.
+- [ ] COST-04 — User, project, workflow and installation budgets with monthly periods, warning and hard thresholds, and the optional interrupt level.
+- [ ] COST-05 — Console spend views, budget bars, remaining budget on New task and task views, events and bounded metrics.
+
+**Done when:** a run that reaches its budget pauses before overspending, a human
+raises it and the run continues, and spend per task, user and model is visible.
+
+#### OpenCode as a gateway-bound runtime ([design](../docs/opencode-runtime.md))
+
+- [ ] OC-01 — Spike: answer the design's open questions against a pinned OpenCode version (disabling every built-in tool, ignoring repository configuration and automatic `AGENTS.md`, provider protocol, usage reporting, process model, licence). Record the results in the design page before any implementation.
+- [ ] OC-02 — Execution-scoped model endpoint (OpenAI- or Anthropic-compatible per OC-01) under the callback base URL, using the LLM gateway and its accounting. Add streaming if OC-01 shows it is required.
+- [ ] OC-03 — Execution-scoped MCP server exposing only the node's granted platform tools, with gateway decisions returned as MCP tool errors.
+- [ ] OC-04 — OpenCode runtime adapter with a generated read-only configuration (LeForge endpoint as the only provider, LeForge MCP as the only tool source).
+- [ ] OC-05 — Sandbox network profile that allows only the LeForge callback host from the sandbox.
+- [ ] OC-06 — Integration tests with a real OpenCode binary and a scripted model for each security property listed in the design.
+- [ ] OC-07 — "Plan → Build → Verify → hand-off" workflow template using OpenCode for Plan and Build and a read-only verifier.
+
+**Done when:** an OpenCode-driven task changes code only through gateway tool
+calls, cannot reach any host other than LeForge, and passes OC-06.
+
+#### Deferred
+
+- [ ] AUTH-OIDC (Later) — Browser login with Authorization Code + PKCE, session cookie, refresh and logout; configurable role claim path and group-to-role mapping; issuer/audience validation. Qualify against a local Keycloak container first.
 
 
 ### 11. Integrated Validation of Release 1
